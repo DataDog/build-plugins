@@ -7,6 +7,8 @@ Everything you need to know about breaking changes and major version bumps.
     -   [`npm run dev` now executes backend functions in-process instead of via a cloud round trip](#npm-run-dev-now-executes-backend-functions-in-process-instead-of-via-a-cloud-round-trip)
     -   [Run `npm run dev:verify` to check cloud parity before publishing](#run-npm-run-devverify-to-check-cloud-parity-before-publishing)
     -   [`process.env` is now allowlisted during local execution](#processenv-is-now-allowlisted-during-local-execution)
+    -   [Custom Credentials resolve locally via `datadog-app.local.json`](#custom-credentials-resolve-locally-via-datadog-applocaljson)
+    -   [`getInitiatingUser()` and `getExecutionUser()` continue to return your real identity locally](#getinitiatinguser-and-getexecutionuser-continue-to-return-your-real-identity-locally)
 -   [v2 to v3](#v2-to-v3)
     -   [Renamed `disabled` to `enable`](#renamed-disabled-to-enable)
     -   [Removed `options.errorTracking.sourcemaps.disableGit`](#removed-optionserrortrackingsourcemapsdisablegit)
@@ -29,13 +31,15 @@ This release changes how `npm run dev` runs an app's backend functions (`*.backe
 
 Previously, `npm run dev` bundled a backend function's file and sent it to Datadog's API on every call, executing it in the cloud and returning the result over the network.
 
-`npm run dev` now loads the function's file directly into the local Vite dev server and calls it there, with no network round trip. `$.Actions` calls, connection scoping, and input/output validation all behave the same as before — a function that only reads its arguments and calls `$.Actions` needs no changes.
+`npm run dev` now loads the function's file directly into the local Vite dev server and executes it there, instead of bundling it and sending it to the cloud on every call. `$.Actions` calls still reach Datadog's API exactly as they do in production, and connection scoping and input/output validation behave the same as before — a function that only reads its arguments and calls `$.Actions` needs no changes.
 
-Static imports of Node built-ins (`fs`, `child_process`, `net`, etc.) and raw network globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`) in a backend file are rejected at build time. Backend functions have never had access to these in production, so this only surfaces earlier — at `npm run dev` time instead of only once the app is published — a case that previously appeared to work locally but would fail in production.
+Static imports of Node built-ins (`fs`, `child_process`, `net`, etc.), dynamic imports of one using a literal string specifier (e.g. `import('fs')`), and raw network globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`) in a backend file are rejected at build time — this check covers every app-local module resolved into the backend bundle, not just the entry file itself, so an app-local helper module is checked too. A dynamic import using a runtime-computed specifier (e.g. `import(moduleName)`) isn't caught by this check. Backend functions have never had access to these in production, and `npm run dev` ran a function through that same restricted production environment before this release too (see above) — so code relying on one of these already failed under `npm run dev`, just later than it does now, and with a runtime error instead of this build-time one.
+
+A separate runtime guard also blocks network and subprocess access (`net`, `dns`, `child_process`, `worker_threads`, etc.) once a function body starts running. It exists for what the build-time check above can't see: a `node_modules` dependency that reaches the network or spawns a process directly from inside the function body — bypassing `$.Actions` — fails at call time under `npm run dev` instead of at build time. It doesn't cover a dependency's own top-level initialization code, which runs while the module loads, before the guard is in scope; because Vite then caches that evaluation, the same dependency can keep succeeding locally on every later call even though production rejects it. `npm run dev:verify` is what catches that gap before publishing.
 
 ### Run `npm run dev:verify` to check cloud parity before publishing
 
-Because local execution no longer talks to Datadog's API, it can no longer catch every difference between local and production behavior on its own (see the `process.env` allowlist below, for example).
+Because a function's own code now runs locally instead of in Datadog's cloud, local execution can no longer catch every difference between local and production behavior on its own (see the `process.env` allowlist below, for example).
 
 `npm run dev:verify` still executes backend functions through the full cloud round trip, the same way `npm run dev` used to. Run it before publishing an app to confirm a function's real dependencies (environment variables, connections) behave the same way in the cloud as they did locally.
 
@@ -43,20 +47,54 @@ Because local execution no longer talks to Datadog's API, it can no longer catch
 npm run dev:verify
 ```
 
+If your `package.json` doesn't have a `dev:verify` script yet, `dev:verify` is just your existing dev command with Vite's `--mode dev-verify` flag appended (e.g. `vite --mode dev-verify`) — add the script, or run the equivalent command directly.
+
 ### `process.env` is now allowlisted during local execution
 
-A backend function running under `npm run dev` no longer sees your real shell environment. `process.env` is scoped to a small, fixed set of safe variables during local execution: `PATH`, `HOME`, `NODE_ENV`, and `TMPDIR`.
+A backend function running under `npm run dev` no longer has unscoped access to `process.env`. It's scoped to a small, fixed set of safe variables during local execution: `PATH`, `HOME`, `NODE_ENV`, and `TMPDIR`.
 
-Reading any other variable — including one your shell has set, or one a secret-backed connection would resolve to in production — returns `undefined` locally, even though the equivalent read against the deployed function succeeds in production.
+Reading any other variable — including one a secret-backed connection would resolve to in production — returns `undefined` locally, even though the equivalent read against the deployed function succeeds in production. The one exception is a Custom Credentials-backed variable declared in `datadog-app.local.json` (see below).
 
 ```diff
  export function myBackendFunction() {
--    const region = process.env.AWS_REGION; // real value from your shell
+-    const region = process.env.AWS_REGION; // resolved in production
 +    const region = process.env.AWS_REGION; // undefined under `npm run dev` — not in the local allowlist
  }
 ```
 
 If a backend function depends on a variable like this, verify it with `npm run dev:verify` (see above) before publishing, since that path still runs against the real cloud environment.
+
+### Custom Credentials resolve locally via `datadog-app.local.json`
+
+Previously, a backend function's Custom Credentials-backed connection resolved to its real value under `npm run dev`, because the function ran through the cloud round trip described above. Now that the function runs locally, that same variable would otherwise fall under the allowlist above and read as `undefined`.
+
+`npm run dev` closes that gap by resolving Custom Credentials from a `datadog-app.local.json` file in your project root, if you create one. Add it to `.gitignore` and map each credential's env var name to its real value:
+
+```json
+{
+    "STRIPE_API_KEY": "sk_test_..."
+}
+```
+
+A missing file resolves to no extra variables — most projects won't have one, and the variable then reads as `undefined` locally until you add it. A present-but-malformed file (invalid JSON, or a value that isn't a string) throws instead of silently resolving to `undefined`, so a typo doesn't look identical to an undeclared secret.
+
+A `datadog-app.local.json` entry resolves before the function's module finishes loading, so a client constructed at the module's top level sees the real value too, the same as one constructed inside the function body:
+
+```ts
+const client = new StripeClient(process.env.STRIPE_API_KEY); // real value, once declared in datadog-app.local.json
+
+export function myBackendFunction() {
+    // ...
+}
+```
+
+### `getInitiatingUser()` and `getExecutionUser()` continue to return your real identity locally
+
+Previously, `getInitiatingUser()` and `getExecutionUser()` (from `@datadog/apps-backend/user`) returned your real identity under `npm run dev`, because the function ran through the cloud round trip described above and `$.Source` came from that same authenticated session.
+
+Now that the function runs locally, `npm run dev` fetches your real, authenticated identity from a preview call before running any backend code, so `getInitiatingUser()` and `getExecutionUser()` keep returning that real identity (`id`, `orgId`, and optionally `email` and `name`) instead of falling back to a placeholder.
+
+Both calls return the identity of that preview invocation, i.e. your own account — not necessarily the identity a real deployed trigger would pass to `getExecutionUser()` (a scheduled run or a different end user's action, for example). `npm run dev:verify` doesn't help here either — it's also a manual preview under your own credentials, with no way to simulate another trigger's identity. Confirm behavior against an execution's real identity by publishing the app and running it through an actual deployed trigger instead.
 
 ## v2 to v3
 
