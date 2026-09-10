@@ -15,6 +15,7 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
+import { resolveCustomCredentials } from './custom-credentials-resolver';
 import type { EnvScopeHandle } from './env-guard';
 import { createEpochGuard } from './execution-epoch';
 import type { BlockedScopeHandle } from './network-guard';
@@ -241,6 +242,9 @@ export async function loadCustomerModuleEntry(
 ): Promise<Record<string, unknown>> {
     await getNetworkGuard();
     const { buildScopedEnv, runWithScopedEnv } = await getEnvGuard();
+    // {} rather than a real resolution: this priming load has no projectRoot, and its top-level
+    // eval is already outside the guarded scope (see doc comment above) — runScriptLocally is
+    // what resolves real credentials for function bodies.
     const scopedEnv = buildScopedEnv({});
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
@@ -901,10 +905,18 @@ async function runScriptLocally(
                     // toJSON()/getter must run while access is still blocked/scoped.
                     const networkGuardPromise = getNetworkGuard();
                     const envGuardPromise = getEnvGuard();
-                    const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv }] =
-                        await Promise.all([networkGuardPromise, envGuardPromise]);
+                    const customCredentialsPromise = resolveCustomCredentials(projectRoot);
+                    const [
+                        { runBlocked },
+                        { buildScopedEnv, runWithScopedEnv },
+                        customCredentials,
+                    ] = await Promise.all([
+                        networkGuardPromise,
+                        envGuardPromise,
+                        customCredentialsPromise,
+                    ]);
                     rejectIfAbandoned();
-                    const scopedEnv = buildScopedEnv({});
+                    const scopedEnv = buildScopedEnv(customCredentials);
                     const data = await runWithScopedEnv(
                         scopedEnv,
                         () =>

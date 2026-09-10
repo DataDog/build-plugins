@@ -7,12 +7,16 @@
 import type { Logger } from '@dd/core/types';
 import { installFakeProcessEnv } from '@dd/tests/_jest/helpers/env';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import fsPromises from 'fs/promises';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import * as customCredentialsResolver from './custom-credentials-resolver';
 import { forceResetEnv } from './env-guard';
 import {
     func,
@@ -33,6 +37,10 @@ const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['c
 
 const TEST_PROJECT_ROOT = '/project';
 
+// Captured before beforeEach's spyOn ever replaces the export — jest.requireActual would return
+// this same, by-then-mocked module object instead of a real one, since it was never jest.mock()'d.
+const realResolveCustomCredentials = customCredentialsResolver.resolveCustomCredentials;
+
 interface TestGlobalDollar {
     backendFunctionArgs: unknown[];
     // Left untyped: $.Actions is a Proxy of unbounded, dynamic depth ($.Actions.<any>.<any>...(...)), the same shape a real customer's untyped code sees.
@@ -50,6 +58,11 @@ beforeEach(() => {
     // Neither optional SDK is installed by default; tests exercising the "installed" path override this.
     jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
     jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
+    // Real fs I/O races unpredictably against the fake-timer tests below (TEST_PROJECT_ROOT isn't
+    // a real directory anyway); tests covering the real file read live in
+    // custom-credentials-resolver.test.ts, plus one integration test further down that restores
+    // the real implementation for its own duration.
+    jest.spyOn(customCredentialsResolver, 'resolveCustomCredentials').mockResolvedValue({});
 });
 
 /** Keeps the existing test call sites concise while every invocation receives a fresh preview context. */
@@ -1181,6 +1194,38 @@ describe('local-execution — executeScriptLocally', () => {
 
             expect(result).toEqual({ data: 'ok' });
             expect(envSeenDuringRegistration).toBeUndefined();
+        });
+
+        test('Should expose a value from a real datadog-app.local.json file as process.env in the customer function', async () => {
+            jest.spyOn(customCredentialsResolver, 'resolveCustomCredentials').mockImplementation(
+                realResolveCustomCredentials,
+            );
+
+            const projectRoot = await fsPromises.mkdtemp(
+                path.join(os.tmpdir(), 'local-execution-custom-credentials-'),
+            );
+            try {
+                await fsPromises.writeFile(
+                    path.join(
+                        projectRoot,
+                        customCredentialsResolver.CUSTOM_CREDENTIALS_LOCAL_FILENAME,
+                    ),
+                    JSON.stringify({ STRIPE_API_KEY: 'sk_test_123' }),
+                );
+
+                const result = await executeScriptLocally(
+                    func,
+                    projectRoot,
+                    [],
+                    stubExecuteAction,
+                    loadModuleReturning({ example: () => process.env.STRIPE_API_KEY }),
+                    mockLogger,
+                );
+
+                expect(result).toEqual({ data: 'sk_test_123' });
+            } finally {
+                await fsPromises.rm(projectRoot, { recursive: true, force: true });
+            }
         });
     });
 

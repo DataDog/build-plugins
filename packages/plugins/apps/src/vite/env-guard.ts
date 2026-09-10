@@ -33,7 +33,8 @@ const nativeReadlinkSync = fs.readlinkSync;
 
 export const SAFE_ENV_KEYS = ['PATH', 'HOME', 'NODE_ENV', 'TMPDIR'] as const;
 
-// customCredentials is currently always {} — Custom Credential resolution for local execution is still undecided, so those values stay unset here rather than read from the real environment.
+// customCredentials comes from custom-credentials-resolver.ts's resolveCustomCredentials — a
+// developer-maintained local file, empty by default.
 export function buildScopedEnv(customCredentials: Record<string, string>): Record<string, string> {
     const scoped: Record<string, string> = {};
     for (const key of SAFE_ENV_KEYS) {
