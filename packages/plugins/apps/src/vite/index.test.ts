@@ -679,13 +679,15 @@ describe('Backend Functions - getVitePlugin', () => {
     });
 
     // Regression test: build-package.ts's exclusion filter only sees the unbundled file, and a
-    // query-suffixed specifier (`?raw`, `?url`) defeats a naive basename check — both must be
-    // rejected here or Vite inlines the real secret values into a built chunk.
+    // query- or hash-suffixed specifier (`?raw`, `?url`, `#fragment`) defeats a naive basename
+    // check — all must be rejected here or Vite inlines the real secret values into a built chunk.
     test.each([
         { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: true },
         { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: false },
         { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?raw`, ssr: true },
         { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?url`, ssr: false },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}#fragment`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?raw#fragment`, ssr: false },
     ])(
         'Should reject a direct import of the local Custom Credentials file (specifier: $specifier, ssr: $ssr)',
         async ({ specifier, ssr }) => {

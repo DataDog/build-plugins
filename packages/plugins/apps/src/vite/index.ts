@@ -165,12 +165,12 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // An import of this file (including a query-suffixed one, e.g. `?raw`) would let
-                // Vite inline its real secret values into a chunk that build-package.ts's exclusion
-                // filter never sees — strip the query before comparing basenames below.
-                const sourceWithoutQuery = source.split('?')[0];
+                // Strips the query/hash suffix before comparing, matching Vite's own postfixRE —
+                // otherwise a `?raw`/`#fragment`-suffixed import bypasses this check and Vite
+                // inlines the real secret into a chunk build-package.ts's filter never sees.
+                const sourceWithoutPostfix = source.replace(/[?#].*$/, '');
                 if (
-                    path.basename(sourceWithoutQuery).toLowerCase() ===
+                    path.basename(sourceWithoutPostfix).toLowerCase() ===
                     CUSTOM_CREDENTIALS_LOCAL_FILENAME
                 ) {
                     throw new Error(
