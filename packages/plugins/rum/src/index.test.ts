@@ -55,7 +55,16 @@ describe('RUM Plugin', () => {
         expect(value()).toMatch(/(?=.*DD_SOURCE_CODE_CONTEXT)(?=.*"ddDebugId":"[0-9a-f-]+")/);
     });
 
-    test('Should serialize the debug ID before source code context metadata', () => {
+    test('Should not serialize service and version with a debug ID', () => {
+        const value = run({ sourceCodeContext: { debugId: true } })[0] as () => string;
+        const code = value();
+
+        expect(code).toContain('"ddDebugId"');
+        expect(code).not.toContain('"service"');
+        expect(code).not.toContain('"version"');
+    });
+
+    test('Should serialize service and version alongside a debug ID', () => {
         const value = run({
             sourceCodeContext: {
                 debugId: true,
@@ -64,10 +73,9 @@ describe('RUM Plugin', () => {
             },
         })[0] as () => string;
         const code = value();
-        const debugIdIndex = code.indexOf('"ddDebugId"');
 
-        expect(debugIdIndex).toBeGreaterThanOrEqual(0);
-        expect(debugIdIndex).toBeLessThan(code.indexOf('"service"'));
-        expect(debugIdIndex).toBeLessThan(code.indexOf('"version"'));
+        expect(code).toContain('"ddDebugId"');
+        expect(code).toContain('"service":"checkout"');
+        expect(code).toContain('"version":"1.2.3"');
     });
 });

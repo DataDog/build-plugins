@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { PluginOptions, Options } from '@dd/core/types';
+import { PLUGIN_NAME as ERROR_TRACKING_PLUGIN_NAME } from '@dd/error-tracking-plugin';
 import { buildPluginFactory } from '@dd/factory';
 
 const invokeFactory = (opts: Options): PluginOptions[] => {
@@ -54,6 +55,33 @@ describe('Factory', () => {
                 output: { enable: true },
             });
             expect(hasPlugin(plugins, 'output')).toBe(true);
+        });
+
+        test('Should include error tracking for RUM debug ID uploads', () => {
+            const plugins = invokeFactory({
+                auth: { apiKey: '123' },
+                errorTracking: { sourcemaps: { debugId: true } },
+                logLevel: 'none',
+                rum: { sourceCodeContext: { debugId: true } },
+            });
+            expect(hasPlugin(plugins, ERROR_TRACKING_PLUGIN_NAME)).toBe(true);
+        });
+
+        test('Should not upload from the top-level sourcemaps option by default', () => {
+            const plugins = invokeFactory({
+                logLevel: 'none',
+                sourcemaps: { debugId: true },
+            });
+            expect(hasPlugin(plugins, ERROR_TRACKING_PLUGIN_NAME)).toBe(false);
+        });
+
+        test('Should inject and upload debug ID source maps from the top-level sourcemaps option', () => {
+            const plugins = invokeFactory({
+                auth: { apiKey: '123' },
+                logLevel: 'none',
+                sourcemaps: { debugId: true, upload: true },
+            });
+            expect(hasPlugin(plugins, ERROR_TRACKING_PLUGIN_NAME)).toBe(true);
         });
 
         test('Should coerce a non-boolean enable value and still include the plugin', () => {

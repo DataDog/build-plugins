@@ -5,6 +5,7 @@
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { createFilter } from '@rollup/pluginutils';
 
+import type { SourceCodeContextOptions } from './types';
 import { validatePrivacyOptions, validateSourceCodeContextOptions } from './validate';
 
 describe('Test privacy plugin option exclude regex', () => {
@@ -51,6 +52,60 @@ describe('sourceCodeContext validation', () => {
         const result = validateSourceCodeContextOptions(pluginOptions);
         expect(result.errors).toHaveLength(0);
         expect(result.config).toEqual(expect.objectContaining({ service: 'checkout' }));
+    });
+
+    test('should accept debug ID injection', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: { sourceCodeContext: { debugId: true } as const },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ debugId: true });
+    });
+
+    test('should preserve service and version when debug ID injection is enabled', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            rum: {
+                sourceCodeContext: {
+                    debugId: true,
+                    service: 'checkout',
+                    version: '1.2.3',
+                } as const,
+            },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        });
+    });
+
+    test('should allow debug ID and service/version identities together in types', () => {
+        const mixedIdentity: SourceCodeContextOptions = {
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        };
+        expect(mixedIdentity).toBeDefined();
+    });
+
+    test('should fall back to metadata.version for combined debug ID and service context', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { version: '1.2.3' },
+            rum: { sourceCodeContext: { debugId: true, service: 'checkout' } as const },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({
+            debugId: true,
+            service: 'checkout',
+            version: '1.2.3',
+        });
     });
 
     test('should error when service is missing', () => {

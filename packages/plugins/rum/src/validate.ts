@@ -168,16 +168,25 @@ export const validateSourceCodeContextOptions = (
 
     const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
 
-    if (!cfg?.debugId && (!cfg?.service || typeof cfg.service !== 'string')) {
+    if (cfg.debugId === true) {
+        toReturn.config = {
+            ...cfg,
+            version: cfg.version || (cfg.service ? options.metadata?.version : undefined),
+        };
+        return toReturn;
+    }
+
+    if (!cfg.service || typeof cfg.service !== 'string') {
         toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
     }
 
-    // Resolve `version`: prefer the plugin-specific option, then fall back to
-    // the shared top-level `metadata.version`. This keeps `metadata.version`
-    // as the single canonical place to declare the deployed build identifier.
-    toReturn.config = {
-        ...cfg,
-        version: cfg.version || options.metadata?.version,
-    };
+    if (toReturn.errors.length === 0) {
+        // Resolve `version`: prefer the plugin-specific option, then fall back to
+        // the shared top-level `metadata.version`.
+        toReturn.config = {
+            ...cfg,
+            version: cfg.version || options.metadata?.version,
+        };
+    }
     return toReturn;
 };

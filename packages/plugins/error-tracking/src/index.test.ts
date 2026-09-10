@@ -43,6 +43,19 @@ describe('Error Tracking Plugin', () => {
         expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
     });
 
+    test('Should process source maps when RUM debug ID uploads are enabled.', async () => {
+        await runBundlers({
+            auth: { apiKey: '123' },
+            enableGit: false,
+            errorTracking: { sourcemaps: { debugId: true } },
+            rum: { sourceCodeContext: { debugId: true } },
+        });
+        expect(uploadSourcemapsMock).toHaveBeenCalledTimes(BUNDLERS.length);
+        expect(uploadSourcemapsMock.mock.calls[0][0]).toMatchObject({
+            sourcemaps: { debugId: true },
+        });
+    });
+
     test('Should not send sourcemap upload metrics unless metrics are enabled.', async () => {
         await runBundlers({
             enableGit: false,

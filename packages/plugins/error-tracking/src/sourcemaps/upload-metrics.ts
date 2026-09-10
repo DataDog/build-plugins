@@ -44,7 +44,7 @@ export const createSourcemapUploadMetrics = (
     options: SourcemapsOptionsWithDefaults,
 ): SourcemapUploadMetrics => ({
     metrics: new Map(),
-    baseTags: [`service:${options.service}`],
+    baseTags: options.debugId === false ? [`service:${options.service}`] : ['matching:debug_id'],
 });
 
 const incrementUploadMetric = (

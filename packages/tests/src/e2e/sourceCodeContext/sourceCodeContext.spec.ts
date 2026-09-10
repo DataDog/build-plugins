@@ -40,19 +40,32 @@ const getDebugIds = async (page: Page): Promise<string[]> => {
     );
 };
 
-async function build(publicDir: string, suiteName: string, bundlers: BundlerName[]) {
+async function build(
+    publicDir: string,
+    suiteName: string,
+    bundlers: BundlerName[],
+    pluginConfig: typeof defaultConfig,
+) {
     const source = path.resolve(__dirname, 'project');
     const destination = path.resolve(publicDir, suiteName);
     await verifyProjectBuild(source, destination, bundlers, pluginConfig, { splitting: true });
 }
 
-const pluginConfig = {
+const debugIdPluginConfig = {
+    ...defaultConfig,
+    rum: {
+        sourceCodeContext: {
+            debugId: true as const,
+        },
+    },
+};
+
+const serviceVersionPluginConfig = {
     ...defaultConfig,
     rum: {
         sourceCodeContext: {
             service: SERVICE_NAME,
             version: SERVICE_VERSION,
-            debugId: true,
         },
     },
 };
@@ -60,7 +73,13 @@ const pluginConfig = {
 describe('Source Code Context', () => {
     // Build our fixture project.
     beforeAll(async ({ publicDir, bundlers, suiteName }) => {
-        await build(publicDir, suiteName, bundlers);
+        await build(publicDir, suiteName, bundlers, debugIdPluginConfig);
+        await build(
+            publicDir,
+            `${suiteName}-service-version`,
+            bundlers,
+            serviceVersionPluginConfig,
+        );
     });
 
     test('Should inject DD_SOURCE_CODE_CONTEXT global variable', async ({
@@ -119,7 +138,7 @@ describe('Source Code Context', () => {
         suiteName,
         devServerUrl,
     }) => {
-        await userFlow(`${devServerUrl}/${suiteName}`, page, bundler);
+        await userFlow(`${devServerUrl}/${suiteName}-service-version`, page, bundler);
 
         // Initialize RUM with beforeSend.
         await page.evaluate(() => {
@@ -193,7 +212,7 @@ describe('Source Code Context', () => {
             'rspack content hash is not deterministic across build directories when devtool is enabled',
         );
 
-        await build(publicDir, `${suiteName}-rebuild`, bundlers);
+        await build(publicDir, `${suiteName}-rebuild`, bundlers, debugIdPluginConfig);
 
         await userFlow(`${devServerUrl}/${suiteName}`, page, bundler);
         const firstBuildIds = await getDebugIds(page);

@@ -6,7 +6,11 @@ import type { Output } from '@dd/core/types';
 import chalk from 'chalk';
 import path from 'path';
 
-import type { SourcemapsOptionsWithDefaults, Sourcemap, MinifiedPathPrefix } from '../types';
+import {
+    type SourcemapsOptionsWithDefaults,
+    type Sourcemap,
+    type MinifiedPathPrefix,
+} from '../types';
 
 type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 'relativePath'>;
 
@@ -34,7 +38,7 @@ export const joinUrlOrPath = (prefix: MinifiedPathPrefix, relativePath: string):
 };
 
 export const decomposePath = (
-    prefix: MinifiedPathPrefix,
+    prefix: MinifiedPathPrefix | undefined,
     // This is coming from context.bundler.outDir, which is absolute.
     absoluteOutDir: string,
     sourcemapFilePath: string,
@@ -45,7 +49,9 @@ export const decomposePath = (
 
     const minifiedFilePath = sourcemapFilePath.replace(/\.map$/, '');
     const relativePath = path.relative(absoluteOutDir, minifiedFilePath);
-    const minifiedUrl = joinUrlOrPath(prefix, relativePath);
+    const minifiedUrl = prefix
+        ? joinUrlOrPath(prefix, relativePath)
+        : relativePath.split(path.sep).join('/');
 
     return {
         minifiedFilePath,
@@ -72,10 +78,12 @@ export const getSourcemapsFiles = (
         .map((file) => file.filepath);
 
     const sourcemapFiles = sourcemapFilesList.map((sourcemapFilePath) => {
+        const minifiedPathPrefix =
+            options.debugId === false ? options.minifiedPathPrefix : undefined;
         return {
-            ...decomposePath(options.minifiedPathPrefix, context.outDir, sourcemapFilePath),
+            ...decomposePath(minifiedPathPrefix, context.outDir, sourcemapFilePath),
             sourcemapFilePath,
-            minifiedPathPrefix: options.minifiedPathPrefix,
+            minifiedPathPrefix,
         };
     });
 

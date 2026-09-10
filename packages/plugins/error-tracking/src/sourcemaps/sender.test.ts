@@ -18,6 +18,7 @@ import {
     mockLogFn,
     mockLogger,
     getPayloadMock,
+    getDebugIdSourcemapsConfiguration,
     getSourcemapMock,
     getSourcemapsConfiguration,
     addFixtureFiles,
@@ -220,6 +221,184 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             getPayloadSpy.mockRestore();
             rmSync(tempDir);
+        });
+
+        test('Should upload by debug ID without service, version, or path configuration', async () => {
+            const debugId = '12345678-1234-4123-8123-123456789012';
+            const minifiedFileContent = `({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`;
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-debug-id-upload-test');
+            const minifiedFilePath = path.join(tempDir, 'app.js');
+            const sourcemapFilePath = path.join(tempDir, 'app.js.map');
+            outputFileSync(minifiedFilePath, minifiedFileContent);
+            outputFileSync(sourcemapFilePath, '{"version":3,"sources":["app.js"]}');
+            addFixtureFiles({
+                [minifiedFilePath]: minifiedFileContent,
+                [sourcemapFilePath]: '{"version":3,"sources":["app.js"]}',
+            });
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await sendSourcemaps(
+                [
+                    getSourcemapMock({
+                        minifiedFilePath,
+                        minifiedPathPrefix: undefined,
+                        minifiedUrl: 'app.js',
+                        relativePath: 'app.js',
+                        sourcemapFilePath,
+                    }),
+                ],
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            expect(getPayloadSpy.mock.calls[0][1]).not.toHaveProperty('service');
+            expect(getPayloadSpy.mock.calls[0][1]).not.toHaveProperty('version');
+            expect(getPayloadSpy.mock.calls[0][4]).toBe(debugId);
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should skip files without a debug ID and upload the remaining sourcemaps', async () => {
+            const debugId = '12345678-1234-4123-8123-123456789012';
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-partial-debug-id-test');
+            const minifiedFileWithDebugId = path.join(tempDir, 'with-debug-id.js');
+            const minifiedFileWithoutDebugId = path.join(tempDir, 'without-debug-id.js');
+            const sourcemapWithDebugId = path.join(tempDir, 'with-debug-id.js.map');
+            const sourcemapWithoutDebugId = path.join(tempDir, 'without-debug-id.js.map');
+            const contentWithDebugId = `({ddDebugId:"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`;
+            const contentWithoutDebugId = 'console.log("no debug id");';
+            const sourcemapContent = '{"version":3,"sources":[]}';
+
+            outputFileSync(minifiedFileWithDebugId, contentWithDebugId);
+            outputFileSync(minifiedFileWithoutDebugId, contentWithoutDebugId);
+            outputFileSync(sourcemapWithDebugId, sourcemapContent);
+            outputFileSync(sourcemapWithoutDebugId, sourcemapContent);
+            addFixtureFiles({
+                [minifiedFileWithDebugId]: contentWithDebugId,
+                [minifiedFileWithoutDebugId]: contentWithoutDebugId,
+                [sourcemapWithDebugId]: sourcemapContent,
+                [sourcemapWithoutDebugId]: sourcemapContent,
+            });
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await sendSourcemaps(
+                [
+                    getSourcemapMock({
+                        minifiedFilePath: minifiedFileWithDebugId,
+                        sourcemapFilePath: sourcemapWithDebugId,
+                    }),
+                    getSourcemapMock({
+                        minifiedFilePath: minifiedFileWithoutDebugId,
+                        sourcemapFilePath: sourcemapWithoutDebugId,
+                    }),
+                ],
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            expect(getPayloadSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ minifiedFilePath: minifiedFileWithDebugId }),
+                expect.any(Object),
+                undefined,
+                senderContextMock.git,
+                debugId,
+            );
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    `Skipping sourcemap ${sourcemapWithoutDebugId} because no debug ID was found in ${minifiedFileWithoutDebugId}`,
+                ),
+                'warn',
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringMatching(/Done uploading .*1\/1.* sourcemaps/),
+                'debug',
+            );
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should abort when all debug IDs are missing', async () => {
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-no-debug-id');
+            const minifiedFilePath = path.join(tempDir, 'app.js');
+            const sourcemapFilePath = path.join(tempDir, 'app.js.map');
+            const minifiedFileContent = 'console.log("no debug id");';
+            const sourcemapContent = '{"version":3,"sources":["app.js"]}';
+            outputFileSync(minifiedFilePath, minifiedFileContent);
+            outputFileSync(sourcemapFilePath, sourcemapContent);
+            addFixtureFiles({
+                [minifiedFilePath]: minifiedFileContent,
+                [sourcemapFilePath]: sourcemapContent,
+            });
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await sendSourcemaps(
+                [getSourcemapMock({ minifiedFilePath, sourcemapFilePath })],
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getPayloadSpy).not.toHaveBeenCalled();
+            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(mockLogFn).toHaveBeenCalledWith(
+                'No debug ID found in any minified file. Aborting upload.',
+                'error',
+            );
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should throw when all debug IDs are missing and bailOnError is enabled', async () => {
+            const tempDir = path.join(os.tmpdir(), 'dd-build-plugins-no-debug-id-bail');
+            const minifiedFilePath = path.join(tempDir, 'app.js');
+            const sourcemapFilePath = path.join(tempDir, 'app.js.map');
+            const minifiedFileContent = 'console.log("no debug id");';
+            const sourcemapContent = '{"version":3,"sources":["app.js"]}';
+            outputFileSync(minifiedFilePath, minifiedFileContent);
+            outputFileSync(sourcemapFilePath, sourcemapContent);
+            addFixtureFiles({
+                [minifiedFilePath]: minifiedFileContent,
+                [sourcemapFilePath]: sourcemapContent,
+            });
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await expect(
+                sendSourcemaps(
+                    [getSourcemapMock({ minifiedFilePath, sourcemapFilePath })],
+                    { ...getDebugIdSourcemapsConfiguration(), bailOnError: true },
+                    senderContextMock,
+                    mockLogger,
+                ),
+            ).rejects.toThrow('No debug ID found in any minified file. Aborting upload.');
+
+            expect(getPayloadSpy).not.toHaveBeenCalled();
+            expect(doRequestMock).not.toHaveBeenCalled();
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should not report missing debug IDs when no sourcemaps were found', async () => {
+            await sendSourcemaps(
+                [],
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(mockLogFn).not.toHaveBeenCalledWith(
+                'No debug ID found in any minified file. Aborting upload.',
+                'error',
+            );
         });
     });
 

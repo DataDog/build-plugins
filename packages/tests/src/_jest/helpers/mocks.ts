@@ -39,10 +39,11 @@ import type {
     MultipartValue,
     Payload,
 } from '@dd/error-tracking-plugin/sourcemaps/payload';
-import type {
-    SourcemapsOptions,
-    SourcemapsOptionsWithDefaults,
-    Sourcemap,
+import {
+    type DebugIdSourcemapsOptionsWithDefaults,
+    type ServiceVersionSourcemapsOptionsWithDefaults,
+    type SourcemapsOptions,
+    type Sourcemap,
 } from '@dd/error-tracking-plugin/types';
 import { TrackedFilesMatcher } from '@dd/internal-git-plugin/trackedFilesMatcher';
 import type { Compilation, Module, MetricsOptions } from '@dd/metrics-plugin/types';
@@ -445,7 +446,7 @@ export const getMetricsConfiguration = (
 });
 
 export const getMinimalSourcemapsConfiguration = (
-    options: Partial<SourcemapsOptions> = {},
+    options: Partial<ServiceVersionSourcemapsOptionsWithDefaults> = {},
 ): SourcemapsOptions => {
     return {
         minifiedPathPrefix: '/prefix',
@@ -456,11 +457,12 @@ export const getMinimalSourcemapsConfiguration = (
 };
 
 export const getSourcemapsConfiguration = (
-    options: Partial<SourcemapsOptions> = {},
-): SourcemapsOptionsWithDefaults => {
+    options: Partial<ServiceVersionSourcemapsOptionsWithDefaults> = {},
+): ServiceVersionSourcemapsOptionsWithDefaults => {
     return {
         bailOnError: false,
         dryRun: false,
+        debugId: false,
         maxConcurrency: 10,
         minifiedPathPrefix: '/prefix',
         releaseVersion: '1.0.0',
@@ -468,6 +470,13 @@ export const getSourcemapsConfiguration = (
         ...options,
     };
 };
+
+export const getDebugIdSourcemapsConfiguration = (): DebugIdSourcemapsOptionsWithDefaults => ({
+    bailOnError: false,
+    debugId: true,
+    dryRun: false,
+    maxConcurrency: 10,
+});
 
 export const getSourcemapMock = (options: Partial<Sourcemap> = {}): Sourcemap => {
     return {
