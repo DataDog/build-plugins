@@ -348,29 +348,32 @@ describe('env-guard', () => {
 
         // Reflect.get throws for a non-object value, and isEnvProxy() is the setter's first check on
         // whatever gets assigned — without its own object/null guard, `process.env = null` (or
-        // undefined) would surface as an unhandled native TypeError instead of either this file's own
-        // clear rejection message (from inside a scope) or a graceful no-op (from outside one).
-        test('Should not throw a native TypeError when process.env is reassigned to null or undefined', () => {
-            // Each reassignment restored individually, not both bundled under one final restore:
-            // each is its own real reassignment, and a single self-assignment only undoes the one
-            // immediately before it.
-            const beforeNull = process.env;
-            try {
-                expect(() => {
-                    process.env = null as unknown as NodeJS.ProcessEnv;
-                }).not.toThrow();
-            } finally {
-                process.env = beforeNull;
-            }
+        // undefined) would surface as an unhandled native TypeError instead of this file's own clear
+        // rejection message.
+        test('Should reject reassigning process.env to null or undefined with a clear error, not a native TypeError', () => {
+            const originalPath = process.env.PATH;
 
-            const beforeUndefined = process.env;
-            try {
-                expect(() => {
-                    process.env = undefined as unknown as NodeJS.ProcessEnv;
-                }).not.toThrow();
-            } finally {
-                process.env = beforeUndefined;
-            }
+            expect(() => {
+                process.env = null as unknown as NodeJS.ProcessEnv;
+            }).toThrow(/process\.env/i);
+            expect(() => {
+                process.env = undefined as unknown as NodeJS.ProcessEnv;
+            }).toThrow(/process\.env/i);
+
+            expect(process.env.PATH).toBe(originalPath);
+        });
+
+        // A number or string reassigned to process.env would corrupt realEnv the same way
+        // null/undefined does, so the guard covers every non-object primitive, not just the two
+        // nullish ones.
+        test('Should reject reassigning process.env to a primitive (e.g. a number), not corrupt the real environment', () => {
+            const originalPath = process.env.PATH;
+
+            expect(() => {
+                process.env = 1 as unknown as NodeJS.ProcessEnv;
+            }).toThrow(/process\.env/i);
+
+            expect(process.env.PATH).toBe(originalPath);
         });
 
         // Regression coverage: this file gets evaluated more than once in practice (Jest's
@@ -451,6 +454,19 @@ describe('env-guard', () => {
             process.env.POST_ATTEMPT_KEY = 'still-writable';
             expect(process.env.POST_ATTEMPT_KEY).toBe('still-writable');
             delete process.env.POST_ATTEMPT_KEY;
+        });
+
+        // A non-configurable definition can never satisfy the Proxy invariant against
+        // INERT_PROXY_TARGET (always empty), so it must throw a clear, guard-specific error rather
+        // than a cryptic native Proxy TypeError — even outside any scope, since the target is
+        // permanently empty regardless of scope state.
+        test('Should throw a clear error for Object.defineProperty(process.env, key, { configurable: false })', () => {
+            expect(() =>
+                Object.defineProperty(process.env, 'LOCKED_KEY', {
+                    value: 'x',
+                    configurable: false,
+                }),
+            ).toThrow(/non-configurable/);
         });
     });
 
@@ -829,6 +845,54 @@ describe('env-guard', () => {
             });
         });
 
+        // fs.openAsBlob is its own entry point, separate from open*/readFile* above, so it needs its
+        // own guard coverage.
+        describe('fs.openAsBlob guard', () => {
+            test('Should block fs.openAsBlob("/proc/self/environ") during an active scoped-env window', async () => {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    await expect(fs.openAsBlob('/proc/self/environ')).rejects.toThrow(
+                        /not allowed in backend functions/,
+                    );
+                });
+            });
+
+            test('Should not block fs.openAsBlob for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-openasblob-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const blob = await fs.openAsBlob(tmpFile);
+                        await expect(blob.text()).resolves.toBe('hello world');
+                    });
+                } finally {
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // Deleting fs.openAsBlob and re-evaluating the module simulates Node 18, which has no
+            // fs.openAsBlob, matching the feature-detection in packages/core/src/helpers/fs.ts's
+            // getFile().
+            test('Should leave fs.openAsBlob undefined, not replace it with a broken wrapper, when the real function is absent', () => {
+                const originalOpenAsBlob = fs.openAsBlob;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                delete (fs as any).openAsBlob;
+                try {
+                    expect(() => {
+                        jest.isolateModules(() => {
+                            // eslint-disable-next-line @typescript-eslint/no-require-imports
+                            require('./env-guard');
+                        });
+                    }).not.toThrow();
+                    expect(fs.openAsBlob).toBeUndefined();
+                } finally {
+                    fs.openAsBlob = originalOpenAsBlob;
+                }
+            });
+        });
+
         test('Should block a Buffer or URL path pointing at /proc/self/environ, not just a string path', async () => {
             await runWithScopedEnv({ PATH: '/scoped' }, async () => {
                 const environPathAsBuffer = Buffer.from('/proc/self/environ');
@@ -1142,6 +1206,14 @@ describe('env-guard', () => {
             }
         });
 
+        // A malformed fs.cp call throws synchronously from Node's own argument validation, not from
+        // the guard, so it must propagate unguarded like every other entry point here.
+        test('Should let a malformed fs.cp call (no callback) throw synchronously, not swallow the error', () => {
+            expect(() => {
+                (fs.cp as unknown as (src: string, dest: string) => void)('/tmp', '/tmp/x');
+            }).toThrow(/must be of type function/i);
+        });
+
         // new fs.ReadStream(path) constructs directly, bypassing the createReadStream factory the
         // guard above wraps, so it needs separate coverage. @types/node declares no (path, options)
         // constructor for ReadStream, so Reflect.construct invokes the real, untyped signature
@@ -1177,6 +1249,144 @@ describe('env-guard', () => {
                 stream?.destroy();
                 fs.rmSync(tmpFile);
             }
+        });
+
+        // fs.FileReadStream is a real, long-deprecated alias for fs.ReadStream — a separate property
+        // slot that must be re-pointed at the same wrapped class, or constructing through this name
+        // bypasses the guard above entirely.
+        describe('fs.FileReadStream alias guard', () => {
+            function constructFileReadStream(rawPath: string): fs.ReadStream {
+                const stream: fs.ReadStream = Reflect.construct(fs.FileReadStream, [rawPath]);
+                stream.on('error', () => {});
+                return stream;
+            }
+
+            test('Should block constructing new fs.FileReadStream("/proc/self/environ") during an active scoped-env window', async () => {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    expect(() => constructFileReadStream('/proc/self/environ')).toThrow(
+                        /not allowed in backend functions/,
+                    );
+                });
+            });
+
+            test('Should not block constructing new fs.FileReadStream(...) for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filereadstream-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'not a secret');
+                let stream: fs.ReadStream | undefined;
+
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => {
+                            stream = constructFileReadStream(tmpFile);
+                        }).not.toThrow();
+                    });
+                } finally {
+                    stream?.destroy();
+                    fs.rmSync(tmpFile);
+                }
+            });
+        });
+
+        // fs.read/readSync/readv/readvSync take an fd directly, the same case toPathString()'s
+        // /proc/self/fd resolution already covers elsewhere — mocked here so that resolution runs
+        // on every OS, not just Linux.
+        describe('fd-based read guard (fs.read/readSync/readv/readvSync)', () => {
+            function mockFdResolvesToEnviron(fd: number): () => void {
+                const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+                Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+                const readlinkSyncSpy = jest
+                    .spyOn(fs, 'readlinkSync')
+                    .mockImplementation((linkPath) => {
+                        expect(linkPath).toBe(`/proc/self/fd/${fd}`);
+                        return '/proc/self/environ';
+                    });
+                reEvaluateEnvGuardWithCurrentMocks();
+                return () => {
+                    readlinkSyncSpy.mockRestore();
+                    if (platformDescriptor) {
+                        Object.defineProperty(process, 'platform', platformDescriptor);
+                    }
+                };
+            }
+
+            test('Should block fs.readSync(fd) when fd resolves to /proc/self/environ', async () => {
+                const restore = mockFdResolvesToEnviron(99);
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => fs.readSync(99, Buffer.alloc(10), 0, 10, 0)).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    restore();
+                }
+            });
+
+            test('Should block the callback-style fs.read(fd) via its callback, not a synchronous throw, when fd resolves to /proc/self/environ', async () => {
+                const restore = mockFdResolvesToEnviron(99);
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const error = await callbackError((callback) =>
+                            fs.read(99, Buffer.alloc(10), 0, 10, 0, callback),
+                        );
+                        expect(error).toBeInstanceOf(Error);
+                        expect((error as Error).message).toMatch(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    restore();
+                }
+            });
+
+            test('Should block fs.readvSync(fd) when fd resolves to /proc/self/environ', async () => {
+                const restore = mockFdResolvesToEnviron(99);
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => fs.readvSync(99, [Buffer.alloc(10)])).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    restore();
+                }
+            });
+
+            test('Should block the callback-style fs.readv(fd) via its callback, not a synchronous throw, when fd resolves to /proc/self/environ', async () => {
+                const restore = mockFdResolvesToEnviron(99);
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const error = await callbackError((callback) =>
+                            fs.readv(99, [Buffer.alloc(10)], callback),
+                        );
+                        expect(error).toBeInstanceOf(Error);
+                        expect((error as Error).message).toMatch(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    restore();
+                }
+            });
+
+            test('Should not block fs.readSync/readvSync for an unrelated real fd during an active scoped-env window', async () => {
+                const tmpFile = path.join(os.tmpdir(), `env-guard-read-fd-${process.pid}.txt`);
+                fs.writeFileSync(tmpFile, 'hello world');
+                const fd = fs.openSync(tmpFile, 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const buffer = Buffer.alloc(5);
+                        expect(fs.readSync(fd, buffer, 0, 5, 0)).toBe(5);
+                        expect(buffer.toString('utf8')).toBe('hello');
+                    });
+                } finally {
+                    fs.closeSync(fd);
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
         });
 
         // FileHandle isn't part of Node's public API, so ensureFileHandleReadGuarded patches its
@@ -1533,6 +1743,186 @@ describe('env-guard', () => {
                     fs.rmSync(tmpFile, { force: true });
                 }
             });
+        });
+
+        // fs.cpSync's recursive copy calls neither fs.copyFileSync nor fs.readFileSync — Node's
+        // internal traversal never re-enters the wrapped entry points above, so a symlink inside the
+        // copied tree pointing at /proc/.../environ would have its real content copied to an
+        // unguarded destination with no guard ever seeing it.
+        describe('cp recursive+dereference guard', () => {
+            test('Should block fs.cpSync/fs.cp/fs.promises.cp with recursive+dereference during an active scoped-env window', async () => {
+                const srcDir = path.join(os.tmpdir(), `env-guard-cp-recursive-src-${process.pid}`);
+                const destDir = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-recursive-dest-${process.pid}`,
+                );
+                fs.mkdirSync(srcDir, { recursive: true });
+                fs.writeFileSync(path.join(srcDir, 'a.txt'), 'not a secret');
+
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() =>
+                            fs.cpSync(srcDir, destDir, { recursive: true, dereference: true }),
+                        ).toThrow(/not allowed in backend functions/);
+
+                        const error = await callbackError((callback) =>
+                            fs.cp(
+                                srcDir,
+                                destDir,
+                                { recursive: true, dereference: true },
+                                callback,
+                            ),
+                        );
+                        expect(error).toBeInstanceOf(Error);
+                        expect((error as Error).message).toMatch(
+                            /not allowed in backend functions/,
+                        );
+
+                        await expect(
+                            fs.promises.cp(srcDir, destDir, {
+                                recursive: true,
+                                dereference: true,
+                            }),
+                        ).rejects.toThrow(/not allowed in backend functions/);
+                    });
+                } finally {
+                    fs.rmSync(srcDir, { recursive: true, force: true });
+                    fs.rmSync(destDir, { recursive: true, force: true });
+                }
+            });
+
+            test('Should not block a recursive copy WITHOUT dereference during an active scoped-env window', async () => {
+                const srcDir = path.join(os.tmpdir(), `env-guard-cp-plain-src-${process.pid}`);
+                const destDir = path.join(os.tmpdir(), `env-guard-cp-plain-dest-${process.pid}`);
+                fs.mkdirSync(srcDir, { recursive: true });
+                fs.writeFileSync(path.join(srcDir, 'a.txt'), 'not a secret');
+
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => fs.cpSync(srcDir, destDir, { recursive: true })).not.toThrow();
+                    });
+                    expect(fs.readFileSync(path.join(destDir, 'a.txt'), 'utf8')).toBe(
+                        'not a secret',
+                    );
+                } finally {
+                    fs.rmSync(srcDir, { recursive: true, force: true });
+                    fs.rmSync(destDir, { recursive: true, force: true });
+                }
+            });
+
+            test('Should not block fs.cpSync for a single unrelated file with no recursive option at all', async () => {
+                const srcFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-single-src-${process.pid}.txt`,
+                );
+                const destFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-single-dest-${process.pid}.txt`,
+                );
+                fs.writeFileSync(srcFile, 'not a secret');
+
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => fs.cpSync(srcFile, destFile)).not.toThrow();
+                    });
+                    expect(fs.readFileSync(destFile, 'utf8')).toBe('not a secret');
+                } finally {
+                    fs.rmSync(srcFile, { force: true });
+                    fs.rmSync(destFile, { force: true });
+                }
+            });
+
+            test('Should still block fs.cpSync("/proc/self/environ", dest) via the plain top-level path check', async () => {
+                const dest = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-still-blocked-${process.pid}.txt`,
+                );
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => fs.cpSync('/proc/self/environ', dest)).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    fs.rmSync(dest, { force: true });
+                }
+            });
+
+            // The generic makeGuardWrapper machinery forwards a caller's original options object
+            // unchanged — without snapshotting, a getter-backed recursive/dereference could report
+            // false to this check and true when Node's own fs.cp* implementation reads the same
+            // property again internally.
+            test('Should read options.recursive/options.dereference exactly once each, not read again by the real implementation', async () => {
+                const srcDir = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-recursive-once-src-${process.pid}`,
+                );
+                const destDir = path.join(
+                    os.tmpdir(),
+                    `env-guard-cp-recursive-once-dest-${process.pid}`,
+                );
+                fs.mkdirSync(srcDir, { recursive: true });
+                fs.writeFileSync(path.join(srcDir, 'a.txt'), 'not a secret');
+
+                let recursiveReadCount = 0;
+                let dereferenceReadCount = 0;
+                const options = {
+                    get recursive() {
+                        recursiveReadCount += 1;
+                        return true;
+                    },
+                    get dereference() {
+                        dereferenceReadCount += 1;
+                        return false;
+                    },
+                };
+
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() =>
+                            fs.cpSync(srcDir, destDir, options as fs.CopySyncOptions),
+                        ).not.toThrow();
+                    });
+                    expect(fs.readFileSync(path.join(destDir, 'a.txt'), 'utf8')).toBe(
+                        'not a secret',
+                    );
+                    // Exactly 1 each: the guard's own snapshotting read, not a second, independent
+                    // read by the real cp implementation.
+                    expect(recursiveReadCount).toBe(1);
+                    expect(dereferenceReadCount).toBe(1);
+                } finally {
+                    fs.rmSync(srcDir, { recursive: true, force: true });
+                    fs.rmSync(destDir, { recursive: true, force: true });
+                }
+            });
+        });
+
+        // The TOCTOU test above verifies "resolve exactly once" by content; this asserts the
+        // invocation count directly.
+        test('Should read options.fd exactly once, not twice via a stray spread', async () => {
+            const tmpFile = path.join(os.tmpdir(), `env-guard-fd-single-read-${process.pid}.txt`);
+            fs.writeFileSync(tmpFile, 'not a secret');
+            const fd = fs.openSync(tmpFile, 'r');
+            let readCount = 0;
+            const options = {
+                get fd() {
+                    readCount += 1;
+                    return fd;
+                },
+            };
+            let stream: fs.ReadStream | undefined;
+
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    stream = fs.createReadStream('/some/unrelated/path', options);
+                    stream.on('error', () => {});
+                });
+                expect(readCount).toBe(1);
+            } finally {
+                stream?.destroy();
+                fs.closeSync(fd);
+                fs.rmSync(tmpFile, { force: true });
+            }
         });
     });
 
