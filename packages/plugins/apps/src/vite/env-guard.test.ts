@@ -1094,6 +1094,362 @@ describe('env-guard', () => {
                 fs.rmSync(tmpFile);
             }
         });
+
+        // FileHandle isn't part of Node's public API, so ensureFileHandleReadGuarded patches its
+        // .read() lazily, per-instance, once a handle is already open.
+        describe('FileHandle.prototype.read guard', () => {
+            test('Should block handle.read() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.read(Buffer.alloc(10), 0, 10, 0)).rejects.toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            // No mocked any-OS variant here — mutating process.platform around a real, async
+            // handle.read() I/O call raced other test files sharing the process, unlike the
+            // synchronous reads elsewhere in this file.
+            test('Should not block handle.read() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const buffer = Buffer.alloc(5);
+                        const { bytesRead } = await handle.read(buffer, 0, 5, 0);
+                        expect(bytesRead).toBe(5);
+                        expect(buffer.toString('utf8', 0, 5)).toBe('hello');
+                    });
+                } finally {
+                    await handle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // Verifies the guard resolves the handle's real fd via a captured native getter, not an
+            // own-property shadow — independent of Node's own read() dispatch, which could itself be
+            // fooled by the same shadow on some versions. Real /proc/self/environ, not a mocked
+            // readlink: the guard's own fs.realpathSync/readlinkSync are captured once at module load
+            // (see nativeRealpathSync/nativeReadlinkSync), so a jest.spyOn() applied after this file's
+            // first import can't reach them — this only exercises real behavior on Linux.
+            test("Should block handle.read() using the handle's real fd, even when an own property shadows it with a harmless value", async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                const realFd = handle.fd;
+                try {
+                    // A harmless-looking own property, distinct from realFd, simulating a
+                    // customer-controlled wrapper lying about which fd this handle was opened against.
+                    Object.defineProperty(handle, 'fd', { value: 999999, configurable: true });
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.read(Buffer.alloc(10), 0, 10, 0)).rejects.toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    Object.defineProperty(handle, 'fd', { value: realFd, configurable: true });
+                    await handle.close();
+                }
+            });
+
+            // The inverse of the shadow test above: the handle's real target is harmless, but an own
+            // property shadows .fd with a different, dangerous fd number. The guard's own check (via
+            // the captured native getter) correctly sees the harmless real fd — but Node's real
+            // handle.read() resolves fd through ordinary property lookup, not that getter, and would
+            // follow the shadow to the dangerous target instead.
+            test("Should block handle.read() when the handle's own fd is shadowed to a different, dangerous fd, even though its real target is harmless", async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const dangerousHandle = await fs.promises.open('/proc/self/environ', 'r');
+                const dangerousFd = dangerousHandle.fd;
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-shadow-inverse-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'not a secret');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                try {
+                    Object.defineProperty(handle, 'fd', {
+                        value: dangerousFd,
+                        configurable: true,
+                    });
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.read(Buffer.alloc(10), 0, 10, 0)).rejects.toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    // close() itself resolves fd the same way read() does — deleting the shadowed
+                    // own property first (rather than closing while it's still in place) restores
+                    // the real, configurable getter so each handle closes its own true fd, not the
+                    // other's.
+                    delete (handle as unknown as Record<string, unknown>).fd;
+                    await handle.close();
+                    await dangerousHandle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // A stateful accessor own property could return the true, harmless fd on the one read
+            // readNativeFd's own divergence check makes, then a different, dangerous fd on a later
+            // read — defeating a "compare the two reads once" defense on its own, since Node's real
+            // readFile() would consult the same property again during the actual I/O. Pinning fd as
+            // a plain value for the call's duration replaces that property outright, so the getter
+            // is never reachable again once the check has run: this asserts both the safe content
+            // (proving no leak) and that the getter really was invoked only once, not skipped.
+            test("Should read only the fd the check validated, not a stateful getter's later, different answer, even though the getter is never consulted again once pinned", async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const dangerousHandle = await fs.promises.open('/proc/self/environ', 'r');
+                const dangerousFd = dangerousHandle.fd;
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-stateful-shadow-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'not a secret');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                const benignFd = handle.fd;
+                let callCount = 0;
+                try {
+                    Object.defineProperty(handle, 'fd', {
+                        configurable: true,
+                        get() {
+                            callCount += 1;
+                            return callCount === 1 ? benignFd : dangerousFd;
+                        },
+                    });
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.readFile('utf8')).resolves.toBe('not a secret');
+                    });
+                    expect(callCount).toBe(1);
+                } finally {
+                    delete (handle as unknown as Record<string, unknown>).fd;
+                    await handle.close();
+                    await dangerousHandle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+        });
+
+        // handle.readFile()/handle.createReadStream()/handle.readableWebStream() are distinct
+        // FileHandle prototype methods that don't delegate to each other, so each needs its own
+        // guard coverage. Linux-only, matching the .read() guard's tests above, since opening a
+        // handle against /proc/self/environ needs /proc to exist.
+        describe('FileHandle.prototype.readFile/readv/createReadStream/readableWebStream/readLines guard', () => {
+            test('Should block handle.readFile() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.readFile()).rejects.toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            test('Should not block handle.readFile() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-readfile-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.readFile('utf8')).resolves.toBe('hello world');
+                    });
+                } finally {
+                    await handle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // No "any OS" mocked variant here either, same flakiness precedent as readFile()'s own
+            // omission above.
+            test('Should block handle.readv() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        await expect(handle.readv([Buffer.alloc(10)], 0)).rejects.toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            test('Should not block handle.readv() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-readv-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        const buffer = Buffer.alloc(5);
+                        const { bytesRead } = await handle.readv([buffer], 0);
+                        expect(bytesRead).toBe(5);
+                        expect(buffer.toString('utf8')).toBe('hello');
+                    });
+                } finally {
+                    await handle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // createReadStream() constructs and returns synchronously (the real read happens lazily
+            // as the stream is consumed) — the guard throws synchronously at construction, matching
+            // that real contract, rather than surfacing only once the stream is later read from.
+            test('Should block handle.createReadStream() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => handle.createReadStream()).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            test('Should not block handle.createReadStream() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-stream-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                let stream: ReturnType<typeof handle.createReadStream> | undefined;
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => {
+                            stream = handle.createReadStream();
+                            stream.on('error', () => {});
+                        }).not.toThrow();
+                    });
+                } finally {
+                    stream?.destroy();
+                    await handle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // readableWebStream() also constructs and returns synchronously, the same reasoning as
+            // createReadStream() above.
+            test('Should block handle.readableWebStream() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => handle.readableWebStream()).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            // readableWebStream()'s cancel() already closes the underlying native handle; a
+            // subsequent handle.close() double-closes it and aborts the process on Node's own
+            // !closed_ assertion, so canceling the stream is this handle's entire cleanup.
+            test('Should not block handle.readableWebStream() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-webstream-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello world');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                let stream: ReturnType<typeof handle.readableWebStream> | undefined;
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => {
+                            stream = handle.readableWebStream();
+                        }).not.toThrow();
+                    });
+                } finally {
+                    if (stream) {
+                        await stream.cancel();
+                    } else {
+                        await handle.close();
+                    }
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+
+            // readLines() also constructs and returns a readline Interface synchronously, the same
+            // reasoning as createReadStream()/readableWebStream() above.
+            test('Should block handle.readLines() when the handle is already open against /proc/self/environ', async () => {
+                if (process.platform !== 'linux') {
+                    return;
+                }
+                const handle = await fs.promises.open('/proc/self/environ', 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        expect(() => handle.readLines()).toThrow(
+                            /not allowed in backend functions/,
+                        );
+                    });
+                } finally {
+                    await handle.close();
+                }
+            });
+
+            test('Should not block handle.readLines() for an unrelated real file during an active scoped-env window', async () => {
+                const tmpFile = path.join(
+                    os.tmpdir(),
+                    `env-guard-filehandle-readlines-ok-${process.pid}.txt`,
+                );
+                fs.writeFileSync(tmpFile, 'hello\nworld');
+                const handle = await fs.promises.open(tmpFile, 'r');
+                try {
+                    await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                        let rl: ReturnType<typeof handle.readLines> | undefined;
+                        expect(() => {
+                            rl = handle.readLines();
+                        }).not.toThrow();
+                        const lines: string[] = [];
+                        for await (const line of rl!) {
+                            lines.push(line);
+                        }
+                        expect(lines).toEqual(['hello', 'world']);
+                    });
+                } finally {
+                    await handle.close();
+                    fs.rmSync(tmpFile, { force: true });
+                }
+            });
+        });
     });
 
     describe('process.report.excludeEnv', () => {

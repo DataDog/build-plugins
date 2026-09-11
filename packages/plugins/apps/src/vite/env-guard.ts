@@ -463,14 +463,31 @@ function wrapGuardedFsFn<T extends (...args: never[]) => unknown>(real: T): T {
 }
 
 // fs.promises.* functions must reject rather than throw synchronously on a guard failure, matching
-// their real Promise-returning contract.
-function wrapGuardedAsyncFsFn<T extends (...args: never[]) => Promise<unknown>>(real: T): T {
-    return makeGuardWrapper(
+// their real Promise-returning contract. `onResolved`, if given, runs on the real, unguarded result
+// once resolved — used only by fs.promises.open below to patch FileHandle.prototype.read from the
+// first real handle it returns (see ensureFileHandleReadGuarded).
+function wrapGuardedAsyncFsFn<T extends (...args: never[]) => Promise<unknown>>(
+    real: T,
+    onResolved?: (result: unknown) => void,
+): T {
+    const guarded = makeGuardWrapper(
         () => real,
         (rawPath) => isBlockedEnvironPath(rawPath),
         ENVIRON_READ_BLOCKED_MESSAGE,
         'reject',
     );
+    if (!onResolved) {
+        return guarded;
+    }
+    const wrapped = async function (this: unknown, ...args: Parameters<T>): Promise<unknown> {
+        const result = await (guarded as unknown as (...a: unknown[]) => Promise<unknown>).apply(
+            this,
+            args,
+        );
+        onResolved(result);
+        return result;
+    } as T;
+    return wrapped;
 }
 
 // fs.readFile/open/copyFile/cp report failure via an error-first callback, never a synchronous
@@ -496,6 +513,154 @@ function wrapGuardedStreamFn<T extends (...args: never[]) => unknown>(real: T): 
     return wrapped as T;
 }
 
+// Re-checked on every fs.promises.open() call rather than trusted as a one-time-installed flag — a
+// stray jest.spyOn(...).mockRestore() elsewhere in the process, on the same shared FileHandle
+// prototype, can silently strip one of these wrappers without this file ever re-running to notice.
+const FILE_HANDLE_READ_GUARD_MARKER = Symbol.for(
+    '@dd/apps-plugin/env-guard/file-handle-read-guard',
+);
+
+// Shared by every FileHandle prototype method patched below — re-checks proto[methodName] fresh on
+// every fs.promises.open() call rather than trusting a one-time flag, for the same reason
+// FILE_HANDLE_READ_GUARD_MARKER exists.
+function originalIfUnguarded(
+    proto: Record<PropertyKey, unknown>,
+    methodName: string,
+): ((...args: never[]) => unknown) | undefined {
+    const original = proto[methodName];
+    if (typeof original !== 'function') {
+        return undefined;
+    }
+    if ((original as unknown as Record<PropertyKey, unknown>)[FILE_HANDLE_READ_GUARD_MARKER]) {
+        return undefined;
+    }
+    return original as (...args: never[]) => unknown;
+}
+
+function markGuarded(fn: (...args: never[]) => unknown): void {
+    (fn as unknown as Record<PropertyKey, unknown>)[FILE_HANDLE_READ_GUARD_MARKER] = true;
+}
+
+// A customer-controlled own property can shadow the prototype's real `fd` getter in either
+// direction — reporting a harmless value to this check while `original.apply` below reads the
+// real, dangerous fd, or the reverse. An untampered handle never carries an own `fd` property, so
+// any divergence between the naive and native reads is itself proof of tampering.
+function readNativeFd(nativeFdGetter: (() => number) | undefined, handle: { fd: number }): number {
+    if (!nativeFdGetter) {
+        return handle.fd;
+    }
+    const trueFd = nativeFdGetter.call(handle);
+    if (handle.fd !== trueFd) {
+        throw new Error(ENVIRON_READ_BLOCKED_MESSAGE);
+    }
+    return trueFd;
+}
+
+// A stateful accessor `fd` property can still defeat readNativeFd's own divergence check: return
+// the validated, harmless fd on the one read the check makes, then a different, dangerous fd on
+// Node's own later read(s) of the same property — read()/readFile()/readv() all re-read `handle.fd`
+// more than once over a single call's lifetime. Pinning `fd` as a plain, static-value own property
+// for the call's full async duration, restored to its original shape afterward, forces every read
+// to resolve the one validated value instead of a getter's shifting answer.
+async function withPinnedFd<T>(handle: object, fd: number, fn: () => Promise<T>): Promise<T> {
+    const hasOwnFd = Object.prototype.hasOwnProperty.call(handle, 'fd');
+    const priorDescriptor = hasOwnFd ? Object.getOwnPropertyDescriptor(handle, 'fd') : undefined;
+    Object.defineProperty(handle, 'fd', { value: fd, configurable: true, enumerable: true });
+    try {
+        return await fn();
+    } finally {
+        if (priorDescriptor) {
+            Object.defineProperty(handle, 'fd', priorDescriptor);
+        } else {
+            delete (handle as Record<string, unknown>).fd;
+        }
+    }
+}
+
+// read()/readFile()/readv() all report failure via their own returned Promise, never a
+// synchronous throw.
+function patchFileHandleAsyncMethod(
+    proto: Record<PropertyKey, unknown>,
+    methodName: string,
+    nativeFdGetter: (() => number) | undefined,
+): void {
+    const original = originalIfUnguarded(proto, methodName);
+    if (!original) {
+        return;
+    }
+    const guarded = function (this: { fd: number }, ...args: never[]): unknown {
+        // Skips readNativeFd entirely outside any scope — it calls the native .fd getter, which
+        // unscoped callers must never trigger (see isBlockedEnvironPath's own short-circuit).
+        if (!sharedState.isInsideScope()) {
+            return original.apply(this, args);
+        }
+        let fd: number;
+        try {
+            fd = readNativeFd(nativeFdGetter, this);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        if (isBlockedEnvironPath(fd)) {
+            return Promise.reject(new Error(ENVIRON_READ_BLOCKED_MESSAGE));
+        }
+        return withPinnedFd(this, fd, async () => original.apply(this, args));
+    };
+    markGuarded(guarded);
+    proto[methodName] = guarded;
+}
+
+// createReadStream()/readableWebStream()/readLines() all construct and return their stream/iterator
+// synchronously — the actual reads happen lazily as the caller consumes it, but a guard failure on
+// the fd itself is known up front, so this matches their real, synchronous-return contract instead
+// of rejecting a promise no caller of these methods is expecting.
+function patchFileHandleSyncMethod(
+    proto: Record<PropertyKey, unknown>,
+    methodName: string,
+    nativeFdGetter: (() => number) | undefined,
+): void {
+    const original = originalIfUnguarded(proto, methodName);
+    if (!original) {
+        return;
+    }
+    const guarded = function (this: { fd: number }, ...args: never[]): unknown {
+        if (!sharedState.isInsideScope()) {
+            return original.apply(this, args);
+        }
+        const fd = readNativeFd(nativeFdGetter, this);
+        if (isBlockedEnvironPath(fd)) {
+            throw new Error(ENVIRON_READ_BLOCKED_MESSAGE);
+        }
+        return original.apply(this, args);
+    };
+    markGuarded(guarded);
+    proto[methodName] = guarded;
+}
+
+// readableWebStream/readLines are patched lazily off the first real handle fs.promises.open()
+// returns — a handle obtained before that patch installs is unaffected, matching every other guard
+// here. These six are distinct prototype methods that don't delegate to each other, so each needs
+// its own patch; guarding .read() alone would leave the other five as unguarded, direct reads of
+// the real fd.
+function ensureFileHandleReadGuarded(handle: unknown): void {
+    if (typeof handle !== 'object' || handle === null) {
+        return;
+    }
+    const proto = Object.getPrototypeOf(handle) as Record<PropertyKey, unknown>;
+    // Read once here, from the first real handle fs.promises.open() ever returns — before any
+    // customer code has had a chance to install its own instance-level `fd` on some later handle.
+    const nativeFdGetter = Object.getOwnPropertyDescriptor(proto, 'fd')?.get as
+        | (() => number)
+        | undefined;
+    patchFileHandleAsyncMethod(proto, 'read', nativeFdGetter);
+    patchFileHandleAsyncMethod(proto, 'readFile', nativeFdGetter);
+    patchFileHandleAsyncMethod(proto, 'readv', nativeFdGetter);
+    patchFileHandleSyncMethod(proto, 'createReadStream', nativeFdGetter);
+    patchFileHandleSyncMethod(proto, 'readableWebStream', nativeFdGetter);
+    // readLines() returns a readline Interface synchronously — the real reads happen lazily as the
+    // caller iterates it, same reasoning as createReadStream()/readableWebStream() above.
+    patchFileHandleSyncMethod(proto, 'readLines', nativeFdGetter);
+}
+
 // open/openSync/promises.open are separate entry points that map a path to a file descriptor
 // without going through readFile*, so they need the same guard.
 fs.readFileSync = wrapGuardedFsFn(fs.readFileSync);
@@ -504,7 +669,7 @@ fs.promises.readFile = wrapGuardedAsyncFsFn(fs.promises.readFile);
 fs.createReadStream = wrapGuardedStreamFn(fs.createReadStream);
 fs.openSync = wrapGuardedFsFn(fs.openSync);
 fs.open = wrapGuardedCallbackFsFn(fs.open);
-fs.promises.open = wrapGuardedAsyncFsFn(fs.promises.open);
+fs.promises.open = wrapGuardedAsyncFsFn(fs.promises.open, ensureFileHandleReadGuarded);
 
 // copyFileSync/copyFile/promises.copyFile/cpSync/promises.cp read the source file's bytes through
 // a distinct native binding that never calls through readFile*/open* above — an uncovered path that
