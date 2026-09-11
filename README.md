@@ -15,6 +15,7 @@ To interact with Datadog directly from your builds.
 > **Migrations**:
 > - [v1 to v2](/MIGRATIONS.md#v1-to-v2).
 > - [v2 to v3](/MIGRATIONS.md#v2-to-v3).
+> - [v3 to v4](/MIGRATIONS.md#v3-to-v4).
 
 ## Table of content <!-- #omit in toc -->
 
