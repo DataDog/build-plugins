@@ -15,23 +15,36 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
+import type { EnvScopeHandle } from './env-guard';
 import { createEpochGuard } from './execution-epoch';
 import type { BlockedScopeHandle } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
-// Lazy, memoized — network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram,
-// dns, child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
+// Lazily imports and memoizes a guard module on first call, resetting the memo on a failed import
+// so a later call can retry rather than being stuck replaying the same rejection forever.
+function lazyImportOnce<T>(loader: () => Promise<T>): () => Promise<T> {
+    let modulePromise: Promise<T> | undefined;
+    return () => {
+        modulePromise ??= loader().catch((err: unknown) => {
+            modulePromise = undefined;
+            throw err;
+        });
+        return modulePromise;
+    };
+}
+
+// network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram, dns,
+// child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
 // import here would trigger that install for every bundler that transitively imports this file via
 // index.ts (webpack/esbuild/rspack/rollup included), even though local execution is Vite-dev-only —
 // deferring the import until a local execution actually happens confines the install to Vite.
-let networkGuardModule: Promise<typeof import('./network-guard')> | undefined;
-function getNetworkGuard(): Promise<typeof import('./network-guard')> {
-    networkGuardModule ??= import('./network-guard').catch((err: unknown) => {
-        networkGuardModule = undefined;
-        throw err;
-    });
-    return networkGuardModule;
-}
+const getNetworkGuard = lazyImportOnce(() => import('./network-guard'));
+
+// Same reasoning as getNetworkGuard() just above: env-guard.ts installs process-wide monkeypatches
+// (fs.readFileSync/readFile/createReadStream/openSync/open and their promises variants,
+// process.report.getReport/writeReport) unconditionally at its own module-load time. A static
+// import here would trigger that install for every bundler, not just Vite.
+const getEnvGuard = lazyImportOnce(() => import('./env-guard'));
 
 type RuntimeUser = {
     id: string;
@@ -214,15 +227,24 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. Accepted residual gap: this runs outside network-guard.ts's `runBlocked` scope (only the exported function's body is wrapped, not module-level evaluation), so a customer file's top-level code has real, unguarded network/subprocess access — not a hard security boundary, matching network-guard.ts's "no OS sandbox" framing. Awaits `getNetworkGuard()` first — the sole choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr` capture (see that file) always happens before this unguarded window, not just before a later `runBlocked` call. */
+/**
+ * Loads a customer module under `runScriptLocally`'s top-level-evaluation `$`-scoping (see
+ * `customerModuleLoadContext`), for callers like dev-server.ts's priming load. Scopes `process.env`
+ * first so a dependency's top-level code can't capture the real `fs.readFileSync` and bypass the
+ * guard. Accepted residual gap: runs outside `runBlocked`, so top-level code still has real
+ * network/subprocess access — not a hard boundary, matching this file's "no OS sandbox" framing.
+ */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
+    onScopeStarted?: (handle: EnvScopeHandle) => void,
 ): Promise<Record<string, unknown>> {
     await getNetworkGuard();
+    const { buildScopedEnv, runWithScopedEnv } = await getEnvGuard();
+    const scopedEnv = buildScopedEnv({});
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
-            loadModule(entrySpecifier),
+            runWithScopedEnv(scopedEnv, () => loadModule(entrySpecifier), onScopeStarted),
         ),
     );
 }
@@ -693,12 +715,19 @@ export async function executeColdActionLocally(
             `Resolving allowed connections for "${displayName}"`,
         );
         const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
-        const primingPromise = loadCustomerModuleEntry(loadModule, entrySpecifier);
-        const primedEntry = await withTimeout(
-            primingPromise,
-            timeoutMs,
-            `Loading "${displayName}"`,
-        );
+        let primingEnvScope: EnvScopeHandle | undefined;
+        const primingPromise = loadCustomerModuleEntry(loadModule, entrySpecifier, (handle) => {
+            primingEnvScope = handle;
+        });
+        let primedEntry: Record<string, unknown> | undefined;
+        try {
+            primedEntry = await withTimeout(primingPromise, timeoutMs, `Loading "${displayName}"`);
+        } catch (err) {
+            // A hung priming load's own runWithScopedEnv finally never runs, so this call abandons
+            // just its own token — leaving any other, unrelated execution's still-active scope alone.
+            primingEnvScope?.abandon();
+            throw err;
+        }
         // Calls runScriptLocally directly, not executeScriptLocally, to avoid enqueueing twice.
         return runScriptLocally(
             { ...func, allowedConnectionIds },
@@ -743,30 +772,27 @@ async function runScriptLocally(
     let rejectTimeout: ((error: Error) => void) | undefined;
     let pendingActionCalls = 0;
     let absoluteTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
-    // Set once runBlocked's own scope starts — undefined until then, so an execution abandoned
-    // before it reaches that point has nothing to abandon here.
+    // Set once runBlocked's/runWithScopedEnv's own scope starts — undefined until then, so an
+    // execution abandoned before it reaches that point has nothing to abandon here.
     let blockedScope: BlockedScopeHandle | undefined;
+    let envScope: EnvScopeHandle | undefined;
 
-    // Promise.race abandons a hung fn without cancelling it, so its runBlocked scope's try/finally
-    // cleanup never runs. abandonIfCurrent() only clears if this scope is still active, so this is
-    // safe even if a newer execution's own runBlocked scope has already started; the block itself
-    // stays enforced regardless via blockedContext's own scoping. Shared by both timeout paths
-    // below, since either can abandon a still-running fn the same way.
-    const abandonBlockedScope = () => {
-        blockedScope?.abandonIfCurrent();
-    };
-
-    // Shared by both timeout paths below: concludes the execution, abandons its runBlocked scope
-    // (see abandonBlockedScope above), then rejects with the caller's own message.
-    const failWithTimeout = (message: string) => {
+    // Promise.race abandons a hung fn without cancelling it, so its runBlocked/runWithScopedEnv
+    // scope's try/finally cleanup never runs. Both handles only discharge their own token, so this
+    // is safe even while a different, still-legitimately-running execution holds its own scope —
+    // unlike forceResetEnv(), neither call can clobber a scope it doesn't own.
+    const abandonExecutionAndRejectWith = (error: Error) => {
         concludeExecution();
-        abandonBlockedScope();
-        rejectTimeout?.(new Error(message));
+        blockedScope?.abandonIfCurrent();
+        envScope?.abandon();
+        rejectTimeout?.(error);
     };
 
     const scheduleTimeout = () => {
         timer = setTimeout(() => {
-            failWithTimeout(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`);
+            abandonExecutionAndRejectWith(
+                new Error(`Local execution of "${func.name}" timed out after ${timeoutMs}ms`),
+            );
         }, timeoutMs);
     };
 
@@ -776,8 +802,10 @@ async function runScriptLocally(
     const rearmAbsoluteTimeout = () => {
         clearTimeout(absoluteTimeoutTimer);
         absoluteTimeoutTimer = setTimeout(() => {
-            failWithTimeout(
-                `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
+            abandonExecutionAndRejectWith(
+                new Error(
+                    `Local execution of "${func.name}" exceeded the absolute ${totalExecutionTimeoutMs}ms execution ceiling, regardless of any $.Actions call in flight.`,
+                ),
             );
         }, totalExecutionTimeoutMs);
     };
@@ -855,19 +883,6 @@ async function runScriptLocally(
             // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
             return await backendGlobalsContext.run({ value: $ }, () =>
                 executionDispatchContext.run(dispatch, async () => {
-                    // Both adapters are stable and idempotent to re-register, so no coordination is needed between them or across executions.
-                    const actionCatalogRegistration = registerActionCatalogIfInstalled(
-                        loadModule,
-                        projectRoot,
-                        timeoutMs,
-                    );
-                    const backendRuntimeRegistration = registerBackendRuntimeIfInstalled(
-                        loadModule,
-                        projectRoot,
-                        timeoutMs,
-                    );
-                    await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
-
                     const rejectIfAbandoned = () => {
                         if (!scope.isCurrent()) {
                             throw new Error(
@@ -875,20 +890,61 @@ async function runScriptLocally(
                             );
                         }
                     };
-                    // Checked again after the await below — getNetworkGuard()'s dynamic import can
-                    // itself take long enough (its first call in a process) for the timeout to fire
-                    // in between, and the customer function must never run once already abandoned.
+                    // Checked again below — getNetworkGuard()'s and getEnvGuard()'s dynamic imports
+                    // can themselves take long enough (their first call in a process) for the
+                    // timeout to fire while they load, and the customer function must never run once
+                    // already abandoned.
                     rejectIfAbandoned();
-                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
-                    const { runBlocked } = await getNetworkGuard();
+                    // Nests runBlocked (network/subprocess) with runWithScopedEnv (process.env) for
+                    // the same window — independent globals, so nesting order doesn't matter.
+                    // assertJsonSerializable runs inside both, since a malicious result's
+                    // toJSON()/getter must run while access is still blocked/scoped.
+                    const networkGuardPromise = getNetworkGuard();
+                    const envGuardPromise = getEnvGuard();
+                    const [{ runBlocked }, { buildScopedEnv, runWithScopedEnv }] =
+                        await Promise.all([networkGuardPromise, envGuardPromise]);
                     rejectIfAbandoned();
-                    const data = await runBlocked(
-                        async () => {
-                            const result = await fn(...args);
-                            return assertJsonSerializable(result, func);
-                        },
+                    const scopedEnv = buildScopedEnv({});
+                    const data = await runWithScopedEnv(
+                        scopedEnv,
+                        () =>
+                            runBlocked(
+                                async () => {
+                                    // Both adapters are stable and idempotent to re-register.
+                                    // Registered here, inside the same env/network scope as the
+                                    // customer function itself, since their loadModule() calls
+                                    // resolve real npm packages a customer project could declare,
+                                    // whose top-level code would otherwise run with the real,
+                                    // unscoped environment and network.
+                                    const actionCatalogRegistration =
+                                        registerActionCatalogIfInstalled(
+                                            loadModule,
+                                            projectRoot,
+                                            timeoutMs,
+                                        );
+                                    const backendRuntimeRegistration =
+                                        registerBackendRuntimeIfInstalled(
+                                            loadModule,
+                                            projectRoot,
+                                            timeoutMs,
+                                        );
+                                    await Promise.all([
+                                        actionCatalogRegistration,
+                                        backendRuntimeRegistration,
+                                    ]);
+                                    // Registration's loadModule() calls can themselves take long
+                                    // enough to cross the timeout — the customer function must
+                                    // never run once already abandoned.
+                                    rejectIfAbandoned();
+                                    const result = await fn(...args);
+                                    return assertJsonSerializable(result, func);
+                                },
+                                (handle) => {
+                                    blockedScope = handle;
+                                },
+                            ),
                         (handle) => {
-                            blockedScope = handle;
+                            envScope = handle;
                         },
                     );
                     return { data };

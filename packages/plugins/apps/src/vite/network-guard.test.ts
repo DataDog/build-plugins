@@ -152,8 +152,8 @@ describe('network-guard', () => {
             ).rejects.toThrow(/Network access is not allowed/);
         });
 
-        // dgram.send()'s real Node contract reports failure via an error-first callback (confirmed
-        // via @types/node doc examples), never a synchronous throw — the guard must match that.
+        // dgram.send()'s real Node contract reports failure via an error-first callback, never a
+        // synchronous throw — the guard must match that.
         test('Should block dgram.Socket.send() made inside fn via its error-first callback, not a synchronous throw', async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -168,9 +168,9 @@ describe('network-guard', () => {
             });
         });
 
-        // dgram.Socket.connect()'s callback is a success-only 'connect' event shorthand (confirmed
-        // via @types/node: `callback?: () => void`) — real failures are only ever reported via the
-        // async 'error' event, so the guard must signal that way too, not a synchronous throw.
+        // dgram.Socket.connect()'s callback is a success-only 'connect' event shorthand — real
+        // failures are only ever reported via the async 'error' event, so the guard must signal
+        // that way too, not a synchronous throw.
         test("Should block dgram.Socket.connect() made inside fn via its async 'error' event, not a synchronous throw", async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -1181,6 +1181,26 @@ describe('installGuardedProperty security', () => {
                 value: { getStore: () => undefined, run: (_v: unknown, fn: () => unknown) => fn() },
             });
         }).toThrow(/Cannot redefine property/);
+    });
+
+    // A raw AsyncLocalStorage instance on the registry would let any code with `require('net')`
+    // call `.disable()` on it and permanently kill network blocking process-wide — a stronger
+    // bypass than reading a value, since it disarms every future runBlocked call too.
+    test('Should not let a `.disable()` call reached via the fs-keyed registry entry disarm network blocking for a later runBlocked call', async () => {
+        const symbol = Symbol.for('@dd/apps-plugin/network-guard blockedContext');
+        const registry = net as unknown as Record<symbol, Record<string, unknown>>;
+        const entry = registry[symbol];
+
+        expect(typeof entry.isActive).toBe('function');
+        expect(typeof entry.run).toBe('function');
+        expect(entry.disable).toBeUndefined();
+        expect(entry.getStore).toBeUndefined();
+
+        await expect(
+            runBlocked(async () => {
+                new net.Socket().connect(80, 'example.com');
+            }),
+        ).rejects.toThrow(/Network access is not allowed/);
     });
 });
 
