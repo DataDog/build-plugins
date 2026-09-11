@@ -12,6 +12,7 @@ export const VALID_FUNCTION_KINDS = [
 ] as const;
 
 export type FunctionKind = (typeof VALID_FUNCTION_KINDS)[number];
+export type FileExtensions = string[] | 'all';
 
 // Which decorator syntax the parser should accept. `legacy` matches
 // TypeScript's `experimentalDecorators` (Angular, NestJS, TypeORM, including
@@ -25,6 +26,7 @@ export type LiveDebuggerOptions = {
     enable?: boolean;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
+    fileExtensions?: FileExtensions;
     honorSkipComments?: boolean;
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
@@ -35,6 +37,7 @@ export type LiveDebuggerOptionsWithDefaults = {
     version: string | undefined;
     include: (string | RegExp)[];
     exclude: (string | RegExp)[];
+    fileExtensions: FileExtensions;
     honorSkipComments: boolean;
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
