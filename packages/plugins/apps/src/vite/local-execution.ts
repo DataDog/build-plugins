@@ -230,22 +230,28 @@ export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>
 
 /**
  * Loads a customer module under `runScriptLocally`'s top-level-evaluation `$`-scoping (see
- * `customerModuleLoadContext`), for callers like dev-server.ts's priming load. Scopes `process.env`
- * first so a dependency's top-level code can't capture the real `fs.readFileSync` and bypass the
- * guard. Accepted residual gap: runs outside `runBlocked`, so top-level code still has real
+ * `customerModuleLoadContext`), for callers like dev-server.ts's priming load that trigger real
+ * top-level evaluation ahead of `executeScriptLocally`. Scopes `process.env` and the network guard
+ * first so a dependency's top-level code can't capture the real, unwrapped `fs.readFileSync`/network
+ * APIs and bypass the guard for the rest of the session. Resolves real Custom Credentials via
+ * `projectRoot` too — module-scope SDK initialization (`new Stripe(process.env.X)`) would otherwise
+ * always capture `undefined`. `onScopeStarted` lets a caller record this load's abandon token so a
+ * hung load can be abandoned without affecting any other execution's still-active scope. Accepted
+ * residual gap: this load still runs outside `runBlocked`, so top-level code has real, unguarded
  * network/subprocess access — not a hard boundary, matching this file's "no OS sandbox" framing.
  */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
+    projectRoot: string,
     onScopeStarted?: (handle: EnvScopeHandle) => void,
 ): Promise<Record<string, unknown>> {
-    await getNetworkGuard();
-    const { buildScopedEnv, runWithScopedEnv } = await getEnvGuard();
-    // {} rather than a real resolution: this priming load has no projectRoot, and its top-level
-    // eval is already outside the guarded scope (see doc comment above) — runScriptLocally is
-    // what resolves real credentials for function bodies.
-    const scopedEnv = buildScopedEnv({});
+    const [{ buildScopedEnv, runWithScopedEnv }, customCredentials] = await Promise.all([
+        getEnvGuard(),
+        resolveCustomCredentials(projectRoot),
+        getNetworkGuard(),
+    ]);
+    const scopedEnv = buildScopedEnv(customCredentials);
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
             runWithScopedEnv(scopedEnv, () => loadModule(entrySpecifier), onScopeStarted),
@@ -720,9 +726,14 @@ export async function executeColdActionLocally(
         );
         const entrySpecifier = func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX;
         let primingEnvScope: EnvScopeHandle | undefined;
-        const primingPromise = loadCustomerModuleEntry(loadModule, entrySpecifier, (handle) => {
-            primingEnvScope = handle;
-        });
+        const primingPromise = loadCustomerModuleEntry(
+            loadModule,
+            entrySpecifier,
+            projectRoot,
+            (handle) => {
+                primingEnvScope = handle;
+            },
+        );
         let primedEntry: Record<string, unknown> | undefined;
         try {
             primedEntry = await withTimeout(primingPromise, timeoutMs, `Loading "${displayName}"`);
@@ -872,6 +883,7 @@ async function runScriptLocally(
                 (await loadCustomerModuleEntry(
                     loadModule,
                     func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                    projectRoot,
                 ));
             const fn = mod[func.name];
             if (typeof fn !== 'function') {

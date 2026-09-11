@@ -29,6 +29,7 @@ import {
     DEFAULT_LONG_POLLING_CONFIG,
     DEFAULT_TIMEOUT_MS,
     deriveActionTimeouts,
+    executeColdActionLocally,
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
 import { forceReset } from './network-guard';
@@ -1220,6 +1221,57 @@ describe('local-execution — executeScriptLocally', () => {
                 );
 
                 expect(result).toEqual({ data: 'sk_test_123' });
+            } finally {
+                await fsPromises.rm(projectRoot, { recursive: true, force: true });
+            }
+        });
+
+        // Regression coverage: executeColdActionLocally primes the module before runScriptLocally
+        // ever runs, so a customer module's own top-level code (e.g. `new Stripe(process.env.X)`)
+        // executes during the priming load, not during the later invocation-scope call above.
+        test('Should resolve real Custom Credentials for the priming load too, so module-top-level code sees real values', async () => {
+            jest.spyOn(customCredentialsResolver, 'resolveCustomCredentials').mockImplementation(
+                realResolveCustomCredentials,
+            );
+
+            const projectRoot = await fsPromises.mkdtemp(
+                path.join(os.tmpdir(), 'local-execution-custom-credentials-'),
+            );
+            try {
+                await fsPromises.writeFile(
+                    path.join(
+                        projectRoot,
+                        customCredentialsResolver.CUSTOM_CREDENTIALS_LOCAL_FILENAME,
+                    ),
+                    JSON.stringify({ STRIPE_API_KEY: 'sk_test_priming' }),
+                );
+
+                let capturedAtModuleLoad: string | undefined;
+                const loadModule: LoadModule = async (specifier: string) => {
+                    if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        capturedAtModuleLoad = process.env.STRIPE_API_KEY;
+                        return { example: () => capturedAtModuleLoad };
+                    }
+                    const error: NodeJS.ErrnoException = new Error(
+                        `Cannot find module '${specifier}'`,
+                    );
+                    error.code = 'MODULE_NOT_FOUND';
+                    throw error;
+                };
+
+                const result = await executeColdActionLocally(
+                    func,
+                    projectRoot,
+                    [],
+                    stubExecuteAction,
+                    stubGetRuntimeContext,
+                    loadModule,
+                    async () => [],
+                    mockLogger,
+                );
+
+                expect(result).toEqual({ data: 'sk_test_priming' });
+                expect(capturedAtModuleLoad).toBe('sk_test_priming');
             } finally {
                 await fsPromises.rm(projectRoot, { recursive: true, force: true });
             }
@@ -2555,6 +2607,7 @@ describe('local-execution — executeScriptLocally', () => {
                 const mod = await isolatedLoadCustomerModuleEntry(
                     loadModule,
                     func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                    TEST_PROJECT_ROOT,
                 );
                 expect(mod).toEqual({ example: expect.any(Function) });
             });
