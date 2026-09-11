@@ -107,6 +107,8 @@ interface EnvGuardSharedState {
     disarmScope(token: symbol): void;
     forceResetAllScopes(): void;
     getExcludeEnv(): boolean | undefined;
+    getCachedNativeFdGetter(): (() => number) | undefined;
+    setCachedNativeFdGetterOnce(getter: (() => number) | undefined): void;
 }
 
 // Keyed on the real `fs` module, via the same getOrCreateShared() helper network-guard.ts uses:
@@ -130,6 +132,12 @@ function getSharedState(): EnvGuardSharedState {
         const realEnvHistory: NodeJS.ProcessEnv[] = [];
         const activeScopeTokens = new Set<symbol>();
         let savedExcludeEnv: boolean | undefined;
+        // Captured once, from the first real FileHandle fs.promises.open() ever returns — the same
+        // reference read()/readFile()/readv()'s own guards use, shared here so extractFdNumber's
+        // cross-check for fs.promises.readFile(handle) and createReadStream's options.fd survives
+        // this file's own re-evaluation (bundled copies, Jest's per-test-file isolation).
+        let cachedNativeFdGetter: (() => number) | undefined;
+        let nativeFdGetterCaptured = false;
 
         function currentEnv(): Record<string, string> | NodeJS.ProcessEnv {
             return nativeGetStore() ?? realEnv;
@@ -227,6 +235,13 @@ function getSharedState(): EnvGuardSharedState {
                 }
             },
             getExcludeEnv,
+            getCachedNativeFdGetter: () => cachedNativeFdGetter,
+            setCachedNativeFdGetterOnce: (getter) => {
+                if (!nativeFdGetterCaptured) {
+                    cachedNativeFdGetter = getter;
+                    nativeFdGetterCaptured = true;
+                }
+            },
         };
     });
 }
@@ -425,10 +440,12 @@ function throwIfBlockedEnvironPath(rawPath: unknown): void {
     }
 }
 
-// A FileHandle exposes its underlying fd as a plain number via its own .fd property.
+// A FileHandle exposes its underlying fd as a plain number via its own .fd property. Cross-checked
+// against the same native getter readNativeFd()'s other callers use below, since this naive `.fd`
+// read is otherwise exactly the shadow TOCTOU those callers are already hardened against.
 function extractFdNumber(fdValue: unknown): unknown {
     if (typeof fdValue === 'object' && fdValue !== null && 'fd' in fdValue) {
-        return fdValue.fd;
+        return readNativeFd(sharedState.getCachedNativeFdGetter(), fdValue as { fd: number });
     }
     return fdValue;
 }
@@ -444,8 +461,12 @@ function guardEnvironPathOrFdOption(rawPath: unknown, options: unknown): unknown
         return options;
     }
     const fdValue = options.fd;
-    const fdNumber = extractFdNumber(fdValue);
-    throwIfBlockedEnvironPath(fdNumber);
+    // Gated the same way isBlockedEnvironPath's own short-circuit is: extractFdNumber now reads a
+    // real FileHandle's native .fd getter, which callers outside any scope must never trigger.
+    if (sharedState.isInsideScope()) {
+        const fdNumber = extractFdNumber(fdValue);
+        throwIfBlockedEnvironPath(fdNumber);
+    }
     return { ...options, fd: fdValue };
 }
 
@@ -651,6 +672,7 @@ function ensureFileHandleReadGuarded(handle: unknown): void {
     const nativeFdGetter = Object.getOwnPropertyDescriptor(proto, 'fd')?.get as
         | (() => number)
         | undefined;
+    sharedState.setCachedNativeFdGetterOnce(nativeFdGetter);
     patchFileHandleAsyncMethod(proto, 'read', nativeFdGetter);
     patchFileHandleAsyncMethod(proto, 'readFile', nativeFdGetter);
     patchFileHandleAsyncMethod(proto, 'readv', nativeFdGetter);

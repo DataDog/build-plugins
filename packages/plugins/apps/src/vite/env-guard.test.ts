@@ -540,6 +540,57 @@ describe('env-guard', () => {
             }
         });
 
+        // Mirrors the FileHandle.prototype.read guard's own shadow test: extractFdNumber's naive
+        // `.fd` read used to trust an own property shadowing the handle's real, dangerous target
+        // with a harmless-looking value — letting fs.promises.readFile(handle) leak the real
+        // /proc/self/environ contents Node's own implementation reads via the handle's true fd.
+        test("Should block fs.promises.readFile(handle) when the handle's own fd is shadowed to a different, harmless value, even though its real target is /proc/self/environ", async () => {
+            if (process.platform !== 'linux') {
+                return;
+            }
+
+            const dangerousHandle = await fs.promises.open('/proc/self/environ', 'r');
+            const tmpFile = path.join(
+                os.tmpdir(),
+                `env-guard-readfile-fd-shadow-${process.pid}.txt`,
+            );
+            fs.writeFileSync(tmpFile, 'not a secret');
+            const harmlessHandle = await fs.promises.open(tmpFile, 'r');
+            try {
+                Object.defineProperty(dangerousHandle, 'fd', {
+                    value: harmlessHandle.fd,
+                    configurable: true,
+                });
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    await expect(fs.promises.readFile(dangerousHandle)).rejects.toThrow(
+                        /not allowed in backend functions/,
+                    );
+                });
+            } finally {
+                delete (dangerousHandle as unknown as Record<string, unknown>).fd;
+                await dangerousHandle.close();
+                await harmlessHandle.close();
+                fs.rmSync(tmpFile, { force: true });
+            }
+        });
+
+        test('Should not block fs.promises.readFile(handle) for an unrelated real file during an active scoped-env window', async () => {
+            const tmpFile = path.join(
+                os.tmpdir(),
+                `env-guard-readfile-handle-ok-${process.pid}.txt`,
+            );
+            fs.writeFileSync(tmpFile, 'hello world');
+            const handle = await fs.promises.open(tmpFile, 'r');
+            try {
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    await expect(fs.promises.readFile(handle, 'utf8')).resolves.toBe('hello world');
+                });
+            } finally {
+                await handle.close();
+                fs.rmSync(tmpFile, { force: true });
+            }
+        });
+
         // Regression coverage: the callback-style fs.readFile must report failure via its own
         // callback, not a synchronous throw — a caller relying on the real error-first-callback
         // contract (with no surrounding try/catch, which that contract never requires) would
@@ -646,6 +697,39 @@ describe('env-guard', () => {
                 });
             } finally {
                 stream?.destroy();
+                fs.rmSync(tmpFile, { force: true });
+            }
+        });
+
+        // options.fd can itself be a FileHandle rather than a plain number — mirrors the
+        // fs.promises.readFile(handle) shadow regression above, for createReadStream's own
+        // extractFdNumber call site.
+        test("Should block fs.createReadStream(unrelatedPath, { fd: handle }) when the handle's own fd is shadowed to a different, harmless value, even though its real target is /proc/self/environ", async () => {
+            if (process.platform !== 'linux') {
+                return;
+            }
+
+            const dangerousHandle = await fs.promises.open('/proc/self/environ', 'r');
+            const tmpFile = path.join(
+                os.tmpdir(),
+                `env-guard-createreadstream-fd-shadow-${process.pid}.txt`,
+            );
+            fs.writeFileSync(tmpFile, 'not a secret');
+            const harmlessHandle = await fs.promises.open(tmpFile, 'r');
+            try {
+                Object.defineProperty(dangerousHandle, 'fd', {
+                    value: harmlessHandle.fd,
+                    configurable: true,
+                });
+                await runWithScopedEnv({ PATH: '/scoped' }, async () => {
+                    expect(() =>
+                        fs.createReadStream('/some/unrelated/path', { fd: dangerousHandle }),
+                    ).toThrow(/not allowed in backend functions/);
+                });
+            } finally {
+                delete (dangerousHandle as unknown as Record<string, unknown>).fd;
+                await dangerousHandle.close();
+                await harmlessHandle.close();
                 fs.rmSync(tmpFile, { force: true });
             }
         });
