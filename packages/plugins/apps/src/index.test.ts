@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global NodeJS */
+
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
@@ -141,6 +143,139 @@ describe('Apps Plugin - package output', () => {
         expect(Object.keys(zip.files)).not.toEqual(
             expect.arrayContaining([`frontend/${ARCHIVE_FILENAME}`]),
         );
+    });
+
+    test('never packages datadog-app.local.json, even when options.include matches it', async () => {
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: localCredentialsPath, relativePath: 'datadog-app.local.json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/datadog-app.local.json']),
+        );
+    });
+
+    // Regression test: a case-insensitive filesystem resolves a differently-cased basename to the
+    // same file a glob matched, so the exclusion filter must compare case-insensitively.
+    test('never packages a case-variant of datadog-app.local.json, even when options.include matches it', async () => {
+        const localCredentialsPath = path.join(root, 'Datadog-App.Local.Json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: localCredentialsPath, relativePath: 'Datadog-App.Local.Json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/Datadog-App.Local.Json']),
+        );
+    });
+
+    // Regression test: a symlink under a different name still reads the credentials file's real
+    // content, so the exclusion filter must check the resolved target, not just the discovered
+    // path's own basename.
+    test('never packages a symlink pointing at datadog-app.local.json, even under a different name', async () => {
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        const symlinkPath = path.join(root, 'backup-config.json');
+        await fs.symlink(localCredentialsPath, symlinkPath);
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: symlinkPath, relativePath: 'backup-config.json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/backup-config.json']),
+        );
+    });
+
+    // Regression test: when datadog-app.local.json is itself a symlink, the file glob-matched at
+    // its target path carries the same secret bytes under a different name and must be excluded too.
+    test('never packages the real target of a symlinked datadog-app.local.json', async () => {
+        const realSecretsPath = path.join(root, 'config', 'dev-secrets.json');
+        await fs.mkdir(path.dirname(realSecretsPath), { recursive: true });
+        await fs.writeFile(realSecretsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.symlink(realSecretsPath, localCredentialsPath);
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: realSecretsPath, relativePath: 'config/dev-secrets.json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/config/dev-secrets.json']),
+        );
+    });
+
+    // Regression test: a hardlink shares the credentials file's inode without ever being a
+    // symlink, so an identity check must compare (device, inode), not just resolve symlink targets.
+    test('never packages a hardlink to datadog-app.local.json, even under a different name', async () => {
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        const hardlinkPath = path.join(root, 'backup-hardlink.json');
+        await fs.link(localCredentialsPath, hardlinkPath);
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: hardlinkPath, relativePath: 'backup-hardlink.json' },
+        ]);
+
+        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        expect(Object.keys(zip.files)).not.toEqual(
+            expect.arrayContaining(['frontend/backup-hardlink.json']),
+        );
+    });
+
+    // Regression test: a stat failure on the candidate asset itself (not on the credentials file)
+    // must still propagate rather than being swallowed as "not a match" — the mock only intercepts
+    // the asset's own stat call so a real credentials file resolves normally first.
+    test('propagates a non-ENOENT stat failure instead of treating an unverifiable asset as safe', async () => {
+        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
+        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
+        const symlinkPath = path.join(root, 'mystery-config.json');
+        await fs.symlink(sourcePath, symlinkPath);
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: symlinkPath, relativePath: 'mystery-config.json' },
+        ]);
+        const realStat = fs.stat.bind(fs);
+        jest.spyOn(fs, 'stat').mockImplementation(async (target, ...args) => {
+            if (target === symlinkPath) {
+                const error: NodeJS.ErrnoException = new Error('permission denied');
+                error.code = 'EACCES';
+                throw error;
+            }
+            return realStat(target as string, ...(args as []));
+        });
+
+        await expect(
+            buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } })),
+        ).rejects.toThrow('permission denied');
     });
 
     test('writes manifest.json with only backend function entries', async () => {

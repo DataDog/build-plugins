@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global NodeJS */
+
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext } from '@dd/core/types';
@@ -17,11 +19,59 @@ import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
+
 export interface BuildAppPackageOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === 'object' && error !== null && 'code' in error;
+}
+
+type FileIdentity = { dev: number; ino: number };
+
+/** Resolves the root credentials file's (device, inode) identity, or undefined if it doesn't exist. */
+async function resolveCredentialsIdentity(buildRoot: string): Promise<FileIdentity | undefined> {
+    try {
+        const stats = await fsp.stat(path.join(buildRoot, CUSTOM_CREDENTIALS_LOCAL_FILENAME));
+        return { dev: stats.dev, ino: stats.ino };
+    } catch (error) {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+/**
+ * Compares an asset's (device, inode) identity against the credentials file's, since fs.stat
+ * follows symlinks either way and inode identity also catches a hardlink — cases a path-string
+ * comparison alone can miss. A vanished asset has nothing left to leak; any other stat failure is
+ * re-thrown rather than silently treated as safe to package.
+ */
+async function isCustomCredentialsAsset(
+    absolutePath: string,
+    credentialsIdentity: FileIdentity | undefined,
+): Promise<boolean> {
+    if (path.basename(absolutePath).toLowerCase() === CUSTOM_CREDENTIALS_LOCAL_FILENAME) {
+        return true;
+    }
+    if (!credentialsIdentity) {
+        return false;
+    }
+    try {
+        const stats = await fsp.stat(absolutePath);
+        return stats.dev === credentialsIdentity.dev && stats.ino === credentialsIdentity.ino;
+    } catch (error) {
+        if (isErrnoException(error) && error.code === 'ENOENT') {
+            return false;
+        }
+        throw error;
+    }
 }
 
 function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
@@ -88,13 +138,25 @@ export async function buildAppPackage({
     try {
         const generatedPaths = new Set([archivePath, defaultArchivePath]);
         const backendPaths = new Set(backendOutputs.values());
-        const frontendAssets = assets
+        const candidateAssets = assets
             .filter((asset) => !generatedPaths.has(path.resolve(asset.absolutePath)))
-            .filter((asset) => !backendPaths.has(asset.absolutePath))
-            .map((asset) => ({
-                ...asset,
-                relativePath: `frontend/${asset.relativePath}`,
-            }));
+            .filter((asset) => !backendPaths.has(asset.absolutePath));
+        const credentialsIdentity = await resolveCredentialsIdentity(buildRoot);
+        const nonCredentialsAssets = (
+            await Promise.all(
+                candidateAssets.map(async (asset) => ({
+                    asset,
+                    isCredentialsAsset: await isCustomCredentialsAsset(
+                        asset.absolutePath,
+                        credentialsIdentity,
+                    ),
+                })),
+            )
+        ).filter(({ isCredentialsAsset }) => !isCredentialsAsset);
+        const frontendAssets = nonCredentialsAssets.map(({ asset }) => ({
+            ...asset,
+            relativePath: `frontend/${asset.relativePath}`,
+        }));
         const packageAssets: Asset[] = [...frontendAssets];
         for (const [bundleName, absolutePath] of backendOutputs) {
             packageAssets.push({

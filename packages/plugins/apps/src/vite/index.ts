@@ -33,6 +33,7 @@ import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
 import { localExecutionResolutionContext } from './local-execution';
@@ -98,6 +99,9 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
+// Not exported by Vite; mirrors its server.fs.deny default so it can be spread in below.
+export const VITE_DEFAULT_SERVER_FS_DENY = ['.env', '.env.*', '*.{crt,pem}', '**/.git/**'];
+
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
@@ -142,6 +146,14 @@ export const getVitePlugin = ({
                 ssr: {
                     noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
                 },
+                // Vite replaces its whole server.fs.deny default rather than merging with a
+                // plugin's own list, so the defaults above must be spread in here or dev-server
+                // protection for .env/.git/certs silently disappears once this filename is added.
+                server: {
+                    fs: {
+                        deny: [...VITE_DEFAULT_SERVER_FS_DENY, CUSTOM_CREDENTIALS_LOCAL_FILENAME],
+                    },
+                },
             };
         },
         // Propagates LOCAL_EXECUTION_LOAD_SUFFIX through the backend-file dependency graph so a
@@ -153,6 +165,19 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
+                // Strips the query/hash suffix before comparing, matching Vite's own postfixRE —
+                // otherwise a `?raw`/`#fragment`-suffixed import bypasses this check and Vite
+                // inlines the real secret into a chunk build-package.ts's filter never sees.
+                const sourceWithoutPostfix = source.replace(/[?#].*$/, '');
+                if (
+                    path.basename(sourceWithoutPostfix).toLowerCase() ===
+                    CUSTOM_CREDENTIALS_LOCAL_FILENAME
+                ) {
+                    throw new Error(
+                        `${CUSTOM_CREDENTIALS_LOCAL_FILENAME} cannot be imported directly — read Custom Credentials via process.env instead.`,
+                    );
+                }
+
                 // Top-level guard (not folded into each branch) so any future branch added below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.

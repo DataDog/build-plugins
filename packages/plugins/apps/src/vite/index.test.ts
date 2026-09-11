@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from '@dd/apps-plugin/vite/custom-credentials-resolver';
+import { getVitePlugin, VITE_DEFAULT_SERVER_FS_DENY } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
@@ -93,6 +94,23 @@ function getConfigureServer(
 
 function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
     return typeof value === 'function';
+}
+
+type ConfigHookResult = {
+    ssr: { noExternal: string[] };
+    server: { fs: { deny: string[] } };
+};
+
+// Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
+// cast on its return value — mirrors `getConfigureServer` above.
+function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+    const { config } = plugin ?? {};
+    if (typeof config !== 'function') {
+        throw new Error('Expected plugin.config to be the plain function-hook form');
+    }
+    return function callConfig(): ConfigHookResult {
+        return Reflect.apply(config, undefined, []);
+    };
 }
 
 const functions: BackendFunction[] = [
@@ -660,6 +678,30 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
+    // Regression test: build-package.ts's exclusion filter only sees the unbundled file, and a
+    // query- or hash-suffixed specifier (`?raw`, `?url`, `#fragment`) defeats a naive basename
+    // check — all must be rejected here or Vite inlines the real secret values into a built chunk.
+    test.each([
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}`, ssr: false },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?raw`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?url`, ssr: false },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}#fragment`, ssr: true },
+        { specifier: `../${CUSTOM_CREDENTIALS_LOCAL_FILENAME}?raw#fragment`, ssr: false },
+    ])(
+        'Should reject a direct import of the local Custom Credentials file (specifier: $specifier, ssr: $ssr)',
+        async ({ specifier, ssr }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            await expect(
+                resolveIdHandler.call({ resolve: jest.fn() }, specifier, '/build/src/index.ts', {
+                    ssr,
+                }),
+            ).rejects.toThrow(/cannot be imported directly/);
+        },
+    );
+
     test('Should inject the apps runtime', () => {
         getVitePlugin(defaultOptions);
 
@@ -676,14 +718,29 @@ describe('Backend Functions - getVitePlugin', () => {
         // module" for them — ssr.noExternal is what server.ssrLoadModule depends on to load them
         // correctly.
         const plugin = getVitePlugin(defaultOptions);
-        const configHook = plugin!.config as () => { ssr: { noExternal: string[] } };
+        const configHook = getConfigHandler(plugin);
         const config = configHook();
 
         expect(config).toEqual({
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
+            server: {
+                fs: {
+                    deny: expect.arrayContaining([CUSTOM_CREDENTIALS_LOCAL_FILENAME]),
+                },
+            },
         });
+    });
+
+    // Regression test: a plugin's own server.fs.deny replaces Vite's defaults instead of merging,
+    // so .env/cert/.git protection must be preserved explicitly alongside this filename.
+    test("Should preserve Vite's default server.fs.deny patterns alongside the credentials filename", () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const configHook = getConfigHandler(plugin);
+        const { deny } = configHook().server.fs;
+
+        expect(deny).toEqual(expect.arrayContaining(VITE_DEFAULT_SERVER_FS_DENY));
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.

@@ -10,6 +10,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
+-   [Custom Credentials for local execution](#custom-credentials-for-local-execution)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -42,6 +43,16 @@ Backend function execution authenticates in this order:
 passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
+
+## Custom Credentials for local execution
+
+Backend functions read Custom Credentials from a `datadog-app.local.json` file in the project
+root — a flat JSON object mapping env var name to value. Add this file to your project's
+`.gitignore`; it holds real secret values.
+
+Values are only available while a backend function body is running — not during a module's
+top-level evaluation (e.g. `const client = new Stripe(process.env.STRIPE_API_KEY)` at import
+time). Read `process.env` inside the function body instead.
 
 ## Package output
 
