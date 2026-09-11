@@ -493,6 +493,35 @@ function extractFdNumber(fdValue: unknown): unknown {
     return fdValue;
 }
 
+// Reads each of `keys` from a getter-backed options object exactly once, then rebuilds a plain
+// object where a key absent from the caller's own options stays absent — see guardCpOptions's own
+// comment for why re-adding an absent key as explicit `undefined` breaks Node's own cp validation.
+// Shared by guardEnvironPathOrFdOption (a single always-present key) and guardCpOptions (two
+// independently-optional keys): presence-conditional restore is correct for both, since a
+// guaranteed-present key just never hits the "absent" branch.
+function snapshotOptionKeysOnce<K extends string>(
+    options: Record<string, unknown>,
+    keys: readonly K[],
+): Record<string, unknown> {
+    // Copying every OTHER own-enumerable key first, via Object.keys rather than a `{ ...options }`
+    // spread, is what keeps this to exactly one read per snapshotted key below — a spread of the
+    // full options object would invoke every key's getter once on its own, then a second time when
+    // that same key is explicitly snapshotted next.
+    const keySet = new Set<string>(keys);
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(options)) {
+        if (!keySet.has(key)) {
+            result[key] = options[key];
+        }
+    }
+    for (const key of keys) {
+        if (key in options) {
+            result[key] = options[key];
+        }
+    }
+    return result;
+}
+
 // createReadStream/ReadStream's options.fd (a raw fd number, or a FileHandle whose own .fd is one)
 // makes Node read from that fd directly, ignoring the leading path argument — a plain
 // throwIfBlockedEnvironPath(rawPath) would never see the real target. Returns a safe options
@@ -510,12 +539,9 @@ function guardEnvironPathOrFdOption(rawPath: unknown, options: unknown): unknown
     if (typeof options !== 'object' || options === null || !('fd' in options)) {
         return options;
     }
-    // Destructuring reads the getter exactly once, into fdValue — spreading the remainder (with fd
-    // already removed) can't invoke it again the way `{ ...options, fd: fdValue }` would have.
-    const { fd: fdValue, ...restOptions } = options as { fd: unknown };
-    const fdNumber = extractFdNumber(fdValue);
-    throwIfBlockedEnvironPath(fdNumber);
-    return { ...restOptions, fd: fdValue };
+    const snapshot = snapshotOptionKeysOnce(options as Record<string, unknown>, ['fd'] as const);
+    throwIfBlockedEnvironPath(extractFdNumber(snapshot.fd));
+    return snapshot;
 }
 
 // Every guarded fs entry point below except createReadStream takes only a leading path argument —
@@ -778,26 +804,18 @@ function guardCpOptions(options: unknown): unknown {
     if (typeof options !== 'object' || options === null) {
         return options;
     }
-    const {
-        recursive: recursiveValue,
-        dereference: dereferenceValue,
-        ...restOptions
-    } = options as { recursive?: unknown; dereference?: unknown };
-    if (recursiveValue === true && dereferenceValue === true) {
+    // Node's cp implementations distinguish an absent key (defaulted internally) from one
+    // explicitly present with value `undefined` (rejected by its own validation), so
+    // snapshotOptionKeysOnce restoring both keys unconditionally would turn a caller's
+    // `{ recursive: true }` (no dereference key at all) into `{ recursive: true, dereference:
+    // undefined }` and throw a validation error that never happens when the real options object is
+    // forwarded as-is — this is why it only re-adds keys actually present on the caller's options.
+    const safeOptions = snapshotOptionKeysOnce(
+        options as Record<string, unknown>,
+        ['recursive', 'dereference'] as const,
+    );
+    if (safeOptions.recursive === true && safeOptions.dereference === true) {
         throw new Error(CP_BLOCKED_MESSAGE);
-    }
-    // Only re-adds a key that was actually present on the caller's own options — Node's cp
-    // implementations distinguish an absent key (defaulted internally) from one explicitly present
-    // with value `undefined` (rejected by its own validation), so restoring both keys unconditionally
-    // would turn a caller's `{ recursive: true }` (no dereference key at all) into
-    // `{ recursive: true, dereference: undefined }` and throw a validation error that never happens
-    // when the real options object is forwarded as-is.
-    const safeOptions = restOptions as Record<string, unknown>;
-    if ('recursive' in options) {
-        safeOptions.recursive = recursiveValue;
-    }
-    if ('dereference' in options) {
-        safeOptions.dereference = dereferenceValue;
     }
     return safeOptions;
 }
@@ -813,11 +831,8 @@ const originalPromisesCp = fs.promises.cp;
 // implementations don't consult it, but nothing here should be the one silent exception.
 fs.cpSync = function (this: unknown, src: unknown, dest: unknown, options?: unknown) {
     throwIfBlockedEnvironPath(src);
-    return originalCpSync.apply(this, [
-        src as string | URL,
-        dest as string | URL,
-        guardCpOptions(options) as fs.CopySyncOptions,
-    ]);
+    const safeOptions = guardCpOptions(options) as fs.CopySyncOptions;
+    return originalCpSync.apply(this, [src as string | URL, dest as string | URL, safeOptions]);
 } as typeof fs.cpSync;
 
 // cp reports failure via an error-first callback, never a synchronous throw. Only the guard's own
@@ -844,11 +859,8 @@ fs.cp = function (this: unknown, src: unknown, dest: unknown, ...rest: unknown[]
 // promises.cp rejects, matching its real Promise-returning contract.
 fs.promises.cp = async function (this: unknown, src: unknown, dest: unknown, options?: unknown) {
     throwIfBlockedEnvironPath(src);
-    return originalPromisesCp.apply(this, [
-        src as string | URL,
-        dest as string | URL,
-        guardCpOptions(options) as fs.CopyOptions,
-    ]);
+    const safeOptions = guardCpOptions(options) as fs.CopyOptions;
+    return originalPromisesCp.apply(this, [src as string | URL, dest as string | URL, safeOptions]);
 } as typeof fs.promises.cp;
 
 // createReadStream's own wrap above only covers that factory function — Node also exports the
