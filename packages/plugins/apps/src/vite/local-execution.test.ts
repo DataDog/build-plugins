@@ -717,10 +717,8 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
-    // Regression test: a zombie scope (fn() that never settles) previously left
-    // process.report.excludeEnv armed forever, since its own finally block never ran to decrement
-    // activeScopeCount and nothing else discharged it — see abandonExecutionAndRejectWith's own
-    // forceResetEnv() call.
+    // A zombie scope's own finally never runs (fn() never settles), so abandonExecutionAndRejectWith
+    // discharges its env scope handle directly instead of relying on that finally.
     test('Should restore process.report.excludeEnv to its pre-scope value after a zombie execution is abandoned, not leave it armed forever', async () => {
         const excludeEnvDescriptor = Object.getOwnPropertyDescriptor(process.report, 'excludeEnv');
         process.report.excludeEnv = false;
@@ -737,8 +735,7 @@ describe('local-execution — executeScriptLocally', () => {
                 ),
             ).rejects.toThrow(/timed out after 20ms/);
 
-            // Lets abandonExecutionAndRejectWith's fire-and-forget getEnvGuard().then(forceResetEnv)
-            // settle before the next scope starts.
+            // Lets the rejected timeout promise's own microtask chain settle before the next scope starts.
             await new Promise((resolve) => setTimeout(resolve, 0));
 
             await executeScriptLocally(

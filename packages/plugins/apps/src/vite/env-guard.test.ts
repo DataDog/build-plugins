@@ -227,16 +227,12 @@ describe('env-guard', () => {
             expect({ ...process.env }).toEqual(realEnvSnapshot);
         });
 
-        // Regression coverage: a plain `process.env[key] = value` for an existing key made from
-        // outside any scope passes the Proxy itself as `receiver`, which on an existing writable
+        // Regression coverage: a plain `process.env[key] = value` for an existing key, made from
+        // outside any scope, passes the Proxy itself as `receiver` — which on an existing writable
         // property falls back to a PARTIAL descriptor that Node's native process.env binding
-        // rejects outright — dd-trace's require-hook instrumentation makes exactly this kind of
-        // assignment while requiring the bundled webpack-plugin.
-        //
-        // This describe block's installFakeProcessEnv() means `currentEnv()` here resolves to a
-        // plain fake-baseline object, which silently tolerates the same partial descriptor Node's
-        // real one rejects — so this only asserts the fix's observable contract inside Jest; the
-        // native throw only reproduces against a real, unpatched Node process.
+        // rejects (dd-trace's require-hook hits this exact case). This describe block's fake
+        // baseline object tolerates that same partial descriptor where a real, unpatched Node
+        // process would throw, so this only asserts the fix's observable contract inside Jest.
         test('Should not throw when assigning an already-existing key on process.env while unscoped', () => {
             const before = process.env.PATH;
             try {
@@ -1117,6 +1113,33 @@ describe('env-guard', () => {
             });
         });
 
+        // Regression coverage: redaction must follow the calling continuation's own scope, not a
+        // shared, resettable counter — a still-active scope's getReport() call must keep redacting
+        // even after an unrelated scope's abandonment (forceResetEnv) has zeroed that counter.
+        test("Should keep redacting a still-active scope's own getReport() call after an unrelated scope's abandonment clears the shared counter", async () => {
+            let resolveOuter: (() => void) | undefined;
+            let reportDuringOuter: ReturnType<typeof process.report.getReport> | undefined;
+            const outer = runWithScopedEnv({ PATH: '/outer' }, async () => {
+                await new Promise<void>((resolve) => {
+                    resolveOuter = resolve;
+                });
+                reportDuringOuter = process.report.getReport();
+            });
+
+            // Simulates an unrelated execution's abandonment path forcing the shared counter to
+            // zero while `outer`'s own scope is still active.
+            forceResetEnv();
+
+            resolveOuter?.();
+            await outer;
+
+            const environmentVariables =
+                reportDuringOuter && 'environmentVariables' in reportDuringOuter
+                    ? reportDuringOuter.environmentVariables
+                    : undefined;
+            expect(environmentVariables).toBeUndefined();
+        });
+
         // On Node >=22.13.0, excludeEnv must delegate to Node's own native setter, not a
         // disconnected JS shadow that would have zero effect on a native, non-JS-triggered report
         // (--report-on-signal etc). Node's native setter throws for a non-boolean; a disconnected
@@ -1233,6 +1256,51 @@ describe('env-guard', () => {
                 readFileSyncSpy.mockRestore();
                 fs.rmSync(tmpFile, { force: true });
             }
+        });
+
+        // Regression coverage: onScopeStarted's handle must discharge only its own token, unlike
+        // forceResetEnv() — abandoning a hung scope must never disarm a different, concurrently
+        // active scope's own excludeEnv protection.
+        test("Should let onScopeStarted's handle abandon only its own scope, leaving a concurrently active scope's excludeEnv protection armed", async () => {
+            const before = processReport.excludeEnv;
+
+            let resolveHung: (() => void) | undefined;
+            let hungHandle: { abandon: () => void } | undefined;
+            const hung = runWithScopedEnv(
+                { PATH: '/hung' },
+                async () => {
+                    await new Promise<void>((resolve) => {
+                        resolveHung = resolve;
+                    });
+                },
+                (handle) => {
+                    hungHandle = handle;
+                },
+            );
+            expect(hungHandle).toBeDefined();
+
+            let resolveActive: (() => void) | undefined;
+            let excludeEnvAfterAbandon: boolean | undefined;
+            const active = runWithScopedEnv({ PATH: '/active' }, async () => {
+                await new Promise<void>((resolve) => {
+                    resolveActive = resolve;
+                });
+                excludeEnvAfterAbandon = processReport.excludeEnv;
+            });
+
+            hungHandle?.abandon();
+            // Still armed: `active`'s own scope is unaffected by abandoning the unrelated hung one.
+            expect(processReport.excludeEnv).toBe(true);
+
+            resolveActive?.();
+            await active;
+            expect(excludeEnvAfterAbandon).toBe(true);
+            // Restored once `active` closes, proving hung's token was actually discharged by
+            // abandon() above — if it lingered in the set, this would still read `true`.
+            expect(processReport.excludeEnv).toBe(before);
+
+            resolveHung?.();
+            await hung;
         });
 
         // Regression coverage: if a zombie scope's runWithScopedEnv finally fires AFTER

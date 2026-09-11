@@ -152,8 +152,8 @@ describe('network-guard', () => {
             ).rejects.toThrow(/Network access is not allowed/);
         });
 
-        // dgram.send()'s real Node contract reports failure via an error-first callback (confirmed
-        // via @types/node doc examples), never a synchronous throw — the guard must match that.
+        // dgram.send()'s real Node contract reports failure via an error-first callback, never a
+        // synchronous throw — the guard must match that.
         test('Should block dgram.Socket.send() made inside fn via its error-first callback, not a synchronous throw', async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -168,9 +168,9 @@ describe('network-guard', () => {
             });
         });
 
-        // dgram.Socket.connect()'s callback is a success-only 'connect' event shorthand (confirmed
-        // via @types/node: `callback?: () => void`) — real failures are only ever reported via the
-        // async 'error' event, so the guard must signal that way too, not a synchronous throw.
+        // dgram.Socket.connect()'s callback is a success-only 'connect' event shorthand — real
+        // failures are only ever reported via the async 'error' event, so the guard must signal
+        // that way too, not a synchronous throw.
         test("Should block dgram.Socket.connect() made inside fn via its async 'error' event, not a synchronous throw", async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -1183,10 +1183,9 @@ describe('installGuardedProperty security', () => {
         }).toThrow(/Cannot redefine property/);
     });
 
-    // Regression coverage for a review finding: the registry entry's own value used to be the raw
-    // AsyncLocalStorage instance, so any code with `require('net')` could call `.disable()` on it
-    // and permanently kill network blocking process-wide — a stronger bypass than reading a value,
-    // since it disarms every future runBlocked call too, not just the caller's own.
+    // A raw AsyncLocalStorage instance on the registry would let any code with `require('net')`
+    // call `.disable()` on it and permanently kill network blocking process-wide — a stronger
+    // bypass than reading a value, since it disarms every future runBlocked call too.
     test('Should not let a `.disable()` call reached via the fs-keyed registry entry disarm network blocking for a later runBlocked call', async () => {
         const symbol = Symbol.for('@dd/apps-plugin/network-guard blockedContext');
         const registry = net as unknown as Record<symbol, Record<string, unknown>>;

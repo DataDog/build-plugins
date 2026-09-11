@@ -32,16 +32,12 @@ interface GuardedAsyncContext {
     run<T>(fn: () => T): T;
 }
 
-// Keyed on the real `net` module (not a per-module `new AsyncLocalStorage()`) since this file gets
-// evaluated more than once — bundled copies and Jest's per-test-file isolation — and every
-// evaluation needs the same store. `globalThis`/`process` are sandboxed per test file too; core
-// modules aren't. isCurrentlyBlocked() is every guard's shared gate.
-//
-// Returns isActive()/run() rather than the raw AsyncLocalStorage instance: any code with
-// `require('net')` — including a backend function's own third-party dependencies — can read
-// whatever this stores, and a raw instance's own `.disable()` would let it kill this guard's scope
-// detection process-wide. Neither exposed function does more than what run{Blocked,Allowed} below
-// already do as exported functions, so this closes off nothing that reaches further than those.
+// Keyed on the real `net` module, not a per-module `new AsyncLocalStorage()`: this file gets
+// evaluated more than once (bundled copies, Jest's per-test-file isolation), and every evaluation
+// needs the same store — `globalThis`/`process` are sandboxed per test file, core modules aren't.
+// Returns isActive()/run() rather than the raw instance, since any code with `require('net')` can
+// read whatever this stores, and a raw instance's own `.disable()` would kill this guard's scope
+// detection process-wide.
 function getSharedContext(key: string): GuardedAsyncContext {
     return getOrCreateShared(net, `@dd/apps-plugin/network-guard ${key}`, () => {
         const context = new AsyncLocalStorage<true>();
@@ -643,7 +639,7 @@ installGuardedProperty<unknown>(worker_threads, 'Worker', guardWorker);
 // installGuardedProperty only patches each built-in's CJS default export; Node keeps ESM named
 // bindings (`import { spawn } from 'node:child_process'`) as separate references to the original
 // native values. syncBuiltinESMExports re-syncs them. Not unit-tested — Jest's CJS transform can't
-// reproduce the real ESM-binding divergence; verified via a standalone `node --input-type=module` script.
+// reproduce the real ESM-binding divergence.
 syncBuiltinESMExports();
 
 // Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` — see `execution-epoch.ts`.

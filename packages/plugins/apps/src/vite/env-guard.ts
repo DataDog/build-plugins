@@ -87,17 +87,10 @@ export function buildScopedEnv(customCredentials: Record<string, string>): Recor
 }
 
 /**
- * Everything a re-evaluation of this file needs to share with every other re-evaluation — see
- * getSharedState()'s own comment for why this can't just be module-level `let`s.
- *
- * Every member here is a function, not a data field: the object this describes is stashed on the
- * public `fs` module (see getSharedState()), so any code with `require('fs')` — including a
- * backend function's own third-party dependencies — can read whatever this exposes. A raw
- * `realEnv` field would hand out the real, unscoped environment directly; a raw `AsyncLocalStorage`
- * instance would let a caller disarm scope detection process-wide via its own `.disable()`. Every
- * function here instead re-applies the real scope check (via a `getStore()` bound at module load,
- * immune to later tampering) before doing anything sensitive, so calling it from inside an active
- * scope — legitimately or not — always yields the same safe result a real caller would get.
+ * Shared across every re-evaluation of this file (see getSharedState()). Every member is a
+ * function, not a data field, since this object is reachable via any `require('fs')` — a raw
+ * `realEnv` field would leak the real environment, and a raw `AsyncLocalStorage` would let a
+ * caller kill scope detection process-wide via `.disable()`. Each function re-checks scope itself.
  */
 interface EnvGuardSharedState {
     getCurrentEnv(): Record<string, string> | NodeJS.ProcessEnv;
@@ -113,7 +106,6 @@ interface EnvGuardSharedState {
     armScope(): symbol;
     disarmScope(token: symbol): void;
     forceResetAllScopes(): void;
-    isAnyScopeActive(): boolean;
     getExcludeEnv(): boolean | undefined;
 }
 
@@ -234,7 +226,6 @@ function getSharedState(): EnvGuardSharedState {
                     restoreExcludeEnvIfLastScope();
                 }
             },
-            isAnyScopeActive: () => activeScopeTokens.size > 0,
             getExcludeEnv,
         };
     });
@@ -579,7 +570,7 @@ function wrapReportFn<T extends (...args: never[]) => unknown>(
 const originalGetReport = process.report.getReport.bind(process.report);
 process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) => {
     const report = original(...args);
-    if (sharedState.isAnyScopeActive() && hasEnvironmentVariables(report)) {
+    if (sharedState.isInsideScope() && hasEnvironmentVariables(report)) {
         delete report.environmentVariables;
     }
     return report;
@@ -587,17 +578,16 @@ process.report.getReport = wrapReportFn(originalGetReport, (original, ...args) =
 
 const originalWriteReport = process.report.writeReport.bind(process.report);
 process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...args) => {
-    if (sharedState.isAnyScopeActive()) {
+    if (sharedState.isInsideScope()) {
         // writeReport(fileName?, err?) also accepts writeReport(err?) with no fileName at all —
         // only a string first argument is ever a caller-chosen destination, so this branch is
         // skipped (falling through to Node's own write below) when none was given.
         const fileNameArg = args[0];
         if (typeof fileNameArg === 'string') {
-            // Builds the redacted report ourselves and writes it directly, rather than letting Node
-            // persist the real report first and rewriting it after — that would leave the unredacted
-            // content on disk for a real window if anything between the two writes throws.
-            // Cast: TS collapses the bound writeReport's overloads to the single-arg `(err?: Error)`
-            // form, so the real two-arg tuple needs restating to reach the err argument at index 1.
+            // Builds the redacted report itself and writes it directly, rather than letting Node
+            // persist the real report first and rewriting it after — that would leave unredacted
+            // content on disk if anything between the two writes throws. Cast: TS collapses the
+            // bound writeReport's overloads to `(err?: Error)`, so the real err arg needs restating.
             const errArg = (args as unknown as [string?, Error?])[1];
             const report = originalGetReport(errArg) as ReportLike;
             delete report.environmentVariables;
@@ -606,7 +596,7 @@ process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...arg
         }
     }
     const filename = original(...args);
-    if (sharedState.isAnyScopeActive()) {
+    if (sharedState.isInsideScope()) {
         const rawReport = fs.readFileSync(filename, 'utf8');
         const report: ReportLike = JSON.parse(rawReport);
         delete report.environmentVariables;
@@ -621,13 +611,23 @@ process.report.writeReport = wrapReportFn(originalWriteReport, (original, ...arg
 // references that stay bound to the original native functions otherwise.
 syncBuiltinESMExports();
 
-// Wraps only the customer function's own call in local-execution.ts's runScriptLocally, matching runBlocked's scope exactly.
+export interface EnvScopeHandle {
+    // Discharges this specific call's own token, safe to call even while a different scope is
+    // still active — unlike forceResetEnv(), it never touches a token it doesn't own.
+    abandon(): void;
+}
+
+// Wraps only the customer function's own call in local-execution.ts's runScriptLocally, matching
+// runBlocked's scope exactly. `onScopeStarted`, if given, is invoked synchronously with a handle
+// scoped to *this* call, for a caller whose own timeout might fire while `fn` is still pending.
 export async function runWithScopedEnv<T>(
     scopedEnv: Record<string, string>,
     fn: () => Promise<T>,
+    onScopeStarted?: (handle: EnvScopeHandle) => void,
 ): Promise<T> {
     ensureEnvProxyInstalled();
     const token = sharedState.armScope();
+    onScopeStarted?.({ abandon: () => sharedState.disarmScope(token) });
     try {
         return await sharedState.runInScope(scopedEnv, fn);
     } finally {
@@ -635,11 +635,10 @@ export async function runWithScopedEnv<T>(
     }
 }
 
-// Defensive reset for process.report's reference count only — process.env itself never needs
-// forcing back, since scopedEnvContext resolves each continuation independently and a zombie's
-// still-open scope was never shared global state to begin with. Called from
-// local-execution.ts's abandonExecutionAndRejectWith when a timed-out execution's fn() will never
-// settle and so never reach its finally.
+// Test-only escape hatch for resetting shared module state between tests — unconditional, unlike
+// EnvScopeHandle.abandon(), since a test fully controls when scopes start and end. Production code
+// discharges a specific hung scope via that handle instead, since this would otherwise also disarm
+// a different, still-active execution's own scope.
 export function forceResetEnv(): void {
     sharedState.forceResetAllScopes();
 }

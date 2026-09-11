@@ -2,15 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-// Shared `this`-forwarding wrapper for any guarded entry point that calls through when
-// `shouldBlock` returns false, and signals failure when it returns true. `getReal` is a lazy
-// getter, not the function itself, so a runtime swap of the real implementation (a test's
-// spyOn/restoreMock) is picked up on the next call instead of frozen at wrap time. 'reject' mode
-// also converts a `shouldBlock` throw into a rejection, matching the Promise-returning contract
-// every 'reject' caller actually has. `shouldBlock`'s parameter type is `unknown[]`, not tied to
-// F's own Parameters: F is still a generic, unresolved type at every call site, so a narrower type
-// would reject every real `shouldBlock` implementation these callers pass — the cost is that a new
-// guarded entry point whose relevant argument isn't in position 0 needs manual review.
+// Shared `this`-forwarding wrapper: calls through when `shouldBlock` returns false, else signals
+// failure per `onBlocked` ('reject' also converts a `shouldBlock` throw into a rejection).
+// `getReal` is a lazy getter so a runtime swap of the real implementation (spyOn/restoreMock) is
+// picked up on the next call, not frozen at wrap time. `shouldBlock` takes `unknown[]`, not F's own
+// Parameters, since F is unresolved at every call site — a new entry point whose relevant arg isn't
+// in position 0 needs manual review as a result.
 export function makeGuardWrapper<F extends (...args: never[]) => unknown>(
     getReal: () => F,
     shouldBlock: (...args: unknown[]) => boolean,
