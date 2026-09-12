@@ -36,6 +36,9 @@ import {
 const ATTACHMENT_NAME = 'live-debugger-runtime-bench';
 const COMMENT_MARKER = '<!-- ld-runtime-bench -->';
 const COMMENT_FILE = path.resolve(os.tmpdir(), 'live-debugger-runtime-bench-comment.md');
+const WORKLOAD_DOCS_URL =
+    'https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures';
+const RAW_SAMPLES_NOTE = 'Raw samples are in the `live-debugger-runtime-bench-results` artifact.';
 
 const buildResultsFilePath = (generatedAt: string) => {
     const safeTimestamp = generatedAt.replace(/[:.]/g, '-');
@@ -412,10 +415,6 @@ export const renderMarkdownComment = (
     } else {
         body +=
             'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.\n\n';
-        if (sdkVersion) {
-            const sdkLabel = formatSdkLabel(sdkVersion, sdkBuild, (value) => `\`${value}\``);
-            body += `Browser Debugger SDK: ${sdkLabel}\n\n`;
-        }
         body += '| Browser | Workload | Quality | Per-call overhead upper |\n';
         body += '| --- | --- | --- | ---: |\n';
 
@@ -423,10 +422,18 @@ export const renderMarkdownComment = (
             body += `| ${row.browserName} | ${row.workloadLabel} | ${formatQuality(row)} | ${formatCallOverhead(row)} |\n`;
         }
 
+        body += `\n[What do the Tiny and Hot workloads represent?](${WORKLOAD_DOCS_URL})\n`;
+        if (sdkVersion) {
+            const sdkLabel = formatSdkLabel(sdkVersion, sdkBuild, (value) => `\`${value}\``);
+            body += `\nBrowser Debugger SDK: ${sdkLabel}\n`;
+        }
         body += '\n<details>\n<summary>Full diagnostics</summary>\n\n';
         body += '```\n';
         body += `${buildAlignedTable(rows)}\n`;
         body += '```\n';
+        if (failures.length === 0) {
+            body += `\n${RAW_SAMPLES_NOTE}\n`;
+        }
         body += '\n</details>\n';
     }
 
@@ -435,10 +442,7 @@ export const renderMarkdownComment = (
         for (const failure of failures) {
             body += `- **${failure.projectName}** (${failure.status}): ${failure.error}\n`;
         }
-    }
-
-    if (rows.length > 0 || failures.length > 0) {
-        body += '\nRaw samples are in the `live-debugger-runtime-bench-results` artifact.\n';
+        body += `\n${RAW_SAMPLES_NOTE}\n`;
     }
 
     return body;
