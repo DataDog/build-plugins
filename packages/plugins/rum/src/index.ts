@@ -8,6 +8,7 @@ import path from 'path';
 
 import type { RumInitConfiguration, RumPublicApi } from './browserSdkTypes';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { initDebugIdHasher } from './debugId';
 import { getSourceCodeContextSnippet } from './getSourceCodeContextSnippet';
 import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
@@ -33,6 +34,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const sourceCodeContext = validatedOptions.sourceCodeContext;
 
     if (sourceCodeContext) {
+        if (sourceCodeContext.debugId) {
+            // The hasher backing `stringToUUID` needs to be ready before any chunk is processed.
+            plugins.push({
+                name: 'datadog-rum-debug-id-hasher-plugin',
+                buildStart: initDebugIdHasher,
+            });
+        }
+
         context.inject({
             type: 'code',
             position: InjectPosition.BEFORE,
