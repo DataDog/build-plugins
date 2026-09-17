@@ -114,61 +114,85 @@ describe('Live Debugger', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         // Override globals to simulate the Datadog Browser Debugger SDK
-        // being loaded with active probes. $dd_probes now returns a truthy
-        // probe object, and $dd_entry/$dd_return/$dd_throw are recording stubs.
+        // being loaded with active probes. $dd_probes returns a truthy probe
+        // object, and $dd_entry/$dd_return/$dd_throw are recording stubs.
+        //
+        // $dd_entry must return a handle identifying the invocation: the
+        // generated code stores it back into the same binding, so returning
+        // undefined would make every exit guard false. The exit hooks check
+        // that they were given that handle rather than the probe object, which
+        // is what catches a bundled exit form that forgot to forward it.
+        //
         // $dd_return must return the returnValue (its 2nd arg) because
         // the comma-expression return pattern uses its return value.
-        const { values, entryCount, returnCount, throwCount } = await page.evaluate(() => {
-            const g = globalThis as any;
-            let entries = 0;
-            let returns = 0;
-            let throws = 0;
+        const { values, entryCount, returnCount, throwCount, handleMismatches } =
+            await page.evaluate(() => {
+                const g = globalThis as any;
+                let entries = 0;
+                let returns = 0;
+                let throws = 0;
+                let mismatches = 0;
 
-            g.$dd_probes = () => ({ active: true });
-            g.$dd_entry = () => {
-                entries++;
-            };
-            g.$dd_return = (_probe: unknown, returnValue: unknown) => {
-                returns++;
-                return returnValue;
-            };
-            g.$dd_throw = () => {
-                throws++;
-            };
+                const checkHandle = (handle: unknown) => {
+                    const isHandle =
+                        typeof handle === 'object' &&
+                        handle !== null &&
+                        'id' in handle &&
+                        typeof handle.id === 'number';
+                    if (!isHandle) {
+                        mismatches++;
+                    }
+                };
 
-            const p = g.ddTestPatterns;
-            const v: Record<string, unknown> = {};
+                g.$dd_probes = () => ({ active: true });
+                g.$dd_entry = () => {
+                    entries++;
+                    return { id: entries };
+                };
+                g.$dd_return = (handle: unknown, returnValue: unknown) => {
+                    returns++;
+                    checkHandle(handle);
+                    return returnValue;
+                };
+                g.$dd_throw = (handle: unknown) => {
+                    throws++;
+                    checkHandle(handle);
+                };
 
-            v.add = p.add(2, 3);
-            v.addWithLocal = p.addWithLocal(2, 3);
-            v.double = p.double(7);
-            v.getObj = p.getObj('hello');
+                const p = g.ddTestPatterns;
+                const v: Record<string, unknown> = {};
 
-            const arr: string[] = [];
-            p.sideEffect(arr, 'ok');
-            v.sideEffect = arr[0];
+                v.add = p.add(2, 3);
+                v.addWithLocal = p.addWithLocal(2, 3);
+                v.double = p.double(7);
+                v.getObj = p.getObj('hello');
 
-            v.absNeg = p.abs(-5);
-            v.absPos = p.abs(3);
-            v.earlyExitFalsy = p.earlyExit(0);
-            v.earlyExitTruthy = p.earlyExit(42);
-            v.signPos = p.sign(10);
-            v.signNeg = p.sign(-10);
+                const arr: string[] = [];
+                p.sideEffect(arr, 'ok');
+                v.sideEffect = arr[0];
 
-            try {
-                p.thrower();
-                v.thrower = 'no-error';
-            } catch (e: unknown) {
-                v.thrower = (e as Error).message;
-            }
+                v.absNeg = p.abs(-5);
+                v.absPos = p.abs(3);
+                v.earlyExitFalsy = p.earlyExit(0);
+                v.earlyExitTruthy = p.earlyExit(42);
+                v.signPos = p.sign(10);
+                v.signNeg = p.sign(-10);
 
-            return {
-                values: v,
-                entryCount: entries,
-                returnCount: returns,
-                throwCount: throws,
-            };
-        });
+                try {
+                    p.thrower();
+                    v.thrower = 'no-error';
+                } catch (e: unknown) {
+                    v.thrower = (e as Error).message;
+                }
+
+                return {
+                    values: v,
+                    entryCount: entries,
+                    returnCount: returns,
+                    throwCount: throws,
+                    handleMismatches: mismatches,
+                };
+            });
 
         // Return values must be preserved even with probes active.
         expect(values.add).toBe(5);
@@ -188,6 +212,10 @@ describe('Live Debugger', () => {
         expect(entryCount).toBeGreaterThan(0);
         expect(returnCount).toBeGreaterThan(0);
         expect(throwCount).toBe(1);
+
+        // Every exit hook received the handle $dd_entry returned, not the
+        // probe object $dd_probes handed to $dd_entry.
+        expect(handleMismatches).toBe(0);
 
         expect(errors).toEqual([]);
     });
