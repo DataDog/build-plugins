@@ -725,7 +725,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
-            expect(result.code).toMatch(/"use strict";\s*\nconst \$dd_p0/);
+            expect(result.code).toMatch(/"use strict";\s*\nlet \$dd_p0/);
         });
 
         it('should preserve multiple directives', () => {
@@ -736,7 +736,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
-            expect(result.code).toMatch(/"use asm";\s*\nconst \$dd_p0/);
+            expect(result.code).toMatch(/"use asm";\s*\nlet \$dd_p0/);
         });
 
         it('should not affect functions without directives', () => {
@@ -746,7 +746,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toMatch(/\{\s*const \$dd_p0/);
+            expect(result.code).toMatch(/\{\s*let \$dd_p0/);
         });
     });
 
@@ -1208,10 +1208,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {const $dd_p0 = $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
                     '}',
                 ),
@@ -1226,10 +1226,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {const $dd_p0 = $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
                     '}',
                 ),
@@ -1244,10 +1244,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
                     '}',
                 ),
@@ -1262,10 +1262,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {const $dd_p0 = $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
                     '}',
                 ),
@@ -1280,10 +1280,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f(flag) {const $dd_p0 = $dd_probes('src/utils.ts;f');",
+                    "function f(flag) {let $dd_p0 = $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {flag}); throw e; }',
                     '}',
                 ),
@@ -1298,10 +1298,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f() {const $dd_p0 = $dd_probes('src/utils.ts;f');",
+                    "function f() {let $dd_p0 = $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, undefined, {a});',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
                     '}',
@@ -1318,9 +1318,9 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const double = (x) => {',
-                    "  const $dd_p0 = $dd_probes('src/utils.ts;double');",
+                    "  let $dd_p0 = $dd_probes('src/utils.ts;double');",
                     '  try {',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = x * 2;',
                     '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
@@ -1339,9 +1339,9 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const getObj = (x) => {',
-                    "  const $dd_p0 = $dd_probes('src/utils.ts;getObj');",
+                    "  let $dd_p0 = $dd_probes('src/utils.ts;getObj');",
                     '  try {',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = {key: x};',
                     '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
@@ -1370,9 +1370,9 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(items) {let $dd_t;',
                     '    ($dd_t = super(items.map((x) => {',
-                    "      const $dd_p0 = $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
+                    "      let $dd_p0 = $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
                     '      try {',
-                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t, {x});',
+                    '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
                     '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});',
                     '        return $dd_rv0;',
@@ -1404,9 +1404,9 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(args) {let $dd_t;',
                     '    const init = () => {',
-                    "      const $dd_p0 = $dd_probes('src/utils.ts;init');",
+                    "      let $dd_p0 = $dd_probes('src/utils.ts;init');",
                     '      try {',
-                    '        if ($dd_p0) $dd_entry($dd_p0, $dd_t);',
+                    '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);',
                     '        const $dd_rv0 = ($dd_t = super(args));',
                     '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);',
                     '        return $dd_rv0;',
@@ -1427,10 +1427,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function log(msg) {const $dd_p0 = $dd_probes('src/utils.ts;log');",
+                    "function log(msg) {let $dd_p0 = $dd_probes('src/utils.ts;log');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {msg}); throw e; }',
                     '}',
@@ -1446,10 +1446,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function abs(x) {const $dd_p0 = $dd_probes('src/utils.ts;abs');",
+                    "function abs(x) {let $dd_p0 = $dd_probes('src/utils.ts;abs');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '}',
                 ),
@@ -1464,10 +1464,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function earlyExit(x) {const $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
+                    "function earlyExit(x) {let $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
                     '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
                     '}',
@@ -1491,10 +1491,10 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function sign(x) {const $dd_p0 = $dd_probes('src/utils.ts;sign');",
+                    "function sign(x) {let $dd_p0 = $dd_probes('src/utils.ts;sign');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_entry($dd_p0, this, {x});',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    if (x > 0) {',
                     '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
                     '    } else {',

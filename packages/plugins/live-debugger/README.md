@@ -23,6 +23,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Skipped function types](#skipped-function-types)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
+    -   [Invocation handles](#invocation-handles)
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
 
@@ -71,11 +72,11 @@ Each instrumented function gets:
 - A unique, stable function ID (format: `<file-path>;<function-name>`)
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
 - Deferred parameter-capture helpers (`$dd_e<N>`)
-- Entry point tracking with parameter capture via `$dd_entry()`
+- Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
 
-The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path.
+The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
 When `metadata.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you also upload sourcemaps through the Error Tracking plugin, use the same value for `errorTracking.sourcemaps.releaseVersion`.
 
@@ -90,10 +91,10 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    const $dd_p0 = $dd_probes('src/utils.js;add');
+    let $dd_p0 = $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {a, b});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
         return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
@@ -241,6 +242,30 @@ if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = func
 ```
 
 This ensures that instrumented code never crashes, even if the SDK has not been loaded. The stub makes `$dd_probes` return `undefined`, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+
+### Invocation handles
+
+Each instrumented function holds a single binding that identifies the call currently running:
+
+```js
+function add(a, b) {
+    let $dd_p0 = $dd_probes('src/math.ts;add');
+    try {
+        let $dd_rv0;
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
+        return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0);
+    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
+}
+```
+
+`$dd_probes` returns the probes registered for the function, and `$dd_entry` exchanges them for an opaque handle identifying this one invocation. Because the binding is function-scoped, every exit path hands the exit hooks the handle belonging to their own call — so overlapping asynchronous invocations are paired correctly even when they finish out of entry order.
+
+`$dd_entry` returns `undefined` when no probe produced an entry (sampling, entry conditions, lifetime budgets). The exit guards are then false and the return and throw hooks are skipped entirely.
+
+Two properties of this contract are load-bearing for the generated code:
+
+- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters.
+- **`$dd_return` returns the value it is given.** Its result *is* the instrumented function's return value, so the hooks' parameter positions cannot be reordered without changing what applications return.
 
 ### Activating probes
 
