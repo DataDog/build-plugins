@@ -6,6 +6,7 @@ Developer notes for the Live Debugger plugin.
 
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
+-   [Consumer build canary](#consumer-build-canary)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
     -   [What it measures](#what-it-measures)
@@ -39,6 +40,59 @@ The Babel packages and `magic-string` are optional peer dependencies for consume
 Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts).
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
+
+## Consumer build canary
+
+Canary targets build real consumer projects with local Datadog build plugins.
+Each target defines its own build phases, package-linking strategy, output
+locations, and validation checks.
+
+To see the currently registered targets and the available command options, run:
+
+```bash
+yarn cli canary --help
+```
+
+Run every phase defined by a target with:
+
+```bash
+yarn cli canary <target>
+```
+
+Install the dependencies of both repositories first. A target may refuse to run
+when either checkout already has a local package-link setup, so it cannot
+overwrite an existing development environment.
+
+The default run compares control and Live Debugger-instrumented variants. Only
+Live Debugger is toggled between a target's paired builds. To select one
+target-defined phase or use a non-default checkout, run:
+
+```bash
+yarn cli canary <target> --phase <phase> --root /path/to/checkout
+```
+
+For each phase, the result reports:
+
+- wall-clock build duration, excluding the separate syntax-validation pass;
+- total raw bytes across all emitted JavaScript files;
+- total gzip bytes when each emitted JavaScript file is compressed separately;
+- absolute and percentage differences between control and instrumented builds.
+
+Build order alternates across runs to reduce systematic warm-cache bias. A
+single duration difference is still noisy and should be interpreted as part of
+a trend, not as a hard regression threshold.
+
+The command writes a versioned JSON report to a timestamped temporary file and
+prints its path. Use `--report /path/to/report.json` to choose an artifact path.
+Generated assets are retained at target-defined locations for diagnosis.
+Temporary package links and package export changes are reverted even when a
+build fails.
+
+The report records each repository's HEAD commit and whether its worktree was
+dirty when the run started. The canary fails when a build or validation command
+exits unsuccessfully, no JavaScript is emitted, the instrumented output lacks
+Live Debugger markers, or the plugin reports an instrumentation or source-map
+error.
 
 ## Runtime benchmark
 
