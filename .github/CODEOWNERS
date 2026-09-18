@@ -5,8 +5,8 @@
 # Plugin owners
 
 # Core
-packages/core/src/helpers/site.ts                                       @DataDog/app-builder-high-code @DataDog/build-plugins
-packages/core/src/helpers/site.test.ts                                  @DataDog/app-builder-high-code @DataDog/build-plugins
+packages/core/src/helpers/site.ts                                       @DataDog/app-builder-high-code
+packages/core/src/helpers/site.test.ts                                  @DataDog/app-builder-high-code
 
 # Build Report
 packages/plugins/build-report                                         @DataDog/build-plugins
@@ -21,13 +21,13 @@ packages/plugins/git                                                  @DataDog/b
 packages/plugins/injection                                            @DataDog/build-plugins
 
 # Metrics
-packages/plugins/metrics                                              @DataDog/frontend-devx @DataDog/build-plugins
+packages/plugins/metrics                                              @DataDog/frontend-devx
 
 # Error Tracking
 packages/plugins/error-tracking                                       @DataDog/build-plugins
 
 # Rum
-packages/plugins/rum                                                  @DataDog/rum-browser @DataDog/build-plugins
+packages/plugins/rum                                                  @DataDog/rum-browser
 
 # Analytics
 packages/plugins/analytics                                            @DataDog/build-plugins
@@ -45,8 +45,8 @@ packages/plugins/async-queue                                          @DataDog/b
 packages/plugins/output                                               @DataDog/build-plugins
 
 # Apps
-packages/plugins/apps                                                 @DataDog/app-builder-high-code @DataDog/build-plugins
+packages/plugins/apps                                                 @DataDog/app-builder-high-code
 
 # Live Debugger
-packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs @DataDog/build-plugins
-packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs @DataDog/build-plugins
+packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs
+packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs
