@@ -490,8 +490,11 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     const argsArg = hasParams ? `, ${entryArgs}` : '';
 
     const escapedFunctionId = escapeSingleQuotedJavaScriptString(functionId);
-    const probeDecl = `const ${probeVarName} = $dd_probes('${escapedFunctionId}');`;
-    const entryCall = `if (${probeVarName}) $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
+    // `$dd_entry` swaps the probe list for a handle identifying this invocation
+    // (undefined when no probe produced an entry), reusing the same binding so
+    // every exit hook pairs with its own entry state, not a concurrent call's.
+    const probeDecl = `let ${probeVarName} = $dd_probes('${escapedFunctionId}');`;
+    const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
     if (isExpressionBody) {

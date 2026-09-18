@@ -47,10 +47,10 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    const $dd_p0 = $dd_probes('src/utils.js;add');
+    let $dd_p0 = $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {a, b});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
         return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
@@ -68,9 +68,9 @@ const double = (x) => x * 2;
 
 // After
 const double = (x) => {
-    const $dd_p0 = $dd_probes('src/utils.js;double');
+    let $dd_p0 = $dd_probes('src/utils.js;double');
     try {
-        if ($dd_p0) $dd_entry($dd_p0, this, {x});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = x * 2;
         if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
         return $dd_rv0;
@@ -89,9 +89,9 @@ const getObj = (x) => ({key: x});
 
 // After
 const getObj = (x) => {
-    const $dd_p0 = $dd_probes('src/utils.js;getObj');
+    let $dd_p0 = $dd_probes('src/utils.js;getObj');
     try {
-        if ($dd_p0) $dd_entry($dd_p0, this, {x});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = {key: x};
         if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
         return $dd_rv0;
@@ -112,10 +112,10 @@ function getTime() {
 
 // After
 function getTime() {
-    const $dd_p0 = $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = $dd_probes('src/utils.js;getTime');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this);
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
         return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0);
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }
 }
@@ -135,10 +135,10 @@ function getTime() {
 
 // After
 function getTime() {
-    const $dd_p0 = $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = $dd_probes('src/utils.js;getTime');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this);
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
         const now = Date.now();
         return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0);
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }
@@ -158,10 +158,10 @@ function log(msg) {
 
 // After
 function log(msg) {
-    const $dd_p0 = $dd_probes('src/utils.js;log');
+    let $dd_p0 = $dd_probes('src/utils.js;log');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {msg});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg});
         console.log(msg);
         if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {msg}); throw e; }
@@ -184,10 +184,10 @@ function earlyExit(x) {
 
 // After
 function earlyExit(x) {
-    const $dd_p0 = $dd_probes('src/utils.js;earlyExit');
+    let $dd_p0 = $dd_probes('src/utils.js;earlyExit');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {x});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (!x) {
             if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
             return;
@@ -213,10 +213,10 @@ function abs(x) {
 
 // After
 function abs(x) {
-    const $dd_p0 = $dd_probes('src/utils.js;abs');
+    let $dd_p0 = $dd_probes('src/utils.js;abs');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {x});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (x < 0) {
             return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
         }
@@ -241,10 +241,10 @@ function sign(x) {
 
 // After
 function sign(x) {
-    const $dd_p0 = $dd_probes('src/utils.js;sign');
+    let $dd_p0 = $dd_probes('src/utils.js;sign');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {x});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (x > 0) {
             return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
         } else {
@@ -272,10 +272,10 @@ function f(flag) {
 
 // After
 function f(flag) {
-    const $dd_p0 = $dd_probes('src/utils.js;f');
+    let $dd_p0 = $dd_probes('src/utils.js;f');
     try {
         let $dd_rv0;
-        if ($dd_p0) $dd_entry($dd_p0, this, {flag});
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag});
         if (flag) {
             return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0);
         }
@@ -312,9 +312,9 @@ class Button extends Component {
     constructor(props) {
         let $dd_t;
         const handleClick = () => {
-            const $dd_p0 = $dd_probes('src/Button.js;handleClick');
+            let $dd_p0 = $dd_probes('src/Button.js;handleClick');
             try {
-                if ($dd_p0) $dd_entry($dd_p0, $dd_t);
+                if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = this.props.onClick();
                 if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);
                 return $dd_rv0;
@@ -346,9 +346,9 @@ class Widget extends Base {
     constructor(items) {
         let $dd_t;
         ($dd_t = super(items.map((x) => {
-            const $dd_p0 = $dd_probes('src/widget.js;<anonymous>@4:16:0');
+            let $dd_p0 = $dd_probes('src/widget.js;<anonymous>@4:16:0');
             try {
-                if ($dd_p0) $dd_entry($dd_p0, $dd_t, {x});
+                if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
                 if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});
                 return $dd_rv0;
@@ -377,9 +377,9 @@ class Widget extends Base {
     constructor(args) {
         let $dd_t;
         const init = () => {
-            const $dd_p0 = $dd_probes('src/widget.js;init');
+            let $dd_p0 = $dd_probes('src/widget.js;init');
             try {
-                if ($dd_p0) $dd_entry($dd_p0, $dd_t);
+                if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = ($dd_t = super(args));
                 if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);
                 return $dd_rv0;
@@ -409,10 +409,10 @@ class Widget extends Base {
 class Widget extends Base {
     constructor(items) {
         const double = function(x) {
-            const $dd_p0 = $dd_probes('src/widget.js;double');
+            let $dd_p0 = $dd_probes('src/widget.js;double');
             try {
                 let $dd_rv0;
-                if ($dd_p0) $dd_entry($dd_p0, this, {x});
+                if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
                 return ($dd_rv0 = x * 2, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
             } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
         };
@@ -435,7 +435,7 @@ where `<line>` and `<column>` are the function's position in the original source
 For example, the callback in `[1, 2].map((x) => x * 2)` might become:
 
 ```js
-const $dd_p0 = $dd_probes('src/utils.js;<anonymous>@1:11:0');
+let $dd_p0 = $dd_probes('src/utils.js;<anonymous>@1:11:0');
 ```
 
 > Setting [`liveDebugger.namedOnly`](./README.md#livedebuggernamedonly) to `true` skips
