@@ -1708,6 +1708,7 @@ __metadata:
     magic-string: "npm:0.30.21"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    picomatch: "npm:4.0.3"
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     rollup-plugin-esbuild: "npm:6.1.1"
@@ -1766,6 +1767,7 @@ __metadata:
     magic-string: "npm:0.30.21"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    picomatch: "npm:4.0.3"
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     rollup-plugin-esbuild: "npm:6.1.1"
@@ -1817,6 +1819,7 @@ __metadata:
     magic-string: "npm:0.30.21"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    picomatch: "npm:4.0.3"
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     rollup-plugin-esbuild: "npm:6.1.1"
@@ -1871,6 +1874,7 @@ __metadata:
     magic-string: "npm:0.30.21"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    picomatch: "npm:4.0.3"
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     rollup-plugin-esbuild: "npm:6.1.1"
@@ -1922,6 +1926,7 @@ __metadata:
     magic-string: "npm:0.30.21"
     outdent: "npm:0.8.0"
     p-queue: "npm:6.6.2"
+    picomatch: "npm:4.0.3"
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.45.1"
     rollup-plugin-esbuild: "npm:6.1.1"
@@ -2107,8 +2112,10 @@ __metadata:
     "@dd/core": "workspace:*"
     "@jridgewell/remapping": "npm:2.3.5"
     "@jridgewell/trace-mapping": "npm:0.3.31"
+    "@types/picomatch": "npm:4.0.2"
     chalk: "npm:2.3.1"
     magic-string: "npm:0.30.21"
+    picomatch: "npm:4.0.3"
     typescript: "npm:5.4.3"
   peerDependencies:
     "@babel/parser": ^7.24.5
@@ -4183,6 +4190,13 @@ __metadata:
   version: 4.0.0
   resolution: "@types/parse-json@npm:4.0.0"
   checksum: 10/4df9de98150d2978afc2161482a3a8e6617883effba3223324f079de97ba7eabd7d84b90ced11c3f82b0c08d4a8383f678c9f73e9c41258f769b3fa234a2bb4f
+  languageName: node
+  linkType: hard
+
+"@types/picomatch@npm:4.0.2":
+  version: 4.0.2
+  resolution: "@types/picomatch@npm:4.0.2"
+  checksum: 10/7b74f860c4c2bf30f7952254717df2dd78441b0add79858dffe7f6a30c9dd6da6c3d7769d2a9f0c499bc5ffe820c629bffc7c5128948febfc2b935800169b1c3
   languageName: node
   linkType: hard
 
@@ -9502,6 +9516,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"picomatch@npm:4.0.3, picomatch@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "picomatch@npm:4.0.3"
+  checksum: 10/57b99055f40b16798f2802916d9c17e9744e620a0db136554af01d19598b96e45e2f00014c91d1b8b13874b80caa8c295b3d589a3f72373ec4aaf54baa5962d5
+  languageName: node
+  linkType: hard
+
 "picomatch@npm:^2.0.4, picomatch@npm:^2.2.3, picomatch@npm:^2.3.1":
   version: 2.3.1
   resolution: "picomatch@npm:2.3.1"
@@ -9513,13 +9534,6 @@ __metadata:
   version: 4.0.2
   resolution: "picomatch@npm:4.0.2"
   checksum: 10/ce617b8da36797d09c0baacb96ca8a44460452c89362d7cb8f70ca46b4158ba8bc3606912de7c818eb4a939f7f9015cef3c766ec8a0c6bfc725fdc078e39c717
-  languageName: node
-  linkType: hard
-
-"picomatch@npm:^4.0.3":
-  version: 4.0.3
-  resolution: "picomatch@npm:4.0.3"
-  checksum: 10/57b99055f40b16798f2802916d9c17e9744e620a0db136554af01d19598b96e45e2f00014c91d1b8b13874b80caa8c295b3d589a3f72373ec4aaf54baa5962d5
   languageName: node
   linkType: hard
 

@@ -10,6 +10,7 @@ import type { SourceMap } from 'magic-string';
 import type { SourceMapCompact, UnpluginBuildContext } from 'unplugin';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { createFileExtensionPattern, createFileFilter } from './filter';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
 import { transformCode } from './transform';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
@@ -29,6 +30,9 @@ export const getLiveDebuggerPlugin = (
     context: GlobalContext,
 ): PluginOptions => {
     const log = context.getLogger(PLUGIN_NAME);
+    const shouldInstrumentFile = createFileFilter(pluginOptions);
+    const fileExtensionPattern = createFileExtensionPattern(pluginOptions.fileExtensions);
+    const nativeInclude = fileExtensionPattern ? [fileExtensionPattern] : pluginOptions.include;
 
     let instrumentedCount = 0;
     let failedCount = 0;
@@ -48,29 +52,16 @@ export const getLiveDebuggerPlugin = (
         transform: {
             filter: {
                 id: {
-                    include: pluginOptions.include,
+                    include: nativeInclude,
                     exclude: pluginOptions.exclude,
                 },
             },
             handler(code, id) {
-                // Enforce include/exclude patterns at runtime because unplugin's
+                // Enforce all file filters at runtime because unplugin's
                 // native filter is not applied in bundler child compilations
                 // (e.g., web worker bundles in rspack/webpack).
-                if (pluginOptions.include.length > 0) {
-                    const included = pluginOptions.include.some((pattern) =>
-                        typeof pattern === 'string' ? id.includes(pattern) : pattern.test(id),
-                    );
-                    if (!included) {
-                        return { code };
-                    }
-                }
-
-                for (const pattern of pluginOptions.exclude) {
-                    const excluded =
-                        typeof pattern === 'string' ? id.includes(pattern) : pattern.test(id);
-                    if (excluded) {
-                        return { code };
-                    }
+                if (!shouldInstrumentFile(id)) {
+                    return { code };
                 }
 
                 if (totalFilesWithFunctions >= DD_LD_LIMIT) {
