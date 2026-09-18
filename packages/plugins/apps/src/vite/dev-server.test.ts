@@ -1488,9 +1488,13 @@ describe('Dev Server Middleware', () => {
             jest.useFakeTimers();
             try {
                 const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
+                const hangingLoadModule = jest.fn(
+                    // Never settles.
+                    () => new Promise<Record<string, unknown>>(() => {}),
+                );
                 const immediateHydrationMiddleware = createDevServerMiddleware(
                     mockViteBuild,
-                    mockLoadModule,
+                    hangingLoadModule,
                     () => mockFunctions,
                     async () => [],
                     mockAuth,
@@ -1499,10 +1503,6 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
-                );
-                mockLoadModule.mockImplementation(
-                    // Never settles.
-                    () => new Promise(() => {}),
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1573,12 +1573,15 @@ describe('Dev Server Middleware', () => {
             // Give compute's request every chance to race ahead while greet's priming is gated —
             // if it weren't serialized behind greet's still-pending turn, compute's ungated
             // priming would already show up here, before greet's gate is ever released.
-            await new Promise((resolve) => setTimeout(resolve, 20));
-            expect(order).toEqual(['greet-priming-start']);
-
-            releaseGreetPriming?.();
-            await resGreet.done;
-            await resCompute.done;
+            // Always release and drain both requests so a failed assertion cannot leak queued
+            // work into the next test.
+            try {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                expect(order).toEqual(['greet-priming-start']);
+            } finally {
+                releaseGreetPriming?.();
+                await Promise.all([resGreet.done, resCompute.done]);
+            }
 
             expect(order).toEqual([
                 'greet-priming-start',
