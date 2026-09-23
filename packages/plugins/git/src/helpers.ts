@@ -80,7 +80,11 @@ export const gitRepositoryURL = async (git: SimpleGit): Promise<string> =>
 // Returns the current hash and remote as well as a TrackedFilesMatcher.
 //
 // To obtain the list of tracked files paths tied to a specific sourcemap, invoke the 'matchSourcemap' method.
-export const getRepositoryData = async (git: SimpleGit): Promise<RepositoryData> => {
+export const getRepositoryData = async (
+    git: SimpleGit,
+    repositoryUrl?: string,
+): Promise<RepositoryData> => {
+    const remoteOverride = repositoryUrl?.trim();
     // Invoke git commands to retrieve some informations and tracked files.
     // We're using Promise.all instead of Promise.allSettled since we want to fail early if
     // any of the promises fails.
@@ -98,7 +102,9 @@ export const getRepositoryData = async (git: SimpleGit): Promise<RepositoryData>
         gitMessage(git),
         gitAuthorAndCommitter(git),
         gitTrackedFiles(git),
-        gitRemote(git),
+        remoteOverride
+            ? Promise.resolve(filterSensitiveInfoFromRepositoryUrl(remoteOverride))
+            : gitRemote(git),
     ];
 
     const [hash, branch, message, authorAndCommitter, trackedFiles, remote] =

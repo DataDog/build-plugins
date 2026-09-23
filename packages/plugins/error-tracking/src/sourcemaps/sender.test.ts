@@ -15,6 +15,7 @@ import {
 import { SOURCEMAP_UPLOAD_METRIC_PREFIX } from '@dd/error-tracking-plugin/sourcemaps/upload-metrics';
 import {
     getContextMock,
+    getRepositoryDataMock,
     mockLogFn,
     mockLogger,
     getPayloadMock,
@@ -138,6 +139,39 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             );
 
             expect(doRequestMock).toHaveBeenCalledTimes(1);
+        });
+
+        test('Should include the configured repository identity in upload metadata', async () => {
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
+            const git = {
+                ...getRepositoryDataMock(),
+                remote: 'https://github.com/user/canonical',
+            };
+
+            await sendSourcemaps(
+                [getSourcemapMock()],
+                getSourcemapsConfiguration(),
+                { ...senderContextMock, git },
+                mockLogger,
+            );
+
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            const { data, headers } = await doRequestMock.mock.calls[0][0].getData!();
+            const body = new Response(data).body!.pipeThrough(new DecompressionStream('gzip'));
+            const form = await new Response(body, { headers }).formData();
+            const event = form.get('event');
+            if (!event || typeof event === 'string') {
+                throw new Error('Missing sourcemap upload metadata');
+            }
+            expect(JSON.parse(await event.text())).toEqual(
+                expect.objectContaining({
+                    git_repository_url: git.remote,
+                    git_commit_sha: git.hash,
+                }),
+            );
         });
 
         test('Should alert in case of payload issues', async () => {

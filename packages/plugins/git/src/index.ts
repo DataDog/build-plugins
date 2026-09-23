@@ -13,13 +13,13 @@ export const PLUGIN_NAME = 'datadog-git-plugin';
 
 export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
     const { options, context } = arg;
+    const repositoryUrl = options.gitRepositoryUrl?.trim();
     const log = context.getLogger(PLUGIN_NAME);
     const timeGit = log.time('get git information', { start: false });
     const processGit = async (gitDir: string) => {
         try {
             const git = await newSimpleGit(path.dirname(gitDir));
-            const remotes = await git.getRemotes(true);
-            if (remotes.length === 0) {
+            if (!repositoryUrl && (await git.getRemotes(true)).length === 0) {
                 log.warn(
                     'No git remotes available, skipping git plugin. ' +
                         'This is expected for a repository that has not been pushed yet.',
@@ -28,7 +28,7 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
                 return;
             }
 
-            const repositoryData = await getRepositoryData(git);
+            const repositoryData = await getRepositoryData(git, repositoryUrl);
             context.git = repositoryData;
 
             timeGit.end();

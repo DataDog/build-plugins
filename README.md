@@ -30,6 +30,7 @@ To interact with Datadog directly from your builds.
     -   [`auth.site`](#authsite)
     -   [`customPlugins`](#customplugins)
     -   [`enableGit`](#enablegit)
+    -   [`gitRepositoryUrl`](#gitrepositoryurl)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
     -   [`metadata.version`](#metadataversion)
@@ -101,6 +102,7 @@ Follow the specific documentation for each bundler:
     };
     customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
     enableGit?: boolean;
+    gitRepositoryUrl?: string;
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
@@ -311,6 +313,22 @@ type GlobalContext = {
 
 Enable the [Git plugin](/packages/plugins/git#readme) to use git information in your build.<br/>
 Set to `false` if you don't want to use it, for instance if you see a `Error: No git remotes available` error.
+
+### `gitRepositoryUrl`
+
+> default: detected from the Git remote
+
+Override the repository URL included in Git metadata and sourcemap uploads. Set this to the repository URL recognized by Source Code Integration when CI clones through a mirror or proxy.
+
+```typescript
+{
+    gitRepositoryUrl: 'https://github.com/my-org/my-repository',
+}
+```
+
+This option takes precedence over the detected Git remote and also works when the checkout has no remote. The checkout must still contain Git history: the commit SHA, branch, and tracked files are read from it as usual. The checkout's remote configuration is not changed.
+
+Leading and trailing whitespace is removed, and an empty value falls back to remote discovery. URL credentials, query parameters, and fragments are stripped using the same filtering as detected remote URLs. This option does not enable Git metadata collection when `enableGit` is `false` or sourcemap uploads are disabled.
 
 ### `logLevel`
 
