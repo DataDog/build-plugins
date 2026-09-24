@@ -47,8 +47,18 @@ describe('Git Plugin helpers', () => {
             revparse: (arg: string) => '25da22df90210a40b919debe3f7ebfb0c1811898',
         });
 
-        test('Should return the relevant data from git', async () => {
-            const data = await getRepositoryData(createMockSimpleGit() as any);
+        test.each([
+            [undefined, 'git@github.com:user/repository.git'],
+            ['', 'git@github.com:user/repository.git'],
+            ['   ', 'git@github.com:user/repository.git'],
+            ['https://github.com/user/canonical', 'https://github.com/user/canonical'],
+            [
+                ' https://user:password@github.com/user/canonical?token=secret#fragment ',
+                'https://github.com/user/canonical',
+            ],
+            ['git@github.com:user/canonical.git', 'git@github.com:user/canonical.git'],
+        ])('Should use URL %s and preserve the other Git data', async (override, remote) => {
+            const data = await getRepositoryData(createMockSimpleGit() as any, override);
             if (!data) {
                 throw new Error('data should not be undefined');
             }
@@ -57,7 +67,8 @@ describe('Git Plugin helpers', () => {
                 'fixtures/common.min.js.map',
                 () => undefined,
             );
-            expect(data.remote).toBe('git@github.com:user/repository.git');
+            expect(data.remote).toBe(remote);
+            expect(data.hash).toBe('25da22df90210a40b919debe3f7ebfb0c1811898');
             expect(data.commit.hash).toBe('25da22df90210a40b919debe3f7ebfb0c1811898');
             expect(data.commit.message).toBe('test message');
             expect(data.commit.author.name).toBe('John Doe');
@@ -68,6 +79,14 @@ describe('Git Plugin helpers', () => {
             expect(data.commit.committer.date).toBe('2021-01-02');
             expect(data.branch).toBe('main');
             expect(files).toStrictEqual(['src/core/plugins/git/helpers.test.ts']);
+        });
+
+        test('Should not discover remotes when a repository URL is provided', async () => {
+            const git = { ...createMockSimpleGit(), getRemotes: jest.fn(() => []) };
+            const data = await getRepositoryData(git as any, 'https://github.com/user/canonical');
+
+            expect(data.remote).toBe('https://github.com/user/canonical');
+            expect(git.getRemotes).not.toHaveBeenCalled();
         });
     });
 

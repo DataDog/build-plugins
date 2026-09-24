@@ -359,6 +359,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 };
                 customPlugins?: (arg: GetPluginsArg) => UnpluginPlugin[];
                 enableGit?: boolean;
+                gitRepositoryUrl?: string;
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
                 metadata?: {
                     name?: string;

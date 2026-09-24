@@ -20,6 +20,8 @@ Adds repository data to the global context from the `buildStart` hook.
 > [!NOTE]
 > This won't be added if [`options.enableGit = false`](/#enablegit).
 
+Use [`options.gitRepositoryUrl`](/#gitrepositoryurl) to override the repository identity when a CI checkout uses a mirror or has no remote. The commit and tracked files still come from the local checkout.
+
 ## Hooks
 
 ### `git`

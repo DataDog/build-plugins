@@ -112,8 +112,45 @@ describe('Git Plugin', () => {
         );
     });
 
+    test.each([
+        { name: 'a mirror remote', remotes: oneRemote },
+        { name: 'no remote', remotes: [] },
+    ])('Should pass the repository override to uploads with $name', async ({ remotes }) => {
+        const repositoryUrl = 'https://github.com/user/canonical';
+        const gitData = { ...getRepositoryDataMock(), remote: repositoryUrl };
+        const git = createMockSimpleGit(remotes);
+        newSimpleGitMocked.mockResolvedValue(git);
+        getRepositoryDataMocked.mockResolvedValue(gitData);
+        uploadSourcemapsMocked.mockResolvedValue();
+        const hookReports: RepositoryData[] = [];
+
+        const { errors } = await runBundlers({
+            ...pluginOptions,
+            gitRepositoryUrl: ` ${repositoryUrl} `,
+            errorTracking: { sourcemaps: getSourcemapsConfiguration() },
+            customPlugins: () => [
+                {
+                    name: 'observe-git-override',
+                    git(data) {
+                        hookReports.push(data);
+                    },
+                },
+            ],
+        });
+
+        expect(errors).toHaveLength(0);
+        expect(getRepositoryDataMocked).toHaveBeenCalledTimes(BUNDLERS.length);
+        expect(getRepositoryDataMocked).toHaveBeenCalledWith(git, repositoryUrl);
+        expect(hookReports).toEqual(BUNDLERS.map(() => gitData));
+        expect(uploadSourcemapsMocked).toHaveBeenCalledTimes(BUNDLERS.length);
+        for (const [, context] of uploadSourcemapsMocked.mock.calls) {
+            expect(context.git).toEqual(gitData);
+        }
+    });
+
     describe('Erroring', () => {
         test('Should not throw with a git error.', async () => {
+            newSimpleGitMocked.mockResolvedValue(createMockSimpleGit(oneRemote));
             const pluginConfig: Options = {
                 ...pluginOptions,
                 errorTracking: {
@@ -149,6 +186,7 @@ describe('Git Plugin', () => {
             const pluginConfig: Options = {
                 ...pluginOptions,
                 enableGit: false,
+                gitRepositoryUrl: 'https://github.com/user/canonical',
                 errorTracking: {
                     sourcemaps: getSourcemapsConfiguration(),
                 },

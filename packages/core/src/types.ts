@@ -305,6 +305,8 @@ export interface Options extends BaseOptions {
     [rum.CONFIG_KEY]?: RumOptions;
     // #types-injection-marker
     sourcemaps?: SourcemapsOptions;
+    /** Repository URL used in Git metadata instead of the detected remote URL. */
+    gitRepositoryUrl?: string;
     customPlugins?: GetCustomPlugins;
 }
 
