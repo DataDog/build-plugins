@@ -504,6 +504,76 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/not in this function's allowed connections/);
         expect(executeAction).not.toHaveBeenCalled();
     });
+    test('Should reject cleanly with standard error message when connectionId is a non-string value', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        await expect(
+            executeScriptLocally(
+                funcWithConnection,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.slack.chat.postMessage({
+                            inputs: { text: 'hi' },
+                            connectionId: 12345,
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/not in this function's allowed connections/);
+        expect(executeAction).not.toHaveBeenCalled();
+    });
+    test('Should normalize connectionId to canonical casing from allowedConnectionIds when invoking action', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            funcWithConnection,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi' },
+                        connectionId: 'CONN-1',
+                    }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith(
+            'com.datadoghq.slack.chat.postMessage',
+            { text: 'hi' },
+            'conn-1',
+        );
+    });
+    test('Should preserve exact connectionId match when allowedConnectionIds contains both uppercase and lowercase forms', async () => {
+        const funcWithDualCasing: BackendFunction = {
+            ...func,
+            allowedConnectionIds: ['CONN-1', 'conn-1'],
+        };
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        const result = await executeScriptLocally(
+            funcWithDualCasing,
+            TEST_PROJECT_ROOT,
+            [],
+            executeAction,
+            loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({
+                        inputs: { text: 'hi' },
+                        connectionId: 'conn-1',
+                    }),
+            }),
+            mockLogger,
+        );
+        expect(result).toEqual({ data: { ok: true } });
+        expect(executeAction).toHaveBeenCalledWith(
+            'com.datadoghq.slack.chat.postMessage',
+            { text: 'hi' },
+            'conn-1',
+        );
+    });
 
     test('Should allow a $.Actions call with no connectionId regardless of allowedConnectionIds', async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });

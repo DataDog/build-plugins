@@ -274,12 +274,24 @@ function assertConnectionIdAllowed(
     connectionId: string | undefined,
     allowedConnectionIds: string[],
     actionDescription: string,
-): void {
-    if (connectionId !== undefined && !allowedConnectionIds.includes(connectionId)) {
-        throw new Error(
-            `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
-        );
+): string | undefined {
+    if (connectionId === undefined) {
+        return undefined;
     }
+    if (typeof connectionId === 'string') {
+        if (allowedConnectionIds.includes(connectionId)) {
+            return connectionId;
+        }
+        const canonical = allowedConnectionIds.find(
+            (id) => id.toLowerCase() === connectionId.toLowerCase(),
+        );
+        if (canonical !== undefined) {
+            return canonical;
+        }
+    }
+    throw new Error(
+        `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
+    );
 }
 
 /** Shared validation for both $.Actions entry points (raw proxy and action-catalog typed wrapper) — extracted so a contract change can't be applied to one path and missed on the other. */
@@ -292,8 +304,12 @@ function validateActionCall(
     if (typeof inputs !== 'object' || !inputs) {
         throw new Error(`Action ${actionDescription} must have an inputs field`);
     }
-    assertConnectionIdAllowed(connectionId, allowedConnectionIds, actionDescription);
-    return { inputs, connectionId };
+    const validatedConnectionId = assertConnectionIdAllowed(
+        connectionId,
+        allowedConnectionIds,
+        actionDescription,
+    );
+    return { inputs, connectionId: validatedConnectionId };
 }
 
 /** Shared validate → serialize → runAllowed sequence for both $.Actions entry points — same reasoning as `validateActionCall` above, extended to cover the whole call instead of just the inputs check. */
