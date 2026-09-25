@@ -10,6 +10,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
@@ -34,6 +35,7 @@ export async function buildBackendFunctions(
     buildRoot: string,
     log: Logger,
     runStaticChecks: RunBackendStaticChecks,
+    configuredAllowedConnectionIds: string[] = [],
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
@@ -119,9 +121,16 @@ export async function buildBackendFunctions(
     return {
         outDir,
         outputs,
-        functions: functions.map((func) => ({
-            ...func,
-            allowedConnectionIds: allowedConnectionIdsByEntryPath.get(func.absolutePath)!,
-        })),
+        functions: functions.map((func) => {
+            const discoveredIds = allowedConnectionIdsByEntryPath.get(func.absolutePath) ?? [];
+            const allowedConnectionIds = mergeAllowedConnectionIds(
+                configuredAllowedConnectionIds,
+                discoveredIds,
+            );
+            return {
+                ...func,
+                allowedConnectionIds,
+            };
+        }),
     };
 }
