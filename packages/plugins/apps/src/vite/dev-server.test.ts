@@ -298,6 +298,7 @@ function createTestMiddleware(
         projectRoot?: CreateDevServerMiddlewareArgs[7];
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
+        configuredAllowedConnectionIds?: CreateDevServerMiddlewareArgs[10];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -313,6 +314,7 @@ function createTestMiddleware(
         overrides.projectRoot ?? '/project',
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
+        overrides.configuredAllowedConnectionIds ?? [],
     );
 }
 
@@ -919,6 +921,65 @@ describe('Dev Server Middleware', () => {
             expect(
                 capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
             ).toEqual(['conn-build']);
+        });
+        test('Should merge configured allowedConnectionIds getter into preview-async query inputs on each request', async () => {
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `
+                        import { request } from '@datadog/action-catalog/http/http';
+
+                        export function greet() {
+                            request({ connectionId: 'conn-discovered', inputs: {} });
+                        }
+                    `,
+                );
+                return mockBuildResult('// code');
+            });
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                spec: { inputs: { allowedConnectionIds: string[] } };
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    capturedBody = body as PreviewAsyncBody;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-configured' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-configured')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const currentConfiguredIds = ['conn-config-1'];
+            const middlewareWithGetter = createTestMiddleware({
+                configuredAllowedConnectionIds: () => currentConfiguredIds,
+            });
+
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middlewareWithGetter(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            expect(
+                capturedBody?.data.attributes.query.properties.spec.inputs.allowedConnectionIds,
+            ).toEqual(['conn-config-1', 'conn-discovered']);
         });
 
         test('Should handle errors array from long-polling endpoint', async () => {

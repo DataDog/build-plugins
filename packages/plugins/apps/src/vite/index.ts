@@ -14,12 +14,14 @@ import {
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
 } from '../auth';
+import { resolveAppConfigCredentialIds } from '../backend/app-config-resolver';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { shouldTraverseCollectedModule } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
@@ -129,6 +131,9 @@ export const getVitePlugin = ({
     });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+    const getConfiguredAllowedConnectionIds = (): string[] => {
+        return resolveAppConfigCredentialIds(context.buildRoot);
+    };
 
     // Vite 6 invokes closeBundle when a dev server's plugin container closes,
     // not only for production builds. configureServer only runs for dev
@@ -290,11 +295,13 @@ export const getVitePlugin = ({
             let backendOutputs = new Map<string, string>();
             let backendFunctions = getBackendFunctions();
             if (backendFunctions.length > 0) {
+                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
                 const result = await buildBackendFunctions(
                     bundler.build,
                     backendFunctions,
                     context.buildRoot,
                     log,
+                    configuredAllowedConnectionIds,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
@@ -338,7 +345,13 @@ export const getVitePlugin = ({
                     context.buildRoot,
                     log,
                 );
-                return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
+                const discoveredIds = extractConnectionIdsFromModuleGraph(
+                    entryId,
+                    moduleGraph,
+                    context.buildRoot,
+                );
+                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
+                return mergeAllowedConnectionIds(configuredAllowedConnectionIds, discoveredIds);
             };
             const middleware = createDevServerMiddleware(
                 bundler.build,
@@ -351,6 +364,7 @@ export const getVitePlugin = ({
                 context.buildRoot,
                 log,
                 server.config.mode,
+                getConfiguredAllowedConnectionIds,
             );
             server.middlewares.use(middleware);
         },
