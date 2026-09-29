@@ -662,6 +662,19 @@ function shouldFailDynamicImport(specifier: string): boolean {
     return specifier === 'non-literal dynamic import' || isLocalSpecifier(specifier);
 }
 
+export function isPackageManagerModule(modulePath: string): boolean {
+    return modulePath.split(path.sep).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
+}
+
+// A `..`-prefixed directory name like `..gen` is still inside the root.
+export function isOutsideRoot(relativePath: string): boolean {
+    return (
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+    );
+}
+
 /**
  * Keeps reachability traversal scoped to app-local JavaScript/TypeScript source
  * modules that the backend build collector can safely analyze.
@@ -672,11 +685,11 @@ export function shouldTraverseCollectedModule(moduleId: string, buildRoot: strin
     }
 
     const relativePath = path.relative(path.resolve(buildRoot), moduleId);
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    if (isOutsideRoot(relativePath)) {
         return false;
     }
 
-    return !relativePath.split(path.sep).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
+    return !isPackageManagerModule(relativePath);
 }
 
 /**

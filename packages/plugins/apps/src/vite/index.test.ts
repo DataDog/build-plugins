@@ -3,7 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from '@dd/apps-plugin/vite/custom-credentials-resolver';
-import { getVitePlugin, VITE_DEFAULT_SERVER_FS_DENY } from '@dd/apps-plugin/vite/index';
+import {
+    getVitePlugin,
+    SSR_WARMUP_SETTING,
+    VITE_DEFAULT_SERVER_FS_DENY,
+} from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
@@ -19,7 +23,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
-import type { ViteDevServer } from 'vite';
+import type { ConfigEnv, EnvironmentOptions, UserConfig, ViteDevServer } from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -100,16 +104,46 @@ type ConfigHookResult = {
     ssr: { noExternal: string[] };
     server: { fs: { deny: string[] } };
 };
+type ConfigEnvironmentCall = (
+    name: string,
+    options: EnvironmentOptions,
+    env: ConfigEnv,
+) => EnvironmentOptions | undefined;
 
-// Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
-// cast on its return value — mirrors `getConfigureServer` above.
-function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+const DEV_SERVER_ENV: ConfigEnv = { command: 'serve', mode: 'development', isPreview: false };
+
+// Narrows `plugin.config` to its handler via a runtime check, avoiding an `as` cast on its return
+// value — mirrors `getConfigureServer` above.
+function getConfigHandler(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (userConfig?: UserConfig) => ConfigHookResult {
     const { config } = plugin ?? {};
-    if (typeof config !== 'function') {
-        throw new Error('Expected plugin.config to be the plain function-hook form');
+    const handler = typeof config === 'object' && config !== null ? config.handler : config;
+    if (typeof handler !== 'function') {
+        throw new Error('Expected plugin.config to have a function handler');
     }
-    return function callConfig(): ConfigHookResult {
-        return Reflect.apply(config, undefined, []);
+    return function callConfig(userConfig = {}): ConfigHookResult {
+        const result: unknown = Reflect.apply(handler, undefined, [userConfig, DEV_SERVER_ENV]);
+        if (!isConfigHookResult(result)) {
+            throw new Error('Expected plugin.config to return a config object');
+        }
+        return result;
+    };
+}
+
+function isConfigHookResult(value: unknown): value is ConfigHookResult {
+    return typeof value === 'object' && value !== null && 'ssr' in value && 'server' in value;
+}
+
+function getConfigEnvironmentHandler(
+    plugin: ReturnType<typeof getVitePlugin>,
+): ConfigEnvironmentCall {
+    const { configEnvironment } = plugin ?? {};
+    if (typeof configEnvironment !== 'function') {
+        throw new Error('Expected plugin.configEnvironment to be the plain function-hook form');
+    }
+    return function callConfigEnvironment(name, options, env) {
+        return Reflect.apply(configEnvironment, undefined, [name, options, env]);
     };
 }
 
@@ -712,6 +746,7 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
+    // Exact shape: Vite 5 has no configEnvironment hook, so the warmup override must not live here.
     test('Should force @datadog/apps-backend and @datadog/action-catalog through the SSR transform pipeline instead of externalizing them', () => {
         // These SDKs ship ESM-only, but Vite's dev-server SSR mode externalizes node_modules by
         // default (a plain require()), which throws "Cannot use import statement outside a
@@ -731,6 +766,112 @@ describe('Backend Functions - getVitePlugin', () => {
                 },
             },
         });
+    });
+
+    const countWarmupNotices = () =>
+        mockLogFn.mock.calls.filter(
+            ([text, level]) => level === 'warn' && String(text).includes(SSR_WARMUP_SETTING),
+        ).length;
+
+    const ssrWarmupCases: Array<{
+        description: string;
+        userConfig: UserConfig;
+        environmentName?: string;
+        mergedOptions: EnvironmentOptions;
+        configEnv?: Partial<ConfigEnv>;
+        expectedOverride: boolean;
+        expectedNotices: number;
+    }> = [
+        {
+            description: 'server.preTransformRequests is on',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            expectedOverride: true,
+            expectedNotices: 1,
+        },
+        {
+            description: 'the merged SSR dev.preTransformRequests is on',
+            userConfig: {},
+            mergedOptions: { dev: { preTransformRequests: true } },
+            expectedOverride: true,
+            expectedNotices: 1,
+        },
+        {
+            description: 'no warmup setting is given',
+            userConfig: {},
+            mergedOptions: {},
+            expectedOverride: true,
+            expectedNotices: 0,
+        },
+        {
+            description: 'server.preTransformRequests is on but the SSR environment turns it off',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: { dev: { preTransformRequests: false } },
+            expectedOverride: true,
+            expectedNotices: 0,
+        },
+        {
+            description: 'it is vite preview',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            configEnv: { isPreview: true },
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+        {
+            description: 'it is a build',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            configEnv: { command: 'build' },
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+        {
+            description: 'the environment is not SSR',
+            userConfig: { server: { preTransformRequests: true } },
+            environmentName: 'client',
+            mergedOptions: {},
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+    ];
+    test.each(ssrWarmupCases)(
+        'Should turn SSR import warmup off: $expectedOverride, with $expectedNotices notice(s), when $description',
+        ({
+            userConfig,
+            environmentName,
+            mergedOptions,
+            configEnv,
+            expectedOverride,
+            expectedNotices,
+        }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const configHook = getConfigHandler(plugin);
+            const configEnvironment = getConfigEnvironmentHandler(plugin);
+            const env = { ...DEV_SERVER_ENV, ...configEnv };
+
+            configHook(userConfig);
+            const environmentOptions = configEnvironment(
+                environmentName ?? 'ssr',
+                mergedOptions,
+                env,
+            );
+
+            const ssrWarmup = environmentOptions?.dev?.preTransformRequests;
+            expect(ssrWarmup === false).toBe(expectedOverride);
+            expect(countWarmupNotices()).toBe(expectedNotices);
+        },
+    );
+
+    test('Should give the SSR import warmup notice only once', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const configEnvironment = getConfigEnvironmentHandler(plugin);
+        const mergedOptions = { dev: { preTransformRequests: true } };
+
+        configEnvironment('ssr', mergedOptions, DEV_SERVER_ENV);
+        configEnvironment('ssr', mergedOptions, DEV_SERVER_ENV);
+
+        expect(countWarmupNotices()).toBe(1);
     });
 
     // Regression test: a plugin's own server.fs.deny replaces Vite's defaults instead of merging,

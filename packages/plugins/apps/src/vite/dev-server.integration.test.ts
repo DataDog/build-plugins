@@ -12,9 +12,10 @@
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
-import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -471,4 +472,337 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.result).toEqual({ data: { ok: true } });
         expect(apiScope.isDone()).toBe(true);
     }, 30000);
+});
+
+// Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
+// would race other test files that copy that whole tree in parallel.
+const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
+
+describe('Dev Server Middleware — editing files between local executions', () => {
+    let editRoot: string | undefined;
+    let editServer: ViteDevServer;
+
+    beforeAll(async () => {
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+        const seed = `apps-edit-then-execute-${process.pid}`;
+        const root = getTempWorkingDir(seed);
+        editRoot = root;
+
+        const context = getContextMock({ buildRoot: root });
+        const appsPlugin: Plugin = {
+            name: 'dd-apps-test',
+            ...getVitePlugin({
+                bundler: { build },
+                context,
+                options: { include: [], longPolling: mockLongPolling },
+            }),
+        };
+        editServer = await createServer({
+            configFile: false,
+            root,
+            logLevel: 'silent',
+            // Each edit is signaled by the test itself; a late real watcher event could
+            // invalidate a module on its own and let a regression pass.
+            server: {
+                middlewareMode: true,
+                hmr: false,
+                watch: { ignored: ['**/*'] },
+                // Asks for SSR import warmup, which the apps plugin turns off for local execution.
+                preTransformRequests: true,
+            },
+            plugins: [appsPlugin],
+            optimizeDeps: { noDiscovery: true },
+            // Bundled into the SSR graph like the real SDKs, so its evaluation can be cached or re-run.
+            ssr: { noExternal: [FAKE_SDK_NAME] },
+        });
+    });
+
+    afterAll(async () => {
+        await editServer?.close();
+        if (editRoot) {
+            rmSync(editRoot);
+        }
+    });
+
+    beforeEach(() => {
+        mockRuntimeContextHydration();
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
+    });
+
+    const invalidationTimeOf = (file: string) => {
+        const nodes = editServer.environments.ssr.moduleGraph.getModulesByFile(file) ?? new Set();
+        const times = [...nodes].map((node) =>
+            Math.max(node.lastInvalidationTimestamp, node.lastHMRTimestamp),
+        );
+        return Math.max(0, ...times);
+    };
+
+    const waitUntil = async (
+        condition: () => boolean,
+        message: string,
+        deadline = Date.now() + 5000,
+    ): Promise<void> => {
+        if (condition()) {
+            return;
+        }
+        if (Date.now() > deadline) {
+            throw new Error(message);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        await waitUntil(condition, message, deadline);
+    };
+
+    // Signals the edit the way the real watcher would, then waits for Vite to invalidate it.
+    const editFile = async (file: string, contents: string) => {
+        const before = invalidationTimeOf(file);
+        outputFileSync(file, contents);
+        editServer.watcher.emit('change', file);
+        await waitUntil(() => invalidationTimeOf(file) > before, `Vite never invalidated ${file}`);
+    };
+
+    const execute = async (func: BackendFunction) => {
+        const functionName = encodeQueryName(func);
+        const req = createMockRequest('/__dd/executeAction', { functionName, args: [] });
+        const res = createMockResponse();
+        const next = jest.fn();
+        editServer.middlewares(req, res, next);
+        await res.done;
+        const rawBody = res.getBody();
+        return { statusCode: res.statusCode, body: JSON.parse(rawBody) };
+    };
+
+    const backendFunctionAt = (file: string, name: string): BackendFunction => {
+        const relativeFile = path.relative(editServer.config.root, file);
+        return {
+            relativePath: relativeFile.replace(/\.backend\.ts$/, ''),
+            name,
+            absolutePath: file,
+            allowedConnectionIds: [],
+        };
+    };
+
+    test('Should run the edited code on the next execution after a backend file changes', async () => {
+        const file = path.join(editServer.config.root, 'editedEntry.backend.ts');
+        const func = backendFunctionAt(file, 'readVersion');
+        const sourceFor = (version: string) =>
+            `export async function readVersion() { return '${version}'; }\n`;
+        const initialSource = sourceFor('v1');
+        outputFileSync(file, initialSource);
+        // Registers the function the way a frontend import of the generated client would.
+        await editServer.ssrLoadModule(file);
+
+        const first = await execute(func);
+        expect(first.statusCode).toBe(200);
+        expect(first.body).toEqual({ success: true, result: { data: 'v1' } });
+
+        const editedSource = sourceFor('v2');
+        await editFile(file, editedSource);
+        mockRuntimeContextHydration();
+        const second = await execute(func);
+        expect(second.statusCode).toBe(200);
+        expect(second.body).toEqual({ success: true, result: { data: 'v2' } });
+    }, 30000);
+
+    test('Should run the edited code on the next execution after a module the backend file imports changes', async () => {
+        const file = path.join(editServer.config.root, 'editedDependencyEntry.backend.ts');
+        const dependencyFile = path.join(editServer.config.root, 'editedDependency.ts');
+        const func = backendFunctionAt(file, 'readDependencyVersion');
+        const dependencySourceFor = (version: string) => `export const version = '${version}';\n`;
+        const initialDependencySource = dependencySourceFor('v1');
+        outputFileSync(dependencyFile, initialDependencySource);
+        outputFileSync(
+            file,
+            "import { version } from './editedDependency';\nexport async function readDependencyVersion() { return version; }\n",
+        );
+        await editServer.ssrLoadModule(file);
+
+        const first = await execute(func);
+        expect(first.statusCode).toBe(200);
+        expect(first.body).toEqual({ success: true, result: { data: 'v1' } });
+
+        const editedDependencySource = dependencySourceFor('v2');
+        await editFile(dependencyFile, editedDependencySource);
+        mockRuntimeContextHydration();
+        const second = await execute(func);
+        expect(second.statusCode).toBe(200);
+        expect(second.body).toEqual({ success: true, result: { data: 'v2' } });
+    }, 30000);
+
+    test('Should turn off SSR import warmup without changing the client environment', () => {
+        const ssrWarmup = editServer.environments.ssr.config.dev.preTransformRequests;
+        const clientWarmup = editServer.environments.client.config.dev.preTransformRequests;
+
+        expect(ssrWarmup).toBe(false);
+        expect(clientWarmup).toBe(true);
+    });
+
+    test('Should run the edited code in every branch on the next execution after a shared dependency changes', async () => {
+        const root = editServer.config.root;
+        const file = path.join(root, 'branchingEntry.backend.ts');
+        const dependencyFile = path.join(root, 'sharedDependency.ts');
+        const func = backendFunctionAt(file, 'readBranchVersions');
+        const branches = ['branchA', 'branchB', 'branchC'];
+        const dependencySourceFor = (version: string) => `export const version = '${version}';\n`;
+        const initialDependencySource = dependencySourceFor('v1');
+        outputFileSync(dependencyFile, initialDependencySource);
+        branches.forEach((branch) => {
+            const branchFile = path.join(root, `${branch}.ts`);
+            const branchSource = `import { version } from './sharedDependency';\nexport const ${branch} = () => version;\n`;
+            outputFileSync(branchFile, branchSource);
+        });
+        const branchImports = branches.map((branch) => `import { ${branch} } from './${branch}';`);
+        const branchCalls = branches.map((branch) => `${branch}()`).join(', ');
+        const entrySource = `${branchImports.join('\n')}\nexport async function readBranchVersions() { return [${branchCalls}]; }\n`;
+        outputFileSync(file, entrySource);
+        await editServer.ssrLoadModule(file);
+        const versionsInEveryBranch = (version: string) => branches.map(() => version);
+
+        const first = await execute(func);
+        expect(first.body).toEqual({
+            success: true,
+            result: { data: versionsInEveryBranch('v1') },
+        });
+
+        const editedDependencySource = dependencySourceFor('v2');
+        await editFile(dependencyFile, editedDependencySource);
+        mockRuntimeContextHydration();
+        const second = await execute(func);
+        expect(second.body).toEqual({
+            success: true,
+            result: { data: versionsInEveryBranch('v2') },
+        });
+    }, 30000);
+
+    test('Should keep an invalidated package dependency cached, so its state survives an edit', async () => {
+        const sdkDir = path.join(editServer.config.root, 'node_modules', FAKE_SDK_NAME);
+        const sdkManifest = JSON.stringify({
+            name: FAKE_SDK_NAME,
+            type: 'module',
+            main: 'index.js',
+        });
+        const sdkManifestPath = path.join(sdkDir, 'package.json');
+        const sdkEntryPath = path.join(sdkDir, 'index.js');
+        outputFileSync(sdkManifestPath, sdkManifest);
+        outputFileSync(
+            sdkEntryPath,
+            'let calls = 0;\nexport function bump() { calls += 1; return calls; }\n',
+        );
+        const file = path.join(editServer.config.root, 'sdkEntry.backend.ts');
+        const func = backendFunctionAt(file, 'callSdk');
+        const sourceFor = (version: string) =>
+            `import { bump } from '${FAKE_SDK_NAME}';\nexport async function callSdk() { return ['${version}', bump()]; }\n`;
+        const initialSource = sourceFor('v1');
+        outputFileSync(file, initialSource);
+        await editServer.ssrLoadModule(file);
+        const first = await execute(func);
+        expect(first.body).toEqual({ success: true, result: { data: ['v1', 1] } });
+
+        const editedSource = sourceFor('v2');
+        await editFile(file, editedSource);
+        // Invalidates the SDK too, as a tsconfig.json change would.
+        editServer.environments.ssr.moduleGraph.invalidateAll();
+        mockRuntimeContextHydration();
+        const second = await execute(func);
+
+        expect(second.body).toEqual({ success: true, result: { data: ['v2', 2] } });
+    }, 30000);
+
+    test('Should keep module state across unchanged executions after an edit', async () => {
+        const file = path.join(editServer.config.root, 'countingEntry.backend.ts');
+        const func = backendFunctionAt(file, 'countCalls');
+        const sourceFor = (start: number) =>
+            `let calls = ${start};\nexport async function countCalls() { calls += 1; return calls; }\n`;
+        const initialSource = sourceFor(0);
+        outputFileSync(file, initialSource);
+        await editServer.ssrLoadModule(file);
+        const countCalls = async () => {
+            mockRuntimeContextHydration();
+            const { body } = await execute(func);
+            return body.result.data;
+        };
+        await countCalls();
+
+        const editedStart = 100;
+        const editedSource = sourceFor(editedStart);
+        await editFile(file, editedSource);
+        const afterEdit = [await countCalls(), await countCalls(), await countCalls()];
+        expect(afterEdit).toEqual([editedStart + 1, editedStart + 2, editedStart + 3]);
+    }, 30000);
+});
+
+describe('Dev Server Middleware — SSR import warmup warnings', () => {
+    const reenableSsrWarmup: Plugin = {
+        name: 'dd-test-reenable-ssr-warmup',
+        configEnvironment(name) {
+            return name === 'ssr' ? { dev: { preTransformRequests: true } } : undefined;
+        },
+    };
+
+    const laterServerWarmup: Plugin = {
+        name: 'dd-test-later-server-warmup',
+        config: () => ({ server: { preTransformRequests: true } }),
+    };
+
+    test.each([
+        {
+            description: 'another plugin turns it back on',
+            otherPlugins: [reenableSsrWarmup],
+            ssrWarmup: true,
+            expectedWarnings: 1,
+        },
+        {
+            description: 'nothing turns it back on',
+            otherPlugins: [],
+            ssrWarmup: false,
+            expectedWarnings: 0,
+        },
+        {
+            description: "a later plugin's config asks for server.preTransformRequests",
+            otherPlugins: [laterServerWarmup],
+            ssrWarmup: false,
+            expectedWarnings: 1,
+        },
+    ])(
+        'Should log $expectedWarnings SSR import warmup warning(s) when $description',
+        async ({ otherPlugins, ssrWarmup, expectedWarnings }) => {
+            const seed = `apps-ssr-warmup-${process.pid}-${ssrWarmup}-${expectedWarnings}`;
+            const root = getTempWorkingDir(seed);
+            const warn = jest.fn();
+            const logger = getMockLogger({ warn });
+            const context = getContextMock({ buildRoot: root, getLogger: () => logger });
+            const appsPlugin: Plugin = {
+                name: 'dd-apps-test',
+                ...getVitePlugin({
+                    bundler: { build },
+                    context,
+                    options: { include: [], longPolling: mockLongPolling },
+                }),
+            };
+            const server = await createServer({
+                configFile: false,
+                root,
+                logLevel: 'silent',
+                server: { middlewareMode: true, hmr: false, watch: { ignored: ['**/*'] } },
+                plugins: [appsPlugin, ...otherPlugins],
+                optimizeDeps: { noDiscovery: true },
+            });
+
+            try {
+                const resolvedSsrWarmup = server.environments.ssr.config.dev.preTransformRequests;
+                const warmupWarnings = warn.mock.calls.filter(([text]) =>
+                    String(text).includes(SSR_WARMUP_SETTING),
+                );
+                expect(resolvedSsrWarmup).toBe(ssrWarmup);
+                expect(warmupWarnings).toHaveLength(expectedWarnings);
+            } finally {
+                await server.close();
+                rmSync(root);
+            }
+        },
+        30000,
+    );
 });
