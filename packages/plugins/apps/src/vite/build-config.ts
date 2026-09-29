@@ -43,6 +43,13 @@ export function getBaseBackendBuildConfig(
 } {
     return {
         configFile: false,
+        // configFile: false only skips loading a vite.config.js — it does not disable Vite's
+        // separate .env-file/import.meta.env machinery, which otherwise copies any VITE_-prefixed
+        // key straight out of the real process.env and statically inlines it into the built
+        // backend function. envPrefix: [] blocks that copy; envFile: false additionally stops a
+        // secret set only in the build root's own .env file from being read at all.
+        envFile: false,
+        envPrefix: [],
         root,
         logLevel: 'silent',
         build: {
