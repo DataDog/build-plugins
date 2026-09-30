@@ -8,6 +8,7 @@ describe('Apps Plugin - validateOptions', () => {
     test('uses package-only defaults', () => {
         expect(validateOptions({ apps: {} })).toEqual({
             include: [],
+            backend: { minify: true },
             longPolling: {
                 maxRetries: 10,
                 timeoutMs: 40000,
@@ -15,6 +16,19 @@ describe('Apps Plugin - validateOptions', () => {
                 exponentialBackoff: true,
             },
         });
+    });
+
+    test('allows opting out of backend minification', () => {
+        expect(validateOptions({ apps: { backend: { minify: false } } }).backend).toEqual({
+            minify: false,
+        });
+    });
+
+    test.each(['esbuild', 0, null])('rejects invalid backend.minify value %p', (minify) => {
+        expect(() =>
+            // @ts-expect-error Test invalid options supplied by JavaScript callers.
+            validateOptions({ apps: { backend: { minify } } }),
+        ).toThrow('apps.backend.minify must be a boolean.');
     });
 
     describe('longPolling', () => {

@@ -15,6 +15,7 @@ import {
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
+    mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
 import { mkdtempSync } from 'fs';
@@ -106,6 +107,7 @@ describe('Apps Plugin - package output', () => {
             }),
             options: {
                 include: [],
+                backend: { minify: true },
                 longPolling: {
                     maxRetries: 10,
                     timeoutMs: 40000,
@@ -127,6 +129,49 @@ describe('Apps Plugin - package output', () => {
         expect(Object.keys(zip.files)).toEqual(
             expect.arrayContaining(['frontend/index.html', 'manifest.json']),
         );
+    });
+
+    test('reports file count, compressed size and total decompressed size when packaging', async () => {
+        // Include multibyte content and a backend bundle so the total must count bytes
+        // across frontend, backend and the generated manifest, not just source characters.
+        await fs.writeFile(sourcePath, 'é'.repeat(600_000));
+        const backendPath = path.join(root, 'example.js');
+        await fs.writeFile(backendPath, 'export function main() {}');
+        const archivePath = await buildAppPackage(
+            packageOptions({ backendOutputs: new Map([['example', backendPath]]) }),
+        );
+        const data = await fs.readFile(archivePath!);
+        const zip = await JSZip.loadAsync(data);
+        const contents = await Promise.all(
+            Object.values(zip.files)
+                .filter((file) => !file.dir)
+                .map((file) => file.async('nodebuffer')),
+        );
+        const decompressedSize = contents.reduce((total, content) => total + content.length, 0);
+
+        expect(mockLogFn).toHaveBeenCalledWith(
+            `App package size: 3 files, ${(data.length / 1_000_000).toFixed(2)} MB compressed, ${(decompressedSize / 1_000_000).toFixed(2)} MB decompressed.`,
+            'info',
+        );
+    });
+
+    test.each([
+        [46_799_999, false],
+        [46_800_000, true],
+        [52_000_001, true],
+    ])('warns at 90%% of the decompressed limit (%i bytes)', async (decompressedSize, warns) => {
+        jest.spyOn(archive, 'createArchive').mockResolvedValue({
+            archivePath: path.join(packageDirectory, ARCHIVE_FILENAME),
+            assets: [],
+            size: 1_000,
+            decompressedSize,
+        });
+
+        await buildAppPackage(packageOptions());
+
+        const warnings = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
+        const warning = [expect.stringContaining('52 MB decompressed upload limit'), 'warn'];
+        expect(warnings).toEqual(warns ? [warning] : []);
     });
 
     test('does not nest stale generated package files into the archive', async () => {
@@ -340,7 +385,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await fs.rm(outDir, { recursive: true, force: true });
     });
 
-    test('Should include reachable helper module connection allowlists in manifest.json', async () => {
+    test.each([undefined, false])('backend.minify=%p', async (minify) => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
@@ -357,6 +402,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
                 assets: archiveAssets,
                 size: 30,
+                decompressedSize: 100,
             };
         });
 
@@ -394,6 +440,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             };
         });
         const args = getArgs();
+        args.options.apps = { backend: { minify } };
         args.bundler = { build: viteBuild };
         const plugins = getPlugins(args);
         const transform = extractViteTransform(plugins);
@@ -412,6 +459,14 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
 
         await extractCloseBundle(plugins)();
 
+        expect(viteBuild).toHaveBeenCalledWith(
+            expect.objectContaining({
+                esbuild: { keepNames: true },
+                build: expect.objectContaining({
+                    minify: minify === false ? false : 'esbuild',
+                }),
+            }),
+        );
         expect(
             Object.values(
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,

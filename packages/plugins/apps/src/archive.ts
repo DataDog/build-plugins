@@ -11,6 +11,7 @@ import type { Asset } from './assets';
 export type Archive = {
     archivePath: string;
     size: number;
+    decompressedSize: number;
     assets: Asset[];
 };
 
@@ -40,10 +41,13 @@ export const createArchive = async (assets: Asset[], archivePath: string): Promi
 
     // Compute the size for logging purpose.
     const { size } = await fsp.stat(archivePath);
+    const assetStats = await Promise.all(assets.map((asset) => fsp.stat(asset.absolutePath)));
+    const decompressedSize = assetStats.reduce((total, stats) => total + stats.size, 0);
 
     return {
         archivePath,
         size,
+        decompressedSize,
         assets,
     };
 };

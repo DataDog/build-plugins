@@ -8,6 +8,9 @@ export const CONFIG_KEY = 'apps' as const;
 export const PLUGIN_NAME: PluginName = 'datadog-apps-plugin' as const;
 
 export const ARCHIVE_FILENAME = 'datadog-app-assets.zip';
+export const DEFAULT_BACKEND_MINIFY = true;
+// The upload API reports a 52 MB decompressed limit; no shared server constant is available here.
+export const MAX_DECOMPRESSED_ARCHIVE_SIZE = 52_000_000;
 export const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
 /** Query suffix marking a local-execution load, so the transform hook can target it directly instead of matching on the broader `options.ssr` flag. */

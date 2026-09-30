@@ -14,6 +14,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.backend.minify](#appsbackendminify)
     -   [apps.longPolling](#appslongpolling)
 <!-- #toc -->
 
@@ -23,6 +24,9 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 apps?: {
     enable?: boolean;
     include?: string[];
+    backend?: {
+        minify?: boolean;
+    };
     longPolling?: {
         maxRetries?: number;
         jitter?: boolean;
@@ -60,6 +64,8 @@ A production `vite build` writes `datadog-app-assets.zip` beside the Vite output
 
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write the archive to a different directory.
 
+Every package build logs its file count, compressed size, and total decompressed size (in decimal MB), including frontend files, backend bundles, and the manifest. At 90% of the upload API's reported 52 MB decompressed limit (46.8 MB), it warns so you can reduce the package before uploading. This is advisory; the server enforces the limit.
+
 Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server authentication is described above.
 
 ### apps.enable
@@ -73,6 +79,14 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
+
+### apps.backend.minify
+
+> default: `true`
+
+Minify production backend function bundles with esbuild. Function and class names are preserved with `keepNames` to help identify frames in function logs, although minified line and column positions still refer to the generated bundle. Dev-server bundles remain unminified.
+
+To opt out, set `apps: { backend: { minify: false } }` in your Datadog Vite plugin options.
 
 ### apps.longPolling
 

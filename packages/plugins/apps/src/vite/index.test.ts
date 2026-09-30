@@ -214,6 +214,7 @@ const defaultOptions = {
     options: {
         enable: true,
         include: [],
+        backend: { minify: true },
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,

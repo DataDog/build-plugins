@@ -295,6 +295,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context.buildRoot,
                     log,
+                    options.backend.minify,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;

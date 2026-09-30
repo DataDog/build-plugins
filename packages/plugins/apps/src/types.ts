@@ -22,6 +22,10 @@ export type LongPollingOptions = {
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
+    backend?: {
+        /** Minify production backend bundles with esbuild, preserving names. Default: `true`. */
+        minify?: boolean;
+    };
     /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
     longPolling?: LongPollingOptions;
 };
@@ -39,5 +43,6 @@ export type AppsManifest = {
 };
 
 export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'include'> & {
+    backend: { minify: boolean };
     longPolling: Required<LongPollingOptions>;
 };

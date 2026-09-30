@@ -31,6 +31,7 @@ export async function buildBackendFunctions(
     functions: BackendFunction[],
     buildRoot: string,
     log: Logger,
+    minify?: boolean,
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
     const outputs = new Map<string, string>();
@@ -62,6 +63,7 @@ export async function buildBackendFunctions(
                 buildRoot,
                 { [virtualId]: virtualContent },
                 [connectionIdCollector.plugin, staticChecksPlugin],
+                minify,
             );
 
             // eslint-disable-next-line no-await-in-loop
