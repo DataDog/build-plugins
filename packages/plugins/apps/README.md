@@ -84,7 +84,7 @@ Tags to set on the app, e.g. `['team:my-team']`. Tags are trimmed and lowercased
 
 The package's `manifest.json` carries the app's complete tag list: these tags plus one `surface:<id>` tag for each surface declared by an `@datadog/apps-frontend` input the built frontend uses (for example `surface:datadog.dashboard`), letting product surfaces find apps meant for them. Surface tags are derived from the final bundle, so an input that is imported but tree-shaken away adds none, and an input that declares no surfaces (like the theme) adds none either.
 
-Deploying replaces the app's tags with this list, so a tag removed from `apps.tags`, or a surface whose input the app stopped using, is removed from the app.
+Deploying replaces the app's tags with this list, so a tag removed from `apps.tags`, or a surface whose input the app stopped using, is removed from the app. The Datadog API also adds `high-code-app` to every uploaded app, so an empty list leaves just that tag.
 
 > [!IMPORTANT]
 > Starting with the version that introduced `apps.tags`, every package carries a tag list, even an empty one. The first deploy of an app built with it replaces any tags set on the app in the App Builder UI; add those to `apps.tags` to keep them. Packages built with older versions have no tag list and leave the app's tags untouched.
