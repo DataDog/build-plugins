@@ -30,7 +30,7 @@ export const resolveLongPolling = (
     };
 };
 
-export const resolveTags = (tags: AppsOptions['tags']): AppsOptionsWithDefaults['tags'] => {
+export const resolveAuthoredTags = (tags: AppsOptions['tags']): AppsOptionsWithDefaults['tags'] => {
     if (tags === undefined) {
         return [];
     }
@@ -55,7 +55,7 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
 
     return {
         include: resolvedOptions.include || [],
-        tags: resolveTags(resolvedOptions.tags),
+        tags: resolveAuthoredTags(resolvedOptions.tags),
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
     };
 };

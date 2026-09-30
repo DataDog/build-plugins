@@ -94,13 +94,13 @@ describe('Apps Plugin - package output', () => {
             options?: Partial<AppsOptionsWithDefaults>;
             backendOutputs?: Map<string, string>;
             backendFunctions?: BackendFunction[];
-            inputSurfaces?: string[];
+            tags?: string[];
         } = {},
     ) {
         return {
             backendOutputs: overrides.backendOutputs ?? new Map<string, string>(),
             backendFunctions: overrides.backendFunctions ?? [],
-            inputSurfaces: overrides.inputSurfaces ?? [],
+            tags: overrides.tags ?? [],
             context: getContextMock({
                 buildRoot: root,
                 bundler: { name: 'vite', version: 'test', outDir: packageDirectory },
@@ -421,6 +421,65 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
+    });
+
+    test("Should write each watch-mode build's own tags, even once the next build has started", async () => {
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        const writtenTags: string[][] = [];
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            writtenTags.push(
+                JSON.parse(await fs.readFile(manifestAsset!.absolutePath, 'utf8')).tags,
+            );
+            return {
+                archivePath: path.join(outDir, ARCHIVE_FILENAME),
+                assets: archiveAssets,
+                size: 1,
+            };
+        });
+        const args = getGetPluginsArg(
+            { apps: { tags: ['Team:Apps'] } },
+            {
+                bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                buildRoot,
+                git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+            },
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const vite = getPlugins(args)[0].vite as any;
+        const buildShipping = (marker: string) => {
+            vite.buildStart();
+            vite.generateBundle.handler(
+                {},
+                {
+                    'assets/index.js': {
+                        type: 'chunk',
+                        fileName: 'assets/index.js',
+                        code: `f(${JSON.stringify(marker)})`,
+                    },
+                },
+            );
+            return vite.closeBundle();
+        };
+
+        // Vite's watcher can start the next build while the previous package is still being written.
+        await Promise.all([
+            buildShipping('dd-app-input/v1 datadog.dashboard surfaces=datadog.dashboard'),
+            buildShipping('dd-app-input/v1 datadog.idp surfaces=datadog.idp.service-panel'),
+        ]);
+
+        expect(writtenTags).toHaveLength(2);
+        expect(writtenTags).toEqual(
+            expect.arrayContaining([
+                ['surface:datadog.dashboard', 'team:apps'],
+                ['surface:datadog.idp.service-panel', 'team:apps'],
+            ]),
+        );
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {

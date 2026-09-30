@@ -17,7 +17,6 @@ import { collectAssets } from '../assets';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
-import { resolveAppTags } from '../tags';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
 import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
@@ -27,8 +26,8 @@ export interface BuildAppPackageOptions {
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
-    /** Surface ids declared by the inputs the built frontend uses; each becomes a `surface:<id>` tag. */
-    inputSurfaces: Iterable<string>;
+    /** The app's complete tag list, written to the manifest as is. */
+    tags: string[];
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
@@ -110,7 +109,7 @@ export async function buildAppPackage({
     backendFunctions,
     context,
     options,
-    inputSurfaces,
+    tags,
 }: BuildAppPackageOptions): Promise<string | undefined> {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -168,7 +167,6 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        const tags = resolveAppTags(options.tags, inputSurfaces);
         log.debug(`App tags: ${tags.length > 0 ? tags.join(', ') : '(none)'}.`);
         const manifest = await writeManifestFile(buildManifest(backendFunctions, tags));
         cleanupManifest = manifest.cleanup;
