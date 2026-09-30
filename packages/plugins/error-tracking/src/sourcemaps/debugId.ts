@@ -8,11 +8,11 @@ import fsp from 'fs/promises';
 // (see packages/plugins/rum/src/getSourceCodeContextSnippet.ts). The key is quoted in source
 // (`JSON.stringify(context)`) but minifiers like terser strip quotes from object keys that are
 // valid identifiers, so the built output can have either `"ddDebugId":"..."` or `ddDebugId:"..."`.
-// The value can also end up wrapped in single quotes depending on the minifier, so both `"` and `'`
-// are accepted around it. Reading it back out of the file we're about to upload means we never have
-// to trust a filename as a coordination key between the RUM plugin and this one, so it stays
-// correct across any bundler renaming step.
-const DEBUG_ID_RX = /"?ddDebugId"?:["']([0-9a-fA-F-]{36})["']/;
+// The value can also end up wrapped in single quotes or backticks depending on the minifier, so all
+// three of `"`, `'` and `` ` `` are accepted around it. Reading it back out of the file we're
+// about to upload means we never have to trust a filename as a coordination key between the RUM
+// plugin and this one, so it stays correct across any bundler renaming step.
+const DEBUG_ID_RX = /"?ddDebugId"?:["'`]([0-9a-fA-F-]{36})["'`]/;
 
 // Read progressively so the common case only needs the first KiB, while still supporting
 // bundlers or transforms that place the injected snippet later in the artifact.

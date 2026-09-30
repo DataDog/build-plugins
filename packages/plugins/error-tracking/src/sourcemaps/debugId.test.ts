@@ -58,6 +58,18 @@ describe('extractDebugId', () => {
         await expect(extractDebugId(filePath)).resolves.toBe(debugId);
     });
 
+    test('Should extract the debug ID when the value is wrapped in backticks (some minifiers use template-literal-style strings)', async () => {
+        const filePath = path.join(tempDir, 'backticked-value.min.js');
+        outputFileSync(
+            filePath,
+            '!function(){}' +
+                `({service:"app",version:"1.0.0",ddDebugId:\`${debugId}\`},` +
+                '"DD_SOURCE_CODE_CONTEXT");',
+        );
+
+        await expect(extractDebugId(filePath)).resolves.toBe(debugId);
+    });
+
     test('Should stop reading after finding the debug ID in the first chunk', async () => {
         const filePath = path.join(tempDir, 'first-chunk.min.js');
         const literal = `ddDebugId:"${debugId}"`;
