@@ -94,11 +94,13 @@ describe('Apps Plugin - package output', () => {
             options?: Partial<AppsOptionsWithDefaults>;
             backendOutputs?: Map<string, string>;
             backendFunctions?: BackendFunction[];
+            inputSurfaces?: string[];
         } = {},
     ) {
         return {
             backendOutputs: overrides.backendOutputs ?? new Map<string, string>(),
             backendFunctions: overrides.backendFunctions ?? [],
+            inputSurfaces: overrides.inputSurfaces ?? [],
             context: getContextMock({
                 buildRoot: root,
                 bundler: { name: 'vite', version: 'test', outDir: packageDirectory },
@@ -106,6 +108,7 @@ describe('Apps Plugin - package output', () => {
             }),
             options: {
                 include: [],
+                tags: [],
                 longPolling: {
                     maxRetries: 10,
                     timeoutMs: 40000,
@@ -278,14 +281,15 @@ describe('Apps Plugin - package output', () => {
         ).rejects.toThrow('permission denied');
     });
 
-    test('writes manifest.json with only backend function entries', async () => {
+    test('writes an empty tag list to manifest.json when the app has no tags', async () => {
         await buildAppPackage(packageOptions());
 
         const zip = await JSZip.loadAsync(
             await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
         );
         const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-        expect(manifest).toEqual({ backend: { functions: {} } });
+        // An explicit [] (rather than no `tags`) tells the backend to clear tags this app no longer has.
+        expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
     test('includes backend function entries with connection allowlists in manifest.json', async () => {

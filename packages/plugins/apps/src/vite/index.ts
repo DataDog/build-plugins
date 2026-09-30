@@ -29,6 +29,7 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
+import { findInputSurfaces } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -136,6 +137,11 @@ export const getVitePlugin = ({
     // dev exit must not rebuild backend functions or replace the production
     // package with dev-session-derived output.
     let devServerActive = false;
+
+    // Surfaces declared by the inputs the shipped frontend uses. Read from the final chunks rather
+    // than the module graph: the SDK's public barrel re-exports every input, so only the rendered,
+    // tree-shaken output tells which ones the app actually uses.
+    const inputSurfaces = new Set<string>();
 
     return {
         // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
@@ -281,6 +287,24 @@ export const getVitePlugin = ({
                 return { code: proxyCode, map: null };
             },
         },
+        buildStart() {
+            // A watch-mode rebuild must not inherit surfaces from an input it no longer uses.
+            inputSurfaces.clear();
+        },
+        generateBundle: {
+            // After other plugins have finished rewriting chunk code.
+            order: 'post',
+            handler(_outputOptions, bundle) {
+                for (const output of Object.values(bundle)) {
+                    if (output.type !== 'chunk') {
+                        continue;
+                    }
+                    for (const surface of findInputSurfaces(output.code)) {
+                        inputSurfaces.add(surface);
+                    }
+                }
+            },
+        },
         async closeBundle() {
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
@@ -306,6 +330,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context,
                     options,
+                    inputSurfaces,
                 });
             } finally {
                 if (backendOutDir) {

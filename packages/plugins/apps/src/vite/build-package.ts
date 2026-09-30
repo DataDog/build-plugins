@@ -17,6 +17,7 @@ import { collectAssets } from '../assets';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
+import { resolveAppTags } from '../tags';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
 import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
@@ -26,6 +27,8 @@ export interface BuildAppPackageOptions {
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
+    /** Surface ids declared by the inputs the built frontend uses; each becomes a `surface:<id>` tag. */
+    inputSurfaces: Iterable<string>;
 }
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
@@ -74,7 +77,7 @@ async function isCustomCredentialsAsset(
     }
 }
 
-function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+function buildManifest(backendFunctions: BackendFunction[], tags: string[]): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -82,16 +85,16 @@ function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
         };
     }
 
-    return { backend: { functions } };
+    return { tags, backend: { functions } };
 }
 
 async function writeManifestFile(
-    backendFunctions: BackendFunction[],
+    manifest: AppsManifest,
 ): Promise<{ manifestAsset: Asset; cleanup: () => Promise<void> }> {
     const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
-        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+        await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -107,6 +110,7 @@ export async function buildAppPackage({
     backendFunctions,
     context,
     options,
+    inputSurfaces,
 }: BuildAppPackageOptions): Promise<string | undefined> {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -164,7 +168,9 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        const manifest = await writeManifestFile(backendFunctions);
+        const tags = resolveAppTags(options.tags, inputSurfaces);
+        log.debug(`App tags: ${tags.length > 0 ? tags.join(', ') : '(none)'}.`);
+        const manifest = await writeManifestFile(buildManifest(backendFunctions, tags));
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);
