@@ -473,6 +473,84 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/must have an inputs field/);
     });
 
+    // assertConnectionIdAllowed only checks this call's own top-level connectionId — a call with no
+    // connectionId (allowed regardless of allowedConnectionIds, per the test above) that nests its
+    // own allowedConnectionIds inside inputs would otherwise reach the destination with a
+    // self-declared scope nothing here validated.
+    test('Should reject an action call that declares its own allowedConnectionIds inside inputs', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.datatransformation.jsFunctionWithActions({
+                            inputs: { script: 'malicious', allowedConnectionIds: ['not-allowed'] },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/must not declare its own allowedConnectionIds/);
+        expect(executeAction).not.toHaveBeenCalled();
+    });
+
+    // The pre-serialization check above only sees the inputs object as it exists before
+    // JSON.stringify calls toJSON() — a toJSON() that only introduces allowedConnectionIds in its
+    // return value would otherwise sail through unnoticed and reach executeAction.
+    test('Should reject an action call whose inputs introduce allowedConnectionIds only via a custom toJSON()', async () => {
+        const executeAction = jest.fn().mockResolvedValue({ ok: true });
+        await expect(
+            executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.datatransformation.jsFunctionWithActions({
+                            inputs: {
+                                toJSON: () => ({
+                                    script: 'malicious',
+                                    allowedConnectionIds: ['not-allowed'],
+                                }),
+                            },
+                        }),
+                }),
+                mockLogger,
+            ),
+        ).rejects.toThrow(/must not declare its own allowedConnectionIds/);
+        expect(executeAction).not.toHaveBeenCalled();
+    });
+
+    // `in` matches inherited properties, not just inputs' own key — a polluted Object.prototype
+    // would otherwise make every subsequent call from every function in the process falsely appear
+    // to self-declare a scope, rejecting legitimate calls process-wide until restart.
+    test('Should not reject a legitimate call whose inputs have no own allowedConnectionIds, even when Object.prototype is polluted with that key', async () => {
+        Reflect.set(Object.prototype, 'allowedConnectionIds', ['hostile']);
+        try {
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModuleReturning({
+                    example: () =>
+                        testDollar().Actions.datatransformation.jsFunctionWithActions({
+                            inputs: { script: 'legitimate' },
+                        }),
+                }),
+                mockLogger,
+            );
+            expect(executeAction).toHaveBeenCalled();
+        } finally {
+            Reflect.deleteProperty(Object.prototype, 'allowedConnectionIds');
+        }
+    });
+
     // validateActionCall's own `typeof inputs !== 'object'` check passes an array through
     // unchanged (typeof [] === 'object'), but serializeActionInputs's shape check downstream
     // rejects it — inputs is semantically a plain object of named parameters, and a caller relying
@@ -1501,6 +1579,110 @@ describe('local-execution — executeScriptLocally', () => {
                     mockLogger,
                 ),
             ).rejects.toThrow(/must have an inputs field/);
+            expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // Mirrors the raw $.Actions path's nested-allowedConnectionIds test: validateActionCall's
+        // check is shared, but the typed-wrapper path reaches it through a different call site.
+        test('Should reject a typed-wrapper action call that declares its own allowedConnectionIds inside inputs', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.(
+                                'com.datadoghq.datatransformation.jsFunctionWithActions',
+                                {
+                                    inputs: {
+                                        script: 'malicious',
+                                        allowedConnectionIds: ['not-allowed'],
+                                    },
+                                },
+                            ),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModule,
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/must not declare its own allowedConnectionIds/);
+            expect(executeAction).not.toHaveBeenCalled();
+        });
+
+        // Mirrors the raw $.Actions path's toJSON()-introduced-allowedConnectionIds test: the
+        // typed-wrapper path shares validateActionCall, but reaches it through a different call site.
+        test('Should reject a typed-wrapper action call whose inputs introduce allowedConnectionIds only via a custom toJSON()', async () => {
+            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+            let registeredImpl:
+                | ((actionId: string, request: unknown) => Promise<unknown>)
+                | undefined;
+
+            const loadModule: LoadModule = async (specifier: string) => {
+                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    return {
+                        example: async () =>
+                            registeredImpl?.(
+                                'com.datadoghq.datatransformation.jsFunctionWithActions',
+                                {
+                                    inputs: {
+                                        toJSON: () => ({
+                                            script: 'malicious',
+                                            allowedConnectionIds: ['not-allowed'],
+                                        }),
+                                    },
+                                },
+                            ),
+                    };
+                }
+                if (specifier === '@datadog/action-catalog/action-execution') {
+                    return {
+                        setExecuteActionImplementation: (
+                            impl: (actionId: string, request: unknown) => Promise<unknown>,
+                        ) => {
+                            registeredImpl = impl;
+                        },
+                    };
+                }
+                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
+                error.code = 'MODULE_NOT_FOUND';
+                throw error;
+            };
+
+            await expect(
+                executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    executeAction,
+                    loadModule,
+                    mockLogger,
+                ),
+            ).rejects.toThrow(/must not declare its own allowedConnectionIds/);
             expect(executeAction).not.toHaveBeenCalled();
         });
 

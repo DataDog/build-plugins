@@ -237,7 +237,7 @@ export type ExecuteAction = (
 /** Resolves a fresh serializable `$` snapshot from an authenticated preview execution. */
 export type GetRuntimeContext = () => Promise<unknown>;
 
-/** Mirrors the cloud path's server-side allowedConnectionIds restriction, so local dev enforces the same connection scoping as production. */
+/** Checks this one call's own connectionId field against the function's allowlist — not full parity with the cloud path's server-side restriction, since a nested meta-action's own inputs can carry a separate scope this never inspects (see validateActionCall's own check for that). */
 function assertConnectionIdAllowed(
     connectionId: string | undefined,
     allowedConnectionIds: string[],
@@ -246,6 +246,23 @@ function assertConnectionIdAllowed(
     if (connectionId !== undefined && !allowedConnectionIds.includes(connectionId)) {
         throw new Error(
             `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
+        );
+    }
+}
+
+/** Rejects a self-declared scope on `inputs` — checked both before serialization (fails fast on the common case) and again after (a custom `toJSON()` runs during `JSON.stringify`, before any replacer sees the result, so it can introduce this key even when the original object never had it). */
+function assertNoSelfDeclaredScope(
+    inputs: Record<string, unknown>,
+    actionDescription: string,
+): void {
+    // assertConnectionIdAllowed only inspects this call's own top-level connectionId — a nested
+    // meta-action carrying its own allowedConnectionIds inside inputs would otherwise reach the
+    // destination with a self-declared scope this function never validated. hasOwnProperty, not
+    // `in`, so a polluted Object.prototype can't make every subsequent call's inputs falsely
+    // appear to declare this key.
+    if (Object.prototype.hasOwnProperty.call(inputs, 'allowedConnectionIds')) {
+        throw new Error(
+            `Action ${actionDescription} must not declare its own allowedConnectionIds in inputs — this function's own allowlist already governs which connections it can use.`,
         );
     }
 }
@@ -260,6 +277,7 @@ function validateActionCall(
     if (typeof inputs !== 'object' || !inputs) {
         throw new Error(`Action ${actionDescription} must have an inputs field`);
     }
+    assertNoSelfDeclaredScope(inputs, actionDescription);
     assertConnectionIdAllowed(connectionId, allowedConnectionIds, actionDescription);
     return { inputs, connectionId };
 }
@@ -278,6 +296,7 @@ async function invokeAction(
         actionDescription,
     );
     const serializedInputs = serializeActionInputs(inputs, actionDescription);
+    assertNoSelfDeclaredScope(serializedInputs, actionDescription);
     const { runAllowed } = await getNetworkGuard();
     return runAllowed(() => executeAction(actionId, serializedInputs, connectionId));
 }
