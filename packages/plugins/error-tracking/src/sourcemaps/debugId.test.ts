@@ -38,6 +38,26 @@ describe('extractDebugId', () => {
         await expect(extractDebugId(filePath)).resolves.toBe(debugId);
     });
 
+    test('Should extract the debug ID when the value is wrapped in single quotes (some minifiers emit single-quoted strings)', async () => {
+        const filePath = path.join(tempDir, 'single-quoted-value.min.js');
+        outputFileSync(
+            filePath,
+            `!function(){}({service:"app",version:"1.0.0",ddDebugId:'${debugId}'},"DD_SOURCE_CODE_CONTEXT");`,
+        );
+
+        await expect(extractDebugId(filePath)).resolves.toBe(debugId);
+    });
+
+    test('Should extract the debug ID when the key is quoted and the value is single-quoted', async () => {
+        const filePath = path.join(tempDir, 'mixed-quotes.min.js');
+        outputFileSync(
+            filePath,
+            `!function(){}({"service":"app","version":"1.0.0","ddDebugId":'${debugId}'},"DD_SOURCE_CODE_CONTEXT");`,
+        );
+
+        await expect(extractDebugId(filePath)).resolves.toBe(debugId);
+    });
+
     test('Should stop reading after finding the debug ID in the first chunk', async () => {
         const filePath = path.join(tempDir, 'first-chunk.min.js');
         const literal = `ddDebugId:"${debugId}"`;
