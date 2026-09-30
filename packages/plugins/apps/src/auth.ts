@@ -6,10 +6,9 @@ import { getDDEnvValue } from '@dd/core/helpers/env';
 import { doRequest } from '@dd/core/helpers/request';
 import type { RequestOpts } from '@dd/core/types';
 
-// Lazy, same reasoning as local-execution.ts's getNetworkGuard(): importing network-guard.ts
-// installs its monkeypatches at module-load time, and this module is only ever used by the Vite
-// dev server (see getAuthenticatedRequest's callers), so deferring the import keeps that install
-// confined to Vite instead of triggering for every bundler that transitively imports this file.
+// Lazy because importing network-guard patches core modules process-wide, which must only happen
+// in the Vite dev server, not in every bundler that loads this file. Reset on failure so a later
+// request retries the import.
 let networkGuardModule: Promise<typeof import('./vite/network-guard')> | undefined;
 function getNetworkGuard(): Promise<typeof import('./vite/network-guard')> {
     networkGuardModule ??= import('./vite/network-guard').catch((err: unknown) => {

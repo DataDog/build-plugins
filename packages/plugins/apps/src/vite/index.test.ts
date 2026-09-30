@@ -95,6 +95,22 @@ function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
     return typeof value === 'function';
 }
 
+type ConfigHookResult = {
+    ssr: { noExternal: string[] };
+};
+
+// Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
+// cast on its return value — mirrors `getConfigureServer` above.
+function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+    const { config } = plugin ?? {};
+    if (typeof config !== 'function') {
+        throw new Error('Expected plugin.config to be the plain function-hook form');
+    }
+    return function callConfig(): ConfigHookResult {
+        return Reflect.apply(config, undefined, []);
+    };
+}
+
 const functions: BackendFunction[] = [
     {
         relativePath: 'src/backend/myHandler',
@@ -676,7 +692,7 @@ describe('Backend Functions - getVitePlugin', () => {
         // module" for them — ssr.noExternal is what server.ssrLoadModule depends on to load them
         // correctly.
         const plugin = getVitePlugin(defaultOptions);
-        const configHook = plugin!.config as () => { ssr: { noExternal: string[] } };
+        const configHook = getConfigHandler(plugin);
         const config = configHook();
 
         expect(config).toEqual({

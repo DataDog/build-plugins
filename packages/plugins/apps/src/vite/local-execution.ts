@@ -19,11 +19,9 @@ import { createEpochGuard } from './execution-epoch';
 import type { BlockedScopeHandle } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
-// Lazy, memoized — network-guard.ts installs process-wide monkeypatches (net.Socket, fetch, dgram,
-// dns, child_process, worker_threads.Worker) unconditionally at its own module-load time. A static
-// import here would trigger that install for every bundler that transitively imports this file via
-// index.ts (webpack/esbuild/rspack/rollup included), even though local execution is Vite-dev-only —
-// deferring the import until a local execution actually happens confines the install to Vite.
+// Lazy because importing network-guard patches core modules process-wide, which must only happen
+// in the Vite dev server, not in every bundler that loads this file. Reset on failure so a later
+// execution retries the import.
 let networkGuardModule: Promise<typeof import('./network-guard')> | undefined;
 function getNetworkGuard(): Promise<typeof import('./network-guard')> {
     networkGuardModule ??= import('./network-guard').catch((err: unknown) => {
@@ -214,12 +212,14 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level-evaluation `$`-scoping `runScriptLocally` uses (see `customerModuleLoadContext`) — for callers like dev-server.ts's priming load that trigger real top-level evaluation ahead of `executeScriptLocally`. Accepted residual gap: this runs outside network-guard.ts's `runBlocked` scope (only the exported function's body is wrapped, not module-level evaluation), so a customer file's top-level code has real, unguarded network/subprocess access — not a hard security boundary, matching network-guard.ts's "no OS sandbox" framing. Awaits `getNetworkGuard()` first — the sole choke point every caller funnels through — so network-guard.ts's `trustedStdout`/`trustedStderr` capture (see that file) always happens before this unguarded window, not just before a later `runBlocked` call. */
+/** Loads a customer module under the same top-level `$`-scoping `runScriptLocally` uses, for callers (like `executeColdActionLocally`'s priming) that evaluate it before `runScriptLocally`. Top-level code runs outside `runBlocked`, so it isn't network-guarded; loading the guard first ensures its trusted stdout/stderr are captured before any customer code can repoint them. */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
 ): Promise<Record<string, unknown>> {
-    await getNetworkGuard();
+    const { assertNoForeignGuard } = await getNetworkGuard();
+    // Checked before the customer's top-level code runs, since runBlocked would refuse anyway.
+    assertNoForeignGuard();
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
             loadModule(entrySpecifier),
@@ -747,21 +747,13 @@ async function runScriptLocally(
     // before it reaches that point has nothing to abandon here.
     let blockedScope: BlockedScopeHandle | undefined;
 
-    // Promise.race abandons a hung fn without cancelling it, so its runBlocked scope's try/finally
-    // cleanup never runs. abandonIfCurrent() only clears if this scope is still active, so this is
-    // safe even if a newer execution's own runBlocked scope has already started; the block itself
-    // stays enforced regardless via blockedContext's own scoping. Shared by both timeout paths
-    // below, since either can abandon a still-running fn the same way.
-    const abandonBlockedScope = () => {
-        blockedScope?.abandonIfCurrent();
-    };
-
-    // Shared by both timeout paths below: concludes the execution, abandons its runBlocked scope
-    // (see abandonBlockedScope above), then rejects with the caller's own message.
+    // Promise.race abandons a hung fn without cancelling it, so its runBlocked cleanup never runs;
+    // abandonIfCurrent() is a no-op once a newer execution's scope has taken over.
     const failWithTimeout = (message: string) => {
         concludeExecution();
-        abandonBlockedScope();
-        rejectTimeout?.(new Error(message));
+        blockedScope?.abandonIfCurrent();
+        const timeoutError = new Error(message);
+        rejectTimeout?.(timeoutError);
     };
 
     const scheduleTimeout = () => {
@@ -855,6 +847,15 @@ async function runScriptLocally(
             // Scopes globalThis.$ and the dispatch info to this call's own async continuation chain.
             return await backendGlobalsContext.run({ value: $ }, () =>
                 executionDispatchContext.run(dispatch, async () => {
+                    const rejectIfAbandoned = () => {
+                        if (!scope.isCurrent()) {
+                            throw new Error(
+                                `Execution of "${func.name}" was abandoned after timing out before it could start.`,
+                            );
+                        }
+                    };
+                    // The module load above can already have crossed the timeout.
+                    rejectIfAbandoned();
                     // Both adapters are stable and idempotent to re-register, so no coordination is needed between them or across executions.
                     const actionCatalogRegistration = registerActionCatalogIfInstalled(
                         loadModule,
@@ -867,21 +868,11 @@ async function runScriptLocally(
                         timeoutMs,
                     );
                     await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
-
-                    const rejectIfAbandoned = () => {
-                        if (!scope.isCurrent()) {
-                            throw new Error(
-                                `Execution of "${func.name}" was abandoned after timing out before it could start.`,
-                            );
-                        }
-                    };
-                    // Checked again after the await below — getNetworkGuard()'s dynamic import can
-                    // itself take long enough (its first call in a process) for the timeout to fire
-                    // in between, and the customer function must never run once already abandoned.
+                    const { runBlocked } = await getNetworkGuard();
+                    // Registration's loadModule() calls can take long enough to cross the timeout,
+                    // and the customer function must never run once abandoned.
                     rejectIfAbandoned();
                     // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
-                    const { runBlocked } = await getNetworkGuard();
-                    rejectIfAbandoned();
                     const data = await runBlocked(
                         async () => {
                             const result = await fn(...args);

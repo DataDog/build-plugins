@@ -15,11 +15,12 @@ import { executeScriptLocally } from './local-execution';
 describe('local-execution resilience (in-process execution known limitations)', () => {
     // A real `while (true) {}` would hang this test forever, since nothing — not even the timeout's
     // own callback — can run while the event loop is blocked synchronously. This bounded busy-wait
-    // proves the same point safely: the 20ms timeout can't interrupt it, so it settles at ~80ms.
+    // proves the same point safely: the timeout can't interrupt it, so it settles once the loop ends.
+    // Generous margins: this first test also pays getNetworkGuard()'s cold dynamic import.
     test('Should NOT interrupt a synchronous CPU-bound loop with the current timeout — known, accepted v1 limitation', async () => {
         const resolver = moduleResolverFor(func, {
             example: () => {
-                const deadline = Date.now() + 80;
+                const deadline = Date.now() + 800;
                 // eslint-disable-next-line no-empty
                 while (Date.now() < deadline) {}
                 return 'loop finished on its own';
@@ -36,13 +37,13 @@ describe('local-execution resilience (in-process execution known limitations)', 
             stubGetRuntimeContext,
             resolver,
             mockLogger,
-            20,
+            300,
         );
 
         const elapsedMs = Date.now() - start;
 
         expect(result).toEqual({ data: 'loop finished on its own' });
-        expect(elapsedMs).toBeGreaterThanOrEqual(60);
+        expect(elapsedMs).toBeGreaterThanOrEqual(700);
     });
 
     // process.exit() would kill this Jest process, so the fixture runs as its own real Jest process —

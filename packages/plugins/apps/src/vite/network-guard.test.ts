@@ -12,11 +12,15 @@ import { promisify } from 'util';
 import worker_threads from 'worker_threads';
 
 import {
+    ALREADY_GUARDED,
+    FOREIGN_GUARD_MESSAGE,
     forceReset,
+    getSharedContext,
     guardEventSource,
     guardWebSocket,
     guardWorker,
     installGuardedProperty,
+    networkGuardSymbol,
     runAllowed,
     runBlocked,
     trustedFetch,
@@ -152,8 +156,7 @@ describe('network-guard', () => {
             ).rejects.toThrow(/Network access is not allowed/);
         });
 
-        // dgram.send()'s real Node contract reports failure via an error-first callback (confirmed
-        // via @types/node doc examples), never a synchronous throw — the guard must match that.
+        // dgram.send() reports failure via its error-first callback, never a synchronous throw.
         test('Should block dgram.Socket.send() made inside fn via its error-first callback, not a synchronous throw', async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -168,9 +171,7 @@ describe('network-guard', () => {
             });
         });
 
-        // dgram.Socket.connect()'s callback is a success-only 'connect' event shorthand (confirmed
-        // via @types/node: `callback?: () => void`) — real failures are only ever reported via the
-        // async 'error' event, so the guard must signal that way too, not a synchronous throw.
+        // dgram.Socket.connect()'s callback is success-only; failures arrive via the 'error' event.
         test("Should block dgram.Socket.connect() made inside fn via its async 'error' event, not a synchronous throw", async () => {
             await runBlocked(async () => {
                 const socket = dgram.createSocket('udp4');
@@ -1166,21 +1167,78 @@ describe('installGuardedProperty security', () => {
         expect(Object.prototype.hasOwnProperty.call(target, 'doesNotExist')).toBe(false);
     });
 
-    // isCurrentlyBlocked() is the shared gate for every guard in this file — a fake AsyncLocalStorage
-    // swapped in here (via a plain `net[symbol] = ...` assignment, which any code holding a `net`
-    // reference could do) would silently disable all of them at once, not just one API surface.
-    test('Should protect the AsyncLocalStorage registry entries stashed on `net` from being overwritten by any code holding a `net` reference', () => {
-        const symbol = Symbol.for('@dd/apps-plugin/network-guard blockedContext');
-        const registry = net as unknown as Record<symbol, unknown>;
-        const descriptor = Object.getOwnPropertyDescriptor(registry, symbol);
+    // isCurrentlyBlocked() is the shared gate for every guard in this file, so a fake context
+    // swapped in by any code holding a `net` reference would silently disable all of them at once.
+    test('Should protect the shared-context registry entries stashed on `net` from being overwritten by any code holding a `net` reference', () => {
+        const symbol = networkGuardSymbol('blockedContext');
+        const descriptor = Object.getOwnPropertyDescriptor(net, symbol);
         expect(descriptor).toMatchObject({ writable: false, configurable: false });
 
         expect(() => {
-            Object.defineProperty(registry, symbol, {
+            Object.defineProperty(net, symbol, {
                 configurable: true,
-                value: { getStore: () => undefined, run: (_v: unknown, fn: () => unknown) => fn() },
+                value: { isActive: () => false, run: (fn: () => unknown) => fn() },
             });
         }).toThrow(/Cannot redefine property/);
+    });
+
+    // A raw AsyncLocalStorage instance on the registry would let any code with `require('net')`
+    // call `.disable()` on it and permanently kill network blocking process-wide — a stronger
+    // bypass than reading a value, since it disarms every future runBlocked call too.
+    test('Should not let a `.disable()` call reached via the `net`-keyed registry entry disarm network blocking for a later runBlocked call', async () => {
+        const symbol = networkGuardSymbol('blockedContext');
+        const entry: unknown = Reflect.get(net, symbol);
+        const entryObject = Object(entry);
+        const disable: unknown = Reflect.get(entryObject, 'disable');
+        const getStore: unknown = Reflect.get(entryObject, 'getStore');
+
+        expect(disable).toBeUndefined();
+        expect(getStore).toBeUndefined();
+        await expect(
+            runBlocked(async () => {
+                new net.Socket().connect(80, 'example.com');
+            }),
+        ).rejects.toThrow(/Network access is not allowed/);
+    });
+
+    // A non-writable registry property stops replacement, not reassignment of the facade's own methods.
+    test('Should freeze the shared facade so its isActive/run methods cannot be reassigned', () => {
+        const symbol = networkGuardSymbol('blockedContext');
+        const entry: unknown = Reflect.get(net, symbol);
+
+        const entryObject = Object(entry);
+        const reassigned = Reflect.set(entryObject, 'isActive', () => false);
+        const frozen = Object.isFrozen(entry);
+
+        expect(entryObject).toBe(entry);
+        expect(frozen).toBe(true);
+        expect(reassigned).toBe(false);
+    });
+
+    // Uses net's actual prototype, since a sandboxed test runtime can give core modules a non-Object one.
+    test("Should not mistake a value inherited from net's own prototype chain for an already-installed registry entry", () => {
+        // Unique per run: a key installed by an earlier run in this process would skip the path under test.
+        const probeKey = `pollutionProbe-${Date.now()}-${Math.random()}`;
+        const symbol = networkGuardSymbol(probeKey);
+        const pollutedFacade = { isActive: () => false, run: (fn: () => unknown) => fn() };
+        const netPrototype: object = Object.getPrototypeOf(net);
+
+        try {
+            const polluted = Reflect.set(netPrototype, symbol, pollutedFacade);
+            expect(polluted).toBe(true);
+
+            const context = getSharedContext(probeKey);
+            const installedAsOwnProperty = Object.prototype.hasOwnProperty.call(net, symbol);
+            // The polluted facade's isActive() is always false, so this distinguishes the real one.
+            const activeInsideRun = context.run(() => context.isActive());
+
+            expect(context).not.toBe(pollutedFacade);
+            expect(installedAsOwnProperty).toBe(true);
+            expect(activeInsideRun).toBe(true);
+        } finally {
+            // The own-property entry getSharedContext installed is permanent by design.
+            Reflect.deleteProperty(netPrototype, symbol);
+        }
     });
 });
 
@@ -1381,5 +1439,42 @@ describe('trustedFetch', () => {
             expect(trustedFetch).toBe(before);
         });
         expect(trustedFetch).toBe(before);
+    });
+});
+
+describe('mixed plugin versions', () => {
+    // Another release's wrappers consult only that release's context, so a run here would be unguarded.
+    test("Should refuse to run when another release's guard is already installed", async () => {
+        let freshCopy!: {
+            installGuardedProperty: typeof installGuardedProperty;
+            runBlocked: typeof runBlocked;
+        };
+        jest.isolateModules(() => {
+            // eslint-disable-next-line global-require -- a fresh copy keeps the foreign-guard flag out of this file's own copy
+            freshCopy = require('./network-guard');
+        });
+        const foreignGetter = () => () => 'real';
+        Object.defineProperty(foreignGetter, ALREADY_GUARDED, { value: true });
+        const target = {};
+        Object.defineProperty(target, 'value', { get: foreignGetter, configurable: true });
+        freshCopy.installGuardedProperty(target, 'value', (getReal: () => unknown) => getReal);
+        const fn = jest.fn(async () => 'ran');
+
+        const run = freshCopy.runBlocked(fn);
+
+        await expect(run).rejects.toThrow(FOREIGN_GUARD_MESSAGE);
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    test('Should keep running when the installed guards are from this same release', async () => {
+        let freshRunBlocked!: typeof runBlocked;
+        jest.isolateModules(() => {
+            // eslint-disable-next-line global-require -- a fresh copy re-runs the install against this copy's own guards
+            freshRunBlocked = require('./network-guard').runBlocked;
+        });
+
+        const run = freshRunBlocked(async () => 'ran');
+
+        await expect(run).resolves.toBe('ran');
     });
 });
