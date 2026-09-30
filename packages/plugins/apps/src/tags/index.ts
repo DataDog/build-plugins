@@ -5,9 +5,8 @@
 /**
  * App tags written to the package manifest.
  *
- * The manifest's `tags` is the app's complete tag list, combined from every tag source. The
- * backend makes the app's tags equal to it, so a tag a source stops contributing disappears on
- * the next deploy.
+ * The manifest's `tags` combines every tag source. The backend adds them to the app and never
+ * removes any; removing a tag is done in the App Builder UI.
  *
  * Canonical tag formatting lives server-side; this only does the hygiene needed to produce a
  * stable, duplicate-free list, so the two rule sets can't drift apart.

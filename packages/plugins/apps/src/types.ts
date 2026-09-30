@@ -23,7 +23,7 @@ export type AppsOptions = {
     enable?: boolean;
     include?: string[];
     /**
-     * Tags to set on the app, e.g. `team:my-team`. The package also carries a `surface:<id>` tag
+     * Tags to add to the app, e.g. `team:my-team`. The package also carries a `surface:<id>` tag
      * for each surface declared by an `@datadog/apps-frontend` input the app uses.
      */
     tags?: string[];
@@ -33,8 +33,8 @@ export type AppsOptions = {
 
 export type AppsManifest = {
     /**
-     * The app's complete tag list (authored tags and derived `surface:<id>` tags), sorted.
-     * The backend makes the app's tags equal to it.
+     * Tags to add to the app (authored tags and derived `surface:<id>` tags), sorted.
+     * The backend adds them to the app's tags and never removes any.
      */
     tags: string[];
     backend: {
