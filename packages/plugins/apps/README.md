@@ -86,6 +86,9 @@ The package's `manifest.json` carries the app's complete tag list: these tags pl
 
 Deploying replaces the app's tags with this list, so a tag removed from `apps.tags`, or a surface whose input the app stopped using, is removed from the app.
 
+> [!IMPORTANT]
+> Starting with the version that introduced `apps.tags`, every package carries a tag list, even an empty one. The first deploy of an app built with it replaces any tags set on the app in the App Builder UI; add those to `apps.tags` to keep them. Packages built with older versions have no tag list and leave the app's tags untouched.
+
 ### apps.longPolling
 
 > default: `{ maxRetries: 10, jitter: true, exponentialBackoff: true, timeoutMs: 40000 }`

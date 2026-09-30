@@ -83,69 +83,123 @@ async function installSdk(appRoot: string, layout: SdkLayout) {
     await fs.symlink(packageDir, linkPath, 'dir');
 }
 
+const USED_SURFACED_MARKER = 'dd-app-input/v1 datadog.dashboard surfaces=';
+const USED_SURFACELESS_MARKER = 'dd-app-input/v1 datadog.theme surfaces=';
+const UNUSED_MARKER = 'dd-app-input/v1 datadog.service-panel surfaces=';
+
 async function readPackage(appRoot: string) {
     const zip = await JSZip.loadAsync(
         await fs.readFile(path.join(appRoot, 'dist', ARCHIVE_FILENAME)),
     );
+    const read = async (pattern: RegExp) =>
+        Object.fromEntries(
+            await Promise.all(
+                zip.file(pattern).map(async (file) => [file.name, await file.async('string')]),
+            ),
+        ) as Record<string, string>;
     const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-    const frontendScripts = await Promise.all(
-        zip
-            .file(/^frontend\/.*\.js$/)
-            .filter((file) => !file.name.endsWith('.map'))
-            .map((file) => file.async('string')),
-    );
-    return { manifest, frontendCode: frontendScripts.join('\n') };
+    const html = await zip.file('frontend/index.html')!.async('string');
+    const entryScript = `frontend${html.match(/<script[^>]* src="([^"]+)"/)![1]}`;
+    return {
+        manifest,
+        entryScript,
+        scripts: await read(/^frontend\/.*\.js$/),
+        sourceMaps: await read(/^frontend\/.*\.js\.map$/),
+    };
+}
+
+const filesContaining = (files: Record<string, string>, text: string) =>
+    Object.keys(files).filter((name) => files[name].includes(text));
+
+/** Builds the fixture app against the SDK layout and returns its package and plugin warnings. */
+async function buildApp(layout: SdkLayout) {
+    const restoreEnv = cleanEnv();
+    const appRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-tags-'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+        await fs.cp(path.join(FIXTURE_ROOT, 'app'), appRoot, { recursive: true });
+        await installSdk(appRoot, layout);
+        await build({
+            root: appRoot,
+            configFile: false,
+            logLevel: 'silent',
+            build: { outDir: 'dist', sourcemap: true },
+            plugins: [
+                datadogVitePlugin({
+                    logLevel: 'warn',
+                    apps: { tags: ['team:apps', 'surface:datadog.dashboard'] },
+                }),
+            ],
+        });
+        return { ...(await readPackage(appRoot)), warnings: warn.mock.calls.flat().join('\n') };
+    } finally {
+        warn.mockRestore();
+        restoreEnv();
+        await fs.rm(appRoot, { recursive: true, force: true });
+    }
+}
+
+type BuiltApp = Awaited<ReturnType<typeof buildApp>>;
+
+/** What every layout must deliver. */
+function describeTagging(getApp: () => BuiltApp) {
+    test('Should tag the app with its authored tags and the surfaces of the inputs it uses', () => {
+        // Authored tags are kept; each surface of the dashboard input (used only from a
+        // dynamically imported module) is added once; the unused and surface-less inputs add
+        // nothing.
+        expect(getApp().manifest.tags).toEqual([
+            'surface:datadog.dashboard',
+            'surface:datadog.notebook',
+            'team:apps',
+        ]);
+    });
+
+    test('Should ship the used inputs and drop the unused one', () => {
+        // Makes the tag assertion about derivation rather than about which inputs got bundled.
+        const { scripts } = getApp();
+        expect(filesContaining(scripts, USED_SURFACED_MARKER)).not.toEqual([]);
+        expect(filesContaining(scripts, USED_SURFACELESS_MARKER)).not.toEqual([]);
+        expect(filesContaining(scripts, UNUSED_MARKER)).toEqual([]);
+    });
+
+    test('Should not warn about input markers', () => {
+        expect(getApp().warnings).not.toContain('input marker');
+    });
 }
 
 describe('Apps Plugin - manifest tags from a real Vite build', () => {
-    let appRoot: string;
-    let restoreEnv: () => void;
+    describe('workspace source SDK layout', () => {
+        let app: BuiltApp;
+        beforeAll(async () => {
+            app = await buildApp('workspace source');
+        }, 60_000);
 
-    beforeEach(async () => {
-        restoreEnv = cleanEnv();
-        appRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-tags-'));
-        await fs.cp(path.join(FIXTURE_ROOT, 'app'), appRoot, { recursive: true });
+        describeTagging(() => app);
+
+        test('Should read markers from lazily loaded chunks', () => {
+            // Tree-shaking works per source module here, so the input used only by the
+            // dynamically imported module lands in that module's chunk, not the entry.
+            const dashboardChunks = filesContaining(app.scripts, USED_SURFACED_MARKER);
+            expect(dashboardChunks).toHaveLength(1);
+            expect(dashboardChunks).not.toContain(app.entryScript);
+        });
     });
 
-    afterEach(async () => {
-        restoreEnv();
-        await fs.rm(appRoot, { recursive: true, force: true });
+    describe('published SDK layout', () => {
+        let app: BuiltApp;
+        beforeAll(async () => {
+            app = await buildApp('published');
+        }, 60_000);
+
+        describeTagging(() => app);
+
+        test('Should ignore markers that only appear in source maps', () => {
+            // The published SDK bundles every input into one shared module, whose full source the
+            // package's source maps carry, unused marker included. It is neither a tag nor a
+            // malformed-marker warning (as its JSON-escaped quotes would give).
+            expect(filesContaining(app.sourceMaps, UNUSED_MARKER)).not.toEqual([]);
+            expect(app.manifest.tags).not.toContain('surface:datadog.idp.service-panel');
+            expect(app.warnings).not.toContain('input marker');
+        });
     });
-
-    test.each<SdkLayout>(['workspace source', 'published'])(
-        'Should tag the app with the surfaces of the inputs it uses, from the %s SDK layout',
-        async (layout) => {
-            await installSdk(appRoot, layout);
-
-            await build({
-                root: appRoot,
-                configFile: false,
-                logLevel: 'silent',
-                build: { outDir: 'dist', sourcemap: true },
-                plugins: [
-                    datadogVitePlugin({
-                        logLevel: 'none',
-                        apps: { tags: ['team:apps', 'surface:datadog.dashboard'] },
-                    }),
-                ],
-            });
-
-            const { manifest, frontendCode } = await readPackage(appRoot);
-
-            // The build really dropped the unused input and kept the surface-less one, so the
-            // assertion below is about derivation rather than about an input never being bundled.
-            expect(frontendCode).toContain('dd-app-input/v1 datadog.theme surfaces=');
-            expect(frontendCode).not.toContain('dd-app-input/v1 datadog.service-panel');
-
-            // Authored tags are kept; each surface of the dashboard input (used only from a
-            // dynamically imported module) is added once; the unused and surface-less inputs add
-            // nothing.
-            expect(manifest.tags).toEqual([
-                'surface:datadog.dashboard',
-                'surface:datadog.notebook',
-                'team:apps',
-            ]);
-        },
-        60_000,
-    );
 });

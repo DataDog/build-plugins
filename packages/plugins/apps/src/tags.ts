@@ -21,18 +21,39 @@ export const SURFACE_TAG_PREFIX = 'surface:';
  * `dd-app-input/v1 <identifier> surfaces=<comma-separated surface ids>`.
  *
  * The literal lives on the consumer itself, so it is tree-shaken with an unused consumer and
- * survives minification and chunk splitting with a used one. Matching deliberately ignores the
- * surrounding quotes, since different minifiers pick different quote styles.
+ * survives minification and chunk splitting with a used one. Any quote style is accepted, since
+ * minifiers pick different ones, but the marker must end at its closing quote: text this grammar
+ * doesn't describe is reported rather than read as a truncated surface id.
  */
-const INPUT_MARKER_RE = /dd-app-input\/v1 ([A-Za-z0-9._-]+) surfaces=([A-Za-z0-9._,-]*)/g;
+const MARKER_PREFIX = 'dd-app-input/';
+const INPUT_MARKER_RE = /dd-app-input\/v1 [A-Za-z0-9._-]+ surfaces=([A-Za-z0-9._,-]*)(?=["'`])/y;
+const UNRECOGNIZED_MARKER_RE = /dd-app-input\/[^"'`\n]{0,120}/y;
 
-/** Surface ids declared by every input marker found in bundled code. */
-export const findInputSurfaces = (code: string): string[] => {
-    const surfaces: string[] = [];
-    for (const [, , surfaceList] of code.matchAll(INPUT_MARKER_RE)) {
-        surfaces.push(...surfaceList.split(',').filter(Boolean));
+export type InputMarkers = {
+    /** Surface ids declared by the recognized markers, in order of appearance. */
+    surfaces: string[];
+    /** Text of markers this grammar doesn't describe, e.g. from a newer SDK. */
+    unrecognized: string[];
+};
+
+/** Reads the input markers found in bundled code. */
+export const readInputMarkers = (code: string): InputMarkers => {
+    const markers: InputMarkers = { surfaces: [], unrecognized: [] };
+    for (
+        let index = code.indexOf(MARKER_PREFIX);
+        index !== -1;
+        index = code.indexOf(MARKER_PREFIX, index + MARKER_PREFIX.length)
+    ) {
+        INPUT_MARKER_RE.lastIndex = index;
+        const match = INPUT_MARKER_RE.exec(code);
+        if (match) {
+            markers.surfaces.push(...match[1].split(',').filter(Boolean));
+        } else {
+            UNRECOGNIZED_MARKER_RE.lastIndex = index;
+            markers.unrecognized.push(UNRECOGNIZED_MARKER_RE.exec(code)![0]);
+        }
     }
-    return surfaces;
+    return markers;
 };
 
 /** Trims and lowercases a tag, or returns undefined for an empty one. */

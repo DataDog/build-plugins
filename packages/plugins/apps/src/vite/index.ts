@@ -29,7 +29,7 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
-import { findInputSurfaces } from '../tags';
+import { readInputMarkers } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -140,8 +140,9 @@ export const getVitePlugin = ({
 
     // Surfaces declared by the inputs the shipped frontend uses. Read from the final chunks rather
     // than the module graph: the SDK's public barrel re-exports every input, so only the rendered,
-    // tree-shaken output tells which ones the app actually uses.
-    const inputSurfaces = new Set<string>();
+    // tree-shaken output tells which ones the app actually uses. Replaced (never mutated) per
+    // build, since a watch-mode rebuild can start before the previous closeBundle finishes.
+    let buildInputSurfaces = new Set<string>();
 
     return {
         // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
@@ -289,7 +290,7 @@ export const getVitePlugin = ({
         },
         buildStart() {
             // A watch-mode rebuild must not inherit surfaces from an input it no longer uses.
-            inputSurfaces.clear();
+            buildInputSurfaces = new Set();
         },
         generateBundle: {
             // After other plugins have finished rewriting chunk code.
@@ -299,13 +300,22 @@ export const getVitePlugin = ({
                     if (output.type !== 'chunk') {
                         continue;
                     }
-                    for (const surface of findInputSurfaces(output.code)) {
-                        inputSurfaces.add(surface);
+                    const { surfaces, unrecognized } = readInputMarkers(output.code);
+                    for (const surface of surfaces) {
+                        buildInputSurfaces.add(surface);
+                    }
+                    for (const marker of unrecognized) {
+                        log.warn(
+                            `Unrecognized @datadog/apps-frontend input marker "${marker}" in ${output.fileName}; ` +
+                                `its surfaces are not tagged. A newer @datadog/vite-plugin may be needed.`,
+                        );
                     }
                 }
             },
         },
         async closeBundle() {
+            // Taken before any await, so the next watch-mode build can't change what this one packages.
+            const inputSurfaces = [...buildInputSurfaces];
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
                 return;

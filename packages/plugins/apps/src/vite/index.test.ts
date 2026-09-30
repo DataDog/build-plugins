@@ -273,6 +273,42 @@ describe('Backend Functions - getVitePlugin', () => {
         );
     });
 
+    test("packages its own build's input surfaces even once the next watch-mode build has started", async () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const plugin = getVitePlugin(defaultOptions) as any;
+        const build = (marker: string) => {
+            plugin.buildStart();
+            plugin.generateBundle.handler(
+                {},
+                {
+                    'assets/index.js': {
+                        type: 'chunk',
+                        fileName: 'assets/index.js',
+                        code: `f(${JSON.stringify(marker)})`,
+                    },
+                },
+            );
+        };
+        let finishPackaging!: () => void;
+        jest.spyOn(buildPackage, 'buildAppPackage').mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishPackaging = () => resolve(undefined);
+                }),
+        );
+
+        build('dd-app-input/v1 datadog.dashboard surfaces=datadog.dashboard');
+        const closing = plugin.closeBundle();
+        // Vite's watcher can start the next build while the previous package is still being written.
+        build('dd-app-input/v1 datadog.idp surfaces=datadog.idp.service-panel');
+        finishPackaging();
+        await closing;
+
+        expect(buildPackage.buildAppPackage).toHaveBeenCalledWith(
+            expect.objectContaining({ inputSurfaces: ['datadog.dashboard'] }),
+        );
+    });
+
     test('skips packaging in closeBundle after a dev server session started', async () => {
         const plugin = getVitePlugin(defaultOptions);
         if (!plugin || Array.isArray(plugin)) {
