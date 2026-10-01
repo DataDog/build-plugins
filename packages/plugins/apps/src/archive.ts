@@ -11,6 +11,8 @@ import type { Asset } from './assets';
 export type Archive = {
     archivePath: string;
     size: number;
+    /** Sum of the packaged files' sizes, which the upload API's 50 MiB decompressed limit counts. */
+    decompressedSize: number;
     assets: Asset[];
 };
 
@@ -40,10 +42,13 @@ export const createArchive = async (assets: Asset[], archivePath: string): Promi
 
     // Compute the size for logging purpose.
     const { size } = await fsp.stat(archivePath);
+    const assetStats = await Promise.all(assets.map((asset) => fsp.stat(asset.absolutePath)));
+    const decompressedSize = assetStats.reduce((total, stats) => total + stats.size, 0);
 
     return {
         archivePath,
         size,
+        decompressedSize,
         assets,
     };
 };
