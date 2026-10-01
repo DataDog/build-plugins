@@ -16,9 +16,7 @@ describe('local-execution resilience (in-process execution known limitations)', 
     // A real `while (true) {}` would hang this test forever, since nothing — not even the timeout's
     // own callback — can run while the event loop is blocked synchronously. This bounded busy-wait
     // proves the same point safely: the timeout can't interrupt it, so it settles once the loop ends.
-    // Margins are generous because loadCustomerModuleEntry's Custom Credentials priming (a dynamic
-    // import plus a real fs read) runs before the loop starts with variable cold-start latency, and
-    // must stay under the timeout for this test to mean anything.
+    // Generous margins: this first test also pays getNetworkGuard()'s cold dynamic import.
     test('Should NOT interrupt a synchronous CPU-bound loop with the current timeout — known, accepted v1 limitation', async () => {
         const resolver = moduleResolverFor(func, {
             example: () => {
