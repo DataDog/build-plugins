@@ -140,7 +140,7 @@ export interface UnsupportedStaticBinding {
 type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
 type ModuleExportName = Identifier | Literal;
 
-const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
+export const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
 
 /**
  * Creates the per-module analysis record consumed by backend-entry reachability
