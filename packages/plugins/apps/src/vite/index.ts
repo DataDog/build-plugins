@@ -16,7 +16,10 @@ import {
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
-import { shouldTraverseCollectedModule } from '../backend/ast-parsing/module-graph';
+import {
+    PACKAGE_MANAGER_DIRS,
+    shouldTraverseCollectedModule,
+} from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
@@ -101,6 +104,47 @@ const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 
 // Not exported by Vite; mirrors its server.fs.deny default so it can be spread in below.
 export const VITE_DEFAULT_SERVER_FS_DENY = ['.env', '.env.*', '*.{crt,pem}', '**/.git/**'];
+
+const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
+
+const isWithinDirectory = (directory: string, filePath: string): boolean => {
+    const relativePath = path.posix.relative(directory, filePath);
+    return (
+        relativePath !== '..' &&
+        !relativePath.startsWith('../') &&
+        !path.posix.isAbsolute(relativePath)
+    );
+};
+
+const shouldTransformBackendModule = (id: string, buildRoot: string, outDir: string): boolean => {
+    if (!BACKEND_FILE_WITH_QUERY_RE.test(id)) {
+        return false;
+    }
+
+    const [idWithoutQuery] = id.split(/[?#]/);
+    const filePath = toPosixPath(idWithoutQuery).replace(/^\0/, '');
+    // Virtual ids aren't on disk, so on-disk exclusions don't apply; resolving them would depend on cwd.
+    if (!path.posix.isAbsolute(filePath) && !path.win32.isAbsolute(filePath)) {
+        return true;
+    }
+
+    const posixBuildRoot = toPosixPath(buildRoot);
+    // Outside the build root the full path decides, so a hoisted package beside an app under
+    // node_modules stays excluded while a linked workspace file is still proxied.
+    const isInsideBuildRoot = isWithinDirectory(posixBuildRoot, filePath);
+    const pathToClassify = isInsideBuildRoot
+        ? path.posix.relative(posixBuildRoot, filePath)
+        : filePath;
+    const segments = pathToClassify.split('/');
+    if (segments.some((segment) => PACKAGE_MANAGER_DIRS.has(segment))) {
+        return false;
+    }
+
+    // An outDir at or above the build root (e.g. `build.outDir: '.'`) must not exclude app files.
+    const posixOutDir = toPosixPath(outDir);
+    const outDirContainsBuildRoot = isWithinDirectory(posixOutDir, posixBuildRoot);
+    return outDirContainsBuildRoot || !isWithinDirectory(posixOutDir, filePath);
+};
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
@@ -224,22 +268,26 @@ export const getVitePlugin = ({
             },
         },
         transform: {
-            filter: {
-                id: {
-                    include: [BACKEND_FILE_WITH_QUERY_RE],
-                    exclude: [/node_modules/, /[/\\]dist[/\\]/],
-                },
-            },
+            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative exclusions.
+            filter: { id: { include: [BACKEND_FILE_WITH_QUERY_RE] } },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id, transformOptions) {
+                const shouldTransform = shouldTransformBackendModule(
+                    id,
+                    context.buildRoot,
+                    context.bundler.outDir,
+                );
+                if (!shouldTransform) {
+                    return null;
+                }
                 if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
                     // Local execution needs the real function body, not the proxy stub below — real loads always go through ssrLoadModule, which runs in SSR, so this only fires for that legitimate path.
                     return null;
                 }
                 // Any other case (no query, a spoofed client-side import reusing the suffix, or an unrecognized query) falls through to the safe proxy-stub generation below. Strip the query first so it registers under the file's real (unsuffixed) relativePath/query-name, not a duplicate.
-                const queryIndex = id.indexOf('?');
+                const queryIndex = id.search(/[?#]/);
                 const normalizedId = queryIndex === -1 ? id : id.slice(0, queryIndex);
 
                 const ast = this.parse(code);
