@@ -4,7 +4,7 @@
 
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { outputFileSync } from '@dd/core/helpers/fs';
+import { outputFileSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
@@ -650,6 +650,16 @@ describe('Injection Plugin', () => {
                     await expect(run()).resolves.toBeUndefined();
                 } finally {
                     await new Promise<void>((resolve) => compiler.close(() => resolve()));
+                    if (process.env.NO_CLEANUP) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
+                    } else {
+                        try {
+                            await rm(workingDir);
+                        } catch (error) {
+                            // Ignore errors, so they can't replace the error thrown by run().
+                        }
+                    }
                 }
             },
         );
