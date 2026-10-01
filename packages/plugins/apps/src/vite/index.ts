@@ -29,6 +29,7 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
+import { createTagSources, resolveTags } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -136,6 +137,11 @@ export const getVitePlugin = ({
     // dev exit must not rebuild backend functions or replace the production
     // package with dev-session-derived output.
     let devServerActive = false;
+
+    // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
+    // rebuild can start before the previous closeBundle finishes.
+    const createBuildTagSources = () => createTagSources({ options, log });
+    let buildTagSources = createBuildTagSources();
 
     return {
         // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
@@ -281,7 +287,28 @@ export const getVitePlugin = ({
                 return { code: proxyCode, map: null };
             },
         },
+        buildStart() {
+            // A watch-mode rebuild must not inherit tags derived from the previous build's code.
+            buildTagSources = createBuildTagSources();
+        },
+        generateBundle: {
+            // After other plugins have finished rewriting chunk code.
+            order: 'post',
+            handler(_outputOptions, bundle) {
+                for (const output of Object.values(bundle)) {
+                    if (output.type !== 'chunk') {
+                        continue;
+                    }
+                    const chunk = { fileName: output.fileName, code: output.code };
+                    for (const source of buildTagSources) {
+                        source.readChunk?.(chunk);
+                    }
+                }
+            },
+        },
         async closeBundle() {
+            // Taken before any await, so the next watch-mode build can't change what this one packages.
+            const tags = resolveTags(buildTagSources);
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
                 return;
@@ -306,6 +333,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context,
                     options,
+                    tags,
                 });
             } finally {
                 if (backendOutDir) {
