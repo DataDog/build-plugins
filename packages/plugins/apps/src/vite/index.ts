@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build } from 'vite';
+import type { build, loadEnv } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -29,6 +29,7 @@ import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
     BACKEND_FILE_WITH_QUERY_RE,
+    DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
@@ -38,10 +39,12 @@ import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
+import { loadEnvFileCredentials } from './dotenv-credentials';
 import { localExecutionResolutionContext } from './local-execution';
 
 export type ViteBundler = {
     build: typeof build;
+    loadEnv: typeof loadEnv;
 };
 
 export interface VitePluginOptions {
@@ -338,6 +341,26 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             devServerActive = true;
+            // dev-verify runs every execution in the cloud, which never sees local .env values.
+            const { mode, envDir, envPrefix } = server.config;
+            const envFileCredentials = loadEnvFileCredentials(bundler.loadEnv, {
+                mode,
+                envDir: mode === DEV_VERIFY_MODE ? false : envDir,
+                envPrefix,
+            });
+            if (envFileCredentials.loaded.length > 0) {
+                const loadedNames = envFileCredentials.loaded.join(', ');
+                log.info(
+                    `Backend functions can read ${loadedNames} from .env files. Shell variables take precedence.`,
+                );
+            }
+            if (envFileCredentials.ignoredDatadogKeys.length > 0) {
+                const ignoredNames = envFileCredentials.ignoredDatadogKeys.join(', ');
+                log.warn(
+                    `Ignoring ${ignoredNames} from .env files. Set Datadog settings in the shell or start the dev server with \`datadog-apps dev\`.`,
+                );
+            }
+
             let doAuthenticatedRequest: DoAuthenticatedRequest | undefined;
             try {
                 doAuthenticatedRequest = getAuthenticatedRequest();

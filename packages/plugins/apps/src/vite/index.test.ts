@@ -5,8 +5,9 @@
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
+import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -20,7 +21,7 @@ import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
 import { createUnplugin } from 'unplugin';
-import { createServer, type Plugin as VitePlugin, type ViteDevServer } from 'vite';
+import { createServer, loadEnv, type Plugin as VitePlugin, type ViteDevServer } from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -32,6 +33,7 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import { loadEnvFileCredentials } from './dotenv-credentials';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -79,7 +81,7 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
-    config: { mode: string };
+    config: { mode: string; envDir: string | false };
 };
 
 // Narrows `plugin.configureServer` to its plain-function hook form via a runtime check, then wraps
@@ -152,6 +154,7 @@ function getResolveIdHandler(plugin: ReturnType<typeof getVitePlugin>): Function
 const mockViteBuild = jest.fn();
 const mockVite = {
     build: mockViteBuild,
+    loadEnv: jest.fn(() => ({})),
     transformWithEsbuild: jest.fn(),
 } as unknown as ViteBundler;
 const mockInject = jest.fn();
@@ -293,7 +296,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: { mode: 'development', envDir: false },
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
@@ -322,7 +325,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: { mode: 'development', envDir: false },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -350,7 +353,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: { mode: 'development', envDir: false },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -1092,7 +1095,7 @@ describe('Backend Functions - getVitePlugin', () => {
         configureServer({
             middlewares: { use },
             ssrLoadModule,
-            config: { mode: DEV_VERIFY_MODE },
+            config: { mode: DEV_VERIFY_MODE, envDir: false },
         });
         restoreEnv();
 
@@ -1132,5 +1135,102 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(body.result).toEqual({ data: { result: 'via cloud' } });
         expect(apiScope.isDone()).toBe(true);
         expect(ssrLoadModule).not.toHaveBeenCalled();
+    });
+
+    test('Should load unprefixed .env values into process.env when the dev server starts', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = cleanEnv();
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: { mode: 'development', envDir },
+            });
+            const loggedValue = mockLogFn.mock.calls.some(([text]) =>
+                String(text).includes('from-dotenv'),
+            );
+
+            const loadedMessage = expect.stringContaining('QA_CONFIGURE_SECRET');
+
+            expect(process.env.QA_CONFIGURE_SECRET).toBe('from-dotenv');
+            expect(mockLogFn).toHaveBeenCalledWith(loadedMessage, 'info');
+            expect(loggedValue).toBe(false);
+        } finally {
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: false });
+            delete process.env.QA_CONFIGURE_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test('Should keep Datadog auth from the shell and warn about Datadog keys in a .env file', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-auth-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'DD_API_KEY=dotenv-api-key\nDD_APP_KEY=dotenv-app-key\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = cleanEnv();
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'shell-oauth-token';
+        const getAuthenticatedRequest = jest.spyOn(auth, 'getAuthenticatedRequest');
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: { mode: 'development', envDir },
+            });
+            const ignoredMessage = expect.stringContaining('DD_API_KEY, DD_APP_KEY');
+            const missingAuthMessage = expect.stringContaining('No authentication configured');
+            const loggedValue = mockLogFn.mock.calls.some(([text]) =>
+                String(text).includes('dotenv-api-key'),
+            );
+
+            expect(process.env).not.toHaveProperty('DD_API_KEY');
+            expect(process.env.DD_OAUTH_ACCESS_TOKEN).toBe('shell-oauth-token');
+            expect(getAuthenticatedRequest).toHaveReturned();
+            expect(mockLogFn).toHaveBeenCalledWith(ignoredMessage, 'warn');
+            expect(mockLogFn).not.toHaveBeenCalledWith(missingAuthMessage, 'warn');
+            expect(loggedValue).toBe(false);
+        } finally {
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: false });
+            getAuthenticatedRequest.mockRestore();
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    // dev-verify sends every execution to the cloud, which never sees local .env values.
+    test('Should not load .env files in dev-verify mode', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-verify-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_VERIFY_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = cleanEnv();
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: { mode: DEV_VERIFY_MODE, envDir },
+            });
+            const loadedMessage = expect.stringContaining('QA_CONFIGURE_VERIFY_SECRET');
+
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_VERIFY_SECRET');
+            expect(mockLogFn).not.toHaveBeenCalledWith(loadedMessage, 'info');
+        } finally {
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: false });
+            delete process.env.QA_CONFIGURE_VERIFY_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
     });
 });
