@@ -67,9 +67,13 @@ jobs:
   e2e:
     timeout-minutes: 30
 
-    name: End to End
+    name: End to End (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       FORCE_COLOR: true
 
@@ -94,7 +98,7 @@ jobs:
           api_key: ${{ steps.dd-sts.outputs.api_key }}
           site: datadoghq.com
 
-      - run: yarn test:e2e
+      - run: yarn test:e2e --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           NODE_OPTIONS: -r ${{env.DD_TRACE_PACKAGE}}
           DD_TAGS: type:e2e
@@ -103,11 +107,23 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ failure() }}
         with:
-          name: playwright
+          name: playwright-${{ matrix.shard }}
           path: |
             packages/tests/playwright-report
             packages/tests/test-results
           retention-days: 3
+
+  # Single status for the shards above, "End to End" is a required check.
+  e2e-result:
+    name: End to End
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: ${{ always() && !startsWith(github.ref_name, 'mq-working-branch-') }}
+    steps:
+      - name: Check shards result
+        run: |
+          echo "Shards result: ${{ needs.e2e.result }}"
+          [ "${{ needs.e2e.result }}" = "success" ]
 
   runtime-bench-preflight:
     timeout-minutes: 20
