@@ -485,6 +485,32 @@ describe('network-guard', () => {
             rmSync(tmpDir);
         });
 
+        // A non-UTF-8 byte decodes to U+FFFD, so the decoded path can differ from the one Node writes.
+        test('Should refuse a Buffer path that does not decode losslessly', async () => {
+            const tmpPath = path.join(tmpWorkDir, 'lossy-');
+            const tmpPathBytes = Buffer.from(tmpPath);
+            const invalidByte = Buffer.from([0xff]);
+            const lossyPath = Buffer.concat([tmpPathBytes, invalidByte]);
+
+            await expect(
+                runBlocked(async () => {
+                    fs.writeFileSync(lossyPath, 'data');
+                }),
+            ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+        });
+
+        test('Should allow a UTF-8 Buffer path under the temp dir', async () => {
+            const tmpPath = path.join(tmpWorkDir, 'buffer-path.txt');
+            const tmpPathBytes = Buffer.from(tmpPath);
+
+            await runBlocked(async () => {
+                fs.writeFileSync(tmpPathBytes, 'data');
+            });
+            const written = fs.readFileSync(tmpPath, 'utf8');
+
+            expect(written).toBe('data');
+        });
+
         test('Should block fs.writeFileSync made inside fn', async () => {
             await expect(
                 runBlocked(async () => {
@@ -1242,6 +1268,37 @@ describe('temp dir writes', () => {
 });
 
 // A run can return before a stream it started has written, as plain Node allows.
+describe('cold install', () => {
+    // FileHandle's prototype is guarded from a handle the install opens asynchronously.
+    test("Should refuse a FileHandle write in the first run, before the FileHandle guard's async install finished", () => {
+        const bundlePath = buildGuardBundle('network-guard-cold-filehandle.bundle.cjs');
+        const childTmpDir = path.join(probeDir, 'cold-filehandle-tmp');
+        fs.mkdirSync(childTmpDir, { recursive: true });
+        const outsideTmpFile = path.join(probeDir, 'cold-filehandle-target.txt');
+        fs.writeFileSync(outsideTmpFile, 'data');
+        const probeScript = [
+            "const fs = require('fs');",
+            'const guard = require(process.argv[1]);',
+            "fs.promises.open(process.argv[2], 'r').then(async (handle) => {",
+            '    const outcome = await guard',
+            '        .runBlocked(() => handle.chmod(0o600))',
+            "        .then(() => 'allowed', (err) => 'refused: ' + err.message);",
+            '    console.log(outcome);',
+            '    await handle.close();',
+            '});',
+        ].join('\n');
+
+        const child = child_process.spawnSync(
+            process.execPath,
+            ['-e', probeScript, bundlePath, outsideTmpFile],
+            { encoding: 'utf8', env: { PATH: process.env.PATH, TMPDIR: childTmpDir } },
+        );
+
+        expect(child.stderr).toBe('');
+        expect(child.stdout).toBe(`refused: ${FS_WRITE_BLOCKED_MESSAGE}\n`);
+    });
+});
+
 describe('late writes from a run that ended', () => {
     test('Should not crash when a run returns without waiting for a write stream it started', () => {
         const bundlePath = buildGuardBundle('network-guard-late-stream.bundle.cjs');

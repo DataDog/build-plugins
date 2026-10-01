@@ -30,6 +30,8 @@ import worker_threads from 'worker_threads';
 const SUBPROCESS_BLOCKED_MESSAGE = 'Spawning a subprocess is not allowed in backend functions.';
 const WORKER_THREAD_BLOCKED_MESSAGE =
     'Spawning a worker thread is not allowed in backend functions.';
+const FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE =
+    'Local execution could not guard file handles, so it refuses to run.';
 export const FS_WRITE_BLOCKED_MESSAGE =
     'Writing to the filesystem is not allowed in backend functions outside os.tmpdir().';
 
@@ -586,7 +588,10 @@ function toFilePath(value: unknown): string | undefined {
         return value;
     }
     if (Buffer.isBuffer(value)) {
-        return value.toString();
+        const decoded = value.toString();
+        // A path that doesn't survive a UTF-8 round trip names a different file than the one checked.
+        const roundTripped = Buffer.from(decoded);
+        return roundTripped.equals(value) ? decoded : undefined;
     }
     if (value instanceof URL && value.protocol === 'file:') {
         return fileURLToPath(value);
@@ -1095,6 +1100,17 @@ export async function runBlocked<T>(
     }
     installGuards();
     assertNoForeignGuard();
+    // A FileHandle opened before install stays unguarded until the async prototype guard lands, so
+    // only a cold install waits; afterwards fn still starts synchronously.
+    if (!fileHandlePrototypeGuarded) {
+        await fileHandleGuard;
+        if (!fileHandlePrototypeGuarded) {
+            throw new Error(FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE);
+        }
+        if (options.signal?.aborted) {
+            throw new Error('The run was aborted before it started.');
+        }
+    }
     const scope: BlockedScope = {
         writableFds: new Set(),
         writableHandles: new WeakSet(),
