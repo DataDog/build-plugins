@@ -109,11 +109,17 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result).toEqual({ data: 42 });
     });
 
-    // Local execution reads the developer's real environment, like any other Node tool.
-    test("Should let the function read the dev server's ambient process.env", async () => {
+    // Local execution reads the developer's real environment, like any other Node tool, both in
+    // the function body and while its module loads.
+    test("Should let the function and its module loading read the dev server's ambient process.env", async () => {
         const envKey = 'DD_LOCAL_EXECUTION_AMBIENT_ENV_PROBE';
         process.env[envKey] = 'visible';
-        const loadModule = loadModuleReturning({ example: () => process.env[envKey] });
+        const resolveModule = loadModuleReturning({ example: () => process.env[envKey] });
+        const readsDuringLoad: Array<string | undefined> = [];
+        const loadModule: LoadModule = async (...args) => {
+            readsDuringLoad.push(process.env[envKey]);
+            return resolveModule(...args);
+        };
         try {
             const result = await executeScriptLocally(
                 func,
@@ -124,6 +130,8 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             );
             expect(result).toEqual({ data: 'visible' });
+            expect(readsDuringLoad.length).toBeGreaterThan(0);
+            expect(readsDuringLoad).not.toContain(undefined);
         } finally {
             delete process.env[envKey];
         }
