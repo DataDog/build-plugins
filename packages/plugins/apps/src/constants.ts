@@ -12,9 +12,9 @@ export const BACKEND_FILE_RE = /\.backend\.(ts|tsx|js|jsx)$/;
 
 /** Query suffix marking a local-execution load, so the transform hook can target it directly instead of matching on the broader `options.ssr` flag. */
 export const LOCAL_EXECUTION_LOAD_SUFFIX = '?dd-local-exec';
-// Matches a backend file with any (or no) trailing query string — scoping only to the exact local-execution suffix would let an unrecognized query slip past this filter and leak the real backend source instead of the safe proxy stub; the handler decides safety per case.
+// Matches a backend file with any (or no) trailing query or fragment postfix, as Vite treats both — scoping only to the exact local-execution suffix would let an unrecognized query slip past this filter and leak the real backend source instead of the safe proxy stub; the handler decides safety per case.
 export const BACKEND_FILE_WITH_QUERY_RE = new RegExp(
-    `${BACKEND_FILE_RE.source.slice(0, -1)}(\\?.*)?$`,
+    `${BACKEND_FILE_RE.source.slice(0, -1)}([?#].*)?$`,
 );
 
 /** Vite's `--mode` for `npm run dev:verify`; read via `server.config.mode` since `import.meta.env.MODE` breaks Jest's CommonJS transform. */

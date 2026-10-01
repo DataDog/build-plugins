@@ -16,14 +16,20 @@ import {
 } from '@dd/tests/_jest/helpers/mocks';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
+import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
-import type { ViteDevServer } from 'vite';
+import { createUnplugin } from 'unplugin';
+import { createServer, type Plugin as VitePlugin, type ViteDevServer } from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import {
+    BACKEND_FILE_WITH_QUERY_RE,
+    DEV_VERIFY_MODE,
+    LOCAL_EXECUTION_LOAD_SUFFIX,
+} from '../constants';
 
 import * as buildPackage from './build-package';
 
@@ -579,6 +585,349 @@ describe('Backend Functions - getVitePlugin', () => {
 
         // Still built once for myHandler — the ?raw import didn't clear its real registration.
         expect(mockViteBuild).toHaveBeenCalledTimes(1);
+    });
+
+    describe('transform on Vite versions without native hook filter support (< 6.3)', () => {
+        const transformContext = {
+            parse: parseAst,
+            resolve: jest.fn(async () => null),
+            load: jest.fn(async () => null),
+            addWatchFile: jest.fn(),
+        };
+        const backendCode = 'export function backendFn() { return 1; }';
+        const backendId = '/build/src/backend/myHandler.backend.ts';
+        const vitePackageJsonPath = require.resolve('vite/package.json');
+        const nodeModulesPackageDirectory = path.dirname(vitePackageJsonPath);
+
+        type TransformCase = {
+            description: string;
+            id: string;
+            expected: 'proxied' | 'untouched';
+            code?: string;
+            ssr?: boolean;
+            buildRoot?: string;
+            outDir?: string;
+            cwd?: string;
+        };
+
+        const transformCases: TransformCase[] = [
+            {
+                description: 'a plain module with named exports',
+                id: '/build/src/util.ts',
+                code: 'export const helper = () => 1;\nexport function other() { return 2; }',
+                expected: 'untouched',
+            },
+            {
+                description: 'a module with a default export',
+                id: '/build/src/App.tsx',
+                code: 'export default function App() { return null; }',
+                expected: 'untouched',
+            },
+            { description: 'a backend file', id: backendId, expected: 'proxied' },
+            {
+                description: 'a backend file with an ?import query',
+                id: `${backendId}?import`,
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file with a #fragment',
+                id: `${backendId}#fragment`,
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file with a query and a #fragment',
+                id: `${backendId}?import#fragment`,
+                expected: 'proxied',
+            },
+            {
+                description: 'a local-execution backend load from SSR',
+                id: `${backendId}${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+                ssr: true,
+                expected: 'untouched',
+            },
+            {
+                description: 'a local-execution-suffixed backend import outside SSR',
+                id: `${backendId}${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+                expected: 'proxied',
+            },
+            {
+                description: 'a local-execution-suffixed non-backend helper',
+                id: `/build/src/helper.ts${LOCAL_EXECUTION_LOAD_SUFFIX}`,
+                ssr: true,
+                expected: 'untouched',
+            },
+            {
+                description: 'a backend file whose query mentions node_modules',
+                id: `${backendId}?from=/node_modules/pkg/`,
+                expected: 'proxied',
+            },
+            {
+                description: 'a \\0-prefixed virtual backend id while cwd is inside node_modules',
+                id: '\0virtual.backend.ts',
+                cwd: nodeModulesPackageDirectory,
+                expected: 'proxied',
+            },
+            {
+                description: 'a \\0-prefixed proxy of a node_modules backend file',
+                id: '\0/build/node_modules/pkg/remote.backend.ts?commonjs-proxy',
+                expected: 'untouched',
+            },
+            {
+                description: 'a Windows-separator backend id',
+                id: 'C:\\proj\\src\\a.backend.ts',
+                buildRoot: 'C:\\proj',
+                outDir: 'C:\\proj\\dist',
+                expected: 'proxied',
+            },
+            {
+                description: 'a Windows drive backend id with forward slashes',
+                id: 'C:/proj/src/a.backend.ts',
+                buildRoot: 'C:\\proj',
+                outDir: 'C:\\proj\\dist',
+                expected: 'proxied',
+            },
+            {
+                description: 'a Windows-separator backend id inside node_modules',
+                id: 'C:\\proj\\node_modules\\pkg\\a.backend.ts',
+                buildRoot: 'C:\\proj',
+                outDir: 'C:\\proj\\dist',
+                expected: 'untouched',
+            },
+            {
+                description: 'a backend file in an app under a dist ancestor',
+                id: '/srv/dist/my-app/src/a.backend.ts',
+                buildRoot: '/srv/dist/my-app',
+                outDir: '/srv/dist/my-app/dist',
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file in an app under a node_modules_legacy ancestor',
+                id: '/x/node_modules_legacy/app/src/a.backend.ts',
+                buildRoot: '/x/node_modules_legacy/app',
+                outDir: '/x/node_modules_legacy/app/dist',
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file in an app under a node_modules ancestor',
+                id: '/home/user/node_modules/app/src/a.backend.ts',
+                buildRoot: '/home/user/node_modules/app',
+                outDir: '/home/user/node_modules/app/dist',
+                expected: 'proxied',
+            },
+            {
+                description:
+                    'a hoisted package backend file beside an app under a node_modules ancestor',
+                id: '/home/user/node_modules/pkg/a.backend.ts',
+                buildRoot: '/home/user/node_modules/app',
+                outDir: '/home/user/node_modules/app/dist',
+                expected: 'untouched',
+            },
+            {
+                description: 'a linked backend file outside the build root',
+                id: '/repo/shared/a.backend.ts',
+                buildRoot: '/repo/app',
+                outDir: '/repo/app/dist',
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file in a node_modules_compat directory',
+                id: '/build/src/node_modules_compat/a.backend.ts',
+                expected: 'proxied',
+            },
+            {
+                description: 'a backend file in a node_modules package',
+                id: '/build/node_modules/pkg/remote.backend.ts',
+                expected: 'untouched',
+            },
+            {
+                description:
+                    'a backend file in a hoisted node_modules package above the build root',
+                id: '/node_modules/pkg/remote.backend.ts',
+                expected: 'untouched',
+            },
+            {
+                description: 'a backend file in the .yarn cache',
+                id: '/build/.yarn/cache/pkg/remote.backend.ts',
+                expected: 'untouched',
+            },
+            {
+                description: 'a backend file in the build outDir',
+                id: '/build/dist/assets/built.backend.js',
+                expected: 'untouched',
+            },
+            {
+                description: 'a backend file when the outDir is the build root',
+                id: backendId,
+                outDir: '/build',
+                expected: 'proxied',
+            },
+        ];
+
+        const getPluginForCase = ({
+            buildRoot = '/build',
+            outDir = '/build/dist',
+        }: TransformCase) =>
+            getVitePlugin({
+                ...defaultOptions,
+                context: {
+                    ...defaultOptions.context,
+                    buildRoot,
+                    bundler: { ...defaultOptions.context.bundler, outDir },
+                },
+            });
+
+        const getOutcome = (result: unknown): string => {
+            if (result === null) {
+                return 'untouched';
+            }
+            const transformedCode = extractTransformedCode(result);
+            return transformedCode?.includes('executeBackendFunction') ? 'proxied' : 'unexpected';
+        };
+
+        test('Should keep only the backend-file include in the native filter', () => {
+            const plugin = getVitePlugin(defaultOptions);
+            const { filter } = getTransformObject(plugin);
+
+            expect(filter?.id).toEqual({ include: [BACKEND_FILE_WITH_QUERY_RE] });
+        });
+
+        test.each(transformCases)(
+            'Should leave the handler result $expected for $description',
+            (transformCase) => {
+                const originalCwd = process.cwd();
+                const plugin = getPluginForCase(transformCase);
+                const handler = getTransformHandler(plugin);
+
+                let result: unknown;
+                try {
+                    process.chdir(transformCase.cwd ?? originalCwd);
+                    result = handler.call(
+                        transformContext,
+                        transformCase.code ?? backendCode,
+                        transformCase.id,
+                        { ssr: transformCase.ssr },
+                    );
+                } finally {
+                    process.chdir(originalCwd);
+                }
+                const outcome = getOutcome(result);
+
+                expect(outcome).toBe(transformCase.expected);
+            },
+        );
+
+        test('Should register a #fragment backend import under the file itself, as a plain import does', () => {
+            const plugin = getVitePlugin(defaultOptions);
+            const handler = getTransformHandler(plugin);
+
+            const plainResult = handler.call(transformContext, backendCode, backendId, {});
+            const fragmentId = `${backendId}#fragment`;
+            const fragmentResult = handler.call(transformContext, backendCode, fragmentId, {});
+            const plainCode = extractTransformedCode(plainResult);
+            const fragmentCode = extractTransformedCode(fragmentResult);
+
+            expect(fragmentCode).toBe(plainCode);
+        });
+
+        // unplugin copies raw `vite` hooks onto the plugin, so nothing re-applies `filter` for Vite < 6.3.
+        test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', () => {
+            const appsVitePlugin = getVitePlugin(defaultOptions);
+            const unpluginOutput = createUnplugin(() => ({
+                name: 'apps-under-test',
+                vite: appsVitePlugin,
+            })).vite();
+            const [composedPlugin] = [unpluginOutput].flat();
+            const rawTransform = getTransformObject(appsVitePlugin);
+            const composedTransform = getTransformObject(composedPlugin);
+            const composedHandler = getTransformHandler(composedPlugin);
+
+            const result = composedHandler.call(
+                transformContext,
+                'export const helper = 1;',
+                '/build/src/util.ts',
+            );
+
+            expect(composedTransform.handler).toBe(rawTransform.handler);
+            expect(result).toBeNull();
+        });
+
+        describe('native filter on a real Vite 6.3 dev server', () => {
+            const PIPELINE_STOP_MESSAGE = 'pipeline-stop: probe finished';
+            let server: ViteDevServer;
+            const idsReachingHandler = new Set<string>();
+
+            beforeAll(async () => {
+                const appsVitePlugin = getVitePlugin(defaultOptions);
+                const { filter } = getTransformObject(appsVitePlugin);
+                const probePlugin: VitePlugin = {
+                    name: 'native-filter-probe',
+                    enforce: 'pre',
+                    transform: {
+                        filter,
+                        handler(_code, id) {
+                            idsReachingHandler.add(id);
+                            return null;
+                        },
+                    },
+                };
+                // Stops each run before Vite's built-in transforms, which reject ids missing from the module graph.
+                const stopPlugin: VitePlugin = {
+                    name: 'pipeline-stop',
+                    enforce: 'pre',
+                    transform() {
+                        throw new Error(PIPELINE_STOP_MESSAGE);
+                    },
+                };
+                server = await createServer({
+                    configFile: false,
+                    root: __dirname,
+                    logLevel: 'silent',
+                    appType: 'custom',
+                    server: { middlewareMode: true, hmr: false, ws: false },
+                    optimizeDeps: { noDiscovery: true, include: [] },
+                    plugins: [probePlugin, stopPlugin],
+                });
+                for (const { id, ssr } of transformCases) {
+                    const environment = ssr ? server.environments.ssr : server.environments.client;
+                    try {
+                        await environment.pluginContainer.transform('export const value = 1;', id);
+                    } catch (error) {
+                        const isPipelineStop =
+                            error instanceof Error && error.message.includes(PIPELINE_STOP_MESSAGE);
+                        if (!isPipelineStop) {
+                            throw error;
+                        }
+                    }
+                }
+            });
+
+            afterAll(async () => {
+                await server.close();
+            });
+
+            const proxiedCases = transformCases.filter(({ expected }) => expected === 'proxied');
+            const nonBackendCases = transformCases.filter(
+                ({ id }) => !BACKEND_FILE_WITH_QUERY_RE.test(id),
+            );
+
+            test.each(proxiedCases)(
+                'Should let the native filter reach the handler for $description',
+                ({ id }) => {
+                    const reachedHandler = idsReachingHandler.has(id);
+
+                    expect(reachedHandler).toBe(true);
+                },
+            );
+
+            test.each(nonBackendCases)(
+                'Should let the native filter skip $description',
+                ({ id }) => {
+                    const reachedHandler = idsReachingHandler.has(id);
+
+                    expect(reachedHandler).toBe(false);
+                },
+            );
+        });
     });
 
     describe('resolveId suffix propagation through a plain helper module', () => {
