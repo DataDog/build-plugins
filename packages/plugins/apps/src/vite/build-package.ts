@@ -21,6 +21,8 @@ import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
 import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
 
+export const MANIFEST_DIR_PREFIX = 'dd-apps-manifest-';
+
 export interface BuildAppPackageOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
@@ -88,7 +90,9 @@ function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
 async function writeManifestFile(
     backendFunctions: BackendFunction[],
 ): Promise<{ manifestAsset: Asset; cleanup: () => Promise<void> }> {
-    const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+    const tmpRoot = os.tmpdir();
+    const manifestDirPrefix = path.join(tmpRoot, MANIFEST_DIR_PREFIX);
+    const manifestDir = await fsp.mkdtemp(manifestDirPrefix);
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
         await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
