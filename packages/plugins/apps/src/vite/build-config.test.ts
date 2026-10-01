@@ -71,9 +71,13 @@ describe('getBaseBackendBuildConfig', () => {
 
         try {
             // A dependency that registers itself at import time and does not declare itself side-effect free.
+            const dependencyPackageJson = JSON.stringify({
+                name: 'registers-on-import',
+                main: 'index.js',
+            });
             outputFileSync(
                 `${workingDir}/node_modules/registers-on-import/package.json`,
-                JSON.stringify({ name: 'registers-on-import', main: 'index.js' }),
+                dependencyPackageJson,
             );
             outputFileSync(
                 `${workingDir}/node_modules/registers-on-import/index.js`,
