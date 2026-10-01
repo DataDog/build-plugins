@@ -29,6 +29,7 @@ import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
     BACKEND_FILE_WITH_QUERY_RE,
+    DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
@@ -39,6 +40,13 @@ import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
 import { localExecutionResolutionContext } from './local-execution';
+import {
+    exemptFetchFromBlockedScope,
+    exemptPluginContainerFromBlockedScope,
+    GRACEFUL_FS_UNGUARDED_WARNING,
+    gracefulFsPredatesGuards,
+    installGuards,
+} from './network-guard';
 
 export type ViteBundler = {
     build: typeof build;
@@ -348,6 +356,29 @@ export const getVitePlugin = ({
                 log.warn(
                     `No authentication configured. Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable. ${AUTH_GUIDANCE}`,
                 );
+            }
+            // Without auth nothing executes, and dev-verify sends every execution to the cloud.
+            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
+                // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
+                // predate it. A failure must not stop the server: each execution installs again, failing closed.
+                try {
+                    installGuards();
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    log.warn(
+                        `Could not install the backend function sandbox guards yet: ${reason}`,
+                    );
+                }
+                if (gracefulFsPredatesGuards()) {
+                    log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
+                }
+                const ssrEnvironment = server.environments?.ssr;
+                if (ssrEnvironment) {
+                    const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
+                    ssrEnvironment.fetchModule = exemptFetchFromBlockedScope(fetchModule);
+                } else if (server.pluginContainer) {
+                    exemptPluginContainerFromBlockedScope(server.pluginContainer);
+                }
             }
 
             const loadModule = server.ssrLoadModule.bind(server);

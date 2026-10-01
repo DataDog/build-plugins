@@ -16,20 +16,8 @@ import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
 import { createEpochGuard } from './execution-epoch';
-import type { BlockedScopeHandle } from './network-guard';
+import { assertNoForeignGuard, installGuards, runBlocked } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
-
-// Lazy because importing network-guard patches core modules process-wide, which must only happen
-// in the Vite dev server, not in every bundler that loads this file. Reset on failure so a later
-// execution retries the import.
-let networkGuardModule: Promise<typeof import('./network-guard')> | undefined;
-function getNetworkGuard(): Promise<typeof import('./network-guard')> {
-    networkGuardModule ??= import('./network-guard').catch((err: unknown) => {
-        networkGuardModule = undefined;
-        throw err;
-    });
-    return networkGuardModule;
-}
 
 type RuntimeUser = {
     id: string;
@@ -212,12 +200,12 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level `$`-scoping `runScriptLocally` uses, for callers (like `executeColdActionLocally`'s priming) that evaluate it before `runScriptLocally`. Top-level code runs outside `runBlocked`, so it isn't network-guarded; loading the guard first ensures its trusted stdout/stderr are captured before any customer code can repoint them. */
+/** Loads a customer module under the same top-level `$`-scoping `runScriptLocally` uses, for callers (like `executeColdActionLocally`'s priming) that evaluate it before `runScriptLocally`. Its top-level code runs before `runBlocked`, so it isn't guarded; installing first still hands it the guarded fs/child_process functions. */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
 ): Promise<Record<string, unknown>> {
-    const { assertNoForeignGuard } = await getNetworkGuard();
+    installGuards();
     // Checked before the customer's top-level code runs, since runBlocked would refuse anyway.
     assertNoForeignGuard();
     return localExecutionResolutionContext.run(new Set(), () =>
@@ -250,16 +238,12 @@ function assertConnectionIdAllowed(
     }
 }
 
-/** Rejects a self-declared scope on `inputs` — checked both before serialization (fails fast on the common case) and again after (a custom `toJSON()` runs during `JSON.stringify`, before any replacer sees the result, so it can introduce this key even when the original object never had it). */
+/** Rejects a top-level `allowedConnectionIds` key on `inputs`, not one nested deeper. Checked before serialization and again after, since a custom `toJSON()` can introduce the key. */
 function assertNoSelfDeclaredScope(
     inputs: Record<string, unknown>,
     actionDescription: string,
 ): void {
-    // assertConnectionIdAllowed only inspects this call's own top-level connectionId — a nested
-    // meta-action carrying its own allowedConnectionIds inside inputs would otherwise reach the
-    // destination with a self-declared scope this function never validated. hasOwnProperty, not
-    // `in`, so a polluted Object.prototype can't make every subsequent call's inputs falsely
-    // appear to declare this key.
+    // Own-property check, so a polluted Object.prototype can't make every call appear to declare it.
     if (Object.prototype.hasOwnProperty.call(inputs, 'allowedConnectionIds')) {
         throw new Error(
             `Action ${actionDescription} must not declare its own allowedConnectionIds in inputs — this function's own allowlist already governs which connections it can use.`,
@@ -282,7 +266,7 @@ function validateActionCall(
     return { inputs, connectionId };
 }
 
-/** Shared validate → serialize → runAllowed sequence for both $.Actions entry points — same reasoning as `validateActionCall` above, extended to cover the whole call instead of just the inputs check. */
+/** Shared validate → serialize → dispatch sequence for both $.Actions entry points — same reasoning as `validateActionCall` above, extended to cover the whole call instead of just the inputs check. */
 async function invokeAction(
     executeAction: ExecuteAction,
     actionId: string,
@@ -297,8 +281,7 @@ async function invokeAction(
     );
     const serializedInputs = serializeActionInputs(inputs, actionDescription);
     assertNoSelfDeclaredScope(serializedInputs, actionDescription);
-    const { runAllowed } = await getNetworkGuard();
-    return runAllowed(() => executeAction(actionId, serializedInputs, connectionId));
+    return executeAction(actionId, serializedInputs, connectionId);
 }
 
 /** Serializes local executions — a customer function deleting `globalThis.$` mid-flight would otherwise break `$` access for any other execution concurrently in progress (see `ensureDollarAccessorInstalled`). */
@@ -329,7 +312,7 @@ function abandonedExecutionError(functionName: string, refusedAction: string): E
  */
 const executionEpoch = createEpochGuard();
 
-/** JSON round-trips `$.Actions` inputs before `runAllowed`, so a malicious `toJSON()`/getter can't sneak a network call under the trusted action — uses the same strict validation as a return value (`assertJsonRoundTrippable`), so a Map/Set/NaN/symbol-keyed input fails loudly instead of reaching the destination corrupted. Also re-checks the round-tripped shape, since a top-level `toJSON()` can turn an object into a string/array. */
+/** JSON round-trips `$.Actions` inputs with the same strict validation as a return value (`assertJsonRoundTrippable`), so a Map/Set/NaN/symbol-keyed input fails loudly instead of reaching the destination corrupted. Also re-checks the round-tripped shape, since a top-level `toJSON()` can turn an object into a string/array. */
 function serializeActionInputs(
     inputs: Record<string, unknown>,
     actionDescription: string,
@@ -344,7 +327,7 @@ function serializeActionInputs(
     return roundTripped as Record<string, unknown>;
 }
 
-/** Resolves a `$.Actions` path to a callable wrapped in `runAllowed`, the one call exempted from `runBlocked` (see network-guard.ts). */
+/** Resolves a `$.Actions` path to a callable that dispatches through `invokeAction`. */
 function makeActionsProxy(
     executeAction: ExecuteAction,
     allowedConnectionIds: string[],
@@ -762,15 +745,11 @@ async function runScriptLocally(
     let rejectTimeout: ((error: Error) => void) | undefined;
     let pendingActionCalls = 0;
     let absoluteTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
-    // Set once runBlocked's own scope starts — undefined until then, so an execution abandoned
-    // before it reaches that point has nothing to abandon here.
-    let blockedScope: BlockedScopeHandle | undefined;
-
-    // Promise.race abandons a hung fn without cancelling it, so its runBlocked cleanup never runs;
-    // abandonIfCurrent() is a no-op once a newer execution's scope has taken over.
+    // Promise.race abandons a hung fn without cancelling it, so this closes its blocked scope instead.
+    const blockedScopeController = new AbortController();
     const failWithTimeout = (message: string) => {
         concludeExecution();
-        blockedScope?.abandonIfCurrent();
+        blockedScopeController.abort();
         const timeoutError = new Error(message);
         rejectTimeout?.(timeoutError);
     };
@@ -887,7 +866,6 @@ async function runScriptLocally(
                         timeoutMs,
                     );
                     await Promise.all([actionCatalogRegistration, backendRuntimeRegistration]);
-                    const { runBlocked } = await getNetworkGuard();
                     // Registration's loadModule() calls can take long enough to cross the timeout,
                     // and the customer function must never run once abandoned.
                     rejectIfAbandoned();
@@ -897,9 +875,7 @@ async function runScriptLocally(
                             const result = await fn(...args);
                             return assertJsonSerializable(result, func);
                         },
-                        (handle) => {
-                            blockedScope = handle;
-                        },
+                        { signal: blockedScopeController.signal },
                     );
                     return { data };
                 }),
