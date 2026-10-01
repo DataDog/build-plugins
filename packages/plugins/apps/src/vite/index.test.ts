@@ -21,7 +21,13 @@ import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
 import { createUnplugin } from 'unplugin';
-import { createServer, loadEnv, type Plugin as VitePlugin, type ViteDevServer } from 'vite';
+import {
+    createServer,
+    loadEnv,
+    type ConfigEnv,
+    type Plugin as VitePlugin,
+    type ViteDevServer,
+} from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -109,13 +115,18 @@ type ConfigHookResult = {
 
 // Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
 // cast on its return value — mirrors `getConfigureServer` above.
-function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+function getConfigHandler(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (configEnv?: ConfigEnv) => ConfigHookResult {
     const { config } = plugin ?? {};
     if (typeof config !== 'function') {
         throw new Error('Expected plugin.config to be the plain function-hook form');
     }
-    return function callConfig(): ConfigHookResult {
-        return Reflect.apply(config, undefined, []);
+    return function callConfig(
+        configEnv: ConfigEnv = { command: 'build', mode: 'production' },
+    ): ConfigHookResult {
+        const hookArgs: unknown[] = [{}, configEnv];
+        return Reflect.apply(config, undefined, hookArgs);
     };
 }
 
@@ -1205,6 +1216,33 @@ describe('Backend Functions - getVitePlugin', () => {
             rmSync(envDir);
         }
     });
+
+    // Vite resolves a restarted server's config, expanding .env references against process.env,
+    // before configureServer runs, so the previous load must already be gone by then.
+    const configHookCases: Array<{ command: ConfigEnv['command']; dropped: boolean }> = [
+        { command: 'serve', dropped: true },
+        { command: 'build', dropped: false },
+    ];
+    test.each(configHookCases)(
+        'Should drop the previous .env load in the config hook ($command)',
+        ({ command, dropped }) => {
+            const startedAt = Date.now();
+            const envDir = getTempWorkingDir(`dd-apps-config-dotenv-${command}-${startedAt}`);
+            const envFilePath = path.join(envDir, '.env');
+            outputFileSync(envFilePath, 'QA_CONFIG_HOOK_SECRET=from-dotenv\n');
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir });
+            const configHook = getConfigHandler(getVitePlugin(defaultOptions));
+
+            try {
+                configHook({ command, mode: 'development' });
+
+                expect('QA_CONFIG_HOOK_SECRET' in process.env).toBe(!dropped);
+            } finally {
+                loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: false });
+                rmSync(envDir);
+            }
+        },
+    );
 
     // dev-verify sends every execution to the cloud, which never sees local .env values.
     test('Should not load .env files in dev-verify mode', () => {

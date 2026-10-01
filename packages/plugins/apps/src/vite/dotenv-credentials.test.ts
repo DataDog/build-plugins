@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { loadEnvFileCredentials } from '@dd/apps-plugin/vite/dotenv-credentials';
+import {
+    dropEnvFileCredentials,
+    loadEnvFileCredentials,
+} from '@dd/apps-plugin/vite/dotenv-credentials';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import path from 'path';
@@ -158,6 +161,17 @@ describe('Apps Plugin - loadEnvFileCredentials', () => {
         load();
 
         expect(process.env.QA_DOTENV_STRIPE_KEY).toBe('set-later');
+    });
+
+    test('Should drop values from the previous load and keep shell variables', () => {
+        process.env.QA_DOTENV_OTHER_KEY = 'from-shell';
+        writeEnvFile('.env', 'QA_DOTENV_STRIPE_KEY=from-dotenv\nQA_DOTENV_OTHER_KEY=from-dotenv\n');
+        load();
+
+        dropEnvFileCredentials();
+
+        expect(process.env).not.toHaveProperty('QA_DOTENV_STRIPE_KEY');
+        expect(process.env.QA_DOTENV_OTHER_KEY).toBe('from-shell');
     });
 
     test('Should load nothing and drop earlier values when env files are disabled', () => {

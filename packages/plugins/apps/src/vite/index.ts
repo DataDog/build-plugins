@@ -39,7 +39,7 @@ import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
-import { loadEnvFileCredentials } from './dotenv-credentials';
+import { dropEnvFileCredentials, loadEnvFileCredentials } from './dotenv-credentials';
 import { localExecutionResolutionContext } from './local-execution';
 
 export type ViteBundler = {
@@ -184,7 +184,12 @@ export const getVitePlugin = ({
         // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
         // externalizes node_modules by default (a plain require()), which throws "Cannot use
         // import statement outside a module" — ssr.noExternal forces Vite's SSR transform instead.
-        config() {
+        config(_userConfig, { command }) {
+            // A restarted server resolves its config, expanding .env references against
+            // process.env, before configureServer reloads the files.
+            if (command === 'serve') {
+                dropEnvFileCredentials();
+            }
             return {
                 ssr: {
                     noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],

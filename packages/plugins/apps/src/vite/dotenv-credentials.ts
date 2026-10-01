@@ -40,6 +40,11 @@ function dropPreviousLoad(loadedValues: Map<string, string>) {
     loadedValues.clear();
 }
 
+/** Removes the values the previous load set, keeping any that something else changed since. */
+export function dropEnvFileCredentials(): void {
+    dropPreviousLoad(getLoadedValues());
+}
+
 /**
  * Copies keys from Vite's .env files (.env, .env.local, .env.[mode], .env.[mode].local) into
  * process.env for local execution. Skips variables the shell already set, keys Vite exposes to
