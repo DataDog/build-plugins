@@ -7,6 +7,7 @@ import { execFileSync } from 'child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import path from 'path';
 
+import { scrubEnv } from './helpers/allowedEnv';
 import { getEnv, logEnv, setupEnv } from './helpers/env';
 
 const c = chalk.bold.dim;
@@ -84,6 +85,10 @@ const globalSetup = () => {
     } catch (e) {
         console.error('Fixtures setup failed:', e);
     }
+
+    // Last, so the fixture setup above still runs with the full env. Test workers are forked
+    // afterwards and inherit what's left, as do their test sandboxes and child processes.
+    scrubEnv();
     console.timeEnd(timeId);
 };
 
