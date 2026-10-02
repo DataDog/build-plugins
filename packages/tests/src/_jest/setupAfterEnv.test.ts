@@ -6,29 +6,56 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 
 import { ENV_OVERRIDE_VARIABLES } from './helpers/cleanEnv';
+import {
+    ALL_SCOPES,
+    CHILD_PROCESSES_SCOPE,
+    PROCESS_ID_TEST_TITLE_PREFIX,
+    EXPOSURE_TEST_TITLE_PREFIX,
+    TEARDOWN_EXPOSURE_PREFIX,
+    TEARDOWN_SCOPE,
+    getExposureLabel,
+} from './setupAfterEnvFixtureLabels';
 
 type JestJsonReport = {
-    numFailedTests: number;
-    numPassedTests: number;
     numTotalTests: number;
-    testResults: { message: string }[];
+    testResults: {
+        message: string;
+        assertionResults: { title: string; status: string }[];
+    }[];
 };
 
-const fakeOverrideEntries: [string, string][] = ENV_OVERRIDE_VARIABLES.map((key) => [
-    key,
-    `fake-${key}`,
+const FAKE_SECRET_NAMES = [...ENV_OVERRIDE_VARIABLES, 'GITHUB_TOKEN'];
+const fakeSecretEntries: [string, string][] = FAKE_SECRET_NAMES.map((name) => [
+    name,
+    `fake-${name}`,
 ]);
-const FAKE_OVERRIDE_ENV = Object.fromEntries(fakeOverrideEntries);
+const FAKE_SECRETS = Object.fromEntries(fakeSecretEntries);
 const jestPackagePath = require.resolve('jest/package.json');
 const jestBinDir = path.dirname(jestPackagePath);
 const JEST_BIN_PATH = path.join(jestBinDir, 'bin/jest.js');
 const JEST_CONFIG_PATH = path.resolve(__dirname, '../../jest.config.ts');
+const SETUP_AFTER_ENV_PATH = path.resolve(__dirname, 'setupAfterEnv.ts');
+const SCRUB_GLOBAL_SETUP_PATH = path.resolve(__dirname, 'scrubEnvGlobalSetup.ts');
 const NOOP_SETUP_PATH = path.resolve(__dirname, 'noopGlobalSetup.ts');
 const SPAWN_TIMEOUT_MS = 15000;
 const TEST_TIMEOUT_MS = SPAWN_TIMEOUT_MS + 5000;
 
-const runFixture = (extraArgs: string[]): JestJsonReport => {
-    const fixtureScrubbedKeys = ENV_OVERRIDE_VARIABLES.join(',');
+type FixtureRun = {
+    globalSetupPath: string;
+    setupFilesAfterEnvPath: string;
+    inWorker: boolean;
+};
+
+const runFixture = ({
+    globalSetupPath,
+    setupFilesAfterEnvPath,
+    inWorker,
+}: FixtureRun): { report: JestJsonReport; jestProcessId: number } => {
+    const fixtureGlobals = JSON.stringify({ FIXTURE_SCRUBBED_KEYS: FAKE_SECRET_NAMES });
+    // Jest always uses workers once workerIdleMemoryLimit is set, even for a single test file.
+    const executionArgs = inWorker
+        ? ['--maxWorkers=1', '--workerIdleMemoryLimit=1GB']
+        : ['--runInBand'];
     const result = spawnSync(
         process.execPath,
         [
@@ -38,12 +65,15 @@ const runFixture = (extraArgs: string[]): JestJsonReport => {
             '--testMatch',
             '**/setupAfterEnv.fixture.ts',
             '--globalSetup',
-            NOOP_SETUP_PATH,
-            '--runInBand',
+            globalSetupPath,
+            '--setupFilesAfterEnv',
+            setupFilesAfterEnvPath,
+            '--globals',
+            fixtureGlobals,
+            ...executionArgs,
             '--ci',
             '--no-watchman',
             '--json',
-            ...extraArgs,
         ],
         {
             encoding: 'utf8',
@@ -58,8 +88,7 @@ const runFixture = (extraArgs: string[]): JestJsonReport => {
                 JEST_CONFIG_TRANSPILE_ONLY: process.env.JEST_CONFIG_TRANSPILE_ONLY,
                 // Keeps the child's console off stdout, which carries the --json report.
                 JEST_SILENT: '1',
-                FIXTURE_SCRUBBED_KEYS: fixtureScrubbedKeys,
-                ...FAKE_OVERRIDE_ENV,
+                ...FAKE_SECRETS,
             },
         },
     );
@@ -68,36 +97,123 @@ const runFixture = (extraArgs: string[]): JestJsonReport => {
     if (result.error) {
         throw new Error(`Fixture run failed: ${result.error.message}\n${output}`);
     }
+    let report: JestJsonReport;
     try {
-        return JSON.parse(result.stdout);
+        report = JSON.parse(result.stdout);
     } catch {
         throw new Error(`Fixture run produced no JSON report.\n${output}`);
     }
+    return { report, jestProcessId: result.pid };
 };
 
-describe('setupAfterEnv', () => {
-    test(
-        'Should keep Datadog env variables out of test files from collection to teardown',
-        () => {
-            const report = runFixture([]);
-            const failureMessages = report.testResults.map((file) => file.message);
+const getExposures = (report: JestJsonReport) => {
+    const assertions = report.testResults.flatMap((file) => file.assertionResults);
+    const failedPairs = assertions
+        .filter((assertion) => assertion.title.startsWith(EXPOSURE_TEST_TITLE_PREFIX))
+        .filter((assertion) => assertion.status !== 'passed')
+        .map((assertion) => assertion.title.slice(EXPOSURE_TEST_TITLE_PREFIX.length));
+    const teardownPairs = report.testResults.flatMap((file) => {
+        const prefixIndex = file.message.indexOf(TEARDOWN_EXPOSURE_PREFIX);
+        if (prefixIndex === -1) {
+            return [];
+        }
+        const listStart = prefixIndex + TEARDOWN_EXPOSURE_PREFIX.length;
+        const [exposedList] = file.message.slice(listStart).split('\n');
+        const names = exposedList.split(', ');
+        return names.map((name) => getExposureLabel(name, TEARDOWN_SCOPE));
+    });
+    return [...failedPairs, ...teardownPairs].sort();
+};
 
-            expect(failureMessages).toEqual(['']);
-            expect(report.numTotalTests).toBeGreaterThan(0);
-            expect(report.numPassedTests).toBe(report.numTotalTests);
-        },
-        TEST_TIMEOUT_MS,
+const getExpectedExposures = (scopes: string[]) => {
+    const pairs = scopes.flatMap((scope) =>
+        FAKE_SECRET_NAMES.map((name) => getExposureLabel(name, scope)),
     );
+    return pairs.sort();
+};
 
-    test(
-        'Should expose them in every scope without the scrub, as a positive control',
-        () => {
-            const report = runFixture(['--setupFilesAfterEnv', NOOP_SETUP_PATH]);
-            const failureMessages = report.testResults.map((file) => file.message);
+describe('Test env scrub', () => {
+    const cases = [
+        {
+            description: 'hide CI secrets from every scope with both layers',
+            run: {
+                globalSetupPath: SCRUB_GLOBAL_SETUP_PATH,
+                setupFilesAfterEnvPath: SETUP_AFTER_ENV_PATH,
+                inWorker: false,
+            },
+            exposedScopes: [],
+        },
+        {
+            description:
+                'hide CI secrets from test code, not child processes, with only setupAfterEnv',
+            run: {
+                globalSetupPath: NOOP_SETUP_PATH,
+                setupFilesAfterEnvPath: SETUP_AFTER_ENV_PATH,
+                inWorker: false,
+            },
+            exposedScopes: [CHILD_PROCESSES_SCOPE],
+        },
+        {
+            description: 'hide CI secrets from every scope with only the globalSetup scrub',
+            run: {
+                globalSetupPath: SCRUB_GLOBAL_SETUP_PATH,
+                setupFilesAfterEnvPath: NOOP_SETUP_PATH,
+                inWorker: false,
+            },
+            exposedScopes: [],
+        },
+        {
+            description:
+                'hide CI secrets from every scope in a forked worker with only the globalSetup scrub',
+            run: {
+                globalSetupPath: SCRUB_GLOBAL_SETUP_PATH,
+                setupFilesAfterEnvPath: NOOP_SETUP_PATH,
+                inWorker: true,
+            },
+            exposedScopes: [],
+        },
+        {
+            description: 'expose CI secrets everywhere with neither, as a positive control',
+            run: {
+                globalSetupPath: NOOP_SETUP_PATH,
+                setupFilesAfterEnvPath: NOOP_SETUP_PATH,
+                inWorker: false,
+            },
+            exposedScopes: ALL_SCOPES,
+        },
+        {
+            description:
+                'expose CI secrets everywhere in a forked worker with neither, as a positive control',
+            run: {
+                globalSetupPath: NOOP_SETUP_PATH,
+                setupFilesAfterEnvPath: NOOP_SETUP_PATH,
+                inWorker: true,
+            },
+            exposedScopes: ALL_SCOPES,
+        },
+    ];
+
+    test.each(cases)(
+        'Should $description',
+        ({ run, exposedScopes }) => {
+            const { report, jestProcessId } = runFixture(run);
+            const exposures = getExposures(report);
+            const expectedExposures = getExpectedExposures(exposedScopes);
+            const assertions = report.testResults.flatMap((file) => file.assertionResults);
+            const processIdTitle = assertions.find((assertion) =>
+                assertion.title.startsWith(PROCESS_ID_TEST_TITLE_PREFIX),
+            )?.title;
+            const processIdText = processIdTitle?.slice(PROCESS_ID_TEST_TITLE_PREFIX.length);
+            const fixtureProcessId = Number(processIdText);
+            const ranInWorker = fixtureProcessId !== jestProcessId;
+            const fileMessages = report.testResults.map((file) => file.message);
+            const isFixtureFileClean = fileMessages.every((message) => message === '');
 
             expect(report.numTotalTests).toBeGreaterThan(0);
-            expect(report.numFailedTests).toBe(report.numTotalTests);
-            expect(failureMessages[0]).toContain('Exposed in teardown scope');
+            expect(fixtureProcessId).toBeGreaterThan(0);
+            expect(ranInWorker).toBe(run.inWorker);
+            expect(isFixtureFileClean).toBe(expectedExposures.length === 0);
+            expect(exposures).toEqual(expectedExposures);
         },
         TEST_TIMEOUT_MS,
     );
