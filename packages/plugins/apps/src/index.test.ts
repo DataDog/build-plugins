@@ -7,12 +7,13 @@ import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import type { PluginOptions } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import {
     getContextMock,
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
+    mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
 import JSZip from 'jszip';
@@ -155,6 +156,26 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
+    test('reports the decompressed size of every packaged file, backend bundles and manifest included', async () => {
+        // Multibyte content, so a character count would under-report the byte total.
+        await fs.writeFile(sourcePath, 'é'.repeat(1_000));
+        const backendPath = path.join(root, 'example.js');
+        await fs.writeFile(backendPath, 'export function main() {}');
+        const backendOutputs = new Map([['example', backendPath]]);
+        const archivePath = await buildAppPackage(packageOptions({ backendOutputs }));
+
+        const archiveData = await fs.readFile(archivePath!);
+        const zip = await JSZip.loadAsync(archiveData);
+        const entries = Object.values(zip.files).filter((file) => !file.dir);
+        const contents = await Promise.all(entries.map((file) => file.async('nodebuffer')));
+        const decompressedSize = contents.reduce((total, content) => total + content.length, 0);
+        const decompressedMb = (decompressedSize / 1_000_000).toFixed(2);
+        const expectedReport = expect.stringContaining(
+            `${entries.length} files, ${(archiveData.length / 1_000_000).toFixed(2)} MB compressed, ${decompressedMb} MB decompressed`,
+        );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedReport, 'info');
+    });
+
     test('does not nest stale generated package files into the archive', async () => {
         const staleArchive = path.join(packageDirectory, ARCHIVE_FILENAME);
         await fs.writeFile(staleArchive, 'stale archive');
@@ -258,6 +279,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
                 assets: archiveAssets,
                 size: 30,
+                decompressedSize: 100,
             };
         });
 

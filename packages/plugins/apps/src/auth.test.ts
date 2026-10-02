@@ -6,7 +6,7 @@
 
 import { getAuthenticatedRequest, MissingAuthenticationError } from '@dd/apps-plugin/auth';
 import { doRequest } from '@dd/core/helpers/request';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 
 jest.mock('@dd/core/helpers/request', () => ({
     doRequest: jest.fn(),

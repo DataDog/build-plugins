@@ -70,8 +70,13 @@ export async function buildBackendFunctions(
             // eslint-disable-next-line no-await-in-loop
             const result = await viteBuild({
                 ...baseConfig,
+                // Production only: dev-server bundles stay unminified so local traces keep line
+                // numbers. keepNames preserves function and class names in function-log stack
+                // frames and for code that reads `.name`; frames still point at `1:<column>`.
+                esbuild: { keepNames: true },
                 build: {
                     ...baseConfig.build,
+                    minify: 'esbuild',
                     write: true,
                     outDir,
                     emptyOutDir: false,
