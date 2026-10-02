@@ -70,6 +70,16 @@ describe('extractDebugId', () => {
         await expect(extractDebugId(filePath)).resolves.toBe(debugId);
     });
 
+    test('Should return undefined when the opening and closing quotes do not match', async () => {
+        const filePath = path.join(tempDir, 'mismatched-quotes.min.js');
+        outputFileSync(
+            filePath,
+            `!function(){}({service:"app",version:"1.0.0",ddDebugId:'${debugId}"},"DD_SOURCE_CODE_CONTEXT");`,
+        );
+
+        await expect(extractDebugId(filePath)).resolves.toBeUndefined();
+    });
+
     test('Should stop reading after finding the debug ID in the first chunk', async () => {
         const filePath = path.join(tempDir, 'first-chunk.min.js');
         const literal = `ddDebugId:"${debugId}"`;
