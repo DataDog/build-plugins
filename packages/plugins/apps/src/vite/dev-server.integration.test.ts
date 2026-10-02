@@ -15,7 +15,7 @@ import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
-import { cleanEnv, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -43,16 +43,11 @@ const mockLongPolling = {
     exponentialBackoff: false,
 };
 
-// getAuthenticatedRequest reads API-key auth from the environment (see
-// setupAfterEnv's cleanEnv, which strips these after collection).
-const restoreModuleEnv = cleanEnv();
+// Also read by the real configureServer hook below, which without auth only warns and leaves both
+// action endpoints unavailable.
 process.env.DD_API_KEY = 'test-api-key';
 process.env.DD_APP_KEY = 'test-app-key';
 const testApiKeyRequest = getAuthenticatedRequest();
-
-afterAll(() => {
-    restoreModuleEnv();
-});
 
 const getRuntimeUsersFunc: BackendFunction = {
     relativePath: 'getRuntimeUsers',
@@ -140,12 +135,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
     beforeAll(async () => {
-        // The real configureServer hook (via getVitePlugin below) calls getAuthenticatedRequest()
-        // itself — set after setupAfterEnv's own beforeAll (which runs first and strips these via
-        // cleanEnv) so the real dev server actually resolves auth instead of warning and disabling it.
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
