@@ -4,6 +4,16 @@
 
 import { spawnSync } from 'child_process';
 
+import {
+    CHILD_PROCESSES_SCOPE,
+    DESCRIBE_SCOPE,
+    PROCESS_ID_TEST_TITLE_PREFIX,
+    EXPOSURE_TEST_TITLE_PREFIX,
+    MODULE_SCOPE,
+    TEARDOWN_EXPOSURE_PREFIX,
+    getExposureLabel,
+} from './setupAfterEnvFixtureLabels';
+
 // Not named `*.test.*`: setupAfterEnv.test.ts spawns it in its own Jest process, because the
 // variables have to be in the environment Jest starts with.
 const isStringArray = (value: unknown): value is string[] =>
@@ -29,29 +39,34 @@ afterAll(() => {
     const exposedKeys = scrubbedKeys.filter((key) => process.env[key] !== undefined);
     const exposedList = exposedKeys.join(', ');
     if (exposedKeys.length) {
-        throw new Error(`Exposed in teardown scope: ${exposedList}`);
+        throw new Error(`${TEARDOWN_EXPOSURE_PREFIX}${exposedList}`);
     }
+});
+
+// Reports which process ran the file, so the caller can tell a forked worker from in-band.
+test(`${PROCESS_ID_TEST_TITLE_PREFIX}${process.pid}`, () => {
+    expect(process.pid).toBeGreaterThan(0);
 });
 
 describe('Environment during test collection', () => {
     const describeScopeEnv = { ...process.env };
     const scopes = [
-        { scope: 'module scope', isExposed: (key: string) => moduleScopeEnv[key] !== undefined },
+        { scope: MODULE_SCOPE, isExposed: (key: string) => moduleScopeEnv[key] !== undefined },
         {
-            scope: 'describe scope',
+            scope: DESCRIBE_SCOPE,
             isExposed: (key: string) => describeScopeEnv[key] !== undefined,
         },
-        { scope: 'child processes', isExposed: (key: string) => childEnvNames.includes(key) },
+        { scope: CHILD_PROCESSES_SCOPE, isExposed: (key: string) => childEnvNames.includes(key) },
     ];
     const cases = scrubbedKeys.flatMap((key) =>
         scopes.map(({ scope, isExposed }) => ({
-            description: `hide ${key} from ${scope}`,
+            description: getExposureLabel(key, scope),
             key,
             isExposed,
         })),
     );
 
-    test.each(cases)('Should $description', ({ key, isExposed }) => {
+    test.each(cases)(`${EXPOSURE_TEST_TITLE_PREFIX}$description`, ({ key, isExposed }) => {
         const exposed = isExposed(key);
         expect(exposed).toBe(false);
     });

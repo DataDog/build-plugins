@@ -110,6 +110,11 @@ export async function buildAppPackage({
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);
+        const compressedMb = (archive.size / 1_000_000).toFixed(2);
+        const decompressedMb = (archive.decompressedSize / 1_000_000).toFixed(2);
+        log.info(
+            `App package size: ${archive.assets.length} files, ${compressedMb} MB compressed, ${decompressedMb} MB decompressed.`,
+        );
         log.info(`App package written to ${archive.archivePath}.`);
         return archive.archivePath;
     } finally {

@@ -4,10 +4,4 @@
 
 // A `--globalSetup` override for spawned single-fixture Jest runs that need globalSetup.ts's env
 // scrub but not its fixture setup, whose `yarn install` would race the parent run's tests.
-import { scrubEnv } from './helpers/allowedEnv';
-
-const scrubEnvGlobalSetup = () => {
-    scrubEnv();
-};
-
-export default scrubEnvGlobalSetup;
+export { scrubEnv as default } from './helpers/allowedEnv';

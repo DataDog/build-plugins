@@ -4,7 +4,7 @@
 
 import { clearDatadogEnv, ENV_OVERRIDE_VARIABLES } from './datadogEnv';
 
-const UNLISTED_KEY = 'DD_CLEAN_ENV_TEST_UNLISTED';
+const UNLISTED_KEY = 'DD_CLEAR_DATADOG_ENV_TEST_UNLISTED';
 
 const setOverrideVariables = (value: string | undefined) => {
     for (const key of ENV_OVERRIDE_VARIABLES) {

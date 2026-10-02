@@ -6,6 +6,15 @@ import { spawnSync } from 'child_process';
 import path from 'path';
 
 import { ENV_OVERRIDE_VARIABLES } from './helpers/datadogEnv';
+import {
+    ALL_SCOPES,
+    CHILD_PROCESSES_SCOPE,
+    PROCESS_ID_TEST_TITLE_PREFIX,
+    EXPOSURE_TEST_TITLE_PREFIX,
+    TEARDOWN_EXPOSURE_PREFIX,
+    TEARDOWN_SCOPE,
+    getExposureLabel,
+} from './setupAfterEnvFixtureLabels';
 
 type JestJsonReport = {
     numTotalTests: number;
@@ -41,7 +50,7 @@ const runFixture = ({
     globalSetupPath,
     setupFilesAfterEnvPath,
     inWorker,
-}: FixtureRun): JestJsonReport => {
+}: FixtureRun): { report: JestJsonReport; jestProcessId: number } => {
     const fixtureGlobals = JSON.stringify({ FIXTURE_SCRUBBED_KEYS: FAKE_SECRET_NAMES });
     // Jest always uses workers once workerIdleMemoryLimit is set, even for a single test file.
     const executionArgs = inWorker
@@ -88,35 +97,40 @@ const runFixture = ({
     if (result.error) {
         throw new Error(`Fixture run failed: ${result.error.message}\n${output}`);
     }
+    let report: JestJsonReport;
     try {
-        return JSON.parse(result.stdout);
+        report = JSON.parse(result.stdout);
     } catch {
         throw new Error(`Fixture run produced no JSON report.\n${output}`);
     }
+    return { report, jestProcessId: result.pid };
 };
 
-// Every (secret, scope) pair the fixture found exposed, as "<NAME> from <scope>".
 const getExposures = (report: JestJsonReport) => {
     const assertions = report.testResults.flatMap((file) => file.assertionResults);
     const failedPairs = assertions
+        .filter((assertion) => assertion.title.startsWith(EXPOSURE_TEST_TITLE_PREFIX))
         .filter((assertion) => assertion.status !== 'passed')
-        .map((assertion) => assertion.title.replace(/^Should hide /, ''));
+        .map((assertion) => assertion.title.slice(EXPOSURE_TEST_TITLE_PREFIX.length));
     const teardownPairs = report.testResults.flatMap((file) => {
-        const match = /Exposed in teardown scope: ([^\n]+)/.exec(file.message);
-        const names = match ? match[1].split(', ') : [];
-        return names.map((name) => `${name} from teardown scope`);
+        const prefixIndex = file.message.indexOf(TEARDOWN_EXPOSURE_PREFIX);
+        if (prefixIndex === -1) {
+            return [];
+        }
+        const listStart = prefixIndex + TEARDOWN_EXPOSURE_PREFIX.length;
+        const [exposedList] = file.message.slice(listStart).split('\n');
+        const names = exposedList.split(', ');
+        return names.map((name) => getExposureLabel(name, TEARDOWN_SCOPE));
     });
     return [...failedPairs, ...teardownPairs].sort();
 };
 
-const expectExposuresIn = (scopes: string[]) => {
+const getExpectedExposures = (scopes: string[]) => {
     const pairs = scopes.flatMap((scope) =>
-        FAKE_SECRET_NAMES.map((name) => `${name} from ${scope}`),
+        FAKE_SECRET_NAMES.map((name) => getExposureLabel(name, scope)),
     );
     return pairs.sort();
 };
-
-const ALL_SCOPES = ['child processes', 'describe scope', 'module scope', 'teardown scope'];
 
 describe('Test env scrub', () => {
     const cases = [
@@ -137,7 +151,7 @@ describe('Test env scrub', () => {
                 setupFilesAfterEnvPath: SETUP_AFTER_ENV_PATH,
                 inWorker: false,
             },
-            exposedScopes: ['child processes'],
+            exposedScopes: [CHILD_PROCESSES_SCOPE],
         },
         {
             description: 'hide CI secrets from every scope with only the globalSetup scrub',
@@ -182,11 +196,23 @@ describe('Test env scrub', () => {
     test.each(cases)(
         'Should $description',
         ({ run, exposedScopes }) => {
-            const report = runFixture(run);
+            const { report, jestProcessId } = runFixture(run);
             const exposures = getExposures(report);
-            const expectedExposures = expectExposuresIn(exposedScopes);
+            const expectedExposures = getExpectedExposures(exposedScopes);
+            const assertions = report.testResults.flatMap((file) => file.assertionResults);
+            const processIdTitle = assertions.find((assertion) =>
+                assertion.title.startsWith(PROCESS_ID_TEST_TITLE_PREFIX),
+            )?.title;
+            const processIdText = processIdTitle?.slice(PROCESS_ID_TEST_TITLE_PREFIX.length);
+            const fixtureProcessId = Number(processIdText);
+            const ranInWorker = fixtureProcessId !== jestProcessId;
+            const fileMessages = report.testResults.map((file) => file.message);
+            const isFixtureFileClean = fileMessages.every((message) => message === '');
 
             expect(report.numTotalTests).toBeGreaterThan(0);
+            expect(fixtureProcessId).toBeGreaterThan(0);
+            expect(ranInWorker).toBe(run.inWorker);
+            expect(isFixtureFileClean).toBe(expectedExposures.length === 0);
             expect(exposures).toEqual(expectedExposures);
         },
         TEST_TIMEOUT_MS,

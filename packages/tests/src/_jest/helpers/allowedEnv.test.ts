@@ -5,9 +5,9 @@
 import { isAllowedEnvName, scrubEnv } from './allowedEnv';
 
 // Sets the variable, scrubs, and restores it, so a case can't leave a broken value behind.
-const isKeptByScrub = (name: string) => {
+const isKeptByScrub = (name: string, value: string) => {
     const previousValue = process.env[name];
-    process.env[name] = 'value';
+    process.env[name] = value;
 
     scrubEnv();
     const isKept = name in process.env;
@@ -79,13 +79,92 @@ describe('scrubEnv', () => {
     ];
 
     test.each(cases)('Should $description', ({ name, kept }) => {
-        const isKept = isKeptByScrub(name);
+        const isKept = isKeptByScrub(name, 'value');
+        expect(isKept).toBe(kept);
+    });
+
+    const valueCases = [
+        {
+            description: 'remove an allowed URL that carries credentials',
+            name: 'DD_TRACE_AGENT_URL',
+            value: 'http://user:token@proxy:8126',
+            kept: false,
+        },
+        {
+            description: 'remove an allowed URL that carries only a token',
+            name: 'GITHUB_SERVER_URL',
+            value: 'https://token@github.com',
+            kept: false,
+        },
+        {
+            description: 'remove a URL with credentials after leading whitespace',
+            name: 'DD_TRACE_AGENT_URL',
+            value: ' http://user:token@proxy:8126',
+            kept: false,
+        },
+        {
+            description: 'remove a URL whose password contains a comma',
+            name: 'DD_TRACE_AGENT_URL',
+            value: 'https://x-access-token:ghs,abc@github.com',
+            kept: false,
+        },
+        {
+            description: 'remove a URL with credentials and backslashes',
+            name: 'DD_TRACE_AGENT_URL',
+            value: 'http:\\\\user:token@proxy:8126',
+            kept: false,
+        },
+        {
+            description: 'remove a list value with an embedded URL with credentials',
+            name: 'DD_TAGS',
+            value: 'type:unit,git.repository_url:https://x-access-token:ghs_abc@github.com/o/r',
+            kept: false,
+        },
+        {
+            description: 'keep a tag whose value is a path containing @',
+            name: 'DD_TAGS',
+            value: 'ci.path:/runner@1,type:unit',
+            kept: true,
+        },
+        {
+            description: 'keep a tag list with @ outside any URL',
+            name: 'DD_TAGS',
+            value: 'team:@apps,type:unit',
+            kept: true,
+        },
+        {
+            description: 'keep a search path whose entries contain @',
+            name: 'PATH',
+            value: '/usr/bin:/opt/tool@1/bin',
+            kept: true,
+        },
+        {
+            description: 'keep an allowed URL without credentials',
+            name: 'DD_TRACE_AGENT_URL',
+            value: 'http://localhost:8126',
+            kept: true,
+        },
+        {
+            description: 'keep an allowed URL with @ only in its path',
+            name: 'GITHUB_SERVER_URL',
+            value: 'https://github.com/@scope',
+            kept: true,
+        },
+    ];
+
+    test.each(valueCases)('Should $description', ({ name, value, kept }) => {
+        const isKept = isKeptByScrub(name, value);
         expect(isKept).toBe(kept);
     });
 });
 
 describe('isAllowedEnvName', () => {
-    const cases = [
+    const cases: {
+        description: string;
+        platform: typeof process.platform;
+        name: string;
+        kept: boolean;
+    }[] = [
         { description: 'keep Path on Windows', platform: 'win32', name: 'Path', kept: true },
         {
             description: 'keep SystemRoot on Windows, which child processes need',
@@ -93,7 +172,18 @@ describe('isAllowedEnvName', () => {
             name: 'SystemRoot',
             kept: true,
         },
-        { description: 'keep PATHEXT on Windows', platform: 'win32', name: 'PATHEXT', kept: true },
+        {
+            description: 'keep PATHEXT on Windows',
+            platform: 'win32',
+            name: 'PATHEXT',
+            kept: true,
+        },
+        {
+            description: 'keep a prefixed name in any case on Windows',
+            platform: 'win32',
+            name: 'jest_worker_id',
+            kept: true,
+        },
         {
             description: 'still remove a GitHub token on Windows',
             platform: 'win32',

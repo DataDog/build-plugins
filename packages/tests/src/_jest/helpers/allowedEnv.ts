@@ -20,14 +20,12 @@ const ALLOWED_NAMES = new Set([
     'TMPDIR',
     'TZ',
     'USER',
-    // Node, CI detection, and color output.
     'CI',
     'COLORTERM',
     'FORCE_COLOR',
     'NO_COLOR',
     'NODE_ENV',
     'NODE_OPTIONS',
-    // Debugging and coverage tooling.
     'DEBUG',
     'NODE_DEBUG',
     'NODE_EXTRA_CA_CERTS',
@@ -35,7 +33,8 @@ const ALLOWED_NAMES = new Set([
     'TS_JEST_LOG',
     'VSCODE_INSPECTOR_OPTIONS',
     // dd-trace starts again in each Jest worker and tags its test events from these, plus the
-    // DD_CIVISIBILITY_/DD_TEST_/DD_TRACE_ prefixes below. None of them is a credential.
+    // DD_CIVISIBILITY_/DD_TEST_/DD_TRACE_ prefixes below. None is a secret by itself; values that
+    // embed URL credentials are removed in scrubEnv().
     'DD_ENV',
     'DD_SERVICE',
     'DD_TAGS',
@@ -83,8 +82,18 @@ const ALLOWED_WINDOWS_NAMES = new Set([
     'WINDIR',
 ]);
 const ALLOWED_PREFIXES = ['DD_CIVISIBILITY_', 'DD_TEST_', 'DD_TRACE_', 'JEST_', 'LC_'];
+// dd-trace and GitHub settings can hold URLs, alone or in lists, that embed `user:token@host`.
+// Search paths can contain `@` too, so only these names are checked.
+const URL_SETTING_PREFIXES = ['DD_', 'GITHUB_'];
+const URL_WITH_CREDENTIALS = /[a-z][a-z\d+.-]*:[\\/]{2}[^\s/\\?#@]*@/i;
 
-export const isAllowedEnvName = (name: string, platform: string) => {
+const hasUrlCredentials = (name: string, value: string) => {
+    const upperName = name.toUpperCase();
+    const isUrlSetting = URL_SETTING_PREFIXES.some((prefix) => upperName.startsWith(prefix));
+    return isUrlSetting && URL_WITH_CREDENTIALS.test(value);
+};
+
+export const isAllowedEnvName = (name: string, platform: typeof process.platform) => {
     // Windows env names are case-insensitive, and the search path is usually spelled `Path`.
     const isWindows = platform === 'win32';
     const comparableName = isWindows ? name.toUpperCase() : name;
@@ -98,7 +107,10 @@ export const isAllowedEnvName = (name: string, platform: string) => {
 export const scrubEnv = () => {
     const names = Object.keys(process.env);
     for (const name of names) {
-        if (!isAllowedEnvName(name, process.platform)) {
+        const value = process.env[name] ?? '';
+        const isAllowed =
+            isAllowedEnvName(name, process.platform) && !hasUrlCredentials(name, value);
+        if (!isAllowed) {
             delete process.env[name];
         }
     }
