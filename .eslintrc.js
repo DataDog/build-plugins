@@ -1,4 +1,10 @@
 const extensions = ['.json', '.ts', '.js', '.md'];
+// Test runs start with CI secrets in their env, so a whole-env copy can carry any the setup scrub
+// misses into failure output.
+const PROCESS_ENV_IN_TESTS_MESSAGE =
+    "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, check for one with `'KEY' in process.env`, list names with Object.keys(process.env), reset Datadog keys with clearDatadogEnv() from @dd/tests/_jest/helpers/datadogEnv, and build child-process env objects key by key.";
+const matchesEnvKey = (path) =>
+    `:matches([${path}.name='env'], [${path}.value='env'], [${path}.type='TemplateLiteral'][${path}.expressions.length=0][${path}.quasis.0.value.cooked='env'])`;
 module.exports = {
     root: true,
     rules: {
@@ -353,7 +359,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
+            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.*'],
             plugins: ['jest'],
             extends: ['plugin:jest/recommended'],
             env: {
@@ -370,6 +376,44 @@ module.exports = {
                 'jest/no-identical-title': 'error',
                 'jest/prefer-to-have-length': 'warn',
                 'jest/valid-expect': 'warn',
+            },
+        },
+        {
+            files: [
+                'packages/tests/src/_jest/**/*.*',
+                'packages/tests/src/_playwright/**/*.*',
+                '**/*.test.*',
+                '**/*.spec.*',
+                '**/*.bench.*',
+                'packages/tests/src/bench/**/*.*',
+                'packages/tests/jest.config.ts',
+                'packages/tests/playwright*.config.ts',
+            ],
+            // The preflight CLI scripts run in a job without credentials.
+            excludedFiles: ['packages/tests/src/bench/**/preflight*.js'],
+            rules: {
+                'no-restricted-syntax': [
+                    'error',
+                    {
+                        selector: `MemberExpression[object.name='process']${matchesEnvKey('property')}:not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(CallExpression[callee.object.name='Object'][callee.property.name='keys'] > MemberExpression.arguments):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init):not(AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right)`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector: `:matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property${matchesEnvKey('key')}:not(:matches([value.type='ObjectPattern'], [value.left.type='ObjectPattern']):not(:has(RestElement)))`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector: `CallExpression[arguments.0.name='process']${matchesEnvKey('arguments.1')}:not([callee.object.name='Object'][callee.property.name='hasOwn']):not([callee.object.name='Reflect'][callee.property.name='has'])`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                ],
+            },
+        },
+        {
+            // Copies process.env on purpose, to check what test code could capture.
+            files: ['packages/tests/src/_jest/setupAfterEnv.fixture.ts'],
+            rules: {
+                'no-restricted-syntax': 'off',
             },
         },
         {
