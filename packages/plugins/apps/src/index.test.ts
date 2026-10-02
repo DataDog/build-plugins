@@ -27,6 +27,13 @@ import type { AppsOptionsWithDefaults } from './types';
 import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
 import { buildAppPackage, MANIFEST_DIR_PREFIX } from './vite/build-package';
 
+// Another test file in this Jest worker can install the guards, which makes fs.promises.mkdtemp
+// non-configurable for jest.spyOn, so the mock comes from the module registry instead.
+jest.mock('fs/promises', () => {
+    const actual = jest.requireActual<typeof import('fs/promises')>('fs/promises');
+    return { ...actual, mkdtemp: jest.fn(actual.mkdtemp) };
+});
+
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
     const plugin = plugins[0];
@@ -43,13 +50,13 @@ function extractViteTransform(plugins: PluginOptions[]) {
 
 /** Asserts mkdtemp created a dir for each expected prefix and that none of those dirs survive. */
 async function expectNoLeakedTempDirs(
-    mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>,
+    mkdtempMock: jest.MockedFunction<typeof fs.mkdtemp>,
     expectedPrefixes: string[],
 ) {
-    if (mkdtempSpy.mock.calls.length === 0) {
+    if (mkdtempMock.mock.calls.length === 0) {
         throw new Error('fs.mkdtemp was never intercepted, so no temp dir cleanup was checked.');
     }
-    const pendingDirs = mkdtempSpy.mock.results.map(({ value }) => value);
+    const pendingDirs = mkdtempMock.mock.results.map(({ value }) => value);
     const createdDirs = await Promise.all(pendingDirs);
     const pluginDirs = createdDirs
         .map(String)
@@ -232,7 +239,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
     // used below; buildAppPackage needs a real outDir it can write into.
     const buildRoot = '/project';
     let outDir: string;
-    let mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>;
+    let mkdtempMock: jest.MockedFunction<typeof fs.mkdtemp>;
     const getArgs = () =>
         getGetPluginsArg(
             { apps: {} },
@@ -247,7 +254,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         const tmpRoot = os.tmpdir();
         const outDirPrefix = path.join(tmpRoot, 'dd-apps-closebundle-');
         outDir = await fs.mkdtemp(outDirPrefix);
-        mkdtempSpy = jest.spyOn(fs, 'mkdtemp');
+        mkdtempMock = jest.mocked(fs.mkdtemp);
+        mkdtempMock.mockClear();
     });
 
     afterEach(async () => {
@@ -332,7 +340,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
@@ -397,7 +405,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Importing Node built-in module "fs" is not supported in backend function code',
         );
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
     });
 
     test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
@@ -458,7 +466,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Using "fetch" is not supported in backend function code',
         );
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
     });
 
     test('Should remove the backend output directory when packaging the app fails', async () => {
@@ -503,6 +511,6 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
 
         const closeBundleResult = extractCloseBundle(plugins)();
         await expect(closeBundleResult).rejects.toThrow('archive write failed');
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 });

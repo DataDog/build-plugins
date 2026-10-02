@@ -2,89 +2,145 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global globalThis, Proxy */
+/* global Proxy */
 
 import child_process from 'child_process';
-import dgram from 'dgram';
-import dns from 'dns';
-import net from 'net';
+import fs from 'fs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { EventEmitter } from 'node:events';
 import { syncBuiltinESMExports } from 'node:module';
 import { Readable, Writable } from 'node:stream';
 import { promisify } from 'node:util';
+import os from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import worker_threads from 'worker_threads';
 
-import { createEpochGuard } from './execution-epoch';
+// No OS sandbox here — blocks subprocesses, worker_threads and fs writes at the JS level, scoped
+// per-call via AsyncLocalStorage. Mirrors Terrapin's production sandbox: network is allowed, and
+// writes only under the OS temp dir, which isn't cleaned up per run.
 
-// No OS sandbox here (unlike prod's Deno) — blocks net/subprocess at the JS level, scoped per-call via AsyncLocalStorage, not a global toggle.
+// Targets accidental dependency behavior, not hostile code, which can read the dev server's
+// credentials in process.env, use the network, reach the `fs` registry. Only runBlocked is guarded.
 
-const NETWORK_BLOCKED_MESSAGE =
-    'Network access is not allowed directly in backend functions — use $.Actions instead.';
+// Residual gaps: a Unix socket or named pipe listener creates a file outside the temp dir, and
+// writes on an fd or handle opened outside the current run (by module top-level code or an earlier
+// run) are refused even under the temp dir, so such a stream's 'error' can crash the server.
+
 const SUBPROCESS_BLOCKED_MESSAGE = 'Spawning a subprocess is not allowed in backend functions.';
 const WORKER_THREAD_BLOCKED_MESSAGE =
     'Spawning a worker thread is not allowed in backend functions.';
+const FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE =
+    'Local execution could not guard file handles, so it refuses to run.';
+export const FS_WRITE_BLOCKED_MESSAGE =
+    'Writing to the filesystem is not allowed in backend functions outside os.tmpdir() or /tmp.';
+
+/** One `runBlocked` call's fds and FileHandles opened for writing; `closed` once the run ends. */
+export interface BlockedScope {
+    readonly writableFds: Set<number>;
+    readonly writableHandles: WeakSet<object>;
+    closed: boolean;
+}
 
 interface GuardedAsyncContext {
-    isActive(): boolean;
-    run<T>(fn: () => T): T;
+    current(): BlockedScope | undefined;
+    run<T>(scope: BlockedScope, fn: () => T): T;
+    exit<T>(fn: () => T): T;
 }
 
 function isGuardedAsyncContext(value: unknown): value is GuardedAsyncContext {
     return (
         typeof value === 'object' &&
         value !== null &&
-        'isActive' in value &&
+        'current' in value &&
         'run' in value &&
-        typeof value.isActive === 'function' &&
-        typeof value.run === 'function'
+        'exit' in value &&
+        typeof value.current === 'function' &&
+        typeof value.run === 'function' &&
+        typeof value.exit === 'function'
     );
 }
 
-// Versioned so a copy from another plugin release, which may store a raw AsyncLocalStorage under
-// the unversioned keys, can't make this copy throw at load.
-const NETWORK_GUARD_SYMBOL_PREFIX = '@dd/apps-plugin/network-guard/v2';
+// Versioned so a copy from another plugin release, which stores a different shape under older
+// keys, can't make this copy throw at load.
+const NETWORK_GUARD_SYMBOL_PREFIX = '@dd/apps-plugin/network-guard/v3';
 
 export function networkGuardSymbol(name: string): symbol {
     return Symbol.for(`${NETWORK_GUARD_SYMBOL_PREFIX} ${name}`);
 }
 
-// Stored on `net` because core modules are the only state shared across this file's multiple
+// Stored on `fs` because core modules are the only state shared across this file's multiple
 // evaluations (bundled copies, Jest per-file isolation). The frozen facade keeps other code from
 // `.disable()`-ing the store; the own-property lookup keeps a polluted prototype from faking an install.
-export function getSharedContext(key: string): GuardedAsyncContext {
+function getSharedEntry<T>(
+    key: string,
+    create: () => T,
+    isValid: (value: unknown) => value is T,
+): T {
     const symbol = networkGuardSymbol(key);
-    if (!Object.prototype.hasOwnProperty.call(net, symbol)) {
-        const context = new AsyncLocalStorage<true>();
-        const facade: GuardedAsyncContext = Object.freeze({
-            isActive: () => context.getStore() === true,
-            run: <T>(fn: () => T) => context.run(true, fn),
-        });
-        Object.defineProperty(net, symbol, {
-            value: facade,
+    if (!Object.prototype.hasOwnProperty.call(fs, symbol)) {
+        const value = create();
+        Object.defineProperty(fs, symbol, {
+            value,
             writable: false,
             configurable: false,
             enumerable: false,
         });
-        return facade;
+        return value;
     }
-    const stored: unknown = Reflect.get(net, symbol);
-    if (!isGuardedAsyncContext(stored)) {
-        throw new Error(
-            `Internal error: the "${key}" network-guard registry entry is not a valid guarded context.`,
-        );
+    const stored: unknown = Reflect.get(fs, symbol);
+    if (!isValid(stored)) {
+        throw new Error(`Internal error: the "${key}" network-guard registry entry is not valid.`);
     }
     return stored;
 }
 
-// Scoped to the active `runBlocked` call's async chain, not process-wide, so unrelated concurrent callers aren't blocked too.
-const blockedContext = getSharedContext('blockedContext');
+function createGuardedAsyncContext(): GuardedAsyncContext {
+    const context = new AsyncLocalStorage<BlockedScope>();
+    return Object.freeze({
+        current: () => context.getStore(),
+        run: <T>(scope: BlockedScope, fn: () => T) => context.run(scope, fn),
+        exit: <T>(fn: () => T) => context.exit(fn),
+    });
+}
 
-// Scoped to the active `runAllowed` call's async chain, not process-wide, so a sibling call stays blocked during the exemption.
-const allowedContext = getSharedContext('allowedContext');
+export function getSharedContext(key: string): GuardedAsyncContext {
+    return getSharedEntry(key, createGuardedAsyncContext, isGuardedAsyncContext);
+}
+
+type ScopeRegistry = Pick<Set<BlockedScope>, 'add' | 'delete' | 'forEach'>;
+
+function isScopeRegistry(value: unknown): value is ScopeRegistry {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'add' in value &&
+        'delete' in value &&
+        'forEach' in value &&
+        typeof value.add === 'function' &&
+        typeof value.delete === 'function' &&
+        typeof value.forEach === 'function'
+    );
+}
+
+// Scoped to the active `runBlocked` call's async chain, not process-wide, so unrelated concurrent
+// callers aren't blocked too. Created on first use, so importing this file has no side effects.
+let blockedContext: GuardedAsyncContext | undefined;
+function getBlockedContext(): GuardedAsyncContext {
+    blockedContext ??= getSharedContext('blockedContext');
+    return blockedContext;
+}
+
+// Runs still pending, across every copy of this file: only the first copy's fs.close guard is
+// installed, and it must see every run's fds.
+let openScopes: ScopeRegistry | undefined;
+function getOpenScopes(): ScopeRegistry {
+    openScopes ??= getSharedEntry('openScopes', () => new Set<BlockedScope>(), isScopeRegistry);
+    return openScopes;
+}
 
 function isCurrentlyBlocked(): boolean {
-    return blockedContext.isActive() && !allowedContext.isActive();
+    return getBlockedContext().current() !== undefined;
 }
 
 // `Symbol.for` so re-evaluations recognize an installed guard; unversioned so another release's
@@ -97,45 +153,32 @@ const GUARD_GENERATION = networkGuardSymbol('installed');
 let foreignGuardFound = false;
 
 export const FOREIGN_GUARD_MESSAGE =
-    'Local execution is unavailable: another version of the Datadog apps plugin in this process already guards Node built-ins, so this version cannot block network or subprocess access. Install a single version of the Datadog build plugins.';
+    'Local execution is unavailable: another version of the Datadog apps plugin in this process already guards Node built-ins, so this version cannot block filesystem writes or subprocesses. Install a single version of the Datadog build plugins.';
 
-// Jest's globalThis Proxy can't produce a non-configurable property without throwing, and by then
-// it's already mutated the real object — so relax configurability under Jest (detected via this
-// env var) instead of hitting that failure. Production never sets it.
-const RUNNING_UNDER_JEST = process.env.JEST_WORKER_ID !== undefined;
-
-// Module objects (net/dgram/dns) stay non-configurable even under Jest, or dd-trace's CI
-// Visibility instrumentation could swap in its own unguarded function. globalThis is relaxed so
-// Jest's environment can still touch it. write/end need their own carve-out: CI pipes
-// stdout/stderr into real net.Socket instances, and jest-mock's spyOn/restoreMock needs
-// `configurable` to restore them.
-function shouldAllowConfigurableUnderJest(target: object, prop: string): boolean {
-    if (!RUNNING_UNDER_JEST) {
-        return false;
+export function assertNoForeignGuard(): void {
+    if (foreignGuardFound) {
+        throw new Error(FOREIGN_GUARD_MESSAGE);
     }
-    return (
-        target === globalThis ||
-        (target === net.Socket.prototype && (prop === 'write' || prop === 'end'))
-    );
+}
+
+function isObjectLike(value: unknown): value is object {
+    return value !== null && (typeof value === 'object' || typeof value === 'function');
 }
 
 /**
  * Permanent getter/setter — a detached callback can still fire after `runBlocked` resolves and
  * must stay blocked. The setter rebuilds the guard on every write since some libraries (e.g. MSW)
  * mark the last function object they saw as "already patched," and reusing one frozen object
- * collides. Non-configurable except `globalThis` under Jest (see `shouldAllowConfigurableUnderJest`),
- * so a dependency can't swap the whole descriptor; plain reassignment still works. Re-installing on
- * an already-guarded property is a no-op via `ALREADY_GUARDED`.
+ * collides. Non-configurable, so a dependency can't swap the whole descriptor; plain reassignment
+ * still works. Re-installing on an already-guarded property is a no-op via `ALREADY_GUARDED`.
  */
 export function installGuardedProperty<T>(
     target: object,
     prop: string,
     makeGuard: (getReal: () => T) => T,
 ): void {
-    const existingGetter = Object.getOwnPropertyDescriptor(target, prop)?.get as
-        | { [ALREADY_GUARDED]?: true }
-        | undefined;
-    if (existingGetter?.[ALREADY_GUARDED]) {
+    const existingGetter = Object.getOwnPropertyDescriptor(target, prop)?.get;
+    if (existingGetter && Reflect.get(existingGetter, ALREADY_GUARDED) === true) {
         if (Reflect.get(existingGetter, GUARD_GENERATION) !== true) {
             foreignGuardFound = true;
         }
@@ -144,8 +187,8 @@ export function installGuardedProperty<T>(
 
     let real = (target as Record<string, T>)[prop];
     if (real === undefined) {
-        // Nothing to guard — this runtime doesn't expose this method/global (e.g. dns.resolveTlsa
-        // on Node 20). A wrapper here would make feature-detection lie.
+        // Nothing to guard — this runtime doesn't expose this method/global. A wrapper here would
+        // make feature-detection lie.
         return;
     }
     // Tracks which `real` was active when each guard was built — the "const original = x; x =
@@ -157,64 +200,66 @@ export function installGuardedProperty<T>(
         // Closes over its own snapshot of `real`, not the shared variable — a wrapper-closure
         // restore would otherwise read whatever `real` currently holds and recurse forever.
         const capturedReal = real;
+        // A non-function stub (undefined, null, false...) reads back as assigned, so feature detection stays accurate.
+        if (typeof capturedReal !== 'function') {
+            return capturedReal;
+        }
         const guard = makeGuard(() => capturedReal);
-        // WeakMap.set() throws on a non-object key; makeGuard can return one (e.g. guardWebSocket
-        // returns undefined when the real global doesn't exist).
-        if (guard !== null && (typeof guard === 'object' || typeof guard === 'function')) {
-            realAtGuardCreation.set(guard as object, real);
+        if (isObjectLike(guard)) {
+            realAtGuardCreation.set(guard, real);
         }
         return guard;
     }
 
     let currentGuard = buildGuard();
-    const getter = (): T => currentGuard;
-    (getter as unknown as { [ALREADY_GUARDED]: true })[ALREADY_GUARDED] = true;
+    // Values assigned through a receiver that owns a copy of this accessor (graceful-fs clones fs's
+    // descriptors), which can't be shadowed with a data property since the copy is non-configurable.
+    const cloneOverrides = new WeakMap<object, { value: T }>();
+    function getter(this: unknown): T {
+        const override = isObjectLike(this) ? cloneOverrides.get(this) : undefined;
+        return override ? override.value : currentGuard;
+    }
+    Object.defineProperty(getter, ALREADY_GUARDED, { value: true });
     Object.defineProperty(getter, GUARD_GENERATION, { value: true });
-    Object.defineProperty(target, prop, {
-        configurable: shouldAllowConfigurableUnderJest(target, prop),
-        enumerable: true,
-        get: getter,
-        // A plain `function`, not an arrow, so `this` is the real receiver — needed to tell
-        // `net.Socket.prototype.write = mock` (every socket) apart from `someSocket.write = mock`
-        // (one socket) when `target` is a shared prototype.
-        set: function (this: unknown, value: T) {
-            if (
-                this !== target &&
-                this !== null &&
-                (typeof this === 'object' || typeof this === 'function')
-            ) {
-                // `target` is a shared prototype — shadow the guard on this instance only, like an
-                // unguarded assignment would, instead of repointing the delegate every other
-                // instance's guard calls through. Some Node/Jest internals call this setter with a
-                // non-object receiver; fall through to the shared-delegate path for those.
-                Object.defineProperty(this, prop, {
-                    value,
-                    writable: true,
-                    configurable: true,
-                    enumerable: true,
-                });
+    // A plain `function`, not an arrow, so `this` is the real receiver — needed to tell
+    // `ChildProcess.prototype.spawn = mock` (every instance) apart from `oneChild.spawn = mock`
+    // (one instance) when `target` is a shared prototype.
+    function setter(this: unknown, value: T): void {
+        // Some Node/Jest internals call this with a non-object receiver; those take the shared path.
+        if (this !== target && isObjectLike(this)) {
+            if (Object.getOwnPropertyDescriptor(this, prop)?.set === setter) {
+                cloneOverrides.set(this, { value });
                 return;
             }
-            real = realAtGuardCreation.has(value as object)
-                ? (realAtGuardCreation.get(value as object) as T)
-                : value;
-            currentGuard = buildGuard();
-        },
+            // `target` is a shared prototype — shadow the guard on this instance only, like an
+            // unguarded assignment would, instead of repointing the delegate every other
+            // instance's guard calls through.
+            Object.defineProperty(this, prop, {
+                value,
+                writable: true,
+                configurable: true,
+                enumerable: true,
+            });
+            return;
+        }
+        const realForGuard = isObjectLike(value) ? realAtGuardCreation.get(value) : undefined;
+        real = realForGuard ?? value;
+        currentGuard = buildGuard();
+    }
+    Object.defineProperty(target, prop, {
+        configurable: false,
+        enumerable: true,
+        get: getter,
+        set: setter,
     });
 }
 
-// write/end signal failure by erroring/destroying the stream, not throwing — a synchronous throw
-// would surface as an uncaught exception in Node internals that call write() without a try/catch
-// (e.g. http's request-flush code, the exact path a reused keep-alive socket takes). destroy() is
-// only safe when something listens for 'error' — Node's default for an unlistened 'error' is to
-// crash the process. A completion callback is always invoked either way.
 function isFunction(value: unknown): value is (...args: unknown[]) => void {
     return typeof value === 'function';
 }
 
-// Node's error-first callback is always the last argument. Shared by signalBlockedSocketOp,
-// guardCallbackMethod, and guardExecFactory. Returns whether one was found, so a caller can fall
-// back to an 'error' event.
+// Node's error-first callback is always the last argument. Returns whether one was found, so a
+// caller can fall back to an 'error' event.
 function invokeCallbackArg(args: unknown[], err: Error, ...extraArgs: unknown[]): boolean {
     const maybeCallback = args[args.length - 1];
     if (isFunction(maybeCallback)) {
@@ -225,9 +270,7 @@ function invokeCallbackArg(args: unknown[], err: Error, ...extraArgs: unknown[])
 }
 
 // Deferred via process.nextTick so a listener attached right after the call still sees it,
-// matching a real socket's error-emission timing. Shared by guardBindMethod,
-// guardCallbackMethod's EventEmitter fallback, guardChildProcessSpawnMethod, and
-// createBlockedChildProcessStub.
+// matching a real event-emission timing.
 function emitAsyncErrorIfListened(target: EventEmitter, err: Error): void {
     process.nextTick(() => {
         if (target.listenerCount('error') > 0) {
@@ -236,173 +279,75 @@ function emitAsyncErrorIfListened(target: EventEmitter, err: Error): void {
     });
 }
 
-function signalBlockedSocketOp(socket: net.Socket, args: unknown[]): void {
-    const err = new Error(NETWORK_BLOCKED_MESSAGE);
-    invokeCallbackArg(args, err);
-    // Deferred to match a real socket's error timing — checking listenerCount synchronously here
-    // would miss a listener attached on the next line.
-    process.nextTick(() => {
-        if (socket.listenerCount('error') > 0) {
-            socket.destroy(err);
-        }
-    });
-}
-
-// The dev server's own stdout/stderr are real net.Socket instances whenever the process is piped —
-// not a network-exfiltration vector, so exempting them only saves the developer's console.log
-// during a blocked scope. Captured once at module load, which local-execution.ts's
-// loadCustomerModuleEntry always awaits before evaluating any customer module's top-level code, so
-// this can never capture a value a customer module already repointed via
-// `Object.defineProperty(process, 'stdout', ...)` — the live `process.stdout`/`stderr` getters are
-// reassignable, and a customer function could otherwise repoint them at an attacker-controlled
-// socket to exfiltrate past the block.
-const trustedStdout: unknown = process.stdout;
-const trustedStderr: unknown = process.stderr;
-function isProcessStdio(socket: net.Socket): boolean {
-    return socket === trustedStdout || socket === trustedStderr;
-}
-
-// Same reasoning as trustedStdout/trustedStderr above, captured before installGuardedProperty
-// patches `globalThis.fetch` below: the dev server's own authenticated request (packages/core's
-// request.ts, used for $.Actions calls and runtime-context hydration) must reach the real network
-// stack even if a customer function already reassigned `globalThis.fetch` to an attacker-controlled
-// wrapper before triggering that call — a plain reassignment goes through installGuardedProperty's
-// setter and rewrites the guard's own delegate, which the authenticated request would otherwise call
-// through to while inside runAllowed. Callers that need this must be threaded explicitly (e.g. via
-// RequestOpts.fetchImpl) rather than relying on a fresh `globalThis.fetch` lookup at call time.
-export const trustedFetch: typeof fetch = globalThis.fetch;
-
-// Shared by guardSocketWrite/guardSocketEnd, which differ only in the blocked-path return value
-// (write() returns a boolean, end() returns `this` for chaining).
-function guardSocketOp<R>(
-    getReal: () => (this: net.Socket, ...args: never[]) => R,
-    blockedReturn: (socket: net.Socket) => R,
-): (this: net.Socket, ...args: never[]) => R {
-    const wrapper = function (this: net.Socket, ...args: unknown[]): R {
-        if (!isCurrentlyBlocked() || isProcessStdio(this)) {
-            return (getReal() as unknown as (...a: unknown[]) => R).apply(this, args);
-        }
-        signalBlockedSocketOp(this, args);
-        return blockedReturn(this);
-    };
-    return wrapper as unknown as (this: net.Socket, ...args: never[]) => R;
-}
-
-function guardSocketWrite<F extends (this: net.Socket, ...args: never[]) => boolean>(
-    getReal: () => F,
-): F {
-    return guardSocketOp<boolean>(getReal, () => false) as unknown as F;
-}
-
-// Same as guardSocketWrite, but end() returns `this` for chaining.
-function guardSocketEnd<F extends (this: net.Socket, ...args: never[]) => net.Socket>(
-    getReal: () => F,
-): F {
-    return guardSocketOp<net.Socket>(getReal, (socket) => socket) as unknown as F;
-}
-
-// 'throw' is for APIs that throw synchronously (spawnSync/execSync); 'reject' for Promise-returning ones.
+// 'throw' is for APIs that throw synchronously (spawnSync/execSync); 'reject' for Promise-returning
+// ones; 'callback' for fs's callback APIs, which report failure through their error-first callback.
+// `errorCode`, if given, is set on the blocked error.
 function makeGuardWrapper<F extends (...args: never[]) => unknown>(
     getReal: () => F,
     blockedMessage: string,
-    onBlocked: 'throw' | 'reject',
+    onBlocked: 'throw' | 'reject' | 'callback',
+    errorCode?: string,
 ): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
         if (!isCurrentlyBlocked()) {
             const real = getReal();
             return Reflect.apply(real, this, args);
         }
-        const blockedError = new Error(blockedMessage);
+        const blockedError = Object.assign(
+            new Error(blockedMessage),
+            errorCode ? { code: errorCode } : {},
+        );
         if (onBlocked === 'reject') {
             return Promise.reject(blockedError);
         }
+        if (onBlocked === 'callback') {
+            if (invokeCallbackArg(args, blockedError)) {
+                return undefined;
+            }
+            // Real fs throws this synchronously for a missing callback regardless of block state.
+            const message = 'The "cb" argument must be of type function. Received undefined';
+            const missingCallbackError = new TypeError(message);
+            throw Object.assign(missingCallbackError, { code: 'ERR_INVALID_ARG_TYPE' });
+        }
         throw blockedError;
     };
-    return wrapper as unknown as F;
-}
-
-// net.Server.listen/dgram.Socket.bind/connect: their optional callback is a success-only shorthand
-// for the 'listening'/'connect' event (no error parameter per @types/node) — real failures only
-// ever reach the async 'error' event, so a synchronous throw here would surface as an uncaught
-// exception in the idiomatic `server.on('error', cb); server.listen(port)` pattern. Deferred via
-// process.nextTick for the same same-tick-safety reason as signalBlockedSocketOp.
-function guardBindMethod<F extends (this: EventEmitter, ...args: never[]) => unknown>(
-    getReal: () => F,
-): F {
-    const wrapper = function (this: EventEmitter, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
-            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
-        }
-        emitAsyncErrorIfListened(this, new Error(NETWORK_BLOCKED_MESSAGE));
-        return this;
-    };
-    return wrapper as unknown as F;
-}
-
-// dgram.Socket.send and the callback-style dns.resolve* surfaces report failure via an error-first
-// callback (dns.resolve*'s is mandatory, dgram's optional, falling back to an async 'error' event).
-// Deferred via process.nextTick for the same reason as guardBindMethod.
-function guardCallbackMethod<F extends (...args: never[]) => unknown>(getReal: () => F): F {
-    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
-            return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
-        }
-        const err = new Error(NETWORK_BLOCKED_MESSAGE);
-        if (!invokeCallbackArg(args, err) && this instanceof EventEmitter) {
-            emitAsyncErrorIfListened(this, err);
-        }
-        return undefined;
-    };
-    return wrapper as unknown as F;
-}
-
-// dns.promises.*/dns.promises.Resolver.prototype.* always return a Promise, so a `.catch()`-chaining
-// caller needs a rejection, not a thrown exception.
-function guardNetworkPromiseMethod<F extends (...args: never[]) => Promise<unknown>>(
-    getReal: () => F,
-): F {
-    return makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'reject');
-}
-
-// Shared by guardWebSocket/guardEventSource/guardWorker. A Proxy construct trap, not a subclass,
-// so a runtime swap via installGuardedProperty's setter is picked up on the next `new`. Forwards
-// the caller's real `newTarget` into Reflect.construct so subclassing (`class Foo extends
-// WebSocket {}`) still works instead of always producing a base instance.
-function guardConstructibleGlobal(
-    getReal: () => unknown,
-    blockedMessage: string = NETWORK_BLOCKED_MESSAGE,
-): unknown {
     const real = getReal();
-    if (real === undefined) {
-        // This repo's supported Node range spans versions where these globals don't exist yet.
-        return undefined;
+    copyPromisifyMetadata(real, wrapper);
+    return wrapper as unknown as F;
+}
+
+// Node marks some fs functions (e.g. fs.write) with an internal symbol telling util.promisify to
+// resolve with a named-field object; a wrapper without it resolves with only the first value.
+// promisify.custom is skipped, since the real one would call past the guard.
+function copyPromisifyMetadata(real: unknown, wrapper: object): void {
+    if (!isObjectLike(real)) {
+        return;
     }
-    return new Proxy(real as object, {
-        construct(_target, args, newTarget) {
-            if (isCurrentlyBlocked()) {
-                throw new Error(blockedMessage);
-            }
-            const RealCtor = getReal() as new (...a: unknown[]) => object;
-            return Reflect.construct(RealCtor, args, newTarget);
-        },
-    });
-}
-
-export function guardWebSocket(getReal: () => unknown): unknown {
-    return guardConstructibleGlobal(getReal);
-}
-
-// EventSource's transport bypasses the patched net.Socket.connect the same way WebSocket does.
-// Not reachable without --experimental-eventsource on this repo's Node versions, but guarding it
-// unconditionally means it's already correct once a runtime exposes it.
-export function guardEventSource(getReal: () => unknown): unknown {
-    return guardConstructibleGlobal(getReal);
+    for (const key of Object.getOwnPropertySymbols(real)) {
+        const descriptor = Object.getOwnPropertyDescriptor(real, key);
+        if (key !== promisify.custom && descriptor) {
+            Object.defineProperty(wrapper, key, descriptor);
+        }
+    }
 }
 
 // A worker gets a fresh V8 realm with its own module registry, so nothing inside it inherits this
-// file's monkeypatches — blocking construction is the only enforceable boundary.
+// file's monkeypatches — blocking construction is the only enforceable boundary. The construct
+// trap forwards `newTarget`, so `class Foo extends Worker {}` still produces a Foo.
 export function guardWorker(getReal: () => unknown): unknown {
-    return guardConstructibleGlobal(getReal, WORKER_THREAD_BLOCKED_MESSAGE);
+    const real = getReal();
+    // Worker reassigned to a non-constructor stub reads back as assigned.
+    if (typeof real !== 'function') {
+        return real;
+    }
+    return new Proxy(real, {
+        construct(target, args, newTarget) {
+            if (isCurrentlyBlocked()) {
+                throw new Error(WORKER_THREAD_BLOCKED_MESSAGE);
+            }
+            return Reflect.construct(target, args, newTarget);
+        },
+    });
 }
 
 // execSync/execFileSync genuinely throw synchronously on failure — this guard is for those two
@@ -480,8 +425,8 @@ function guardExecFactory<F extends (...args: never[]) => unknown>(getReal: () =
 // ChildProcess.prototype.spawn() configures an existing instance, so there's no factory return
 // value to fabricate — just this instance's async 'error' event. The real method returns a
 // synchronous integer (0 success, negative errno on failure), so the blocked path returns a
-// negative placeholder. Kept separate from guardBindMethod since this method's `this` type isn't
-// part of @types/node's public surface (see the childProcessPrototype cast below).
+// negative placeholder. This method's `this` type isn't part of @types/node's public surface (see
+// the childProcessPrototype cast below), so it needs its own guard rather than reusing another.
 function guardChildProcessSpawnMethod<F extends (...args: never[]) => unknown>(
     getReal: () => F,
 ): F {
@@ -554,194 +499,667 @@ function guardExecWithPromisifyCustom<F extends (...args: never[]) => unknown>(
     return wrapper;
 }
 
-// net.Socket.connect() genuinely throws synchronously for some argument-validation failures, and
-// runs inside the customer function's own async call stack (see runBlocked in local-execution.ts),
-// where a synchronous throw is safely caught — unlike the detached-callback guards below, left
-// throw-based deliberately.
-installGuardedProperty<typeof net.Socket.prototype.connect>(
-    net.Socket.prototype,
-    'connect',
-    (getReal) => makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'throw'),
-);
-// A reused, already-connected keep-alive socket never calls connect() again for a second request —
-// write()/end() are the choke point every request still goes through, so guarding only connect()
-// would let a module-load-time "warm-up" request bypass the guard when reused later.
-installGuardedProperty<typeof net.Socket.prototype.write>(
-    net.Socket.prototype,
-    'write',
-    guardSocketWrite,
-);
-installGuardedProperty<typeof net.Socket.prototype.end>(
-    net.Socket.prototype,
-    'end',
-    guardSocketEnd,
-);
-// A dependency calling `Writable.prototype.write.call(aSocket, data)` directly still reaches the
-// real implementation, since only Socket's own write/end are shadowed above. Guarding
-// `stream.Writable.prototype` itself isn't viable: countless unrelated Writable subclasses each do
-// `SomeClass.prototype.write = ownImpl`, and every such assignment walks up and triggers the same
-// inherited setter on Writable.prototype, corrupting every other subclass's write() with whichever
-// wrote last (breaks Vite's own HTTP client in real bundler tests). Accepted as a residual gap —
-// this guard is dev-time safety, not a hard security boundary (see the "No OS sandbox" note above).
-installGuardedProperty<typeof fetch>(globalThis, 'fetch', guardNetworkPromiseMethod);
-// dgram (UDP) and the native WebSocket global are separate entry points from fetch/net — neither
-// goes through net.Socket, so they need their own guards.
-installGuardedProperty<typeof dgram.Socket.prototype.send>(
-    dgram.Socket.prototype,
-    'send',
-    guardCallbackMethod,
-);
-installGuardedProperty<typeof dgram.Socket.prototype.connect>(
-    dgram.Socket.prototype,
-    'connect',
-    guardBindMethod,
-);
-// Inbound listeners are a separate entry point from the outbound send/connect above — a dependency
-// can still open a real listening socket via net.createServer().listen(...) or dgram's .bind(...).
-installGuardedProperty<typeof net.Server.prototype.listen>(
-    net.Server.prototype,
-    'listen',
-    guardBindMethod,
-);
-installGuardedProperty<typeof dgram.Socket.prototype.bind>(
-    dgram.Socket.prototype,
-    'bind',
-    guardBindMethod,
-);
-installGuardedProperty<unknown>(globalThis, 'WebSocket', guardWebSocket);
-installGuardedProperty<unknown>(globalThis, 'EventSource', guardEventSource);
-
-// dns.resolve*/dns.promises.resolve*/dns.Resolver/dns.promises.Resolver go through Node's native
-// c-ares channel, bypassing the net.Socket/dgram.Socket guards above — each is a distinct function
-// object needing its own guard. dns.lookup is deliberately excluded: this threat model is dev-loop
-// safety, not DNS-tunneling exfiltration, and guarding it risks breaking hostname validation.
-const DNS_RESOLVE_METHODS = [
-    'resolve',
-    'resolve4',
-    'resolve6',
-    'resolveAny',
-    'resolveCaa',
-    'resolveCname',
-    'resolveMx',
-    'resolveNaptr',
-    'resolveNs',
-    'resolvePtr',
-    'resolveSoa',
-    'resolveSrv',
-    'resolveTlsa',
-    'resolveTxt',
-    'reverse',
-] as const;
-for (const method of DNS_RESOLVE_METHODS) {
-    // Each method's real signature differs, so the type argument is pinned to the guard's own
-    // constraint instead (same approach as the child_process installs below).
-    installGuardedProperty<(...args: never[]) => unknown>(dns, method, guardCallbackMethod);
+function installSubprocessGuards(): void {
+    installGuardedProperty<typeof child_process.spawn>(child_process, 'spawn', guardSpawnFactory);
+    installGuardedProperty<typeof child_process.spawnSync>(
+        child_process,
+        'spawnSync',
+        guardSpawnSyncResult,
+    );
+    // `unknown` is the correct escape hatch: exec/execFile's `__promisify__` property doesn't structurally satisfy a plain function type.
     installGuardedProperty<(...args: never[]) => unknown>(
-        dns.Resolver.prototype,
-        method,
-        guardCallbackMethod,
+        child_process,
+        'exec',
+        guardExecWithPromisifyCustom,
     );
-    // dns.promises.*/dns.promises.Resolver.prototype.* always return a Promise, so these use the
-    // reject-not-throw guard instead.
-    installGuardedProperty<(...args: never[]) => Promise<unknown>>(
-        dns.promises,
-        method,
-        guardNetworkPromiseMethod,
+    installGuardedProperty<typeof child_process.execSync>(
+        child_process,
+        'execSync',
+        guardSubprocess,
     );
-    installGuardedProperty<(...args: never[]) => Promise<unknown>>(
-        dns.promises.Resolver.prototype,
-        method,
-        guardNetworkPromiseMethod,
+    installGuardedProperty<(...args: never[]) => unknown>(
+        child_process,
+        'execFile',
+        guardExecWithPromisifyCustom,
     );
+    installGuardedProperty<typeof child_process.execFileSync>(
+        child_process,
+        'execFileSync',
+        guardSubprocess,
+    );
+    installGuardedProperty<(...args: never[]) => unknown>(child_process, 'fork', guardSpawnFactory);
+    // Also guards `ChildProcess.prototype.spawn` directly, since the functions above are thin wrappers a dependency could bypass them through.
+    const childProcessPrototype = child_process.ChildProcess.prototype as unknown as Record<
+        string,
+        unknown
+    >;
+    installGuardedProperty<(...args: never[]) => unknown>(
+        childProcessPrototype,
+        'spawn',
+        guardChildProcessSpawnMethod,
+    );
+
+    installGuardedProperty<unknown>(worker_threads, 'Worker', guardWorker);
 }
 
-installGuardedProperty<typeof child_process.spawn>(child_process, 'spawn', guardSpawnFactory);
-installGuardedProperty<typeof child_process.spawnSync>(
-    child_process,
-    'spawnSync',
-    guardSpawnSyncResult,
-);
-// `unknown` is the correct escape hatch: exec/execFile's `__promisify__` property doesn't structurally satisfy a plain function type.
-installGuardedProperty<(...args: never[]) => unknown>(
-    child_process,
-    'exec',
-    guardExecWithPromisifyCustom,
-);
-installGuardedProperty<typeof child_process.execSync>(child_process, 'execSync', guardSubprocess);
-installGuardedProperty<(...args: never[]) => unknown>(
-    child_process,
-    'execFile',
-    guardExecWithPromisifyCustom,
-);
-installGuardedProperty<typeof child_process.execFileSync>(
-    child_process,
-    'execFileSync',
-    guardSubprocess,
-);
-installGuardedProperty<(...args: never[]) => unknown>(child_process, 'fork', guardSpawnFactory);
-// Also guards `ChildProcess.prototype.spawn` directly, since the functions above are thin wrappers a dependency could bypass them through.
-const childProcessPrototype = child_process.ChildProcess.prototype as unknown as Record<
-    string,
-    unknown
->;
-installGuardedProperty<(...args: never[]) => unknown>(
-    childProcessPrototype,
-    'spawn',
-    guardChildProcessSpawnMethod,
-);
+// Only writes are guarded (reads stay open). Blocked errors use EROFS, since graceful-fs's win32
+// rename retries EACCES/EPERM for a minute.
+type FsWriteFn = (...args: never[]) => unknown;
+type FsWriteGuard = (getReal: () => FsWriteFn) => FsWriteFn;
+const guardFsSyncWriteMethod: FsWriteGuard = (getReal) =>
+    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'throw', 'EROFS');
+const guardFsCallbackWriteMethod: FsWriteGuard = (getReal) =>
+    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'callback', 'EROFS');
+const guardFsPromiseWriteMethod: FsWriteGuard = (getReal) =>
+    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'reject', 'EROFS');
 
-installGuardedProperty<unknown>(worker_threads, 'Worker', guardWorker);
-
-// installGuardedProperty only patches each built-in's CJS default export; Node keeps ESM named
-// bindings (`import { spawn } from 'node:child_process'`) as separate references to the original
-// native values. syncBuiltinESMExports re-syncs them. Not unit-tested — Jest's CJS transform can't
-// reproduce the real ESM-binding divergence.
-syncBuiltinESMExports();
-
-// Guards against the same abandoned-scope-corrupts-a-newer-one race as `local-execution.ts` — see `execution-epoch.ts`.
-const blockEpoch = createEpochGuard();
-
-export interface BlockedScopeHandle {
-    // Invalidates this specific `runBlocked` call's scope, but only if it's still the active one —
-    // a no-op once a newer call has superseded it. Unlike `forceReset()`, safe to call even while a
-    // different scope is running, since it won't un-exempt that other scope's in-flight
-    // `runAllowed` call.
-    abandonIfCurrent(): void;
+const OPEN_WRITE_FLAG_BITS = [
+    fs.constants.O_WRONLY,
+    fs.constants.O_RDWR,
+    fs.constants.O_CREAT,
+    fs.constants.O_TRUNC,
+    fs.constants.O_APPEND,
+];
+// Each constant is a single power-of-two bit; tested arithmetically since the repo lints out bitwise operators.
+function hasFlagBit(flags: number, bit: number): boolean {
+    return Math.floor(flags / bit) % 2 === 1;
+}
+// Flags are the second argument; omitted (or a callback in that position) means 'r'.
+function opensForWriting(args: unknown[]): boolean {
+    const flags = args[1];
+    if (typeof flags === 'number') {
+        // A negative or fractional value can't be bit-tested reliably, so it's treated as a write.
+        if (!Number.isInteger(flags) || flags < 0) {
+            return true;
+        }
+        return OPEN_WRITE_FLAG_BITS.some((bit) => hasFlagBit(flags, bit));
+    }
+    return typeof flags === 'string' && /[wa+]/.test(flags);
 }
 
-export function assertNoForeignGuard(): void {
-    if (foreignGuardFound) {
-        throw new Error(FOREIGN_GUARD_MESSAGE);
+// The run's scope while it's still going; undefined outside a run or once it ended.
+function openScope(): BlockedScope | undefined {
+    const scope = getBlockedContext().current();
+    return scope && !scope.closed ? scope : undefined;
+}
+
+function toFilePath(value: unknown): string | undefined {
+    if (typeof value === 'string') {
+        return value;
+    }
+    if (Buffer.isBuffer(value)) {
+        const decoded = value.toString();
+        // A path that doesn't survive a UTF-8 round trip names a different file than the one checked.
+        const roundTripped = Buffer.from(decoded);
+        return roundTripped.equals(value) ? decoded : undefined;
+    }
+    if (value instanceof URL && value.protocol === 'file:') {
+        return fileURLToPath(value);
+    }
+    return undefined;
+}
+
+function existsWithoutFollowingLinks(candidate: string): boolean {
+    try {
+        fs.lstatSync(candidate);
+        return true;
+    } catch {
+        return false;
     }
 }
 
-// Runs `fn` with network/subprocess access blocked; wraps the customer's function body in `local-execution.ts`'s `runScriptLocally`.
-// `onScopeStarted`, if given, is invoked synchronously with a handle scoped to *this* call, for a
-// caller whose own timeout might fire while `fn` is still pending (see `local-execution.ts`).
+// Where the kernel lands a write: never textually normalized, since path.resolve and fs.realpathSync
+// collapse `link/..` while the kernel follows the link first. A dangling link or a `..` past a
+// missing segment resolves to nothing and is refused.
+function realPathForWrite(filePath: string): string | undefined {
+    const cwd = process.cwd();
+    const target = path.isAbsolute(filePath) ? filePath : `${cwd}${path.sep}${filePath}`;
+    const missingSegments: string[] = [];
+    let current = target;
+    while (!existsWithoutFollowingLinks(current)) {
+        const parent = path.dirname(current);
+        if (parent === current) {
+            return undefined;
+        }
+        const missingSegment = path.basename(current);
+        missingSegments.unshift(missingSegment);
+        current = parent;
+    }
+    if (missingSegments.includes('..')) {
+        return undefined;
+    }
+    try {
+        const realPath = fs.realpathSync.native(current);
+        return path.join(realPath, ...missingSegments);
+    } catch {
+        return undefined;
+    }
+}
+
+// Where the kernel resolves the directory entry an operation like unlink or rename acts on: through
+// its parent's links but not the final component's. A trailing separator or a `.`/`..` name makes
+// the kernel follow the final component, so those take the full resolution.
+function realEntryPath(filePath: string): string | undefined {
+    const name = path.basename(filePath);
+    if (filePath.endsWith(path.sep) || name === '' || name === '.' || name === '..') {
+        return realPathForWrite(filePath);
+    }
+    const parentPath = path.dirname(filePath);
+    const realParent = realPathForWrite(parentPath);
+    return realParent === undefined ? undefined : path.join(realParent, name);
+}
+
+// The real OS temp dir, plus /tmp outside Windows, resolved at install. Libraries like tempy and
+// temp-dir save os.tmpdir() when they load, and Terrapin's os.tmpdir() is /tmp, which some
+// dependencies hard-code.
+let realTmpDirs: string[] | undefined;
+
+function captureRealTmpDirs(): string[] | undefined {
+    const tmpDirs = process.platform === 'win32' ? [os.tmpdir()] : [os.tmpdir(), '/tmp'];
+    const realDirs = tmpDirs.flatMap((tmpDir) => {
+        try {
+            return [fs.realpathSync.native(tmpDir)];
+        } catch {
+            return [];
+        }
+    });
+    return realDirs.length > 0 ? [...new Set(realDirs)] : undefined;
+}
+
+interface PathRule {
+    readonly operatesOnEntry: boolean;
+    readonly allowsRoot: boolean;
+}
+const WRITE_THROUGH_PATH: PathRule = { operatesOnEntry: false, allowsRoot: false };
+
+// Strictly under a real temp dir, since removing or renaming a temp root would break $TMPDIR for
+// every process; mkdir may name the root itself, as it only makes sure it exists.
+function isPermittedPath(value: unknown, rule: PathRule): boolean {
+    const filePath = toFilePath(value);
+    if (filePath === undefined || realTmpDirs === undefined) {
+        return false;
+    }
+    const realPath = rule.operatesOnEntry ? realEntryPath(filePath) : realPathForWrite(filePath);
+    if (realPath === undefined) {
+        return false;
+    }
+    return realTmpDirs.some(
+        (tmpDir) =>
+            (rule.allowsRoot && realPath === tmpDir) || realPath.startsWith(`${tmpDir}${path.sep}`),
+    );
+}
+
+// Which arguments name what a method modifies; every other method modifies its first argument.
+const WRITTEN_ARG_INDEXES: Record<string, number[]> = {
+    copyFile: [1],
+    rename: [0, 1],
+    link: [0, 1],
+};
+// Arguments naming a directory entry the method acts on itself rather than through a final symlink.
+const ENTRY_ARG_INDEXES: Record<string, number[]> = {
+    unlink: [0],
+    rm: [0],
+    rmdir: [0],
+    rename: [0, 1],
+    link: [1],
+    lchmod: [0],
+    lchown: [0],
+    lutimes: [0],
+};
+// Refused everywhere, so no writable directory holds a link that could redirect a write (cp copies
+// symlinks as-is).
+const NEVER_PERMITTED_WRITES = new Set(['symlink', 'cp']);
+// Create `<prefix>XXXXXX`, so that path, not the prefix, must be in a writable directory.
+const PREFIX_CREATING_WRITES = new Set(['mkdtemp', 'mkdtempDisposable']);
+function pathCreatedFromPrefix(value: unknown): string | undefined {
+    const prefix = toFilePath(value);
+    return prefix === undefined ? undefined : `${prefix}XXXXXX`;
+}
+// Data writes to stdout/stderr are console output (e.g. pino's sonic-boom); truncating or
+// chmod-ing them is not.
+const STDIO_DATA_WRITES = new Set(['write', 'writev', 'writeFile', 'appendFile']);
+
+// Allowed when every modified target is console output, a path under a writable directory, or an
+// fd or FileHandle opened there. Worked out once per method, since it runs on every guarded fs call.
+function makeWritePermission(method: string): (scope: BlockedScope, args: unknown[]) => boolean {
+    const baseMethod = method.replace(/Sync$/, '');
+    if (NEVER_PERMITTED_WRITES.has(baseMethod)) {
+        return () => false;
+    }
+    const writtenIndexes = WRITTEN_ARG_INDEXES[baseMethod] ?? [0];
+    const entryIndexes = ENTRY_ARG_INDEXES[baseMethod] ?? [];
+    const allowsRoot = baseMethod === 'mkdir';
+    const allowsStdio = STDIO_DATA_WRITES.has(baseMethod);
+    const createsFromPrefix = PREFIX_CREATING_WRITES.has(baseMethod);
+    return (scope, args) =>
+        writtenIndexes.every((index) => {
+            const target = args[index];
+            if (allowsStdio && (target === 1 || target === 2)) {
+                return true;
+            }
+            // Stay writable after the run ends, so a stream it left writing can finish.
+            if (typeof target === 'number') {
+                return scope.writableFds.has(target);
+            }
+            if (isObjectLike(target) && scope.writableHandles.has(target)) {
+                return true;
+            }
+            if (scope.closed) {
+                return false;
+            }
+            const writtenPath = createsFromPrefix ? pathCreatedFromPrefix(target) : target;
+            const operatesOnEntry = entryIndexes.includes(index);
+            return isPermittedPath(writtenPath, { operatesOnEntry, allowsRoot });
+        });
+}
+
+// A run that ended stays registered while it owns fds, so the fs.close guard still revokes them and
+// a reused fd number never inherits write access.
+function deregisterIfIdle(scope: BlockedScope): void {
+    if (scope.closed && scope.writableFds.size === 0) {
+        getOpenScopes().delete(scope);
+    }
+}
+
+// Re-registers a run that ended while the open was in flight, so the fd can still be revoked.
+function recordWritableFd(scope: BlockedScope, fd: number): void {
+    scope.writableFds.add(fd);
+    getOpenScopes().add(scope);
+}
+
+function forgetWritableFd(fd: number): void {
+    getOpenScopes().forEach((scope) => {
+        scope.writableFds.delete(fd);
+        deregisterIfIdle(scope);
+    });
+}
+
+type FsWriteForm = 'sync' | 'callback' | 'promise';
+const FS_WRITE_REFUSALS: Record<FsWriteForm, FsWriteGuard> = {
+    sync: guardFsSyncWriteMethod,
+    callback: guardFsCallbackWriteMethod,
+    promise: guardFsPromiseWriteMethod,
+};
+
+// Refuses a write outside the writable directories; outside any run, the real function is called
+// directly, skipping argument inspection.
+function guardFsWriteMethod(method: string, form: FsWriteForm): FsWriteGuard {
+    const isPermitted = makeWritePermission(method);
+    const makeRefusal = FS_WRITE_REFUSALS[form];
+    return (getReal) => {
+        const refuse = makeRefusal(getReal);
+        const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+            const scope = getBlockedContext().current();
+            const callTarget =
+                scope !== undefined && !isPermitted(scope, args) ? refuse : getReal();
+            return Reflect.apply(callTarget, this, args);
+        };
+        const real = getReal();
+        copyPromisifyMetadata(real, wrapper);
+        return wrapper;
+    };
+}
+
+// Records each fd opened for writing in a writable directory, so fd-based writes on it (including
+// createWriteStream's) are allowed; any other write-mode open is refused before it can truncate.
+function guardFsOpenMethod(mode: 'sync' | 'callback'): FsWriteGuard {
+    return (getReal) => {
+        const refuse = FS_WRITE_REFUSALS[mode](getReal);
+        return function (this: unknown, ...args: unknown[]): unknown {
+            const real = getReal();
+            if (!opensForWriting(args)) {
+                return Reflect.apply(real, this, args);
+            }
+            const scope = openScope();
+            if (!scope || !isPermittedPath(args[0], WRITE_THROUGH_PATH)) {
+                return Reflect.apply(refuse, this, args);
+            }
+            if (mode === 'sync') {
+                const fd: unknown = Reflect.apply(real, this, args);
+                if (typeof fd === 'number') {
+                    recordWritableFd(scope, fd);
+                }
+                return fd;
+            }
+            const callback = args[args.length - 1];
+            if (typeof callback !== 'function') {
+                return Reflect.apply(real, this, args);
+            }
+            // Recorded even if the run ended meanwhile, since the caller, such as a stream, owns the fd.
+            const recordFd = (err: unknown, fd: unknown) => {
+                if (!err && typeof fd === 'number') {
+                    recordWritableFd(scope, fd);
+                }
+                Reflect.apply(callback, undefined, [err, fd]);
+            };
+            const argsWithRecorder = [...args.slice(0, -1), recordFd];
+            return Reflect.apply(real, this, argsWithRecorder);
+        };
+    };
+}
+
+// Forgets a closed fd in every run, wherever it's closed from, so a later file the OS gives the
+// same number doesn't inherit write access.
+const guardFsCloseMethod: FsWriteGuard = (getReal) =>
+    function (this: unknown, ...args: unknown[]): unknown {
+        const fd = args[0];
+        if (typeof fd === 'number') {
+            forgetWritableFd(fd);
+        }
+        const real = getReal();
+        return Reflect.apply(real, this, args);
+    };
+
+// readFile opens a path itself rather than through fs.open, so a write flag in its options can
+// truncate or create the file. Node ignores the flag for an fd or FileHandle.
+function readsPathForWriting(args: unknown[]): boolean {
+    const [target, options] = args;
+    const isPath = typeof target === 'string' || Buffer.isBuffer(target) || target instanceof URL;
+    const flag: unknown = isObjectLike(options) ? Reflect.get(options, 'flag') : undefined;
+    return isPath && opensForWriting([target, flag]);
+}
+
+function guardFsReadFileMethod(form: FsWriteForm): FsWriteGuard {
+    return (getReal) => {
+        const refuse = FS_WRITE_REFUSALS[form](getReal);
+        const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+            const scope = getBlockedContext().current();
+            const isRefused =
+                scope !== undefined &&
+                readsPathForWriting(args) &&
+                (scope.closed || !isPermittedPath(args[0], WRITE_THROUGH_PATH));
+            return Reflect.apply(isRefused ? refuse : getReal(), this, args);
+        };
+        const real = getReal();
+        copyPromisifyMetadata(real, wrapper);
+        return wrapper;
+    };
+}
+
+// Each async name is guarded on fs (callback form) and fs.promises (promise form); the installer
+// skips a name a module doesn't expose. fs.promises and require('fs/promises') are the same object.
+const FS_SYNC_WRITE_METHODS = [
+    'writeFileSync',
+    'appendFileSync',
+    'writeSync',
+    'writevSync',
+    'copyFileSync',
+    'unlinkSync',
+    'rmSync',
+    'rmdirSync',
+    'renameSync',
+    'mkdirSync',
+    'symlinkSync',
+    'linkSync',
+    'cpSync',
+    'truncateSync',
+    'ftruncateSync',
+    'mkdtempSync',
+    'mkdtempDisposableSync',
+    'utimesSync',
+    'futimesSync',
+    'lutimesSync',
+    'chmodSync',
+    'fchmodSync',
+    'lchmodSync',
+    'chownSync',
+    'fchownSync',
+    'lchownSync',
+];
+const FS_ASYNC_WRITE_METHODS = FS_SYNC_WRITE_METHODS.map((method) => method.replace(/Sync$/, ''));
+const FS_WRITE_GUARD_INSTALLS: Array<[target: object, methods: string[], form: FsWriteForm]> = [
+    [fs, FS_SYNC_WRITE_METHODS, 'sync'],
+    [fs, FS_ASYNC_WRITE_METHODS, 'callback'],
+    [fs.promises, FS_ASYNC_WRITE_METHODS, 'promise'],
+];
+type PromisesOpen = typeof fs.promises.open;
+
+// A write-mode open is refused outside the temp dir. Inside it both the handle and its fd are
+// recorded, and the fd is revoked when the handle closes.
+// A FileHandle's close is an own property of each handle and skips fs.close, so it's wrapped here.
+function revokeFdOnClose(handle: fs.promises.FileHandle): void {
+    const { fd } = handle;
+    const realClose = handle.close;
+    handle.close = function close(this: unknown, ...args: unknown[]) {
+        forgetWritableFd(fd);
+        return Reflect.apply(realClose, this, args);
+    };
+}
+
+function guardReturnedHandle(handle: fs.promises.FileHandle): fs.promises.FileHandle {
+    guardFileHandlePrototype(handle);
+    return handle;
+}
+
+function guardPromisesOpen(real: PromisesOpen): PromisesOpen {
+    const refuse = guardFsPromiseWriteMethod(() => real);
+    function open(this: unknown, ...args: Parameters<PromisesOpen>): ReturnType<PromisesOpen> {
+        if (!opensForWriting(args)) {
+            const reading: ReturnType<PromisesOpen> = Reflect.apply(real, this, args);
+            return fileHandlePrototypeGuarded ? reading : reading.then(guardReturnedHandle);
+        }
+        const scope = openScope();
+        if (!scope || !isPermittedPath(args[0], WRITE_THROUGH_PATH)) {
+            return Reflect.apply(refuse, this, args);
+        }
+        const opening: ReturnType<PromisesOpen> = Reflect.apply(real, this, args);
+        return opening.then((handle) => {
+            scope.writableHandles.add(handle);
+            recordWritableFd(scope, handle.fd);
+            revokeFdOnClose(handle);
+            return guardReturnedHandle(handle);
+        });
+    }
+    Object.defineProperty(open, GUARD_GENERATION, { value: true });
+    return open;
+}
+
+// A handle's own modifying methods skip the fs guards, and chmod/chown/utimes work even on a
+// read-mode handle, so inside a run they only work on a handle opened for writing where allowed.
+const FILE_HANDLE_WRITE_METHODS = [
+    'appendFile',
+    'chmod',
+    'chown',
+    'truncate',
+    'utimes',
+    'write',
+    'writeFile',
+    'writev',
+];
+
+let fileHandlePrototypeGuarded = false;
+function guardFileHandlePrototype(handle: object): void {
+    const prototype: unknown = Object.getPrototypeOf(handle);
+    if (fileHandlePrototypeGuarded || !isObjectLike(prototype)) {
+        return;
+    }
+    fileHandlePrototypeGuarded = true;
+    for (const method of FILE_HANDLE_WRITE_METHODS) {
+        const real: unknown = Reflect.get(prototype, method);
+        if (!isFunction(real) || Reflect.get(real, GUARD_GENERATION) === true) {
+            continue;
+        }
+        const refuse = guardFsPromiseWriteMethod(() => real);
+        const guarded = function (this: unknown, ...args: unknown[]): unknown {
+            const scope = getBlockedContext().current();
+            const writable = isObjectLike(this) && scope?.writableHandles.has(this) === true;
+            const callTarget = scope === undefined || writable ? real : refuse;
+            return Reflect.apply(callTarget, this, args);
+        };
+        Object.defineProperty(guarded, GUARD_GENERATION, { value: true });
+        Reflect.set(prototype, method, guarded);
+    }
+}
+
+// FileHandle isn't exported, so its prototype comes from a handle on the null device, opened at
+// install; the open guard also applies it to the first handle it returns, if that comes sooner.
+let fileHandleGuard: Promise<void> | undefined;
+function startGuardingFileHandles(): void {
+    fileHandleGuard ??= fs.promises
+        .open(os.devNull, 'r')
+        .then(async (handle) => {
+            guardFileHandlePrototype(handle);
+            await handle.close();
+        })
+        .catch(() => {
+            // Retried on the next install, like any other guard that failed to install.
+            fileHandleGuard = undefined;
+        });
+}
+
+// A plain data property, unlike the accessors above, so other packages' tests can still
+// jest.spyOn(fs.promises, 'open'). A reassignment can drop it, so every install re-wraps the current
+// value unless it's already this guard; a spy around the guard just gets wrapped once more.
+function installPromisesOpenGuard(): void {
+    const current = fs.promises.open;
+    if (typeof current === 'function' && Reflect.get(current, GUARD_GENERATION) !== true) {
+        fs.promises.open = guardPromisesOpen(current);
+    }
+}
+
+function installFsGuards(): void {
+    installPromisesOpenGuard();
+    installGuardedProperty<FsWriteFn>(fs, 'open', guardFsOpenMethod('callback'));
+    installGuardedProperty<FsWriteFn>(fs, 'openSync', guardFsOpenMethod('sync'));
+    installGuardedProperty<FsWriteFn>(fs, 'close', guardFsCloseMethod);
+    installGuardedProperty<FsWriteFn>(fs, 'closeSync', guardFsCloseMethod);
+    installGuardedProperty<FsWriteFn>(fs, 'readFileSync', guardFsReadFileMethod('sync'));
+    installGuardedProperty<FsWriteFn>(fs, 'readFile', guardFsReadFileMethod('callback'));
+    installGuardedProperty<FsWriteFn>(fs.promises, 'readFile', guardFsReadFileMethod('promise'));
+    for (const [target, methods, form] of FS_WRITE_GUARD_INSTALLS) {
+        for (const method of methods) {
+            const guard = guardFsWriteMethod(method, form);
+            installGuardedProperty<FsWriteFn>(target, method, guard);
+        }
+    }
+    realTmpDirs ??= captureRealTmpDirs();
+}
+
+// graceful-fs publishes its queue on the real fs when it loads; a clone it (or fs-extra) made before
+// the install copied fs's original functions, so writes through it skip the guards.
+const GRACEFUL_FS_QUEUE = Symbol.for('graceful-fs.queue');
+let gracefulFsLoadedFirst = false;
+
+export const GRACEFUL_FS_UNGUARDED_WARNING =
+    'fs-extra or graceful-fs was loaded before the dev server installed the backend function sandbox guards, so filesystem writes a backend function makes through it are not blocked.';
+
+export function gracefulFsPredatesGuards(): boolean {
+    return gracefulFsLoadedFirst;
+}
+
+let guardsInstalled = false;
+// Patches process-wide built-ins, so it's called explicitly (by the Vite dev server and before
+// each local execution) rather than at import: every bundler that loads this plugin imports this file.
+export function installGuards(): void {
+    if (guardsInstalled) {
+        installPromisesOpenGuard();
+        startGuardingFileHandles();
+        return;
+    }
+    gracefulFsLoadedFirst ||= Object.prototype.hasOwnProperty.call(fs, GRACEFUL_FS_QUEUE);
+    // Each property install is a no-op once done, so a call after a failed attempt retries the rest.
+    installSubprocessGuards();
+    installFsGuards();
+    // Node keeps ESM named bindings (`import { spawn } from 'node:child_process'`) as separate
+    // references to the original values until this re-syncs them with the patched CJS exports.
+    syncBuiltinESMExports();
+    startGuardingFileHandles();
+    guardsInstalled = true;
+}
+
+// Captured at load, since Jest's fake timers replace process.nextTick and would stall a run's close.
+const { nextTick } = process;
+
+// Runs `fn` outside any run's blocked scope — for work done on a run's behalf that isn't customer
+// code, like Vite resolving and transforming a module the run dynamically imports.
+export function runOutsideBlockedScope<T>(fn: () => T): T {
+    return getBlockedContext().exit(fn);
+}
+
+export const NON_STRING_MODULE_ID_MESSAGE = 'Module id must be a string';
+
+// Vite and its plugins call methods on the id, so a customer object's own toString or startsWith
+// would otherwise run exempt. Vite's methods are async, so a rejection matches how they fail on one.
+function runExemptForStringId<T>(id: unknown, call: () => Promise<T>): Promise<T> {
+    if (typeof id !== 'string') {
+        const idError = new TypeError(NON_STRING_MODULE_ID_MESSAGE);
+        return Promise.reject(idError);
+    }
+    return runOutsideBlockedScope(call);
+}
+
+// Wraps Vite's module fetch (resolve, load, transform) so project plugins doing that work for a
+// run's dynamic import aren't blocked; evaluating the fetched module still runs in the run's scope.
+export function exemptFetchFromBlockedScope<Rest extends unknown[], Result>(
+    fetchModule: (id: string, ...rest: Rest) => Promise<Result>,
+): (id: string, ...rest: Rest) => Promise<Result> {
+    return (id, ...rest) => runExemptForStringId(id, () => fetchModule(id, ...rest));
+}
+
+// Vite 5 has no environment API; its module fetch calls these container methods, looked up per call.
+const PLUGIN_CONTAINER_ID_ARG_INDEXES: Record<string, number> = {
+    resolveId: 0,
+    load: 0,
+    transform: 1,
+};
+
+export function exemptPluginContainerFromBlockedScope(container: object): void {
+    for (const [method, idIndex] of Object.entries(PLUGIN_CONTAINER_ID_ARG_INDEXES)) {
+        const original: unknown = Reflect.get(container, method);
+        if (typeof original !== 'function') {
+            continue;
+        }
+        const exempt = function (this: unknown, ...args: unknown[]): Promise<unknown> {
+            return runExemptForStringId(args[idIndex], () => Reflect.apply(original, this, args));
+        };
+        Reflect.set(container, method, exempt);
+    }
+}
+
+function closeScope(scope: BlockedScope): void {
+    scope.closed = true;
+    deregisterIfIdle(scope);
+}
+
+// Runs `fn` with subprocesses, worker_threads and fs writes outside the OS temp dir blocked; wraps
+// the customer's function body in `local-execution.ts`'s `runScriptLocally`.
+// Aborting `signal` closes the scope for a caller that gives up on a `fn` that never settles.
 export async function runBlocked<T>(
     fn: () => Promise<T>,
-    onScopeStarted?: (handle: BlockedScopeHandle) => void,
+    options: { signal?: AbortSignal } = {},
 ): Promise<T> {
+    if (options.signal?.aborted) {
+        throw new Error('The run was aborted before it started.');
+    }
+    installGuards();
     assertNoForeignGuard();
-    const scope = blockEpoch.start();
-    onScopeStarted?.({ abandonIfCurrent: () => scope.concludeIfCurrent() });
+    // A FileHandle opened before install stays unguarded until the async prototype guard lands, so
+    // only a cold install waits; afterwards fn still starts synchronously.
+    if (!fileHandlePrototypeGuarded) {
+        await fileHandleGuard;
+        if (!fileHandlePrototypeGuarded) {
+            throw new Error(FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE);
+        }
+        if (options.signal?.aborted) {
+            throw new Error('The run was aborted before it started.');
+        }
+    }
+    const scope: BlockedScope = {
+        writableFds: new Set(),
+        writableHandles: new WeakSet(),
+        closed: false,
+    };
+    getOpenScopes().add(scope);
+    const onAbort = () => closeScope(scope);
+    options.signal?.addEventListener('abort', onAbort, { once: true });
     try {
-        return await blockedContext.run(fn);
+        return await getBlockedContext().run(scope, fn);
     } finally {
-        scope.concludeIfCurrent();
+        options.signal?.removeEventListener('abort', onAbort);
+        // Work fn queued for the next tick, like a write stream's open, still starts in the run.
+        await new Promise((resolve) => {
+            nextTick(resolve);
+        });
+        closeScope(scope);
     }
-}
-
-// Exempts `fn`'s own async chain (not siblings) from an active `runBlocked` scope; no-ops if that scope was already abandoned.
-export async function runAllowed<T>(fn: () => Promise<T>): Promise<T> {
-    if (!blockEpoch.hasActiveScope()) {
-        return fn();
-    }
-    return allowedContext.run(fn);
-}
-
-// Test-only escape hatch for resetting shared module state between tests — unconditional, unlike
-// `BlockedScopeHandle.abandonIfCurrent()`, since a test fully controls when scopes start and end.
-export function forceReset(): void {
-    blockEpoch.forceInvalidate();
 }
