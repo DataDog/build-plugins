@@ -2,9 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { cleanEnv, ENV_OVERRIDE_VARIABLES } from './cleanEnv';
+import { clearDatadogEnv, ENV_OVERRIDE_VARIABLES } from './datadogEnv';
 
-const UNLISTED_KEY = 'DD_CLEAN_ENV_TEST_UNLISTED';
+const UNLISTED_KEY = 'DD_CLEAR_DATADOG_ENV_TEST_UNLISTED';
 
 const setOverrideVariables = (value: string | undefined) => {
     for (const key of ENV_OVERRIDE_VARIABLES) {
@@ -16,7 +16,7 @@ const setOverrideVariables = (value: string | undefined) => {
     }
 };
 
-describe('cleanEnv', () => {
+describe('clearDatadogEnv', () => {
     afterEach(() => {
         setOverrideVariables(undefined);
         delete process.env[UNLISTED_KEY];
@@ -49,7 +49,7 @@ describe('cleanEnv', () => {
     test.each(cases)('Should $description', ({ initial, setAfterClean, restore, expected }) => {
         setOverrideVariables(initial);
 
-        const restoreEnv = cleanEnv();
+        const restoreEnv = clearDatadogEnv();
         if (setAfterClean !== undefined) {
             setOverrideVariables(setAfterClean);
         }
@@ -65,7 +65,7 @@ describe('cleanEnv', () => {
     test('Should leave variables outside the override list untouched', () => {
         process.env[UNLISTED_KEY] = 'kept';
 
-        const restoreEnv = cleanEnv();
+        const restoreEnv = clearDatadogEnv();
         expect(process.env[UNLISTED_KEY]).toBe('kept');
         restoreEnv();
         expect(process.env[UNLISTED_KEY]).toBe('kept');
