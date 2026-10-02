@@ -103,6 +103,7 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
 
@@ -179,22 +180,46 @@ export const getVitePlugin = ({
     // dev exit must not rebuild backend functions or replace the production
     // package with dev-session-derived output.
     let devServerActive = false;
+    let hasNoticedSsrWarmupOverride = false;
+    let serverPreTransformRequests: boolean | undefined;
 
     return {
-        // @datadog/apps-backend and @datadog/action-catalog ship ESM-only, but ssrLoadModule
-        // externalizes node_modules by default (a plain require()), which throws "Cannot use
-        // import statement outside a module" — ssr.noExternal forces Vite's SSR transform instead.
-        config(_userConfig, { command }) {
-            // A restarted server resolves its config, expanding .env references against
-            // process.env, before configureServer reloads the files.
-            if (command === 'serve') {
-                dropEnvFileCredentials();
+        config: {
+            // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
+            order: 'post',
+            handler(userConfig, { command }) {
+                serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // A restarted server resolves its config, expanding .env references against
+                // process.env, before configureServer reloads the files.
+                if (command === 'serve') {
+                    dropEnvFileCredentials();
+                }
+                return {
+                    // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with
+                    // a plain require(), which throws "Cannot use import statement outside a
+                    // module"; ssr.noExternal forces Vite's SSR transform instead.
+                    ssr: {
+                        noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                    },
+                };
+            },
+        },
+        // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
+        configEnvironment(name, environmentOptions, { command, isPreview }) {
+            if (name !== 'ssr' || command !== 'serve' || isPreview) {
+                return undefined;
             }
-            return {
-                ssr: {
-                    noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
-                },
-            };
+            // Vite uses server.preTransformRequests only when the environment leaves this unset.
+            const isSsrWarmupOn =
+                environmentOptions.dev?.preTransformRequests ?? serverPreTransformRequests;
+            if (isSsrWarmupOn && !hasNoticedSsrWarmupOverride) {
+                hasNoticedSsrWarmupOverride = true;
+                log.warn(
+                    `Turning off SSR import warmup (${SSR_WARMUP_SETTING}) so edited backend code runs on the next local execution.`,
+                );
+            }
+            // Warming SSR imports re-caches modules that local execution un-caches to re-run.
+            return { dev: { preTransformRequests: false } };
         },
         // Propagates LOCAL_EXECUTION_LOAD_SUFFIX through the backend-file dependency graph so a
         // nested `.backend.ts` import isn't replaced with the frontend proxy stub. Every subgraph
@@ -366,6 +391,11 @@ export const getVitePlugin = ({
                 );
             }
 
+            if (server.environments?.ssr?.config.dev.preTransformRequests) {
+                log.warn(
+                    `SSR import warmup (${SSR_WARMUP_SETTING}) is on, so edited backend code may not run until the dev server restarts.`,
+                );
+            }
             let doAuthenticatedRequest: DoAuthenticatedRequest | undefined;
             try {
                 doAuthenticatedRequest = getAuthenticatedRequest();
