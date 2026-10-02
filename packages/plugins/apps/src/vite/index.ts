@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build } from 'vite';
+import type { build, loadEnv } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -39,6 +39,7 @@ import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
+import { dropEnvFileCredentials, loadEnvFileCredentials } from './dotenv-credentials';
 import { localExecutionResolutionContext } from './local-execution';
 import {
     exemptFetchFromBlockedScope,
@@ -50,6 +51,7 @@ import {
 
 export type ViteBundler = {
     build: typeof build;
+    loadEnv: typeof loadEnv;
 };
 
 export interface VitePluginOptions {
@@ -192,8 +194,13 @@ export const getVitePlugin = ({
         config: {
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
-            handler(userConfig) {
+            handler(userConfig, { command }) {
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // A restarted server resolves its config, expanding .env references against
+                // process.env, before configureServer reloads the files.
+                if (command === 'serve') {
+                    dropEnvFileCredentials();
+                }
                 return {
                     // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with
                     // a plain require(), which throws "Cannot use import statement outside a
@@ -371,6 +378,26 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             devServerActive = true;
+            // dev-verify runs every execution in the cloud, which never sees local .env values.
+            const { mode, envDir, envPrefix } = server.config;
+            const envFileCredentials = loadEnvFileCredentials(bundler.loadEnv, {
+                mode,
+                envDir: mode === DEV_VERIFY_MODE ? false : envDir,
+                envPrefix,
+            });
+            if (envFileCredentials.loaded.length > 0) {
+                const loadedNames = envFileCredentials.loaded.join(', ');
+                log.info(
+                    `Backend functions can read ${loadedNames} from .env files. Shell variables take precedence.`,
+                );
+            }
+            if (envFileCredentials.ignoredDatadogKeys.length > 0) {
+                const ignoredNames = envFileCredentials.ignoredDatadogKeys.join(', ');
+                log.warn(
+                    `Ignoring ${ignoredNames} from .env files. Set Datadog settings in the shell or start the dev server with \`datadog-apps dev\`.`,
+                );
+            }
+
             if (server.environments?.ssr?.config.dev.preTransformRequests) {
                 log.warn(
                     `SSR import warmup (${SSR_WARMUP_SETTING}) is on, so edited backend code may not run until the dev server restarts.`,

@@ -7,9 +7,10 @@
 
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { build } from 'vite';
+import { build, loadEnv } from 'vite';
 
 import { getBaseBackendBuildConfig } from './build-config';
+import { loadEnvFileCredentials } from './dotenv-credentials';
 
 describe('getBaseBackendBuildConfig', () => {
     test('bundles a backend function that imports a real Node builtin module with a working import, not a browser-external stub', async () => {
@@ -239,6 +240,62 @@ describe('getBaseBackendBuildConfig', () => {
 
             expect(code).not.toContain(secretValue);
         } finally {
+            rmSync(workingDir);
+        }
+    });
+
+    test('Should keep a .env credential the dev server copied into process.env as a runtime read', async () => {
+        const seed = `build-config-dotenv-loaded-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        const unprefixedValue = 'sk_unprefixed_should_stay_a_runtime_read';
+
+        try {
+            outputFileSync(`${workingDir}/.env`, `QA_TEST_LOADED_SECRET=${unprefixedValue}\n`);
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: workingDir });
+            expect(process.env.QA_TEST_LOADED_SECRET).toBe(unprefixedValue);
+
+            const absolutePath = `${workingDir}/src/readsLoadedEnv.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            export async function readsLoadedEnv() {
+                return process.env.QA_TEST_LOADED_SECRET;
+            }
+        `,
+            );
+
+            const virtualId = 'virtual:dd-backend-test:readsLoadedEnv';
+            const virtualContent = `import { readsLoadedEnv } from ${JSON.stringify(absolutePath)};\nexport async function main($) { return await readsLoadedEnv(); }`;
+            const baseConfig = getBaseBackendBuildConfig(
+                workingDir,
+                { [virtualId]: virtualContent },
+                [],
+            );
+
+            const result = await build({
+                ...baseConfig,
+                build: {
+                    ...baseConfig.build,
+                    write: false,
+                    rollupOptions: {
+                        ...baseConfig.build.rollupOptions,
+                        input: virtualId,
+                        output: baseConfig.build.rollupOptions.output,
+                    },
+                },
+            });
+
+            const output = Array.isArray(result) ? result[0] : result;
+            if (!('output' in output)) {
+                throw new Error('Unexpected vite.build result');
+            }
+            const chunk = output.output[0];
+            const code = chunk.type === 'chunk' ? chunk.code : '';
+
+            expect(code).toContain('process.env.QA_TEST_LOADED_SECRET');
+            expect(code).not.toContain(unprefixedValue);
+        } finally {
+            loadEnvFileCredentials(loadEnv, { mode: 'development', envDir: false });
             rmSync(workingDir);
         }
     });
