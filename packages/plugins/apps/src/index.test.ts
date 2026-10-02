@@ -7,7 +7,7 @@ import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import type { PluginOptions } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import {
     getContextMock,
     getGetPluginsArg,
