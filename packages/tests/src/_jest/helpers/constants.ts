@@ -29,6 +29,7 @@ export const KNOWN_ERRORS: string[] = [
     '[DEP0147] DeprecationWarning: In future versions of Node.js, fs.rmdir',
     // Jest 30 globalsCleanup warnings for nock's internal properties that can't be protected.
     "[JEST-01] DeprecationWarning: 'logger' property was accessed on [_FetchInterceptor]",
+    "[JEST-01] DeprecationWarning: 'emitter' property was accessed on [_ClientRequestInterceptor]",
     "[JEST-01] DeprecationWarning: 'now' property was accessed on [Function]",
     // Local shells may set NO_COLOR while the test script forces color output.
     "Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.",
