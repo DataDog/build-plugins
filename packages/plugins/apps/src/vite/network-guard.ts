@@ -33,7 +33,7 @@ const WORKER_THREAD_BLOCKED_MESSAGE =
 const FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE =
     'Local execution could not guard file handles, so it refuses to run.';
 export const FS_WRITE_BLOCKED_MESSAGE =
-    'Writing to the filesystem is not allowed in backend functions outside os.tmpdir().';
+    'Writing to the filesystem is not allowed in backend functions outside os.tmpdir() or /tmp.';
 
 /** One `runBlocked` call's fds and FileHandles opened for writing; `closed` once the run ends. */
 export interface BlockedScope {
@@ -649,17 +649,21 @@ function realEntryPath(filePath: string): string | undefined {
     return realParent === undefined ? undefined : path.join(realParent, name);
 }
 
-// The real OS temp dir, resolved at install. Libraries like tempy and temp-dir save os.tmpdir()
-// when they load, so writes under it are allowed, as in plain Node and on Terrapin.
-let realTmpDir: string | undefined;
+// The real OS temp dir, plus /tmp outside Windows, resolved at install. Libraries like tempy and
+// temp-dir save os.tmpdir() when they load, and Terrapin's os.tmpdir() is /tmp, which some
+// dependencies hard-code.
+let realTmpDirs: string[] | undefined;
 
-function captureRealTmpDir(): string | undefined {
-    try {
-        const tmpDir = os.tmpdir();
-        return fs.realpathSync.native(tmpDir);
-    } catch {
-        return undefined;
-    }
+function captureRealTmpDirs(): string[] | undefined {
+    const tmpDirs = process.platform === 'win32' ? [os.tmpdir()] : [os.tmpdir(), '/tmp'];
+    const realDirs = tmpDirs.flatMap((tmpDir) => {
+        try {
+            return [fs.realpathSync.native(tmpDir)];
+        } catch {
+            return [];
+        }
+    });
+    return realDirs.length > 0 ? [...new Set(realDirs)] : undefined;
 }
 
 interface PathRule {
@@ -668,20 +672,20 @@ interface PathRule {
 }
 const WRITE_THROUGH_PATH: PathRule = { operatesOnEntry: false, allowsRoot: false };
 
-// Strictly under the real OS temp dir, since removing or renaming the temp root would break
-// $TMPDIR for every process; mkdir may name the root itself, as it only makes sure it exists.
+// Strictly under a real temp dir, since removing or renaming a temp root would break $TMPDIR for
+// every process; mkdir may name the root itself, as it only makes sure it exists.
 function isPermittedPath(value: unknown, rule: PathRule): boolean {
     const filePath = toFilePath(value);
-    if (filePath === undefined || realTmpDir === undefined) {
+    if (filePath === undefined || realTmpDirs === undefined) {
         return false;
     }
     const realPath = rule.operatesOnEntry ? realEntryPath(filePath) : realPathForWrite(filePath);
     if (realPath === undefined) {
         return false;
     }
-    return (
-        (rule.allowsRoot && realPath === realTmpDir) ||
-        realPath.startsWith(`${realTmpDir}${path.sep}`)
+    return realTmpDirs.some(
+        (tmpDir) =>
+            (rule.allowsRoot && realPath === tmpDir) || realPath.startsWith(`${tmpDir}${path.sep}`),
     );
 }
 
@@ -846,6 +850,32 @@ const guardFsCloseMethod: FsWriteGuard = (getReal) =>
         return Reflect.apply(real, this, args);
     };
 
+// readFile opens a path itself rather than through fs.open, so a write flag in its options can
+// truncate or create the file. Node ignores the flag for an fd or FileHandle.
+function readsPathForWriting(args: unknown[]): boolean {
+    const [target, options] = args;
+    const isPath = typeof target === 'string' || Buffer.isBuffer(target) || target instanceof URL;
+    const flag: unknown = isObjectLike(options) ? Reflect.get(options, 'flag') : undefined;
+    return isPath && opensForWriting([target, flag]);
+}
+
+function guardFsReadFileMethod(form: FsWriteForm): FsWriteGuard {
+    return (getReal) => {
+        const refuse = FS_WRITE_REFUSALS[form](getReal);
+        const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+            const scope = getBlockedContext().current();
+            const isRefused =
+                scope !== undefined &&
+                readsPathForWriting(args) &&
+                (scope.closed || !isPermittedPath(args[0], WRITE_THROUGH_PATH));
+            return Reflect.apply(isRefused ? refuse : getReal(), this, args);
+        };
+        const real = getReal();
+        copyPromisifyMetadata(real, wrapper);
+        return wrapper;
+    };
+}
+
 // Each async name is guarded on fs (callback form) and fs.promises (promise form); the installer
 // skips a name a module doesn't expose. fs.promises and require('fs/promises') are the same object.
 const FS_SYNC_WRITE_METHODS = [
@@ -993,13 +1023,16 @@ function installFsGuards(): void {
     installGuardedProperty<FsWriteFn>(fs, 'openSync', guardFsOpenMethod('sync'));
     installGuardedProperty<FsWriteFn>(fs, 'close', guardFsCloseMethod);
     installGuardedProperty<FsWriteFn>(fs, 'closeSync', guardFsCloseMethod);
+    installGuardedProperty<FsWriteFn>(fs, 'readFileSync', guardFsReadFileMethod('sync'));
+    installGuardedProperty<FsWriteFn>(fs, 'readFile', guardFsReadFileMethod('callback'));
+    installGuardedProperty<FsWriteFn>(fs.promises, 'readFile', guardFsReadFileMethod('promise'));
     for (const [target, methods, form] of FS_WRITE_GUARD_INSTALLS) {
         for (const method of methods) {
             const guard = guardFsWriteMethod(method, form);
             installGuardedProperty<FsWriteFn>(target, method, guard);
         }
     }
-    realTmpDir ??= captureRealTmpDir();
+    realTmpDirs ??= captureRealTmpDirs();
 }
 
 // graceful-fs publishes its queue on the real fs when it loads; a clone it (or fs-extra) made before

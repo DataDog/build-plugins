@@ -569,6 +569,83 @@ describe('network-guard', () => {
             });
         });
 
+        // readFile opens the file itself rather than through the guarded fs.open, so its flag can
+        // truncate or create a file.
+        const readFileForms: Array<{
+            api: string;
+            read: (target: string, flag: string) => Promise<unknown>;
+        }> = [
+            {
+                api: 'fs.readFileSync',
+                read: async (target, flag) => fs.readFileSync(target, { flag }),
+            },
+            // UTF-8 reads take a separate native fast path.
+            {
+                api: 'fs.readFileSync with utf8',
+                read: async (target, flag) => fs.readFileSync(target, { flag, encoding: 'utf8' }),
+            },
+            {
+                api: 'fs.readFile',
+                read: (target, flag) =>
+                    new Promise((resolve, reject) => {
+                        fs.readFile(target, { flag }, (err, data) =>
+                            err ? reject(err) : resolve(data),
+                        );
+                    }),
+            },
+            {
+                api: 'fs.promises.readFile',
+                read: (target, flag) => fs.promises.readFile(target, { flag }),
+            },
+        ];
+
+        test.each(readFileForms)(
+            'Should refuse $api with a write flag outside the temp dir',
+            async ({ read }) => {
+                fs.writeFileSync(testFile, 'kept');
+                const createdFile = path.join(tmpDir, 'created.txt');
+                await runBlocked(async () => {
+                    await expect(read(testFile, 'w')).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                    await expect(read(createdFile, 'a')).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                });
+                const content = fs.readFileSync(testFile, 'utf8');
+                const createdExists = fs.existsSync(createdFile);
+
+                expect(content).toBe('kept');
+                expect(createdExists).toBe(false);
+            },
+        );
+
+        // Streams open through the guarded fs.open, so their flags are covered there.
+        test('Should refuse fs.createReadStream with a write flag outside the temp dir', async () => {
+            fs.writeFileSync(testFile, 'kept');
+            const streamError = await runBlocked(
+                () =>
+                    new Promise<Error>((resolve) => {
+                        fs.createReadStream(testFile, { flags: 'w' }).on('error', resolve);
+                    }),
+            );
+            const content = fs.readFileSync(testFile, 'utf8');
+
+            expect(streamError.message).toBe(FS_WRITE_BLOCKED_MESSAGE);
+            expect(content).toBe('kept');
+        });
+
+        test.each(readFileForms)(
+            'Should allow $api with a read flag anywhere and a write flag under the temp dir',
+            async ({ api, read }) => {
+                fs.writeFileSync(testFile, 'outside');
+                const tmpFile = path.join(tmpWorkDir, `${api.replace(/\W/g, '-')}.txt`);
+                fs.writeFileSync(tmpFile, 'inside');
+                const contents = await runBlocked(async () => [
+                    String(await read(testFile, 'r')),
+                    String(await read(tmpFile, 'r+')),
+                ]);
+
+                expect(contents).toEqual(['outside', 'inside']);
+            },
+        );
+
         // An fd opened for writing before the blocked scope started is still refused.
         test('Should block fs.writeSync made inside fn on an fd from openSync', async () => {
             const fd = fs.openSync(testFile, 'w');
@@ -1544,6 +1621,25 @@ describe('writes under the real OS temp directory', () => {
         } finally {
             rmSync(fdFile);
             rmSync(handleFile);
+        }
+    });
+
+    // On Terrapin's Linux os.tmpdir() is /tmp, so a dependency that hard-codes /tmp works there.
+    test('Should allow writes under /tmp even when os.tmpdir() is elsewhere', async () => {
+        if (process.platform === 'win32') {
+            return;
+        }
+        const suffix = `${process.pid}-${Date.now()}`;
+        const slashTmpFile = path.join('/tmp', `dd-slash-tmp-${suffix}.txt`);
+        try {
+            await runBlocked(async () => {
+                fs.writeFileSync(slashTmpFile, 'data');
+            });
+            const content = fs.readFileSync(slashTmpFile, 'utf8');
+
+            expect(content).toBe('data');
+        } finally {
+            rmSync(slashTmpFile);
         }
     });
 
