@@ -1,6 +1,6 @@
 const extensions = ['.json', '.ts', '.js', '.md'];
-// A whole-env copy carries every CI secret the test env scrub doesn't remove, and a failing
-// assertion can print it.
+// Test runs start with CI secrets in their env, and Jest's scrub only removes some of them, so a
+// whole-env copy can carry them into failure output.
 const PROCESS_ENV_IN_TESTS_MESSAGE =
     "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, check for one with `'KEY' in process.env`, reset Datadog keys with cleanEnv() from @dd/tests/_jest/helpers/cleanEnv, and build child-process env objects key by key.";
 module.exports = {
@@ -374,16 +374,28 @@ module.exports = {
                 'jest/no-identical-title': 'error',
                 'jest/prefer-to-have-length': 'warn',
                 'jest/valid-expect': 'warn',
+            },
+        },
+        {
+            files: [
+                'packages/tests/src/_jest/**/*.*',
+                'packages/tests/src/_playwright/**/*.*',
+                '**/*.test.*',
+                '**/*.spec.*',
+                '**/*.bench.*',
+                'packages/tests/src/bench/**/*.ts',
+            ],
+            rules: {
                 'no-restricted-syntax': [
                     'error',
                     {
                         selector:
-                            "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env']):not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init)",
+                            "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env']):not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init):not(AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right)",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {
                         selector:
-                            "VariableDeclarator[init.name='process'] > ObjectPattern.id > Property[key.name='env']",
+                            ":matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property[key.name='env']",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {
