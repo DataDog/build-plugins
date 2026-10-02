@@ -3,7 +3,6 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
-import { OVERRIDE_VARIABLES } from '@dd/core/helpers/env';
 import { mkdirSync } from '@dd/core/helpers/fs';
 import type { BundlerName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
@@ -12,14 +11,6 @@ import os from 'os';
 import path from 'path';
 
 const fsp = fs.promises;
-
-type EnvOverrideVariable =
-    | `DATADOG_${(typeof OVERRIDE_VARIABLES)[number]}`
-    | `DD_${(typeof OVERRIDE_VARIABLES)[number]}`;
-
-const ENV_OVERRIDE_VARIABLES = OVERRIDE_VARIABLES.flatMap(
-    (key) => [`DATADOG_${key}`, `DD_${key}`] as const,
-) as EnvOverrideVariable[];
 
 type TestEnv = {
     NO_CLEANUP: boolean;
@@ -72,27 +63,6 @@ export const setupEnv = (env: TestEnv): void => {
     if (JEST_SILENT) {
         process.env.JEST_SILENT = '1';
     }
-};
-
-export const cleanEnv = () => {
-    const previousEnv = Object.fromEntries(
-        ENV_OVERRIDE_VARIABLES.map((key) => [key, process.env[key]]),
-    ) as Record<EnvOverrideVariable, string | undefined>;
-
-    for (const key of ENV_OVERRIDE_VARIABLES) {
-        delete process.env[key];
-    }
-
-    return () => {
-        for (const key of ENV_OVERRIDE_VARIABLES) {
-            const value = previousEnv[key];
-            if (value === undefined) {
-                delete process.env[key];
-            } else {
-                process.env[key] = value;
-            }
-        }
-    };
 };
 
 export const logEnv = (env: TestEnv) => {

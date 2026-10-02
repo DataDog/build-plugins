@@ -118,11 +118,17 @@ describe('local-execution — executeScriptLocally', () => {
         expect(result).toEqual({ data: 42 });
     });
 
-    // Local execution reads the developer's real environment, like any other Node tool.
-    test("Should let the function read the dev server's ambient process.env", async () => {
+    // Local execution reads the developer's real environment, like any other Node tool, both in
+    // the function body and while its module loads.
+    test("Should let the function and its module loading read the dev server's ambient process.env", async () => {
         const envKey = 'DD_LOCAL_EXECUTION_AMBIENT_ENV_PROBE';
         process.env[envKey] = 'visible';
-        const loadModule = loadModuleReturning({ example: () => process.env[envKey] });
+        const resolveModule = loadModuleReturning({ example: () => process.env[envKey] });
+        const readsDuringLoad: Array<string | undefined> = [];
+        const loadModule: LoadModule = async (...args) => {
+            readsDuringLoad.push(process.env[envKey]);
+            return resolveModule(...args);
+        };
         try {
             const result = await executeScriptLocally(
                 func,
@@ -133,6 +139,8 @@ describe('local-execution — executeScriptLocally', () => {
                 mockLogger,
             );
             expect(result).toEqual({ data: 'visible' });
+            expect(readsDuringLoad.length).toBeGreaterThan(0);
+            expect(readsDuringLoad).not.toContain(undefined);
         } finally {
             delete process.env[envKey];
         }
@@ -3058,7 +3066,7 @@ describe('local-execution — executeScriptLocally', () => {
         });
 
         // An abandoned execution's loadModule can resolve late, after a newer one is already inside the guards — it must not corrupt the newer state.
-        test("Should never let an abandoned execution's late-resolving loadModule enter the network guard while a newer execution is still inside them", async () => {
+        test("Should never let an abandoned execution's late-resolving loadModule enter the network guard while a newer execution is still inside it", async () => {
             const makeLoadModule = (mainDelayMs: number): LoadModule => {
                 return async (specifier: string) => {
                     if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {

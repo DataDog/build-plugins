@@ -7,7 +7,8 @@ import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
-import { cleanEnv, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
+import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
