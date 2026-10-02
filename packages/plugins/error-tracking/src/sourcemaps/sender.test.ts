@@ -13,6 +13,7 @@ import {
     SOURCEMAPS_API_PATH,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { SOURCEMAP_UPLOAD_METRIC_PREFIX } from '@dd/error-tracking-plugin/sourcemaps/upload-metrics';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import {
     getContextMock,
     getRepositoryDataMock,
@@ -64,22 +65,14 @@ const senderContextMock = {
 
 describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getIntakeUrl', () => {
-        const realProcessEnv = process.env;
-        // A synthetic literal, never derived from the real process.env — beforeEach resets
-        // from it before every test, so a real value here would leak into all of them.
-        const baselineEnv = {
-            PATH: '/usr/bin',
-            HOME: '/home/dev',
-            NODE_ENV: 'test',
-            TMPDIR: '/tmp',
-        };
+        let restoreEnv: () => void;
 
         beforeEach(() => {
-            process.env = { ...baselineEnv };
+            restoreEnv = cleanEnv();
         });
 
-        afterAll(() => {
-            process.env = realProcessEnv;
+        afterEach(() => {
+            restoreEnv();
         });
 
         test('Should return correct intake URL for US3 site', () => {

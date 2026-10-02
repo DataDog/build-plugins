@@ -2202,11 +2202,13 @@ __metadata:
     "@rollup/plugin-commonjs": "npm:28.0.1"
     "@rollup/plugin-typescript": "npm:12.1.4"
     "@rspack/core": "npm:1.4.9"
+    "@types/eslint": "npm:9.6.1"
     "@types/faker": "npm:5.5.9"
     "@types/jest": "npm:^29"
     "@types/node": "npm:^20"
     clipanion: "npm:4.0.0-rc.3"
     esbuild: "npm:0.25.8"
+    eslint: "npm:8.57.0"
     faker: "npm:5.5.3"
     glob: "npm:11.1.0"
     jest: "npm:30.0.5"
@@ -4056,7 +4058,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/eslint@npm:*":
+"@types/eslint@npm:*, @types/eslint@npm:9.6.1":
   version: 9.6.1
   resolution: "@types/eslint@npm:9.6.1"
   dependencies:

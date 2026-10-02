@@ -1,4 +1,8 @@
 const extensions = ['.json', '.ts', '.js', '.md'];
+// A whole-env copy carries every CI secret the test env scrub doesn't remove, and a failing
+// assertion can print it.
+const PROCESS_ENV_IN_TESTS_MESSAGE =
+    "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, check for one with `'KEY' in process.env`, reset Datadog keys with cleanEnv() from @dd/tests/_jest/helpers/cleanEnv, and build child-process env objects key by key.";
 module.exports = {
     root: true,
     rules: {
@@ -353,7 +357,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
+            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.*'],
             plugins: ['jest'],
             extends: ['plugin:jest/recommended'],
             env: {
@@ -370,6 +374,31 @@ module.exports = {
                 'jest/no-identical-title': 'error',
                 'jest/prefer-to-have-length': 'warn',
                 'jest/valid-expect': 'warn',
+                'no-restricted-syntax': [
+                    'error',
+                    {
+                        selector:
+                            "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env']):not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init)",
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector:
+                            "VariableDeclarator[init.name='process'] > ObjectPattern.id > Property[key.name='env']",
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector:
+                            "CallExpression[arguments.0.name='process'][arguments.1.value='env']",
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                ],
+            },
+        },
+        {
+            // Copies process.env on purpose, to check what test code could capture.
+            files: ['packages/tests/src/_jest/setupAfterEnv.fixture.ts'],
+            rules: {
+                'no-restricted-syntax': 'off',
             },
         },
         {
