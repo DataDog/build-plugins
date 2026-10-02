@@ -1,8 +1,8 @@
 const extensions = ['.json', '.ts', '.js', '.md'];
-// Test runs start with CI secrets in their env, and Jest's scrub only removes some of them, so a
-// whole-env copy can carry them into failure output.
+// Test runs start with CI secrets in their env, so a whole-env copy can carry any the setup scrub
+// misses into failure output.
 const PROCESS_ENV_IN_TESTS_MESSAGE =
-    "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, check for one with `'KEY' in process.env`, reset Datadog keys with cleanEnv() from @dd/tests/_jest/helpers/cleanEnv, and build child-process env objects key by key.";
+    "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, check for one with `'KEY' in process.env`, list names with Object.keys(process.env), reset Datadog keys with clearDatadogEnv() from @dd/tests/_jest/helpers/datadogEnv, and build child-process env objects key by key.";
 module.exports = {
     root: true,
     rules: {
@@ -392,7 +392,7 @@ module.exports = {
                     'error',
                     {
                         selector:
-                            "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env']):not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init):not(AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right)",
+                            "MemberExpression[object.name='process']:matches([property.name='env'], [property.value='env']):not(MemberExpression > MemberExpression.object):not(BinaryExpression[operator='in'] > MemberExpression.right):not(CallExpression[callee.object.name='Object'][callee.property.name='keys'] > MemberExpression.arguments):not(VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init):not(AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right)",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {

@@ -13,7 +13,7 @@ import {
     SOURCEMAPS_API_PATH,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { SOURCEMAP_UPLOAD_METRIC_PREFIX } from '@dd/error-tracking-plugin/sourcemaps/upload-metrics';
-import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
     getContextMock,
     getRepositoryDataMock,
@@ -68,7 +68,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
         let restoreEnv: () => void;
 
         beforeEach(() => {
-            restoreEnv = cleanEnv();
+            restoreEnv = clearDatadogEnv();
         });
 
         afterEach(() => {

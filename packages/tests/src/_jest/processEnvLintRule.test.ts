@@ -128,6 +128,21 @@ describe('process.env lint rule for tests', () => {
             expected: 1,
         },
         {
+            description: 'allow listing its names',
+            code: 'const names = Object.keys(process.env);',
+            expected: 0,
+        },
+        {
+            description: 'flag listing its values',
+            code: 'const values = Object.values(process.env);',
+            expected: 1,
+        },
+        {
+            description: 'flag listing its entries',
+            code: 'const entries = Object.entries(process.env);',
+            expected: 1,
+        },
+        {
             description: 'allow checking for a key',
             code: "const hasSite = 'DD_SITE' in process.env;",
             expected: 0,
