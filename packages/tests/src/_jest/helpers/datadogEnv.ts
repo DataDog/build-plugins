@@ -8,7 +8,7 @@ export const ENV_OVERRIDE_VARIABLES = OVERRIDE_VARIABLES.flatMap(
     (key) => [`DATADOG_${key}`, `DD_${key}`] as const,
 );
 
-export const cleanEnv = () => {
+export const clearDatadogEnv = () => {
     const previousEnv = new Map<string, string | undefined>();
     for (const key of ENV_OVERRIDE_VARIABLES) {
         previousEnv.set(key, process.env[key]);
