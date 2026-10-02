@@ -384,6 +384,8 @@ module.exports = {
                 '**/*.spec.*',
                 '**/*.bench.*',
                 'packages/tests/src/bench/**/*.ts',
+                'packages/tests/jest.config.ts',
+                'packages/tests/playwright*.config.ts',
             ],
             rules: {
                 'no-restricted-syntax': [
@@ -395,7 +397,7 @@ module.exports = {
                     },
                     {
                         selector:
-                            ":matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property[key.name='env']",
+                            ":matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property:matches([key.name='env'], [key.value='env'])",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {

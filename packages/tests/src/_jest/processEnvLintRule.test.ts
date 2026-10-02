@@ -77,6 +77,11 @@ describe('process.env lint rule for tests', () => {
             expected: 1,
         },
         {
+            description: 'flag destructuring it off process with a computed key',
+            code: "const { ['env']: env } = process;",
+            expected: 1,
+        },
+        {
             description: 'allow setting one key',
             code: "process.env.DD_SITE = 'datadoghq.com';",
             expected: 0,
@@ -148,6 +153,16 @@ describe('process.env lint rule for tests', () => {
         {
             description: 'apply to Jest helpers',
             file: 'packages/tests/src/_jest/helpers/a.ts',
+            expected: 1,
+        },
+        {
+            description: 'apply to the Jest config',
+            file: 'packages/tests/jest.config.ts',
+            expected: 1,
+        },
+        {
+            description: 'apply to the Playwright configs',
+            file: 'packages/tests/playwright.live-debugger-runtime.config.ts',
             expected: 1,
         },
         {
