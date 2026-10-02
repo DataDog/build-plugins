@@ -7,6 +7,7 @@ import https from 'https';
 import http from 'http';
 import { protectProperties } from 'jest-util';
 
+import { cleanEnv } from './helpers/cleanEnv.ts';
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
 
@@ -30,10 +31,13 @@ jest.mock('async-retry', () => {
     });
 });
 
-let restoreEnv: () => void;
+// Scrubs CI's Datadog credentials and DD_SITE before test files' module and describe scopes run.
+// Never restored: each test file gets its own process.env copy, so restoring would only re-expose
+// them to teardown.
+cleanEnv();
+
 beforeAll(() => {
     const nock = jest.requireActual('nock');
-    const { cleanEnv } = jest.requireActual('./helpers/env.ts');
     // Do not send any HTTP requests.
     nock.disableNetConnect();
 
@@ -44,9 +48,6 @@ beforeAll(() => {
     // Protect HTTP/HTTPS modules that nock patches to prevent warnings about internal properties.
     protectProperties(http, ['request', 'get']);
     protectProperties(https, ['request', 'get']);
-
-    // Need to clean env to avoid the `DD_SITE` leak from dd-trace in the CI.
-    restoreEnv = cleanEnv();
 });
 
 afterAll(async () => {
@@ -59,7 +60,6 @@ afterAll(async () => {
     // Clean the workingDirs from runBundlers();
     const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
     await cleanupEverything();
-    restoreEnv();
 });
 
 // Have a less verbose, console.log output.
