@@ -6,7 +6,7 @@ import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { InjectPosition } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
     createMockRequest,
     createMockResponse,
@@ -1086,7 +1086,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const ssrLoadModule = jest.fn();
         const configureServer = getConfigureServer(plugin);
         // configureServer resolves auth from the environment; restored immediately after use.
-        const restoreEnv = cleanEnv();
+        const restoreEnv = clearDatadogEnv();
         process.env.DD_API_KEY = 'test-api-key';
         process.env.DD_APP_KEY = 'test-app-key';
         configureServer({

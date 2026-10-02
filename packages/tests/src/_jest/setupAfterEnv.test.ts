@@ -5,7 +5,7 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
 
-import { ENV_OVERRIDE_VARIABLES } from './helpers/cleanEnv';
+import { ENV_OVERRIDE_VARIABLES } from './helpers/datadogEnv';
 
 type JestJsonReport = {
     numTotalTests: number;
