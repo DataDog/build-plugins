@@ -4,7 +4,7 @@
 
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
-import { outputFileSync } from '@dd/core/helpers/fs';
+import { outputFileSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import type { Assign, BundlerName, Options, ToInjectItem } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
@@ -595,6 +595,14 @@ describe('Injection Plugin', () => {
     // We reproduce this by creating a compiler once and running it twice (no close()
     // in between), simulating what happens in dev server / watch mode.
     describe('output.clean compatibility', () => {
+        // The parts of a webpack or rspack compiler this test drives.
+        type RebuildCompiler = {
+            run: (
+                callback: (err: unknown, stats?: { compilation: { errors?: unknown[] } }) => void,
+            ) => void;
+            close: (callback: () => void) => void;
+        };
+
         const xpackCases: {
             name: string;
             bundle: any;
@@ -615,41 +623,57 @@ describe('Injection Plugin', () => {
             async ({ bundle, config, plugin }) => {
                 const seed = `clean-test.${getUniqueId()}`;
                 const workingDir = await prepareWorkingDir(seed);
-                const outDir = getOutDir(workingDir, 'clean');
+                let compiler: RebuildCompiler | undefined;
+                try {
+                    const outDir = getOutDir(workingDir, 'clean');
 
-                // Create one compiler and run it twice to simulate watch/dev-mode rebuilds.
-                // With the bug, output.clean deletes the helper file from outDir
-                // during the first build's emit, so the second build's resolution fails.
-                const compiler: any = bundle(
-                    config({
+                    // Create one compiler and run it twice to simulate watch/dev-mode rebuilds.
+                    // With the bug, output.clean deletes the helper file from outDir
+                    // during the first build's emit, so the second build's resolution fails.
+                    const compilerConfig = config({
                         workingDir,
                         outDir,
                         entry: { main: easyProjectWithCSSEntry },
                         node: true,
                         clean: true,
                         plugins: [plugin(defaultPluginOptions)],
-                    }),
-                );
-
-                const run = () =>
-                    new Promise<void>((resolve, reject) => {
-                        compiler.run((err: any, stats: any) => {
-                            if (err) {
-                                return reject(err);
-                            }
-                            const { errors } = stats!.compilation;
-                            if (errors?.length) {
-                                return reject(errors[0]);
-                            }
-                            resolve();
-                        });
                     });
+                    const builtCompiler: RebuildCompiler = bundle(compilerConfig);
+                    compiler = builtCompiler;
 
-                try {
+                    const run = () =>
+                        new Promise<void>((resolve, reject) => {
+                            builtCompiler.run((err, stats) => {
+                                if (err) {
+                                    return reject(err);
+                                }
+                                const { errors } = stats!.compilation;
+                                if (errors?.length) {
+                                    return reject(errors[0]);
+                                }
+                                resolve();
+                            });
+                        });
+
                     await expect(run()).resolves.toBeUndefined();
                     await expect(run()).resolves.toBeUndefined();
                 } finally {
-                    await new Promise<void>((resolve) => compiler.close(() => resolve()));
+                    const createdCompiler = compiler;
+                    if (createdCompiler) {
+                        await new Promise<void>((resolve) =>
+                            createdCompiler.close(() => resolve()),
+                        );
+                    }
+                    if (process.env.NO_CLEANUP) {
+                        // eslint-disable-next-line no-console
+                        console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
+                    } else {
+                        try {
+                            await rm(workingDir);
+                        } catch (error) {
+                            // Ignore errors, so they can't replace the error thrown by run().
+                        }
+                    }
                 }
             },
         );

@@ -18,6 +18,7 @@ import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin'
 import { getBaseBackendBuildConfig } from './build-config';
 
 const VIRTUAL_PREFIX = '\0dd-backend:';
+export const BACKEND_OUT_DIR_PREFIX = 'dd-apps-backend-';
 
 /**
  * Build all backend functions using a separate vite.build() call.
@@ -32,7 +33,9 @@ export async function buildBackendFunctions(
     buildRoot: string,
     log: Logger,
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
-    const outDir = await mkdtemp(path.join(tmpdir(), 'dd-apps-backend-'));
+    const tmpRoot = tmpdir();
+    const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
+    const outDir = await mkdtemp(outDirPrefix);
     const outputs = new Map<string, string>();
     const allowedConnectionIdsByEntryPath = new Map<string, string[]>();
 
