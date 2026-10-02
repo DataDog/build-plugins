@@ -1,0 +1,15 @@
+{
+    "name": "@dd/eslint-plugin",
+    "packageManager": "yarn@4.0.2",
+    "license": "MIT",
+    "private": true,
+    "author": "Datadog",
+    "description": "ESLint rules for Datadog's Build Plugins Monorepo",
+    "homepage": "https://github.com/DataDog/build-plugins/tree/main/packages/eslint-plugin#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/eslint-plugin"
+    },
+    "main": "./index.js"
+}
