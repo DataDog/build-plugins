@@ -16,8 +16,6 @@ import { promisify } from 'node:util';
 import worker_threads from 'worker_threads';
 
 import { createEpochGuard } from './execution-epoch';
-import { makeGuardWrapper } from './guarded-wrapper';
-import { getOrCreateShared } from './shared-module-singleton';
 
 // No OS sandbox here (unlike prod's Deno) — blocks net/subprocess at the JS level, scoped per-call via AsyncLocalStorage, not a global toggle.
 
@@ -32,20 +30,51 @@ interface GuardedAsyncContext {
     run<T>(fn: () => T): T;
 }
 
-// Keyed on the real `net` module, not a per-module `new AsyncLocalStorage()`: this file gets
-// evaluated more than once (bundled copies, Jest's per-test-file isolation), and every evaluation
-// needs the same store — `globalThis`/`process` are sandboxed per test file, core modules aren't.
-// Returns isActive()/run() rather than the raw instance, since any code with `require('net')` can
-// read whatever this stores, and a raw instance's own `.disable()` would kill this guard's scope
-// detection process-wide.
-function getSharedContext(key: string): GuardedAsyncContext {
-    return getOrCreateShared(net, `@dd/apps-plugin/network-guard ${key}`, () => {
+function isGuardedAsyncContext(value: unknown): value is GuardedAsyncContext {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        'isActive' in value &&
+        'run' in value &&
+        typeof value.isActive === 'function' &&
+        typeof value.run === 'function'
+    );
+}
+
+// Versioned so a copy from another plugin release, which may store a raw AsyncLocalStorage under
+// the unversioned keys, can't make this copy throw at load.
+const NETWORK_GUARD_SYMBOL_PREFIX = '@dd/apps-plugin/network-guard/v2';
+
+export function networkGuardSymbol(name: string): symbol {
+    return Symbol.for(`${NETWORK_GUARD_SYMBOL_PREFIX} ${name}`);
+}
+
+// Stored on `net` because core modules are the only state shared across this file's multiple
+// evaluations (bundled copies, Jest per-file isolation). The frozen facade keeps other code from
+// `.disable()`-ing the store; the own-property lookup keeps a polluted prototype from faking an install.
+export function getSharedContext(key: string): GuardedAsyncContext {
+    const symbol = networkGuardSymbol(key);
+    if (!Object.prototype.hasOwnProperty.call(net, symbol)) {
         const context = new AsyncLocalStorage<true>();
-        return {
+        const facade: GuardedAsyncContext = Object.freeze({
             isActive: () => context.getStore() === true,
             run: <T>(fn: () => T) => context.run(true, fn),
-        };
-    });
+        });
+        Object.defineProperty(net, symbol, {
+            value: facade,
+            writable: false,
+            configurable: false,
+            enumerable: false,
+        });
+        return facade;
+    }
+    const stored: unknown = Reflect.get(net, symbol);
+    if (!isGuardedAsyncContext(stored)) {
+        throw new Error(
+            `Internal error: the "${key}" network-guard registry entry is not a valid guarded context.`,
+        );
+    }
+    return stored;
 }
 
 // Scoped to the active `runBlocked` call's async chain, not process-wide, so unrelated concurrent callers aren't blocked too.
@@ -58,8 +87,17 @@ function isCurrentlyBlocked(): boolean {
     return blockedContext.isActive() && !allowedContext.isActive();
 }
 
-// `Symbol.for`, not `Symbol()`, so every re-evaluation of this file recognizes an already-installed guard instead of minting its own.
-const ALREADY_GUARDED = Symbol.for('@dd/apps-plugin/network-guard installed');
+// `Symbol.for` so re-evaluations recognize an installed guard; unversioned so another release's
+// copy (whose accessors are non-configurable) is recognized too, rather than crashing on redefine.
+export const ALREADY_GUARDED = Symbol.for('@dd/apps-plugin/network-guard installed');
+
+// Marks accessors installed by this guard generation. An accessor with only ALREADY_GUARDED came
+// from another release whose wrappers consult that release's own context, so this copy can't block.
+const GUARD_GENERATION = networkGuardSymbol('installed');
+let foreignGuardFound = false;
+
+export const FOREIGN_GUARD_MESSAGE =
+    'Local execution is unavailable: another version of the Datadog apps plugin in this process already guards Node built-ins, so this version cannot block network or subprocess access. Install a single version of the Datadog build plugins.';
 
 // Jest's globalThis Proxy can't produce a non-configurable property without throwing, and by then
 // it's already mutated the real object — so relax configurability under Jest (detected via this
@@ -98,6 +136,9 @@ export function installGuardedProperty<T>(
         | { [ALREADY_GUARDED]?: true }
         | undefined;
     if (existingGetter?.[ALREADY_GUARDED]) {
+        if (Reflect.get(existingGetter, GUARD_GENERATION) !== true) {
+            foreignGuardFound = true;
+        }
         return;
     }
 
@@ -128,6 +169,7 @@ export function installGuardedProperty<T>(
     let currentGuard = buildGuard();
     const getter = (): T => currentGuard;
     (getter as unknown as { [ALREADY_GUARDED]: true })[ALREADY_GUARDED] = true;
+    Object.defineProperty(getter, GUARD_GENERATION, { value: true });
     Object.defineProperty(target, prop, {
         configurable: shouldAllowConfigurableUnderJest(target, prop),
         enumerable: true,
@@ -259,6 +301,26 @@ function guardSocketEnd<F extends (this: net.Socket, ...args: never[]) => net.So
     return guardSocketOp<net.Socket>(getReal, (socket) => socket) as unknown as F;
 }
 
+// 'throw' is for APIs that throw synchronously (spawnSync/execSync); 'reject' for Promise-returning ones.
+function makeGuardWrapper<F extends (...args: never[]) => unknown>(
+    getReal: () => F,
+    blockedMessage: string,
+    onBlocked: 'throw' | 'reject',
+): F {
+    const wrapper = function (this: unknown, ...args: unknown[]): unknown {
+        if (!isCurrentlyBlocked()) {
+            const real = getReal();
+            return Reflect.apply(real, this, args);
+        }
+        const blockedError = new Error(blockedMessage);
+        if (onBlocked === 'reject') {
+            return Promise.reject(blockedError);
+        }
+        throw blockedError;
+    };
+    return wrapper as unknown as F;
+}
+
 // net.Server.listen/dgram.Socket.bind/connect: their optional callback is a success-only shorthand
 // for the 'listening'/'connect' event (no error parameter per @types/node) — real failures only
 // ever reach the async 'error' event, so a synchronous throw here would surface as an uncaught
@@ -299,7 +361,7 @@ function guardCallbackMethod<F extends (...args: never[]) => unknown>(getReal: (
 function guardNetworkPromiseMethod<F extends (...args: never[]) => Promise<unknown>>(
     getReal: () => F,
 ): F {
-    return makeGuardWrapper(getReal, () => isCurrentlyBlocked(), NETWORK_BLOCKED_MESSAGE, 'reject');
+    return makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'reject');
 }
 
 // Shared by guardWebSocket/guardEventSource/guardWorker. A Proxy construct trap, not a subclass,
@@ -346,12 +408,7 @@ export function guardWorker(getReal: () => unknown): unknown {
 // execSync/execFileSync genuinely throw synchronously on failure — this guard is for those two
 // only. The rest have their own guards below matching each one's real (never-throws) contract.
 function guardSubprocess<F extends (...args: never[]) => unknown>(getReal: () => F): F {
-    return makeGuardWrapper(
-        getReal,
-        () => isCurrentlyBlocked(),
-        SUBPROCESS_BLOCKED_MESSAGE,
-        'throw',
-    );
+    return makeGuardWrapper(getReal, SUBPROCESS_BLOCKED_MESSAGE, 'throw');
 }
 
 // spawn()/fork() return a brand-new ChildProcess with no existing `this` to emit 'error' on, so
@@ -504,8 +561,7 @@ function guardExecWithPromisifyCustom<F extends (...args: never[]) => unknown>(
 installGuardedProperty<typeof net.Socket.prototype.connect>(
     net.Socket.prototype,
     'connect',
-    (getReal) =>
-        makeGuardWrapper(getReal, () => isCurrentlyBlocked(), NETWORK_BLOCKED_MESSAGE, 'throw'),
+    (getReal) => makeGuardWrapper(getReal, NETWORK_BLOCKED_MESSAGE, 'throw'),
 );
 // A reused, already-connected keep-alive socket never calls connect() again for a second request —
 // write()/end() are the choke point every request still goes through, so guarding only connect()
@@ -653,6 +709,12 @@ export interface BlockedScopeHandle {
     abandonIfCurrent(): void;
 }
 
+export function assertNoForeignGuard(): void {
+    if (foreignGuardFound) {
+        throw new Error(FOREIGN_GUARD_MESSAGE);
+    }
+}
+
 // Runs `fn` with network/subprocess access blocked; wraps the customer's function body in `local-execution.ts`'s `runScriptLocally`.
 // `onScopeStarted`, if given, is invoked synchronously with a handle scoped to *this* call, for a
 // caller whose own timeout might fire while `fn` is still pending (see `local-execution.ts`).
@@ -660,6 +722,7 @@ export async function runBlocked<T>(
     fn: () => Promise<T>,
     onScopeStarted?: (handle: BlockedScopeHandle) => void,
 ): Promise<T> {
+    assertNoForeignGuard();
     const scope = blockEpoch.start();
     onScopeStarted?.({ abandonIfCurrent: () => scope.concludeIfCurrent() });
     try {

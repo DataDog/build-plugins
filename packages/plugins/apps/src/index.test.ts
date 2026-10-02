@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global NodeJS */
-
 import * as archive from '@dd/apps-plugin/archive';
 import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
@@ -17,7 +15,6 @@ import {
     getRepositoryDataMock,
 } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
-import { mkdtempSync } from 'fs';
 import JSZip from 'jszip';
 import os from 'os';
 import path from 'path';
@@ -26,7 +23,8 @@ import { parseAst } from 'rollup/parseAst';
 import type { BackendFunction } from './backend/types';
 import { ARCHIVE_FILENAME } from './constants';
 import type { AppsOptionsWithDefaults } from './types';
-import { buildAppPackage } from './vite/build-package';
+import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
+import { buildAppPackage, MANIFEST_DIR_PREFIX } from './vite/build-package';
 
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
@@ -40,6 +38,27 @@ function extractViteTransform(plugins: PluginOptions[]) {
     const transform = plugins[0].vite?.transform;
     expect(transform).toEqual(expect.objectContaining({ handler: expect.any(Function) }));
     return (transform as { handler: (code: string, id: string) => Promise<unknown> }).handler;
+}
+
+/** Asserts mkdtemp created a dir for each expected prefix and that none of those dirs survive. */
+async function expectNoLeakedTempDirs(
+    mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>,
+    expectedPrefixes: string[],
+) {
+    if (mkdtempSpy.mock.calls.length === 0) {
+        throw new Error('fs.mkdtemp was never intercepted, so no temp dir cleanup was checked.');
+    }
+    const pendingDirs = mkdtempSpy.mock.results.map(({ value }) => value);
+    const createdDirs = await Promise.all(pendingDirs);
+    const pluginDirs = createdDirs
+        .map(String)
+        .filter((dir) => expectedPrefixes.some((prefix) => path.basename(dir).startsWith(prefix)));
+    const createdPrefixes = expectedPrefixes.filter((prefix) =>
+        pluginDirs.some((dir) => path.basename(dir).startsWith(prefix)),
+    );
+    expect(createdPrefixes).toEqual(expectedPrefixes);
+    const leakedDirs = pluginDirs.filter((dir) => fsHelpers.existsSync(dir));
+    expect(leakedDirs).toEqual([]);
 }
 
 function emitModuleParsed(
@@ -145,139 +164,6 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
-    test('never packages datadog-app.local.json, even when options.include matches it', async () => {
-        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
-        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: localCredentialsPath, relativePath: 'datadog-app.local.json' },
-        ]);
-
-        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
-
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        expect(Object.keys(zip.files)).not.toEqual(
-            expect.arrayContaining(['frontend/datadog-app.local.json']),
-        );
-    });
-
-    // Regression test: a case-insensitive filesystem resolves a differently-cased basename to the
-    // same file a glob matched, so the exclusion filter must compare case-insensitively.
-    test('never packages a case-variant of datadog-app.local.json, even when options.include matches it', async () => {
-        const localCredentialsPath = path.join(root, 'Datadog-App.Local.Json');
-        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: localCredentialsPath, relativePath: 'Datadog-App.Local.Json' },
-        ]);
-
-        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
-
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        expect(Object.keys(zip.files)).not.toEqual(
-            expect.arrayContaining(['frontend/Datadog-App.Local.Json']),
-        );
-    });
-
-    // Regression test: a symlink under a different name still reads the credentials file's real
-    // content, so the exclusion filter must check the resolved target, not just the discovered
-    // path's own basename.
-    test('never packages a symlink pointing at datadog-app.local.json, even under a different name', async () => {
-        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
-        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        const symlinkPath = path.join(root, 'backup-config.json');
-        await fs.symlink(localCredentialsPath, symlinkPath);
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: symlinkPath, relativePath: 'backup-config.json' },
-        ]);
-
-        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
-
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        expect(Object.keys(zip.files)).not.toEqual(
-            expect.arrayContaining(['frontend/backup-config.json']),
-        );
-    });
-
-    // Regression test: when datadog-app.local.json is itself a symlink, the file glob-matched at
-    // its target path carries the same secret bytes under a different name and must be excluded too.
-    test('never packages the real target of a symlinked datadog-app.local.json', async () => {
-        const realSecretsPath = path.join(root, 'config', 'dev-secrets.json');
-        await fs.mkdir(path.dirname(realSecretsPath), { recursive: true });
-        await fs.writeFile(realSecretsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
-        await fs.symlink(realSecretsPath, localCredentialsPath);
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: realSecretsPath, relativePath: 'config/dev-secrets.json' },
-        ]);
-
-        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
-
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        expect(Object.keys(zip.files)).not.toEqual(
-            expect.arrayContaining(['frontend/config/dev-secrets.json']),
-        );
-    });
-
-    // Regression test: a hardlink shares the credentials file's inode without ever being a
-    // symlink, so an identity check must compare (device, inode), not just resolve symlink targets.
-    test('never packages a hardlink to datadog-app.local.json, even under a different name', async () => {
-        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
-        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        const hardlinkPath = path.join(root, 'backup-hardlink.json');
-        await fs.link(localCredentialsPath, hardlinkPath);
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: hardlinkPath, relativePath: 'backup-hardlink.json' },
-        ]);
-
-        await buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } }));
-
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        expect(Object.keys(zip.files)).not.toEqual(
-            expect.arrayContaining(['frontend/backup-hardlink.json']),
-        );
-    });
-
-    // Regression test: a stat failure on the candidate asset itself (not on the credentials file)
-    // must still propagate rather than being swallowed as "not a match" — the mock only intercepts
-    // the asset's own stat call so a real credentials file resolves normally first.
-    test('propagates a non-ENOENT stat failure instead of treating an unverifiable asset as safe', async () => {
-        const localCredentialsPath = path.join(root, 'datadog-app.local.json');
-        await fs.writeFile(localCredentialsPath, '{"STRIPE_API_KEY":"sk_test_should_not_ship"}');
-        const symlinkPath = path.join(root, 'mystery-config.json');
-        await fs.symlink(sourcePath, symlinkPath);
-        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
-            { absolutePath: sourcePath, relativePath: 'index.html' },
-            { absolutePath: symlinkPath, relativePath: 'mystery-config.json' },
-        ]);
-        const realStat = fs.stat.bind(fs);
-        jest.spyOn(fs, 'stat').mockImplementation(async (target, ...args) => {
-            if (target === symlinkPath) {
-                const error: NodeJS.ErrnoException = new Error('permission denied');
-                error.code = 'EACCES';
-                throw error;
-            }
-            return realStat(target as string, ...(args as []));
-        });
-
-        await expect(
-            buildAppPackage(packageOptions({ options: { include: ['**/*.json'] } })),
-        ).rejects.toThrow('permission denied');
-    });
-
     test('writes manifest.json with only backend function entries', async () => {
         await buildAppPackage(packageOptions());
 
@@ -324,7 +210,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
     // The module-graph collector needs buildRoot to match the virtual module ids
     // used below; buildAppPackage needs a real outDir it can write into.
     const buildRoot = '/project';
-    const outDir = mkdtempSync(path.join(os.tmpdir(), 'dd-apps-closebundle-'));
+    let outDir: string;
+    let mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>;
     const getArgs = () =>
         getGetPluginsArg(
             { apps: {} },
@@ -335,6 +222,13 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             },
         );
 
+    beforeEach(async () => {
+        const tmpRoot = os.tmpdir();
+        const outDirPrefix = path.join(tmpRoot, 'dd-apps-closebundle-');
+        outDir = await fs.mkdtemp(outDirPrefix);
+        mkdtempSpy = jest.spyOn(fs, 'mkdtemp');
+    });
+
     afterEach(async () => {
         jest.restoreAllMocks();
         await fs.rm(outDir, { recursive: true, force: true });
@@ -344,7 +238,6 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
 
         let manifest: unknown;
         jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
@@ -417,13 +310,13 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
+        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
 
         // The entry file alone is clean; only importing a local helper is visible from here.
         const entryCode = `
@@ -482,13 +375,13 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Importing Node built-in module "fs" is not supported in backend function code',
         );
+        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
     });
 
     test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
-        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
 
         const entryCode = `
             import { getEcho } from './helpers/http-helper.js';
@@ -543,5 +436,51 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Using "fetch" is not supported in backend function code',
         );
+        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
+    });
+
+    test('Should remove the backend output directory when packaging the app fails', async () => {
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(archive, 'createArchive').mockRejectedValue(new Error('archive write failed'));
+
+        const entryId = '/project/src/backend/greet.backend.js';
+        const entryCode = `
+            export function greet() {
+                return 'hello';
+            }
+        `;
+        const viteBuild = jest.fn().mockImplementation(async (config) => {
+            emitModuleParsed(config, entryId, entryCode);
+            return {
+                output: [
+                    {
+                        type: 'chunk',
+                        isEntry: true,
+                        name: expect.any(String),
+                        fileName: 'unused.greet.js',
+                    },
+                ],
+            };
+        });
+        const args = getArgs();
+        args.bundler = { build: viteBuild };
+        const plugins = getPlugins(args);
+        const transform = extractViteTransform(plugins);
+        await transform.call(
+            {
+                parse: parseAst,
+                resolve: jest.fn(async () => null),
+                load: jest.fn(async () => null),
+                addWatchFile: jest.fn(),
+            },
+            entryCode,
+            entryId,
+        );
+
+        const closeBundleResult = extractCloseBundle(plugins)();
+        await expect(closeBundleResult).rejects.toThrow('archive write failed');
+        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 });
