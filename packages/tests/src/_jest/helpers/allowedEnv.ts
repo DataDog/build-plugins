@@ -68,15 +68,37 @@ const ALLOWED_NAMES = new Set([
     'NO_TYPES',
     'REQUESTED_BUNDLERS',
 ]);
+// Windows system variables that node, git, and other child processes need to start.
+const ALLOWED_WINDOWS_NAMES = new Set([
+    'APPDATA',
+    'COMSPEC',
+    'HOMEDRIVE',
+    'HOMEPATH',
+    'LOCALAPPDATA',
+    'PATHEXT',
+    'PROGRAMDATA',
+    'SYSTEMDRIVE',
+    'SYSTEMROOT',
+    'USERPROFILE',
+    'WINDIR',
+]);
 const ALLOWED_PREFIXES = ['DD_CIVISIBILITY_', 'DD_TEST_', 'DD_TRACE_', 'JEST_', 'LC_'];
 
-const isAllowed = (name: string) =>
-    ALLOWED_NAMES.has(name) || ALLOWED_PREFIXES.some((prefix) => name.startsWith(prefix));
+export const isAllowedEnvName = (name: string, platform: string) => {
+    // Windows env names are case-insensitive, and the search path is usually spelled `Path`.
+    const isWindows = platform === 'win32';
+    const comparableName = isWindows ? name.toUpperCase() : name;
+    return (
+        ALLOWED_NAMES.has(comparableName) ||
+        (isWindows && ALLOWED_WINDOWS_NAMES.has(comparableName)) ||
+        ALLOWED_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
+    );
+};
 
 export const scrubEnv = () => {
     const names = Object.keys(process.env);
     for (const name of names) {
-        if (!isAllowed(name)) {
+        if (!isAllowedEnvName(name, process.platform)) {
             delete process.env[name];
         }
     }

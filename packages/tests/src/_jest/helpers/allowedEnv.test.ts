@@ -2,7 +2,23 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { scrubEnv } from './allowedEnv';
+import { isAllowedEnvName, scrubEnv } from './allowedEnv';
+
+// Sets the variable, scrubs, and restores it, so a case can't leave a broken value behind.
+const isKeptByScrub = (name: string) => {
+    const previousValue = process.env[name];
+    process.env[name] = 'value';
+
+    scrubEnv();
+    const isKept = name in process.env;
+
+    if (previousValue === undefined) {
+        delete process.env[name];
+    } else {
+        process.env[name] = previousValue;
+    }
+    return isKept;
+};
 
 describe('scrubEnv', () => {
     const cases = [
@@ -63,17 +79,37 @@ describe('scrubEnv', () => {
     ];
 
     test.each(cases)('Should $description', ({ name, kept }) => {
-        const previousValue = process.env[name];
-        process.env[name] = 'value';
-
-        scrubEnv();
-        const isKept = name in process.env;
-
-        if (previousValue === undefined) {
-            delete process.env[name];
-        } else {
-            process.env[name] = previousValue;
-        }
+        const isKept = isKeptByScrub(name);
         expect(isKept).toBe(kept);
+    });
+});
+
+describe('isAllowedEnvName', () => {
+    const cases = [
+        { description: 'keep Path on Windows', platform: 'win32', name: 'Path', kept: true },
+        {
+            description: 'keep SystemRoot on Windows, which child processes need',
+            platform: 'win32',
+            name: 'SystemRoot',
+            kept: true,
+        },
+        { description: 'keep PATHEXT on Windows', platform: 'win32', name: 'PATHEXT', kept: true },
+        {
+            description: 'still remove a GitHub token on Windows',
+            platform: 'win32',
+            name: 'GITHUB_TOKEN',
+            kept: false,
+        },
+        {
+            description: 'match names case-sensitively elsewhere',
+            platform: 'linux',
+            name: 'Path',
+            kept: false,
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ platform, name, kept }) => {
+        const isAllowed = isAllowedEnvName(name, platform);
+        expect(isAllowed).toBe(kept);
     });
 });
