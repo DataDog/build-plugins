@@ -397,7 +397,7 @@ module.exports = {
                     },
                     {
                         selector:
-                            ":matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property:matches([key.name='env'], [key.value='env'])",
+                            ":matches(VariableDeclarator[init.name='process'] > ObjectPattern.id, AssignmentExpression[right.name='process'] > ObjectPattern.left) > Property:matches([key.name='env'], [key.value='env']):not([value.type='ObjectPattern']:not(:has(RestElement)))",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {

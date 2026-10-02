@@ -82,6 +82,21 @@ describe('process.env lint rule for tests', () => {
             expected: 1,
         },
         {
+            description: 'flag a nested rest destructure of it off process',
+            code: 'const { env: { ...rest } } = process;',
+            expected: 1,
+        },
+        {
+            description: 'allow nested destructuring of named keys off process',
+            code: 'const { env: { PATH } } = process;',
+            expected: 0,
+        },
+        {
+            description: 'allow nested assignment-destructuring of named keys off process',
+            code: 'let PATH;\n({ env: { PATH } } = process);',
+            expected: 0,
+        },
+        {
             description: 'allow setting one key',
             code: "process.env.DD_SITE = 'datadoghq.com';",
             expected: 0,
