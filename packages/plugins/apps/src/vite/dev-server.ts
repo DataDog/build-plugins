@@ -12,6 +12,7 @@ import type { build } from 'vite';
 
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
@@ -113,6 +114,7 @@ async function bundleBackendFunction(
     viteBuild: typeof build,
     func: BackendFunction,
     projectRoot: string,
+    configuredAllowedConnectionIds: string[] = [],
     log: Logger,
 ): Promise<BundleResult> {
     const displayName = formatRef(func);
@@ -163,11 +165,15 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const discoveredIds = connectionIdCollector.getAllowedConnectionIds();
+    const allowedConnectionIds = mergeAllowedConnectionIds(
+        configuredAllowedConnectionIds,
+        discoveredIds,
+    );
     const enrichedFunc = {
         ...func,
-        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+        allowedConnectionIds,
     };
-
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
     return { func: enrichedFunc, code };
@@ -697,9 +703,18 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
     mode: string,
+    configuredAllowedConnectionIds: string[] | (() => string[]) = [],
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, func, projectRoot, log);
+    const resolveConfiguredAllowedConnectionIds = (): string[] => {
+        if (typeof configuredAllowedConnectionIds === 'function') {
+            return configuredAllowedConnectionIds();
+        }
+        return configuredAllowedConnectionIds;
+    };
+    const bundle = (func: BackendFunction) => {
+        const connectionIds = resolveConfiguredAllowedConnectionIds();
+        return bundleBackendFunction(viteBuild, func, projectRoot, connectionIds, log);
+    };
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
 
     const initialFunctions = getBackendFunctions();

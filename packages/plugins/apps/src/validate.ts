@@ -30,7 +30,7 @@ export const resolveLongPolling = (
 };
 
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
-    const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
+    const resolvedOptions = options[CONFIG_KEY] ?? {};
 
     return {
         include: resolvedOptions.include || [],
