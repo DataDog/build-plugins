@@ -87,6 +87,62 @@ describe('process.env lint rule for tests', () => {
             expected: 1,
         },
         {
+            description: 'flag reaching it with a template-literal key',
+            code: 'const env = process[`env`];',
+            expected: 1,
+        },
+        {
+            description: 'flag destructuring it off process with a template-literal key',
+            code: 'const { [`env`]: env } = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing it with a template-literal key',
+            code: 'jest.replaceProperty(process, `env`, {});',
+            expected: 1,
+        },
+        {
+            description: 'flag reading it with Reflect.get',
+            code: "const env = Reflect.get(process, 'env');",
+            expected: 1,
+        },
+        {
+            description: 'flag destructuring it off process with a default',
+            code: 'const { env = {} } = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag a defaulted nested rest destructure of it off process',
+            code: 'const { env: { ...rest } = {} } = process;',
+            expected: 1,
+        },
+        {
+            description: 'allow reading one key through a template-literal key',
+            code: 'const path = process[`env`].PATH;',
+            expected: 0,
+        },
+        {
+            description: 'allow checking that process has it with Object.hasOwn',
+            code: "const hasEnv = Object.hasOwn(process, 'env');",
+            expected: 0,
+        },
+        {
+            description: 'allow checking that process has it with Reflect.has',
+            code: "const hasEnv = Reflect.has(process, 'env');",
+            expected: 0,
+        },
+        {
+            description: 'allow defaulted nested destructuring of named keys off process',
+            code: 'const { env: { PATH } = {} } = process;',
+            expected: 0,
+        },
+        {
+            description:
+                'allow defaulted nested assignment-destructuring of named keys off process',
+            code: 'let PATH;\n({ env: { PATH } = {} } = process);',
+            expected: 0,
+        },
+        {
             description: 'allow nested destructuring of named keys off process',
             code: 'const { env: { PATH } } = process;',
             expected: 0,
@@ -178,6 +234,11 @@ describe('process.env lint rule for tests', () => {
         {
             description: 'apply to benchmark setup and reporters',
             file: 'packages/tests/src/bench/liveDebuggerRuntime/globalSetup.ts',
+            expected: 1,
+        },
+        {
+            description: 'apply to benchmark JavaScript the benchmarks import',
+            file: 'packages/tests/src/bench/liveDebuggerRuntime/liveDebuggerBenchConfig.js',
             expected: 1,
         },
         {
