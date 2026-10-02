@@ -4,7 +4,7 @@
 
 import type { Options } from '@dd/core/types';
 
-import { CONFIG_KEY } from './constants';
+import { CONFIG_KEY, DEFAULT_BACKEND_MINIFY } from './constants';
 import type { AppsOptions, AppsOptionsWithDefaults } from './types';
 
 export const resolveLongPolling = (
@@ -31,9 +31,14 @@ export const resolveLongPolling = (
 
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
+    const minify = resolvedOptions.backend?.minify;
+    if (minify !== undefined && typeof minify !== 'boolean') {
+        throw new Error('apps.backend.minify must be a boolean.');
+    }
 
     return {
         include: resolvedOptions.include || [],
+        backend: { minify: minify ?? DEFAULT_BACKEND_MINIFY },
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
     };
 };

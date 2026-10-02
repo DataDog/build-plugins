@@ -134,10 +134,12 @@ async function bundleBackendFunction(
         log,
         connectionIdCollector.getModuleRecords,
     );
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
-        connectionIdCollector.plugin,
-        staticChecksPlugin,
-    ]);
+    const baseConfig = getBaseBackendBuildConfig(
+        projectRoot,
+        { [virtualId]: virtualContent },
+        [connectionIdCollector.plugin, staticChecksPlugin],
+        false, // Keep dev-server bundles readable for debugging.
+    );
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.

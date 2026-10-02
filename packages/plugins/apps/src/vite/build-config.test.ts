@@ -8,10 +8,61 @@
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { build } from 'vite';
+import { SourceTextModule } from 'vm';
 
 import { getBaseBackendBuildConfig } from './build-config';
 
 describe('getBaseBackendBuildConfig', () => {
+    test('minifies backend bundles with esbuild and preserves names by default', () => {
+        const config = getBaseBackendBuildConfig('/project', {});
+        expect(config.build.minify).toBe('esbuild');
+        expect(config.esbuild).toEqual({ keepNames: true });
+    });
+
+    test('allows backend minification to be disabled', () => {
+        const config = getBaseBackendBuildConfig('/project', {}, [], false);
+        expect(config.build.minify).toBe(false);
+    });
+
+    test('preserves function and class names in a minified bundle at runtime', async () => {
+        const virtualId = 'virtual:dd-backend-test:names';
+        const config = getBaseBackendBuildConfig(process.cwd(), {
+            [virtualId]: `
+                class BackendError extends Error {}
+                function readableBackendFunction() { throw new BackendError('test'); }
+                export function main() {
+                    try { readableBackendFunction(); }
+                    catch (error) {
+                        return { className: BackendError.name, stack: error.stack };
+                    }
+                }
+            `,
+        });
+        const result = await build({
+            ...config,
+            build: {
+                ...config.build,
+                write: false,
+                rollupOptions: { ...config.build.rollupOptions, input: virtualId },
+            },
+        });
+        const output = Array.isArray(result) ? result[0] : result;
+        if (!('output' in output) || output.output[0].type !== 'chunk') {
+            throw new Error('Expected a backend bundle');
+        }
+        const code = output.output[0].code;
+        const module = new SourceTextModule(code);
+        await module.link(() => {
+            throw new Error('Unexpected external import');
+        });
+        await module.evaluate();
+        const main = Reflect.get(module.namespace, 'main');
+        const { className, stack } = main();
+        expect(main.name).toBe('main');
+        expect(className).toBe('BackendError');
+        expect(stack).toContain('readableBackendFunction');
+    });
+
     test('bundles a backend function that imports a real Node builtin module with a working import, not a browser-external stub', async () => {
         const seed = `build-config-ssr-${Date.now()}`;
         const workingDir = getTempWorkingDir(seed);
@@ -58,7 +109,7 @@ describe('getBaseBackendBuildConfig', () => {
             const code = chunk.type === 'chunk' ? chunk.code : '';
 
             // The browser-external stub has no real exports and rewrites away the import specifier.
-            expect(code).toContain("from 'node:crypto'");
+            expect(code).toMatch(/from\s*["']node:crypto["']/);
             expect(code).not.toContain('__vite-browser-external');
         } finally {
             rmSync(workingDir);

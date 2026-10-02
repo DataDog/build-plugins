@@ -32,6 +32,7 @@ export async function buildBackendFunctions(
     functions: BackendFunction[],
     buildRoot: string,
     log: Logger,
+    minify?: boolean,
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
@@ -65,6 +66,7 @@ export async function buildBackendFunctions(
                 buildRoot,
                 { [virtualId]: virtualContent },
                 [connectionIdCollector.plugin, staticChecksPlugin],
+                minify,
             );
 
             // eslint-disable-next-line no-await-in-loop

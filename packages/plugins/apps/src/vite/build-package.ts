@@ -14,7 +14,7 @@ import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
+import { ARCHIVE_FILENAME, MAX_DECOMPRESSED_ARCHIVE_SIZE, PLUGIN_NAME } from '../constants';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
 export const MANIFEST_DIR_PREFIX = 'dd-apps-manifest-';
@@ -110,6 +110,14 @@ export async function buildAppPackage({
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);
+        log.info(
+            `App package size: ${archive.assets.length} files, ${(archive.size / 1_000_000).toFixed(2)} MB compressed, ${(archive.decompressedSize / 1_000_000).toFixed(2)} MB decompressed.`,
+        );
+        if (archive.decompressedSize >= MAX_DECOMPRESSED_ARCHIVE_SIZE * 0.9) {
+            log.warn(
+                `App package is approaching or exceeds the ${MAX_DECOMPRESSED_ARCHIVE_SIZE / 1_000_000} MB decompressed upload limit. Reduce the package size before uploading.`,
+            );
+        }
         log.info(`App package written to ${archive.archivePath}.`);
         return archive.archivePath;
     } finally {

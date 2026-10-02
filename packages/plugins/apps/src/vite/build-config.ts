@@ -4,7 +4,7 @@
 
 import type { BuildOptions, InlineConfig, Plugin } from 'vite';
 
-import { BACKEND_CODE_EXTENSIONS } from '../constants';
+import { BACKEND_CODE_EXTENSIONS, DEFAULT_BACKEND_MINIFY } from '../constants';
 
 /**
  * Create the virtual module resolver plugin used by both production and dev builds.
@@ -38,6 +38,7 @@ export function getBaseBackendBuildConfig(
     root: string,
     virtualEntries: Record<string, string>,
     plugins: Plugin[] = [],
+    minify = DEFAULT_BACKEND_MINIFY,
 ): InlineConfig & {
     build: BuildOptions & { rollupOptions: NonNullable<BuildOptions['rollupOptions']> };
 } {
@@ -52,8 +53,9 @@ export function getBaseBackendBuildConfig(
         envPrefix: [],
         root,
         logLevel: 'silent',
+        esbuild: { keepNames: true },
         build: {
-            minify: false,
+            minify: minify ? 'esbuild' : false,
             target: 'esnext',
             // Backend functions run server-side. Without this, Vite's default
             // browser-target build externalizes Node builtins (node:crypto, fs)
