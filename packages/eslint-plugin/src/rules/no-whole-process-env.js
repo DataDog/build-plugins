@@ -96,11 +96,31 @@ const getKeyName = (node, key) => {
     return getStaticString(key);
 };
 
-const getCalleeName = (callee) => {
+// A name that refers to the built-in global, or to Jest's export imported from @jest/globals
+// under its own name, rather than to a local binding that shadows it.
+const isTrustedGlobal = (sourceCode, identifier) => {
+    const variable = getRuntimeVariable(sourceCode, identifier);
+    if (!variable) {
+        return true;
+    }
+    return variable.defs.some(
+        (definition) =>
+            definition.type === 'ImportBinding' &&
+            definition.node.type === 'ImportSpecifier' &&
+            definition.node.imported.name === identifier.name &&
+            getStaticString(definition.parent.source) === '@jest/globals',
+    );
+};
+
+// `name` or `object.method` for a call on a trusted global; undefined for anything else.
+const getCalleeName = (sourceCode, callee) => {
     if (callee.type === 'Identifier') {
-        return callee.name;
+        return isTrustedGlobal(sourceCode, callee) ? callee.name : undefined;
     }
     if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') {
+        return undefined;
+    }
+    if (!isTrustedGlobal(sourceCode, callee.object)) {
         return undefined;
     }
     const methodName = getKeyName(callee, callee.property);
@@ -393,16 +413,19 @@ const isProcess = (sourceCode, node, seen = new Set()) => {
             );
         case 'CallExpression': {
             const [first, second] = target.arguments;
-            const calleeName = getCalleeName(target.callee);
+            const calleeName = getCalleeName(sourceCode, target.callee);
             const isRequire = REQUIRE_CALLS.has(calleeName);
             const readsGlobalProcess =
                 calleeName === 'Reflect.get' &&
                 isGlobalObject(sourceCode, first) &&
                 getStaticString(second) === 'process';
             const { callee } = target;
+            const methodName =
+                callee.type === 'MemberExpression'
+                    ? getKeyName(callee, callee.property)
+                    : undefined;
             const returnsProcess =
-                callee.type === 'MemberExpression' &&
-                SELF_RETURNING_METHODS.has(getKeyName(callee, callee.property)) &&
+                SELF_RETURNING_METHODS.has(methodName) &&
                 isProcess(sourceCode, callee.object, seen);
             return (isRequire && isProcessModule(first)) || readsGlobalProcess || returnsProcess;
         }
@@ -427,22 +450,8 @@ const getEnclosingFunction = (node) => {
 };
 
 // A hook name bound to Jest's global, or imported from @jest/globals under its own name.
-const isJestHookName = (sourceCode, callee) => {
-    if (callee?.type !== 'Identifier' || !HOOKS.has(callee.name)) {
-        return false;
-    }
-    const variable = getRuntimeVariable(sourceCode, callee);
-    if (!variable) {
-        return true;
-    }
-    return variable.defs.some(
-        (definition) =>
-            definition.type === 'ImportBinding' &&
-            definition.node.type === 'ImportSpecifier' &&
-            definition.node.imported.name === callee.name &&
-            getStaticString(definition.parent.source) === '@jest/globals',
-    );
-};
+const isJestHookName = (sourceCode, callee) =>
+    callee?.type === 'Identifier' && HOOKS.has(callee.name) && isTrustedGlobal(sourceCode, callee);
 
 const isHookCallback = (sourceCode, callback) => {
     const call = callback.parent;
@@ -495,7 +504,7 @@ const isKeyedCallTarget = (sourceCode, call, argument) => {
     if (call.arguments[0] !== argument) {
         return false;
     }
-    const calleeName = getCalleeName(call.callee);
+    const calleeName = getCalleeName(sourceCode, call.callee);
     if (KEYED_CALLS.has(calleeName) || isHasOwnPropertyCall(call.callee)) {
         return true;
     }
@@ -536,9 +545,9 @@ const isAndGuard = (logical, operand) => logical.operator === '&&' && logical.le
 const THIS_BINDING_METHODS = new Set(['apply', 'bind', 'call']);
 
 // process passed as `this`, as in `process.exit.bind(process)` or `Reflect.apply(fn, process, args)`.
-const isThisArgument = (call, argument) => {
+const isThisArgument = (sourceCode, call, argument) => {
     const { callee } = call;
-    if (getCalleeName(callee) === 'Reflect.apply') {
+    if (getCalleeName(sourceCode, callee) === 'Reflect.apply') {
         return call.arguments[1] === argument;
     }
     if (callee.type !== 'MemberExpression') {
@@ -563,7 +572,7 @@ const isProcessReportRead = (sourceCode, call) => {
 // Calls the rule reports on their own: reading or replacing process.env, replacing global
 // process, or reading a process report.
 const isReportedCall = (sourceCode, call) => {
-    const calleeName = getCalleeName(call.callee);
+    const calleeName = getCalleeName(sourceCode, call.callee);
     const [target, key] = call.arguments;
     const keyName = getStaticString(key);
     const sources = call.arguments.slice(1);
@@ -573,11 +582,11 @@ const isReportedCall = (sourceCode, call) => {
     const replacesEnvFromLiteral =
         targetIsProcess &&
         PROPERTY_REPLACERS.has(calleeName) &&
-        sources.some((source) => hasNamedProperty(source, 'env'));
+        sources.some((source) => mayHaveProperty(source, 'env'));
     const replacesGlobalProcessFromLiteral =
         PROPERTY_REPLACERS.has(calleeName) &&
         isGlobalObject(sourceCode, target) &&
-        sources.some((source) => hasNamedProperty(source, 'process'));
+        sources.some((source) => mayHaveProperty(source, 'process'));
     const replacesGlobalProcess =
         KEYED_REPLACERS.has(calleeName) &&
         keyName === 'process' &&
@@ -630,7 +639,10 @@ const isSafeProcessUse = (sourceCode, processNode) => {
         case 'ForInStatement':
             return parent.right === child;
         case 'CallExpression':
-            return isKeyedCallTarget(sourceCode, parent, child) || isThisArgument(parent, child);
+            return (
+                isKeyedCallTarget(sourceCode, parent, child) ||
+                isThisArgument(sourceCode, parent, child)
+            );
         case 'VariableDeclarator':
         case 'AssignmentPattern':
             return true;
@@ -651,6 +663,19 @@ const isSafeProcessUse = (sourceCode, processNode) => {
     }
 };
 
+// A rest parameter or `arguments` hides the callback's first argument from the binding walk.
+const isTrackedCallbackArgument = (sourceCode, callback) => {
+    if (callback.params[0]?.type === 'RestElement') {
+        return false;
+    }
+    if (callback.type === 'ArrowFunctionExpression') {
+        return true;
+    }
+    const callbackScope = sourceCode.getScope(callback);
+    const argumentsVariable = callbackScope.set.get('arguments');
+    return !argumentsVariable || argumentsVariable.references.length === 0;
+};
+
 // A use of a promise for the process module that the rule follows: awaiting it, an inline `.then`
 // callback, or a local alias.
 const isSafeProcessModulePromiseUse = (sourceCode, promiseNode) => {
@@ -669,13 +694,13 @@ const isSafeProcessModulePromiseUse = (sourceCode, promiseNode) => {
         case 'MemberExpression': {
             const call = parent.parent;
             const callback = call.type === 'CallExpression' ? call.arguments[0] : undefined;
-            return (
+            const isInlineThenCallback =
                 parent.object === child &&
                 getKeyName(parent, parent.property) === 'then' &&
                 call.callee === parent &&
                 callback !== undefined &&
-                FUNCTION_TYPES.has(callback.type)
-            );
+                FUNCTION_TYPES.has(callback.type);
+            return isInlineThenCallback && isTrackedCallbackArgument(sourceCode, callback);
         }
         default:
             return false;
@@ -709,11 +734,18 @@ const getCallChainEnd = (call) => {
     return current;
 };
 
-const hasNamedProperty = (node, name) =>
-    node?.type === 'ObjectExpression' &&
-    node.properties.some(
-        (property) => property.type === 'Property' && getKeyName(property, property.key) === name,
-    );
+// Whether a source object can carry the `name` key: only an object literal whose static keys
+// leave it out provably can't.
+const mayHaveProperty = (node, name) => {
+    if (node?.type !== 'ObjectExpression') {
+        return true;
+    }
+    return node.properties.some((property) => {
+        const keyName =
+            property.type === 'Property' ? getKeyName(property, property.key) : undefined;
+        return keyName === undefined || keyName === name;
+    });
+};
 
 /** @type {import('eslint').Rule.RuleModule} */
 module.exports = {

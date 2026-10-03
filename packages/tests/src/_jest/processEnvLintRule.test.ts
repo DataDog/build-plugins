@@ -1297,6 +1297,76 @@ describe('process.env lint rule for tests', () => {
             expected: 0,
         },
         {
+            description: 'flag replacing process properties from a variable',
+            code: 'Object.assign(process, replacement);',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing process properties from a spread',
+            code: 'Object.assign(process, { ...replacement });',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing process properties from a computed key',
+            code: 'Object.assign(process, { [key]: value });',
+            expected: 1,
+        },
+        {
+            description: 'flag defining process properties from a variable',
+            code: 'Object.defineProperties(process, descriptors);',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing global properties from a variable',
+            code: 'Object.assign(globalThis, replacement);',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing global properties from a spread',
+            code: 'Object.assign(global, { ...replacement });',
+            expected: 1,
+        },
+        {
+            description: 'flag defining global properties from a variable',
+            code: 'Object.defineProperties(globalThis, descriptors);',
+            expected: 1,
+        },
+        {
+            description: 'flag passing it to a local function named like a name reader',
+            code: 'const Object = { keys: (value) => expect(value).toEqual({}) };\nObject.keys(process.env);',
+            expected: 1,
+        },
+        {
+            description: 'flag passing it to a local object named like jest',
+            code: "const jest = { replaceProperty: consume };\njest.replaceProperty(process.env, 'A', 'x');",
+            expected: 1,
+        },
+        {
+            description: 'flag reaching the process module through a rest parameter',
+            code: "import('process').then((...args) => expect(args[0].env).toEqual({}));",
+            expected: 1,
+        },
+        {
+            description: 'flag reaching the process module through arguments',
+            code: "import('process').then(function () {\n    consume(arguments[0]);\n});",
+            expected: 1,
+        },
+        {
+            description: 'allow a local function named require',
+            code: "const require = (name) => fake(name);\nconst value = require('process').env;",
+            expected: 0,
+        },
+        {
+            description: 'allow jest imported from @jest/globals',
+            code: "import { jest } from '@jest/globals';\njest.replaceProperty(process.env, 'DD_SITE', 'x');",
+            expected: 0,
+        },
+        {
+            description: 'allow a then callback that ignores the process module',
+            code: "import('process').then(() => run());",
+            expected: 0,
+        },
+        {
             description: 'allow importing something else from process',
             code: "import { cwd } from 'process';",
             expected: 0,
