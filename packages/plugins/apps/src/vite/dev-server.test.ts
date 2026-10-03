@@ -6,6 +6,7 @@
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
+import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -205,6 +206,14 @@ describe('getRetryDelay', () => {
 function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) => unknown) {
     const resolveModule = moduleResolverFor(func, { [func.name]: fn });
     mockLoadModule.mockImplementation(resolveModule);
+}
+
+function createDeferred() {
+    let resolve: () => void = () => {};
+    const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
 }
 
 const previewRuntimeContext = {
@@ -1542,17 +1551,40 @@ describe('Dev Server Middleware', () => {
         // enqueue() call, two concurrent requests for two different cold functions could evaluate
         // their top-level code in genuine parallel instead of one fully finishing before the other starts.
         test('Should never let two concurrent requests for different cold functions race their priming loads', async () => {
-            mockRuntimeContextHydration();
+            // The describe's beforeEach registers greet's hydration; this one serves compute's.
+            const apiScope = mockRuntimeContextHydration();
             const order: string[] = [];
-            let releaseGreetPriming: (() => void) | undefined;
-            const greetPrimingGate = new Promise<void>((resolve) => {
-                releaseGreetPriming = resolve;
+            const greetPrimingGate = createDeferred();
+            const greetPrimingStarted = createDeferred();
+            const computeQueued = createDeferred();
+            // handleExecuteAction logs this and reaches enqueue() with no await in between.
+            const computeQueuedMessage = `Executing action locally: ${mockFunctions[1].relativePath}/${mockFunctions[1].name}`;
+            const queueAwareLog = getMockLogger({
+                debug: (text: string) => {
+                    if (text.startsWith(computeQueuedMessage)) {
+                        computeQueued.resolve();
+                    }
+                },
+            });
+            // A cold execution submits its runtime-context query as soon as its queued turn starts,
+            // so a second submission means compute's turn began while greet still held the queue.
+            let submittedQueryCount = 0;
+            const countingRequest = <T>(opts: Omit<RequestOpts, 'auth'>) => {
+                if (opts.method === 'POST') {
+                    submittedQueryCount += 1;
+                }
+                return testAuthenticatedRequest<T>(opts);
+            };
+            const queueAwareMiddleware = createTestMiddleware({
+                log: queueAwareLog,
+                doAuthenticatedRequest: countingRequest,
             });
 
             mockLoadModule.mockImplementation(async (specifier: string) => {
                 if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
                     order.push('greet-priming-start');
-                    await greetPrimingGate;
+                    greetPrimingStarted.resolve();
+                    await greetPrimingGate.promise;
                     order.push('greet-priming-end');
                     return { [mockFunctions[0].name]: () => 'greet-done' };
                 }
@@ -1576,22 +1608,40 @@ describe('Dev Server Middleware', () => {
             const resCompute = createMockResponse();
 
             // Fired back-to-back, before either request's own body has even finished parsing.
-            middleware(reqGreet, resGreet, jest.fn());
-            middleware(reqCompute, resCompute, jest.fn());
+            const nextGreet = jest.fn();
+            const nextCompute = jest.fn();
+            queueAwareMiddleware(reqGreet, resGreet, nextGreet);
+            queueAwareMiddleware(reqCompute, resCompute, nextCompute);
 
-            // Give compute's request every chance to race ahead while greet's priming is gated —
-            // if it weren't serialized behind greet's still-pending turn, compute's ungated
-            // priming would already show up here, before greet's gate is ever released.
-            // Always release and drain both requests so a failed assertion cannot leak queued
-            // work into the next test.
+            // The deadline and finally keep a missing signal from hanging the test or leaking queued
+            // work into the next one.
             try {
+                const bothSignals = Promise.all([
+                    greetPrimingStarted.promise,
+                    computeQueued.promise,
+                ]);
+                await withTimeout(
+                    bothSignals,
+                    5000,
+                    'Waiting for greet to prime and compute to queue',
+                );
+                // Compute starting its turn early or priming outside the queue has no event to wait
+                // for, so this delay only bounds how long either regression gets to show up; correct
+                // code passes for any delay well under the priming and test timeouts.
                 await new Promise((resolve) => setTimeout(resolve, 20));
+                expect(submittedQueryCount).toBe(1);
                 expect(order).toEqual(['greet-priming-start']);
             } finally {
-                releaseGreetPriming?.();
+                greetPrimingGate.resolve();
                 await Promise.all([resGreet.done, resCompute.done]);
             }
 
+            expect(resGreet.statusCode).toBe(200);
+            expect(resCompute.statusCode).toBe(200);
+            expect(nextGreet).not.toHaveBeenCalled();
+            expect(nextCompute).not.toHaveBeenCalled();
+            const isComputeHydrated = apiScope.isDone();
+            expect(isComputeHydrated).toBe(true);
             expect(order).toEqual([
                 'greet-priming-start',
                 'greet-priming-end',
