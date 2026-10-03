@@ -8,6 +8,7 @@ import http from 'http';
 import { protectProperties } from 'jest-util';
 
 import { cleanEnv } from './helpers/cleanEnv.ts';
+import { protectInterceptors } from './helpers/protectInterceptors.ts';
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
 
@@ -56,6 +57,9 @@ afterAll(async () => {
     nock.cleanAll();
     nock.restore();
     nock.activate();
+    // nock's interceptors register on the global object, so Jest soft-deletes them once this file
+    // ends; a request still in flight would then print a JEST-01 warning into the next test file.
+    protectInterceptors(global, protectProperties);
 
     // Clean the workingDirs from runBundlers();
     const { cleanupEverything } = jest.requireActual('./helpers/runBundlers.ts');
