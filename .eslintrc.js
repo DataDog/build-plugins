@@ -353,7 +353,7 @@ module.exports = {
     },
     overrides: [
         {
-            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.ts'],
+            files: ['packages/tests/src/_jest/**/*.*', '**/*.test.*'],
             plugins: ['jest'],
             extends: ['plugin:jest/recommended'],
             env: {
@@ -370,6 +370,26 @@ module.exports = {
                 'jest/no-identical-title': 'error',
                 'jest/prefer-to-have-length': 'warn',
                 'jest/valid-expect': 'warn',
+            },
+        },
+        {
+            files: [
+                'packages/tests/src/_jest/**/*.*',
+                'packages/tests/src/_playwright/**/*.*',
+                '**/*.test.*',
+                '**/*.fixture.*',
+                '**/*.fixtures.*',
+                '**/*.spec.*',
+                '**/*.bench.*',
+                'packages/tests/src/bench/**/*.*',
+                'packages/tests/jest.config.ts',
+                'packages/tests/playwright*.config.ts',
+            ],
+            // The preflight CLI scripts run in a job without credentials.
+            excludedFiles: ['packages/tests/src/bench/**/preflight*.js'],
+            plugins: ['@dd'],
+            rules: {
+                '@dd/no-whole-process-env': 'error',
             },
         },
         {
