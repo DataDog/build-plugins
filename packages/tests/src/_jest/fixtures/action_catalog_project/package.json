@@ -9,6 +9,7 @@
     "main": "index.js",
     "exports": {
         ".": "./index.js",
-        "./action-execution": "./action-execution.js"
+        "./action-execution": "./action-execution.js",
+        "./dd/metrics": "./dd/metrics.js"
     }
 }
