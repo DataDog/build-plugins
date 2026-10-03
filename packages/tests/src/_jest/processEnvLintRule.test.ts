@@ -228,8 +228,8 @@ describe('process.env lint rule for tests', () => {
             expected: 0,
         },
         {
-            description: 'allow passing process and a variable named env',
-            code: "const env = 'DD_SITE';\ndoSomething(process, env);",
+            description: 'allow a keyed call on process with a variable named env',
+            code: "const env = 'DD_SITE';\nconst value = Reflect.get(process, env);",
             expected: 0,
         },
         {
@@ -948,6 +948,352 @@ describe('process.env lint rule for tests', () => {
         {
             description: 'allow reading another global with Reflect.get',
             code: "const fetcher = Reflect.get(globalThis, 'fetch');\nconst value = fetcher.env;",
+            expected: 0,
+        },
+        {
+            description: 'flag destructuring it in a then callback of a dynamic import',
+            code: "import('node:process').then(({ env }) => console.log(env));",
+            expected: 1,
+        },
+        {
+            description: 'flag reaching it through a then callback parameter of a dynamic import',
+            code: "import('process').then((nodeProcess) => console.log(nodeProcess.env));",
+            expected: 1,
+        },
+        {
+            description: 'flag reaching it through an awaited alias of a dynamic import',
+            code: "const loading = import('process');\nconst nodeProcess = await loading;\nconst copy = { ...nodeProcess.env };",
+            expected: 1,
+        },
+        {
+            description: 'flag passing process to a function',
+            code: 'consume(process);',
+            expected: 1,
+        },
+        {
+            description: 'flag returning process',
+            code: 'const getProcess = () => {\n    return process;\n};',
+            expected: 1,
+        },
+        {
+            description: 'flag logging process inside an object',
+            code: 'console.log({ process });',
+            expected: 1,
+        },
+        {
+            description: 'flag exporting process',
+            code: 'export default process;',
+            expected: 1,
+        },
+        {
+            description: 'flag assigning process to a property',
+            code: 'module.exports = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag putting process in an array',
+            code: 'const list = [process];',
+            expected: 1,
+        },
+        {
+            description: 'flag asserting on process inside an object',
+            code: 'expect({ process }).toEqual({});',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing global process with an alias once',
+            code: 'const originalProcess = process;\nglobal.process = originalProcess;',
+            expected: 1,
+        },
+        {
+            description: 'allow listening to a process event',
+            code: "process.on('exit', handler);",
+            expected: 0,
+        },
+        {
+            description: 'allow asserting on one process property',
+            code: 'expect(process.exitCode).toBe(0);',
+            expected: 0,
+        },
+        {
+            description: 'allow comparing process',
+            code: 'const isSame = target === process;',
+            expected: 0,
+        },
+        {
+            description: 'allow checking for a process key',
+            code: "const hasEnv = 'env' in process;",
+            expected: 0,
+        },
+        {
+            description: 'allow listing the names of process',
+            code: 'const names = Object.keys(process);',
+            expected: 0,
+        },
+        {
+            description: 'allow testing process for truthiness',
+            code: 'if (process) {\n    run();\n}',
+            expected: 0,
+        },
+        {
+            description: 'allow negating process',
+            code: 'const missing = !process;',
+            expected: 0,
+        },
+        {
+            description: 'flag passing an assignment of process',
+            code: 'let nodeProcess;\nfoo((nodeProcess = process));',
+            expected: 1,
+        },
+        {
+            description: 'flag asserting on an assignment-destructure of process',
+            code: 'let platform;\nexpect(({ platform } = process)).toBe(1);',
+            expected: 1,
+        },
+        {
+            description: 'flag asserting on a promise for the process module',
+            code: "expect(import('process')).resolves.toEqual({});",
+            expected: 1,
+        },
+        {
+            description: 'flag passing the process module to a then callback by reference',
+            code: "import('process').then(console.log);",
+            expected: 1,
+        },
+        {
+            description: 'flag exporting an alias of process',
+            code: 'export const exportedProcess = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag re-exporting everything from process',
+            code: "export * from 'process';",
+            expected: 1,
+        },
+        {
+            description: 'flag re-exporting the default export of process',
+            code: "export { default } from 'process';",
+            expected: 1,
+        },
+        {
+            description: 'flag printing a process report',
+            code: "expect(JSON.stringify(process.report.getReport())).toContain('x');",
+            expected: 1,
+        },
+        {
+            description:
+                'flag replacing global process with an alias through jest.replaceProperty once',
+            code: "const originalProcess = process;\njest.replaceProperty(global, 'process', originalProcess);",
+            expected: 1,
+        },
+        {
+            description: 'flag replacing global process with an alias through Object.assign once',
+            code: 'const originalProcess = process;\nObject.assign(globalThis, { process: originalProcess });',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing it with Object.defineProperty and keeping the result once',
+            code: "const defined = Object.defineProperty(process, 'env', { value: {} });",
+            expected: 1,
+        },
+        {
+            description: 'allow binding a process method to process',
+            code: 'const realExit = process.exit.bind(process);',
+            expected: 0,
+        },
+        {
+            description: 'allow applying a process method to process',
+            code: 'const originalEmit = process.emit;\noriginalEmit.apply(process, args);',
+            expected: 0,
+        },
+        {
+            description: 'allow calling a process method on process',
+            code: "const originalEmit = process.emit;\noriginalEmit.call(process, 'warning');",
+            expected: 0,
+        },
+        {
+            description: 'allow guarding a key read with process &&',
+            code: "const isCi = process && process.env.CI;\nexpect(isCi).toBe('1');",
+            expected: 0,
+        },
+        {
+            description: 'allow using an awaited alias of the process module by key',
+            code: "const loading = import('process');\nconst nodeProcess = await loading;\nnodeProcess.exit(0);",
+            expected: 0,
+        },
+        {
+            description: 'flag spreading process into a value that replaces global process once',
+            code: "Object.defineProperty(globalThis, 'process', { value: { ...process, env: {} } });",
+            expected: 1,
+        },
+        {
+            description: 'flag spreading process into a jest.replaceProperty replacement once',
+            code: "jest.replaceProperty(global, 'process', { ...process, env: {} });",
+            expected: 1,
+        },
+        {
+            description: 'flag spreading process into an assignment to global process once',
+            code: 'global.process = { ...process, env: {} };',
+            expected: 1,
+        },
+        {
+            description: 'flag spreading it into its own replacement once',
+            code: "jest.replaceProperty(process, 'env', { ...process.env, DD_SITE: 'x' });",
+            expected: 1,
+        },
+        {
+            description: 'flag exporting env destructured off process once',
+            code: 'export const { env } = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag copying process with valueOf',
+            code: 'const copy = process.valueOf();',
+            expected: 1,
+        },
+        {
+            description: 'flag deleting global process',
+            code: 'delete global.process;',
+            expected: 1,
+        },
+        {
+            description: 'flag a then callback parameter with a default',
+            code: "import('process').then((nodeProcess = fallback) => consume(nodeProcess));",
+            expected: 1,
+        },
+        {
+            description: 'allow exporting a named key destructured off process',
+            code: 'export const { platform } = process;',
+            expected: 0,
+        },
+        {
+            description: 'allow exporting a named env key destructured off process',
+            code: 'export const { env: { DD_SITE } } = process;',
+            expected: 0,
+        },
+        {
+            description: 'allow testing process in a conditional',
+            code: 'const pick = process ? first : second;',
+            expected: 0,
+        },
+        {
+            description: 'allow testing process in a while loop',
+            code: 'while (process) {\n    break;\n}',
+            expected: 0,
+        },
+        {
+            description: 'allow a discarded dynamic import of process',
+            code: "import('process');",
+            expected: 0,
+        },
+        {
+            description: 'allow a type-only re-export of everything from process',
+            code: "export type * from 'process';",
+            expected: 0,
+        },
+        {
+            description: 'allow assigning a promise for the process module to a local',
+            code: "let loading;\nloading = import('process');",
+            expected: 0,
+        },
+        {
+            description: 'allow Reflect.apply of a process method on process',
+            code: 'const originalEmit = process.emit;\nReflect.apply(originalEmit, process, args);',
+            expected: 0,
+        },
+        {
+            description: 'flag exporting process through a default key off a dynamic import',
+            code: "export const { default: nodeProcess } = await import('node:process');",
+            expected: 1,
+        },
+        {
+            description: 'flag exporting process through a default key off process',
+            code: 'export const { default: nodeProcess } = process;',
+            expected: 1,
+        },
+        {
+            description: 'flag exporting a binding later assigned the process module',
+            code: "export let nodeProcess;\nbeforeAll(async () => {\n    nodeProcess = await import('process');\n});",
+            expected: 1,
+        },
+        {
+            description: 'flag exporting a binding later assigned a promise for the process module',
+            code: "export let loading;\nloading = import('process');",
+            expected: 1,
+        },
+        {
+            description: 'flag exporting an alias of process by name',
+            code: 'const nodeProcess = process;\nexport { nodeProcess };',
+            expected: 1,
+        },
+        {
+            description: 'flag using an assignment of a promise for the process module',
+            code: "let loading;\nconst used = (loading = import('process'));",
+            expected: 1,
+        },
+        {
+            description: 'flag reaching it through a promise alias assigned after declaration',
+            code: "let loading;\nloading = import('process');\nconst nodeProcess = await loading;\nconst copy = { ...nodeProcess.env };",
+            expected: 1,
+        },
+        {
+            description: 'allow calling a destructured process method on process',
+            code: "const { emit } = process;\nemit.call(process, 'warning');",
+            expected: 0,
+        },
+        {
+            description: 'allow a wrapper that applies the original on process',
+            code: 'const wrap = (original) => (...args) => original.apply(process, args);',
+            expected: 0,
+        },
+        {
+            description: 'allow lazily assigning a promise for the process module',
+            code: "let loading;\nloading ??= import('process');\nconst nodeProcess = await loading;\nnodeProcess.exit(0);",
+            expected: 0,
+        },
+        {
+            description: 'flag reassigning it with a spread of itself once',
+            code: "process.env = { ...process.env, A: '1' };",
+            expected: 1,
+        },
+        {
+            description: 'flag mocking its getter with a spread of itself once',
+            code: "jest.spyOn(process, 'env', 'get').mockReturnValue({ ...process.env, DD_SITE: 'x' });",
+            expected: 1,
+        },
+        {
+            description: 'flag returning process from a test through an emitter method',
+            code: "test('cleans up', () => process.removeAllListeners('exit'));",
+            expected: 1,
+        },
+        {
+            description: 'flag using a logical assignment of a promise alias',
+            code: "let loading = import('process');\nconsume((loading ||= other));",
+            expected: 1,
+        },
+        {
+            description: 'flag using a logical assignment of a process alias',
+            code: 'let nodeProcess = process;\nconst value = (nodeProcess ||= fallback);\nconsole.log(value);',
+            expected: 1,
+        },
+        {
+            description: 'allow returning an emitter method result from a hook',
+            code: "afterEach(() => process.removeAllListeners('exit'));",
+            expected: 0,
+        },
+        {
+            description: 'allow chaining emitter methods on process',
+            code: "process.on('exit', first).on('exit', second);",
+            expected: 0,
+        },
+        {
+            description: 'allow an exported declaration of process',
+            code: 'export declare const process: NodeJS.Process;',
+            expected: 0,
+        },
+        {
+            description: 'allow testing process in a do-while loop',
+            code: 'do {\n    break;\n} while (process);',
             expected: 0,
         },
         {
