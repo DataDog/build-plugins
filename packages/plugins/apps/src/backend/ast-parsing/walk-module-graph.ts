@@ -2,11 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import {
-    type ParsedModuleRecord,
-    shouldTraverseCollectedModule,
-    unsupportedModuleGraphDependency,
-} from './module-graph';
+import { isBackendSourceModule } from '../backend-sources';
+
+import { type ParsedModuleRecord, unsupportedModuleGraphDependency } from './module-graph';
 
 export interface ModuleGraphWalkContext {
     entryId: string;
@@ -15,7 +13,7 @@ export interface ModuleGraphWalkContext {
 }
 
 /**
- * Walks every collected app-local module statically reachable from a backend
+ * Walks every collected backend source module statically reachable from a backend
  * entry and applies fail-closed graph validation before following dependency
  * edges.
  */
@@ -63,12 +61,12 @@ export function walkModuleGraph(
             );
         }
 
-        // Follow only collected local source modules. Package imports, virtual
-        // entries, generated files, and files outside buildRoot are ignored by
-        // design because they are outside the app-local backend graph.
+        // Follow only collected backend source modules. Ordinary package imports,
+        // virtual entries, generated files, and files outside buildRoot are ignored
+        // by design because they are outside the backend source graph.
         for (const dependency of record.staticDependencies) {
             const dependencyId = dependency.resolvedId;
-            if (!shouldTraverseCollectedModule(dependencyId, buildRoot)) {
+            if (!isBackendSourceModule(dependencyId, buildRoot)) {
                 continue;
             }
 

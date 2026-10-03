@@ -16,15 +16,17 @@ import {
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
-import {
-    PACKAGE_MANAGER_DIRS,
-    shouldTraverseCollectedModule,
-} from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
+import {
+    findInstalledBackendFunctionPackages,
+    isBackendFunctionFile,
+    isBackendSourceModule,
+} from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
+import { getInstalledBackendRuntimePackages } from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
@@ -113,47 +115,6 @@ function createBackendFunctionRegistry() {
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
-const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
-
-const isWithinDirectory = (directory: string, filePath: string): boolean => {
-    const relativePath = path.posix.relative(directory, filePath);
-    return (
-        relativePath !== '..' &&
-        !relativePath.startsWith('../') &&
-        !path.posix.isAbsolute(relativePath)
-    );
-};
-
-const shouldTransformBackendModule = (id: string, buildRoot: string, outDir: string): boolean => {
-    if (!BACKEND_FILE_WITH_QUERY_RE.test(id)) {
-        return false;
-    }
-
-    const [idWithoutQuery] = id.split(/[?#]/);
-    const filePath = toPosixPath(idWithoutQuery).replace(/^\0/, '');
-    // Virtual ids aren't on disk, so on-disk exclusions don't apply; resolving them would depend on cwd.
-    if (!path.posix.isAbsolute(filePath) && !path.win32.isAbsolute(filePath)) {
-        return true;
-    }
-
-    const posixBuildRoot = toPosixPath(buildRoot);
-    // Outside the build root the full path decides, so a hoisted package beside an app under
-    // node_modules stays excluded while a linked workspace file is still proxied.
-    const isInsideBuildRoot = isWithinDirectory(posixBuildRoot, filePath);
-    const pathToClassify = isInsideBuildRoot
-        ? path.posix.relative(posixBuildRoot, filePath)
-        : filePath;
-    const segments = pathToClassify.split('/');
-    if (segments.some((segment) => PACKAGE_MANAGER_DIRS.has(segment))) {
-        return false;
-    }
-
-    // An outDir at or above the build root (e.g. `build.outDir: '.'`) must not exclude app files.
-    const posixOutDir = toPosixPath(outDir);
-    const outDirContainsBuildRoot = isWithinDirectory(posixOutDir, posixBuildRoot);
-    return outDirContainsBuildRoot || !isWithinDirectory(posixOutDir, filePath);
-};
-
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
@@ -202,14 +163,48 @@ export const getVitePlugin = ({
         config: {
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
-            handler(userConfig) {
+            handler(userConfig, { command }) {
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // configResolved (where context.buildRoot is set) runs after this hook, so resolve
+                // the root the same way Vite does.
+                const root = path.resolve(userConfig.root ?? process.cwd());
+                // Only the dev server pre-bundles dependencies or loads modules through SSR.
+                const backendPackageNames =
+                    command === 'serve'
+                        ? findInstalledBackendFunctionPackages(root).flatMap(
+                              (pkg) => pkg.importNames,
+                          )
+                        : [];
+                if (backendPackageNames.length > 0) {
+                    log.debug(
+                        `Packages providing backend functions: ${backendPackageNames.join(', ')}`,
+                    );
+                }
                 return {
                     // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with
                     // a plain require(), which throws "Cannot use import statement outside a
-                    // module"; ssr.noExternal forces Vite's SSR transform instead.
+                    // module"; ssr.noExternal forces Vite's SSR transform instead. A package
+                    // providing backend functions needs the same so local execution runs its real
+                    // modules (and its self-referencing imports) through this plugin.
                     ssr: {
-                        noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                        noExternal: [
+                            '@datadog/apps-backend',
+                            '@datadog/action-catalog',
+                            ...backendPackageNames,
+                        ],
+                    },
+                    // Pre-bundling would inline a package's backend files into a browser chunk
+                    // where the transform below never sees them, shipping their real body instead
+                    // of the proxy. Excluding the package also keeps it external inside any other
+                    // pre-bundled dependency that imports it.
+                    optimizeDeps: {
+                        exclude: backendPackageNames,
+                    },
+                    // A backend runtime singleton must be the app's own copy, the one the backend
+                    // entry initializes, even when a package providing backend functions is linked
+                    // from somewhere that has its own copy installed.
+                    resolve: {
+                        dedupe: getInstalledBackendRuntimePackages(root),
                     },
                 };
             },
@@ -271,10 +266,11 @@ export const getVitePlugin = ({
                     return resolved;
                 }
 
-                // Only app-local source gets a distinct local-execution identity — an SDK/package
+                // Only backend source (app code or an opted-in package's code, which is kept out of
+                // optimizeDeps) gets a distinct local-execution identity — any other SDK/package
                 // import must resolve to the same module Vite otherwise caches for it, since an
                 // unrecognized query on a node_modules id can break Vite's optimizeDeps handling.
-                if (!shouldTraverseCollectedModule(resolved.id, context.buildRoot)) {
+                if (!isBackendSourceModule(resolved.id, context.buildRoot)) {
                     return resolved;
                 }
 
@@ -286,13 +282,17 @@ export const getVitePlugin = ({
             },
         },
         transform: {
-            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative exclusions.
+            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative
+            // exclusions or a package's opt-in.
             filter: { id: { include: [BACKEND_FILE_WITH_QUERY_RE] } },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id, transformOptions) {
-                const shouldTransform = shouldTransformBackendModule(
+                // A `.backend.*` name alone isn't enough: only the app's own files (outside
+                // package-manager dirs and the outDir) and those of packages that opted in become
+                // functions. Anything else stays an ordinary module.
+                const shouldTransform = isBackendFunctionFile(
                     id,
                     context.buildRoot,
                     context.bundler.outDir,
