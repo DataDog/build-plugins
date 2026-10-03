@@ -9,6 +9,8 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [Backend functions](#backend-functions)
+    -   [Backend functions from packages](#backend-functions-from-packages)
 -   [Development server authentication](#development-server-authentication)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
@@ -32,6 +34,28 @@ apps?: {
     };
 }
 ```
+
+## Backend functions
+
+Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject Node built-in imports and network globals such as `fetch` in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
+
+### Backend functions from packages
+
+A package can ship backend functions too. It opts in from its `package.json`:
+
+```json
+{
+    "datadogApps": { "backendFunctions": true }
+}
+```
+
+In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code. A `.backend.*` file in a package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names.
+
+A few things to know:
+
+-   Declare `@datadog/action-catalog` and `@datadog/apps-backend` as peer dependencies. Each function uses the app's own copy, the one its runtime is set up on. This holds even when the package is linked from a checkout that has its own copy installed.
+-   The dev server keeps opted-in packages out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle.
+-   A function's name is derived from its file's path relative to the project root, so it's the same in `vite dev` and `vite build` for a given install, and distinct from every app file's.
 
 ## Development server authentication
 

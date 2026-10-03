@@ -13,13 +13,15 @@ import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 
 import {
     createParsedModuleRecord,
     getStaticModuleSources,
-    isOutsideRoot,
-    isPackageManagerModule,
     type ParsedModuleRecord,
-    shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import {
+    isBackendSourceModule,
+    isOutsideRoot,
+    isPackageManagerModule,
+} from '../backend/backend-sources';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import { normalizeViteModuleId } from './backend-module-graph-collector';
@@ -137,7 +139,7 @@ async function walkModuleGraph(
         // Checked by normalized moduleId (extension-based), before the query check below, so a
         // non-traversable non-code import (e.g. `./template.html?raw`) is skipped like the
         // build-time collector skips it, regardless of its query.
-        if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
+        if (!isBackendSourceModule(moduleId, buildRoot)) {
             continue;
         }
 

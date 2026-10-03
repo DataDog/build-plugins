@@ -9,3 +9,6 @@ yarn-error.log
 
 node_modules/
 dist/
+
+# Packaged library layouts under test ship their code in dist/.
+!apps_backend_library_project/packages/*/dist/

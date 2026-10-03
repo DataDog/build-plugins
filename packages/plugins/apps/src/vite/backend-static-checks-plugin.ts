@@ -6,13 +6,11 @@ import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 import type { Plugin, Rollup } from 'vite';
 
-import {
-    type ParsedModuleRecord,
-    shouldTraverseCollectedModule,
-} from '../backend/ast-parsing/module-graph';
+import type { ParsedModuleRecord } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
+import { isBackendSourceModule } from '../backend/backend-sources';
 
 import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-graph-collector';
 
@@ -23,7 +21,7 @@ function unsupportedStaticChecksSource(filePath: string, unsupported: string): E
     );
 }
 
-// Re-runs the static checks against every app-local module the nested backend build resolves, not just the `.backend.ts` entry, so an imported helper module is also checked. MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is populated (falls back to a local parse if a module is missing from it).
+// Re-runs the static checks against every backend source module (app code or an opted-in package's code) the nested backend build resolves, not just the `.backend.ts` entry, so an imported helper module is also checked. MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is populated (falls back to a local parse if a module is missing from it).
 export function createBackendStaticChecksPlugin(
     buildRoot: string,
     log: Logger,
@@ -33,10 +31,7 @@ export function createBackendStaticChecksPlugin(
         name: 'dd-backend-static-checks',
         moduleParsed(moduleInfo: Rollup.ModuleInfo) {
             const moduleId = normalizeViteModuleId(moduleInfo.id);
-            if (
-                isViteVirtualModuleId(moduleId) ||
-                !shouldTraverseCollectedModule(moduleId, buildRoot)
-            ) {
+            if (isViteVirtualModuleId(moduleId) || !isBackendSourceModule(moduleId, buildRoot)) {
                 return;
             }
 

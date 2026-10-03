@@ -18,9 +18,8 @@ import type {
     Super,
     VariableDeclaration,
 } from 'estree';
-import path from 'path';
 
-import { BACKEND_CODE_EXTENSIONS } from '../../constants';
+import { isBackendSourceModule } from '../backend-sources';
 
 import {
     analyzeModuleScope,
@@ -33,7 +32,7 @@ import { ensureProgram, isStringLiteral } from './type-guards';
 import { walkAst } from './walk-ast';
 
 /**
- * Parsed app-local backend module plus reusable static facts about its module
+ * Parsed backend source module (app code or an opted-in package's code) plus reusable static facts about its module
  * boundary and top-level declarations. These facts are intentionally
  * domain-neutral: action-catalog and connection ID logic consume them later,
  * but they are not encoded into the record itself.
@@ -140,16 +139,14 @@ export interface UnsupportedStaticBinding {
 type ImportCallExpression = SimpleCallExpression & { callee: { type: 'Import' } };
 type ModuleExportName = Identifier | Literal;
 
-export const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
-
 /**
  * Creates the per-module analysis record consumed by backend-entry reachability
  * analysis. The caller supplies canonical module IDs and already-resolved
  * static dependency IDs instead of asking this module to resolve/load files.
  *
- * Returns null when the module is outside the analyzable app-local backend
- * graph, allowing build collectors to skip package/generated modules without
- * duplicating graph filtering rules.
+ * Returns null when the module is outside the analyzable backend source graph
+ * (see `isBackendSourceModule`), allowing build collectors to skip ordinary
+ * package/generated modules without duplicating graph filtering rules.
  */
 export function createParsedModuleRecord(
     moduleId: string,
@@ -157,7 +154,7 @@ export function createParsedModuleRecord(
     ast: BaseNode,
     staticDependencies: string[] = [],
 ): ParsedModuleRecord | null {
-    if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
+    if (!isBackendSourceModule(moduleId, buildRoot)) {
         return null;
     }
 
@@ -660,36 +657,6 @@ function collectUnsupportedModuleDependencies(ast: Program): ModuleDependency[] 
  */
 function shouldFailDynamicImport(specifier: string): boolean {
     return specifier === 'non-literal dynamic import' || isLocalSpecifier(specifier);
-}
-
-export function isPackageManagerModule(modulePath: string): boolean {
-    return modulePath.split(path.sep).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
-}
-
-// A `..`-prefixed directory name like `..gen` is still inside the root.
-export function isOutsideRoot(relativePath: string): boolean {
-    return (
-        relativePath === '..' ||
-        relativePath.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(relativePath)
-    );
-}
-
-/**
- * Keeps reachability traversal scoped to app-local JavaScript/TypeScript source
- * modules that the backend build collector can safely analyze.
- */
-export function shouldTraverseCollectedModule(moduleId: string, buildRoot: string): boolean {
-    if (!BACKEND_CODE_EXTENSIONS.some((extension) => moduleId.endsWith(extension))) {
-        return false;
-    }
-
-    const relativePath = path.relative(path.resolve(buildRoot), moduleId);
-    if (isOutsideRoot(relativePath)) {
-        return false;
-    }
-
-    return !isPackageManagerModule(relativePath);
 }
 
 /**

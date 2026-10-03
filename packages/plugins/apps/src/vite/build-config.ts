@@ -4,6 +4,7 @@
 
 import type { BuildOptions, InlineConfig, Plugin } from 'vite';
 
+import { getInstalledBackendRuntimePackages } from '../backend/shared';
 import { BACKEND_CODE_EXTENSIONS } from '../constants';
 
 /**
@@ -77,6 +78,10 @@ export function getBaseBackendBuildConfig(
         },
         resolve: {
             extensions: [...BACKEND_CODE_EXTENSIONS, '.json'],
+            // The virtual entry initializes these runtimes on the copy resolved from the root, so
+            // a package providing backend functions must reach that same copy even when it's
+            // linked from a location with its own copy installed.
+            dedupe: getInstalledBackendRuntimePackages(root),
         },
         // SSR mode externalizes node_modules deps by default, assuming a
         // server runtime can require() them at runtime. Backend bundles have
