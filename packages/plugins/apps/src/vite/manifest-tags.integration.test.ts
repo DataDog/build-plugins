@@ -127,7 +127,15 @@ async function buildApp(layout: SdkLayout) {
             plugins: [
                 datadogVitePlugin({
                     logLevel: 'warn',
-                    apps: { tags: ['team:apps', 'surface:datadog.dashboard'] },
+                    // The empty string and number are skipped with a warning, not fatal.
+                    apps: {
+                        tags: [
+                            'team:apps',
+                            'surface:datadog.dashboard',
+                            '',
+                            42 as unknown as string,
+                        ],
+                    },
                 }),
             ],
         });
@@ -160,6 +168,10 @@ function describeTagging(getApp: () => BuiltApp) {
         expect(filesContaining(scripts, USED_SURFACED_MARKER)).not.toEqual([]);
         expect(filesContaining(scripts, USED_SURFACELESS_MARKER)).not.toEqual([]);
         expect(filesContaining(scripts, UNUSED_MARKER)).toEqual([]);
+    });
+
+    test('Should warn about, and skip, authored tags that are not non-empty strings', () => {
+        expect(getApp().warnings).toContain('apps.tags: skipping 2 entries');
     });
 
     test('Should not warn about input markers', () => {

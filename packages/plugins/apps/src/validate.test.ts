@@ -8,31 +8,13 @@ describe('Apps Plugin - validateOptions', () => {
     test('uses package-only defaults', () => {
         expect(validateOptions({ apps: {} })).toEqual({
             include: [],
-            tags: [],
+            tags: undefined,
             longPolling: {
                 maxRetries: 10,
                 timeoutMs: 40000,
                 jitter: true,
                 exponentialBackoff: true,
             },
-        });
-    });
-
-    describe('tags', () => {
-        test('Should trim, lowercase and deduplicate authored tags', () => {
-            expect(
-                validateOptions({ apps: { tags: [' Team:Apps ', 'team:apps', 'env:prod'] } }).tags,
-            ).toEqual(['team:apps', 'env:prod']);
-        });
-
-        test.each([
-            { description: 'an empty tag', tags: ['team:apps', '  '] },
-            { description: 'a non-string tag', tags: [42] },
-            { description: 'a non-array value', tags: 'team:apps' },
-        ])('Should throw on $description', ({ tags }) => {
-            expect(() => validateOptions({ apps: { tags: tags as string[] } })).toThrow(
-                /^apps\.tags must/,
-            );
         });
     });
 

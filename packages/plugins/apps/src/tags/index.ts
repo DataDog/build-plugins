@@ -14,9 +14,11 @@
 
 import { authoredTagSource } from './authored';
 import { inputSurfaceTagSource } from './input-surfaces';
+import { normalizeTag } from './normalize';
 import type { TagSource, TagSourceContext } from './types';
 
 export type { ShippedChunk, TagSource, TagSourceContext } from './types';
+export { normalizeTag } from './normalize';
 
 /** Every tag source, in no particular order. Adding a source means adding it here. */
 const TAG_SOURCES: Array<(context: TagSourceContext) => TagSource> = [
@@ -27,12 +29,6 @@ const TAG_SOURCES: Array<(context: TagSourceContext) => TagSource> = [
 /** Fresh sources for one build; none of them carries anything over from a previous build. */
 export const createTagSources = (context: TagSourceContext): TagSource[] =>
     TAG_SOURCES.map((createSource) => createSource(context));
-
-/** Trims and lowercases a tag, or returns undefined for an empty one. */
-export const normalizeTag = (tag: string): string | undefined => {
-    const normalized = tag.trim().toLowerCase();
-    return normalized === '' ? undefined : normalized;
-};
 
 /** The manifest's tag list: every source's tags, normalized, deduplicated and sorted. */
 export const resolveTags = (sources: TagSource[]): string[] => {

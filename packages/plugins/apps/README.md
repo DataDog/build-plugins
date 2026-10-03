@@ -80,7 +80,7 @@ Additional glob patterns (relative to the project root) to include in the packag
 
 > default: `[]`
 
-Tags to add to the app, e.g. `['team:my-team']`. Tags are trimmed and lowercased; the Datadog API applies the remaining tag formatting rules.
+Tags to add to the app, e.g. `['team:my-team']`. Tags are trimmed and lowercased; the Datadog API applies the remaining tag formatting rules. Tags never fail a build: entries that aren't non-empty strings are skipped with a warning.
 
 The package's `manifest.json` carries the app's tags: these tags plus one `surface:<id>` tag for each surface declared by an `@datadog/apps-frontend` input the built frontend uses (for example `surface:datadog.dashboard`), letting product surfaces find apps meant for them. Surface tags are derived from the final bundle, so an input that is imported but tree-shaken away adds none, and an input that declares no surfaces (like the theme) adds none either.
 

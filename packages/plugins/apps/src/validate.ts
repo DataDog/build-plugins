@@ -5,7 +5,6 @@
 import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
-import { normalizeTag } from './tags';
 import type { AppsOptions, AppsOptionsWithDefaults } from './types';
 
 export const resolveLongPolling = (
@@ -30,32 +29,13 @@ export const resolveLongPolling = (
     };
 };
 
-export const resolveAuthoredTags = (tags: AppsOptions['tags']): AppsOptionsWithDefaults['tags'] => {
-    if (tags === undefined) {
-        return [];
-    }
-    if (!Array.isArray(tags)) {
-        throw new Error('apps.tags must be an array of strings.');
-    }
-    const resolved = new Set<string>();
-    for (const tag of tags as unknown[]) {
-        const normalized = typeof tag === 'string' ? normalizeTag(tag) : undefined;
-        if (!normalized) {
-            throw new Error(
-                `apps.tags must only contain non-empty strings, received ${JSON.stringify(tag)}.`,
-            );
-        }
-        resolved.add(normalized);
-    }
-    return [...resolved];
-};
-
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
 
     return {
         include: resolvedOptions.include || [],
-        tags: resolveAuthoredTags(resolvedOptions.tags),
+        // Passed through as configured; the authored tag source cleans it, best effort.
+        tags: resolvedOptions.tags,
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
     };
 };

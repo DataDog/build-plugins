@@ -48,6 +48,6 @@ export type AppsManifest = {
     };
 };
 
-export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'include' | 'tags'> & {
+export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'include'> & {
     longPolling: Required<LongPollingOptions>;
 };

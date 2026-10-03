@@ -288,7 +288,7 @@ describe('Apps Plugin - package output', () => {
             await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
         );
         const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-        // An explicit [] (rather than no `tags`) tells the backend to clear tags this app no longer has.
+        // The manifest always carries a tag list; an empty one adds nothing.
         expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
