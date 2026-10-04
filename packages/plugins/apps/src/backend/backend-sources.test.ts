@@ -182,6 +182,26 @@ describe('Backend Functions - package ownership rules', () => {
         }).toEqual(expected);
     });
 
+    // Bundlers and callers spell ids differently (Vite uses forward slashes even on Windows); any
+    // spelling of a path must name the same owner, since that decides what gets deployed.
+    test.each([
+        {
+            spelling: 'with a `..` segment',
+            file: 'app/node_modules/plain/../opted/data.backend.js',
+        },
+        { spelling: 'with a repeated separator', file: 'app/node_modules//opted/data.backend.js' },
+    ])('Should classify an opted-in package file spelled $spelling by its package', ({ file }) => {
+        const moduleId = `${tree}/${file}`;
+
+        const owner = getBackendModuleOwner(moduleId, appRoot);
+
+        expect(owner).toEqual({
+            kind: 'backend-package',
+            package: { name: 'opted', root: at('app/node_modules/opted') },
+        });
+        expect(isBackendSourceModule(moduleId, appRoot)).toBe(true);
+    });
+
     test.each([
         { file: 'app/src/data.backend.ts', expected: true },
         { file: 'app/node_modules/opted/hooks/state.backend.js', expected: true },

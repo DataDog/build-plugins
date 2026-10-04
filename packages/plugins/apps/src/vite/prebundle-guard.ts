@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import path from 'path';
 import type { UserConfig } from 'vite';
 
 import { getBackendModuleOwner } from '../backend/backend-sources';
@@ -28,7 +27,7 @@ export function getPreBundledBackendFileError(
     if (!BACKEND_FILE_RE.test(filePath)) {
         return undefined;
     }
-    const owner = getBackendModuleOwner(path.normalize(filePath), buildRoot);
+    const owner = getBackendModuleOwner(filePath, buildRoot);
     if (owner.kind !== 'backend-package') {
         return undefined;
     }

@@ -85,7 +85,7 @@ function trackStaleAppModules(server: ViteDevServer, buildRoot: string) {
         // modules re-run too, even when it's installed under node_modules.
         return (
             !isPackageManagerModule(pathToClassify) ||
-            getBackendModuleOwner(path.normalize(moduleId), buildRoot).kind === 'backend-package'
+            getBackendModuleOwner(moduleId, buildRoot).kind === 'backend-package'
         );
     };
     // Scanned upfront too: another plugin's transform hook can pre-transform its imports and

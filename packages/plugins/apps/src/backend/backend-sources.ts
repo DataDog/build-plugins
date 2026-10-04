@@ -183,16 +183,20 @@ function findOwningPackage(filePath: string): OwningPackage | undefined {
  * `buildRoot`. Source inside the build root is always the app's, even under a nested package.json;
  * only modules reached through a package manager, or living outside the root, consult the owning
  * package's opt-in.
+ *
+ * Any spelling of the path classifies the same: a Vite id with forward slashes on Windows, or one
+ * with `..` or repeated separators. A returned package root uses the platform's separators.
  */
 export function getBackendModuleOwner(moduleId: string, buildRoot: string): BackendModuleOwner {
+    const modulePath = path.normalize(moduleId);
     const root = path.resolve(buildRoot);
-    const insideRoot = isWithin(root, moduleId);
-    if (insideRoot && !isPackageManagerModule(path.relative(root, moduleId))) {
+    const insideRoot = isWithin(root, modulePath);
+    if (insideRoot && !isPackageManagerModule(path.relative(root, modulePath))) {
         return { kind: 'app' };
     }
 
-    const underPackageManager = isPackageManagerModule(moduleId);
-    const owner = findOwningPackage(moduleId);
+    const underPackageManager = isPackageManagerModule(modulePath);
+    const owner = findOwningPackage(modulePath);
     // A manifest enclosing the build root is the app's own (or its workspace's), never a dependency.
     if (owner && !isWithin(owner.root, root)) {
         const pkg = { name: owner.name, root: owner.root };
@@ -303,7 +307,7 @@ export function isBackendFunctionFile(id: string, buildRoot: string, outDir: str
     }
 
     // An opted-in package's files are functions even under node_modules or its own dist/.
-    const owner = getBackendModuleOwner(path.normalize(filePath), buildRoot);
+    const owner = getBackendModuleOwner(filePath, buildRoot);
     if (owner.kind === 'backend-package') {
         return true;
     }
