@@ -33,6 +33,8 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
+import { createTagSources, resolveTags } from '../tags';
+import type { TagSource } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
@@ -189,6 +191,13 @@ export const getVitePlugin = ({
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
 
+    // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
+    // rebuild can start before the previous closeBundle finishes.
+    const createBuildTagSources = () => createTagSources({ options, log });
+    // Created in buildStart, so each build gets its own sources and authored-tag warnings fire
+    // once per build rather than also at plugin init.
+    let buildTagSources: TagSource[] = [];
+
     return {
         config: {
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
@@ -338,7 +347,28 @@ export const getVitePlugin = ({
                 return { code: proxyCode, map: null };
             },
         },
+        buildStart() {
+            // A watch-mode rebuild must not inherit tags derived from the previous build's code.
+            buildTagSources = createBuildTagSources();
+        },
+        generateBundle: {
+            // After other plugins have finished rewriting chunk code.
+            order: 'post',
+            handler(_outputOptions, bundle) {
+                for (const output of Object.values(bundle)) {
+                    if (output.type !== 'chunk') {
+                        continue;
+                    }
+                    const chunk = { fileName: output.fileName, code: output.code };
+                    for (const source of buildTagSources) {
+                        source.readChunk?.(chunk);
+                    }
+                }
+            },
+        },
         async closeBundle() {
+            // Taken before any await, so the next watch-mode build can't change what this one packages.
+            const tags = resolveTags(buildTagSources);
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
                 return;
@@ -363,6 +393,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context,
                     options,
+                    tags,
                 });
             } finally {
                 if (backendOutDir) {

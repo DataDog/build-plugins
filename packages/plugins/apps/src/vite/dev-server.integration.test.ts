@@ -154,6 +154,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 context: getContextMock({ buildRoot: FIXTURE_ROOT }),
                 options: {
                     include: [],
+                    tags: [],
                     longPolling: mockLongPolling,
                 },
             }),

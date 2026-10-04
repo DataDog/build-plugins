@@ -260,6 +260,7 @@ const defaultOptions = {
     options: {
         enable: true,
         include: [],
+        tags: [],
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,
