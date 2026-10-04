@@ -2,6 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 import { createFrontendProxyModules, FRONTEND_PROXY_ID_RE } from './frontend-proxy-modules';
 
 const paths = { buildRoot: '/build', outDir: '/build/dist' };
@@ -41,7 +45,7 @@ describe('Backend Functions - frontend proxy modules', () => {
         },
         { description: 'an ordinary module', resolved: { id: '/build/src/helper.ts' } },
         {
-            description: 'a package dependency',
+            description: "a package dependency that didn't opt in to backend functions",
             resolved: { id: '/build/node_modules/pkg/a.backend.js' },
         },
         { description: 'a file in the outDir', resolved: { id: '/build/dist/a.backend.js' } },
@@ -61,5 +65,29 @@ describe('Backend Functions - frontend proxy modules', () => {
             moduleSideEffects: true,
         });
         expect(proxies.getSourceId(proxy?.id ?? '')).toBe(resolved.id);
+    });
+
+    test("Should swap an installed opted-in package's backend module for its proxy module", () => {
+        const tree = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-proxy-')));
+        try {
+            const appRoot = path.join(tree, 'app');
+            const packageRoot = path.join(appRoot, 'node_modules', '@scope', 'viz');
+            fs.mkdirSync(packageRoot, { recursive: true });
+            const manifest = { name: '@scope/viz', datadogApps: { backendFunctions: true } };
+            fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify(manifest));
+            const proxies = createFrontendProxyModules(() => ({
+                buildRoot: appRoot,
+                outDir: path.join(appRoot, 'dist'),
+            }));
+            // Under the package's own dist/, as a published package ships it.
+            const resolved = { id: path.join(packageRoot, 'dist', 'data.backend.js') };
+
+            const proxy = proxies.resolveFrontendProxy(resolved);
+
+            expect(proxy?.id).toMatch(FRONTEND_PROXY_ID_RE);
+            expect(proxies.getSourceId(proxy?.id ?? '')).toBe(resolved.id);
+        } finally {
+            fs.rmSync(tree, { recursive: true, force: true });
+        }
     });
 });

@@ -8,13 +8,16 @@ import { ARCHIVE_FILENAME, BACKEND_FILE_RE } from '@dd/apps-plugin/constants';
 import type { AppsManifest } from '@dd/apps-plugin/types';
 import { rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
+import type { BackendLibraryLayout } from '@dd/tests/_jest/helpers/appsBackendLibraryProject';
+import { assembleBackendLibraryApp } from '@dd/tests/_jest/helpers/appsBackendLibraryProject';
 import { getOutDir, prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { buildWithVite, configVite } from '@dd/tools/bundlers';
 import fsp from 'fs/promises';
+import fs from 'fs';
 import JSZip from 'jszip';
 import path from 'path';
-import { createServer } from 'vite';
+import { build, createServer } from 'vite';
 
 type Sourcemap = {
     name: string;
@@ -38,6 +41,12 @@ const PACKAGED_FUNCTIONS = [
 ];
 // Code only the backend functions' bodies (or the modules they import) contain.
 const BACKEND_BODY_MARKERS = ['getExecutionUser', 'helperEcho', '@datadog/apps-backend'];
+// Code only the opted-in package's backend function (or the modules it imports) contains.
+const LIBRARY_BACKEND_BODY_MARKERS = [
+    'viz-lib backend body',
+    'toTimeseriesRequest',
+    '@datadog/action-catalog',
+];
 const BACKEND_FILE_STEMS = ['getRuntimeUsers', 'noSdk', 'viaHelper', 'helper'];
 const PROXY_CALL_RE = /executeBackendFunction\(["'`]([0-9a-f]{64}\.\w+)["'`]/g;
 
@@ -54,16 +63,46 @@ const readEmittedSourcemaps = async (outDir: string): Promise<Sourcemap[]> => {
     return maps;
 };
 
-const readBackendSources = async (fixtureDir: string): Promise<BackendSource[]> => {
-    const fixtureFiles = await fsp.readdir(fixtureDir);
-    const backendFiles = fixtureFiles.filter((file) => BACKEND_FILE_RE.test(file));
+type BuildOutput = {
+    maps: Sourcemap[];
+    outputNames: string[];
+    frontendCode: string;
+    manifest: AppsManifest;
+};
+
+const readBuildOutput = async (outDir: string): Promise<BuildOutput> => {
+    const maps = await readEmittedSourcemaps(outDir);
+    const outputNames = await fsp.readdir(outDir, { recursive: true });
+    const chunkNames = outputNames.filter((name) => name.endsWith('.js'));
+    const chunks = await Promise.all(
+        chunkNames.map((name) => fsp.readFile(path.join(outDir, name), 'utf-8')),
+    );
+    const archiveContent = await fsp.readFile(path.join(outDir, ARCHIVE_FILENAME));
+    const archive = await JSZip.loadAsync(archiveContent);
+    const manifestFile = archive.file('manifest.json');
+    if (!manifestFile) {
+        throw new Error('Expected manifest.json in the app package.');
+    }
+    const manifest: AppsManifest = JSON.parse(await manifestFile.async('string'));
+    return { maps, outputNames, frontendCode: chunks.join('\n'), manifest };
+};
+
+const readBackendSourceFiles = async (files: string[]): Promise<BackendSource[]> => {
     const backendSources: BackendSource[] = [];
-    for (const file of backendFiles) {
+    for (const file of files) {
         // eslint-disable-next-line no-await-in-loop
-        const text = await fsp.readFile(path.join(fixtureDir, file), 'utf-8');
+        const text = await fsp.readFile(file, 'utf-8');
         backendSources.push({ file, text });
     }
     return backendSources;
+};
+
+const readBackendSources = async (fixtureDir: string): Promise<BackendSource[]> => {
+    const fixtureFiles = await fsp.readdir(fixtureDir);
+    const backendFiles = fixtureFiles
+        .filter((file) => BACKEND_FILE_RE.test(file))
+        .map((file) => path.join(fixtureDir, file));
+    return readBackendSourceFiles(backendFiles);
 };
 
 const findBackendSourcePaths = (maps: Sourcemap[]) =>
@@ -132,21 +171,7 @@ describe('apps frontend sourcemaps', () => {
                 throw new Error(`Expected no build errors, got: ${errors.join(', ')}`);
             }
 
-            maps = await readEmittedSourcemaps(outDir);
-            outputNames = await fsp.readdir(outDir, { recursive: true });
-            const chunkNames = outputNames.filter((name) => name.endsWith('.js'));
-            const chunks = await Promise.all(
-                chunkNames.map((name) => fsp.readFile(path.join(outDir, name), 'utf-8')),
-            );
-            frontendCode = chunks.join('\n');
-            const archive = await JSZip.loadAsync(
-                await fsp.readFile(path.join(outDir, ARCHIVE_FILENAME)),
-            );
-            const manifestFile = archive.file('manifest.json');
-            if (!manifestFile) {
-                throw new Error('Expected manifest.json in the app package.');
-            }
-            manifest = JSON.parse(await manifestFile.async('string'));
+            ({ maps, outputNames, frontendCode, manifest } = await readBuildOutput(outDir));
         }, 60000);
 
         test('give the frontend a proxy call for each backend function it calls, and no backend code', () => {
@@ -222,3 +247,100 @@ describe('apps frontend sourcemaps', () => {
         });
     });
 });
+
+// A package that opts in ships its backend functions as `.backend.js` files under its own `dist/`,
+// imported by its own package name (`@datadog/apps-frontend/visualizations/backend`). Installed
+// under node_modules or linked from a checkout, it gets the same guarantees as the app's own files.
+describe.each<BackendLibraryLayout>(['installed', 'linked'])(
+    'apps frontend sourcemaps, for backend functions of an opted-in package (%s)',
+    (layout) => {
+        let cleanup: () => Promise<void>;
+        let backendSources: BackendSource[];
+        let output: BuildOutput;
+
+        beforeAll(async () => {
+            const assembled = await assembleBackendLibraryApp(layout);
+            const { appRoot } = assembled;
+            cleanup = assembled.cleanup;
+            const vizLibDir = fs.realpathSync(path.join(appRoot, 'node_modules/@fixtures/viz-lib'));
+            // The backend function and the module only it imports.
+            backendSources = await readBackendSourceFiles([
+                path.join(vizLibDir, 'dist/src/visualizations/data.backend.js'),
+                path.join(vizLibDir, 'dist/src/visualizations/request.js'),
+            ]);
+
+            const plugin = datadogVitePlugin({ ...defaultPluginOptions, apps: {} });
+            await build({
+                root: appRoot,
+                configFile: false,
+                logLevel: 'silent',
+                build: {
+                    outDir: 'dist',
+                    emptyOutDir: true,
+                    sourcemap: true,
+                    rollupOptions: {
+                        input: path.join(appRoot, 'main.ts'),
+                        // Vite's default chunk naming: it names a lazily imported module's chunk
+                        // after the module, as viz-lib imports its backend function.
+                        output: { chunkFileNames: '[name]-[hash].js' },
+                    },
+                },
+                plugins: [plugin],
+            });
+            output = await readBuildOutput(path.join(appRoot, 'dist'));
+        }, 60000);
+
+        afterAll(async () => {
+            await cleanup();
+        });
+
+        test("give the frontend a proxy call for the package's backend function, and no backend code", () => {
+            const proxiedQueryNames = [...output.frontendCode.matchAll(PROXY_CALL_RE)].map(
+                (match) => match[1],
+            );
+
+            expect(proxiedQueryNames).toEqual([expect.stringMatching(/\.fetchSeries$/)]);
+            for (const marker of LIBRARY_BACKEND_BODY_MARKERS) {
+                expect(output.frontendCode).not.toContain(marker);
+            }
+        });
+
+        test("package the package's backend function the frontend reaches", () => {
+            const proxiedQueryNames = [...output.frontendCode.matchAll(PROXY_CALL_RE)].map(
+                (match) => match[1],
+            );
+            expect(Object.keys(output.manifest.backend.functions)).toEqual(proxiedQueryNames);
+        });
+
+        test('never name an output file after a backend file', () => {
+            const backendNamed = output.outputNames.filter(
+                (name) => BACKEND_FILE_RE.test(name) || name.includes('.backend'),
+            );
+            expect(backendNamed).toEqual([]);
+        });
+
+        test("still map the packages' frontend code to its sources", () => {
+            const allSources = output.maps.flatMap((map) => map.sources);
+            expect(allSources).toEqual(
+                expect.arrayContaining([
+                    expect.stringMatching(/viz-lib\/dist\/src\/index\.js$/),
+                    // A package that didn't opt in keeps its `.backend.js` file an ordinary module.
+                    expect.stringMatching(/plain-backend-lib\/ordinary\.backend\.js$/),
+                ]),
+            );
+        });
+
+        test("never reference the package's backend files as sources", () => {
+            const backendSourcePaths = output.maps.flatMap((map) =>
+                map.sources
+                    .filter((source) => /viz-lib\/dist\/src\/visualizations\//.test(source))
+                    .map((source) => `${map.name}: ${source}`),
+            );
+            expect(backendSourcePaths).toEqual([]);
+        });
+
+        test("never contain a backend file's source text", () => {
+            expect(findBackendSourceTexts(output.maps, backendSources)).toEqual([]);
+        });
+    },
+);
