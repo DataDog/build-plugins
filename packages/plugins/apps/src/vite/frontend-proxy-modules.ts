@@ -64,6 +64,10 @@ export function createFrontendProxyModules(getPaths: () => FrontendProxyPaths) {
          * In a frontend build, swaps a resolved backend module for its proxy module id, so the
          * frontend graph only ever holds the proxy stub (see `load` in index.ts). Anything else,
          * including an unresolved or external import, passes through unchanged.
+         *
+         * A backend module is whatever `isBackendFunctionFile` says the transform turns into a
+         * proxy, so the two can't disagree: the app's own files, and an opted-in package's,
+         * installed under node_modules or linked.
          */
         resolveFrontendProxy<T extends ResolvedModule>(resolved: T | null): T | null {
             if (!resolved || resolved.external) {
