@@ -19,7 +19,7 @@ import type {
     VariableDeclaration,
 } from 'estree';
 
-import { isBackendSourceModule } from '../backend-sources';
+import { importsBackendFunctionPackage, isBackendSourceModule } from '../backend-sources';
 
 import {
     analyzeModuleScope,
@@ -61,7 +61,7 @@ export interface StaticModuleDependency {
 
 export interface ModuleDependency {
     specifier: string;
-    kind: 'dynamic-import' | 'require';
+    kind: 'dynamic-import' | 'backend-package-dynamic-import' | 'require';
 }
 
 /**
@@ -167,7 +167,7 @@ export function createParsedModuleRecord(
         ast: program,
         scopeAnalysis,
         staticDependencies: staticModuleDependencies,
-        unsupportedDependencies: collectUnsupportedModuleDependencies(program),
+        unsupportedDependencies: collectUnsupportedModuleDependencies(program, moduleId, buildRoot),
         importsByVariable: collectImportBindings(program, scopeAnalysis, staticModuleDependencies),
         exportsByName: collectExportBindings(program, scopeAnalysis, staticModuleDependencies),
         starExports: collectStarExports(program, staticModuleDependencies),
@@ -620,21 +620,36 @@ function getResolvedSource(staticDependencies: StaticModuleDependency[], source:
  * Finds dependency forms that cannot be represented by the static dependency
  * IDs supplied by the backend build collector.
  */
-function collectUnsupportedModuleDependencies(ast: Program): ModuleDependency[] {
+function collectUnsupportedModuleDependencies(
+    ast: Program,
+    moduleId: string,
+    buildRoot: string,
+): ModuleDependency[] {
     const dependencies: ModuleDependency[] = [];
+    const getDynamicImportFailure = (specifier: string): ModuleDependency | undefined => {
+        if (shouldFailDynamicImport(specifier)) {
+            return { specifier, kind: 'dynamic-import' };
+        }
+        // A package's modules are backend source like app code, so a dynamic import into one is
+        // as unfollowable as a local one. Ordinary package imports stay skipped.
+        if (importsBackendFunctionPackage(specifier, moduleId, buildRoot)) {
+            return { specifier, kind: 'backend-package-dynamic-import' };
+        }
+        return undefined;
+    };
 
     walkAst(ast, dependencies, {
         ImportExpression(node, { state }) {
-            const specifier = getImportExpressionSpecifier(node);
-            if (shouldFailDynamicImport(specifier)) {
-                state.push({ specifier, kind: 'dynamic-import' });
+            const failure = getDynamicImportFailure(getImportExpressionSpecifier(node));
+            if (failure) {
+                state.push(failure);
             }
         },
         CallExpression(node, { state }) {
             if (isImportCallExpression(node)) {
-                const specifier = getImportCallSpecifier(node);
-                if (shouldFailDynamicImport(specifier)) {
-                    state.push({ specifier, kind: 'dynamic-import' });
+                const failure = getDynamicImportFailure(getImportCallSpecifier(node));
+                if (failure) {
+                    state.push(failure);
                 }
                 return;
             }

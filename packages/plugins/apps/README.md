@@ -49,12 +49,14 @@ A package can ship backend functions too. It opts in from its `package.json`:
 }
 ```
 
-In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code. A `.backend.*` file in a package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names. That holds for installed packages. A package linked from outside the project root (a workspace package, `npm link`, a `file:` dependency) that hasn't opted in is the exception: like any linked workspace file, its `.backend.*` files are always proxied, so the build fails rather than deploying them or shipping their bodies.
+In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code; backend code can only import such a package statically. Under `node_modules`, the package is the installed package root, so a named `package.json` in a subfolder (like `preact/hooks`) doesn't change it.
+
+The opt-in governs packages outside the project root, installed or linked. Code inside the project root is the app's own, even a workspace package with its own `package.json`. A `.backend.*` file in an installed package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names. A package linked from outside the project root (a workspace package, `npm link`, a `file:` dependency) that hasn't opted in is the exception: like any linked workspace file, its `.backend.*` files are always proxied, so the build fails, naming the package, rather than deploying them or shipping their bodies.
 
 A few things to know:
 
 -   Declare `@datadog/action-catalog` and `@datadog/apps-backend` as peer dependencies. Each function uses the app's own copy, the one its runtime is set up on. This holds even when the package is linked from a checkout that has its own copy installed.
--   The dev server keeps opted-in packages out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle.
+-   The dev server keeps opted-in packages it finds in the app's dependency tree out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle. If pre-bundling still reaches one (an undeclared dependency, an alias), the dev server fails with an error naming the package to add to `optimizeDeps.exclude`.
 -   A function's name is derived from its file's path relative to the project root, so it's the same in `vite dev` and `vite build` for a given install, and distinct from every app file's.
 
 ## Development server authentication

@@ -1096,7 +1096,12 @@ describe('Backend Functions - getVitePlugin', () => {
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
-            optimizeDeps: { exclude: [] },
+            optimizeDeps: {
+                exclude: [],
+                esbuildOptions: {
+                    plugins: [expect.objectContaining({ name: 'dd-apps-backend-prebundle-guard' })],
+                },
+            },
             resolve: { dedupe: [] },
         });
     });

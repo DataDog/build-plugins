@@ -17,7 +17,7 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import { build, createServer, type ViteDevServer } from 'vite';
+import { build, createLogger, createServer, type ViteDevServer } from 'vite';
 
 import { ARCHIVE_FILENAME } from '../constants';
 import type { AppsManifest } from '../types';
@@ -54,6 +54,7 @@ async function assembleApp(
     await install(ACTION_CATALOG_DIR, '@datadog/action-catalog');
     await install(path.join(PROJECT_DIR, 'packages/plain-lib'), 'plain-backend-lib');
     await install(path.join(PROJECT_DIR, 'packages/banned-lib'), '@fixtures/banned-lib');
+    await install(path.join(PROJECT_DIR, 'packages/hooks-lib'), '@fixtures/hooks-lib');
 
     const link = async (checkout: string, name: string) => {
         const linkPath = path.join(appRoot, 'node_modules', name);
@@ -176,12 +177,29 @@ function getField(value: unknown, key: string): unknown {
 }
 
 /** The query spec of a preview-async request body: `data.attributes.query.properties.spec`. */
-function getSpec(body: unknown): { fqn?: unknown; connectionId?: unknown } {
+function getSpec(body: unknown): { fqn?: unknown; connectionId?: unknown; inputs?: unknown } {
     const spec = ['data', 'attributes', 'query', 'properties', 'spec'].reduce(getField, body);
     return {
         fqn: getField(spec, 'fqn'),
         connectionId: getField(spec, 'connectionId'),
+        inputs: getField(spec, 'inputs'),
     };
+}
+
+/** Waits until Vite's SSR module graph has invalidated `file` after a change event. */
+async function waitForInvalidation(server: ViteDevServer, file: string): Promise<void> {
+    const deadline = Date.now() + 5000;
+    const isInvalidated = () => {
+        const nodes = server.environments.ssr.moduleGraph.getModulesByFile(file) ?? new Set();
+        return [...nodes].some((node) => node.lastInvalidationTimestamp > 0);
+    };
+    while (!isInvalidated()) {
+        if (Date.now() > deadline) {
+            throw new Error(`Vite never invalidated ${file}`);
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 }
 
 /** Mocks Datadog's preview API: runtime-context hydration, then the metrics action itself. */
@@ -283,7 +301,7 @@ describe.each<Layout>(['installed', 'linked'])(
                 const outDir = path.join(appRoot, 'dist');
 
                 await expect(buildApp(appRoot, 'linked-plain.ts')).rejects.toThrow(
-                    /^Unsupported local module graph for \S+[/\\]linked-plain-lib[/\\]linked\.backend\.js: missing module record/,
+                    /^Cannot build backend function \S+linked\.backend\.js: \S+linked\.backend\.js belongs to the package "linked-plain-backend-lib" \(\S+\), which doesn't provide backend functions\. Add "datadogApps": \{ "backendFunctions": true \} to its package\.json/,
                 );
 
                 // Vite wrote the frontend before packaging failed: it holds only the proxy.
@@ -299,6 +317,15 @@ describe.each<Layout>(['installed', 'linked'])(
                 ]);
                 expect(frontendOutput).not.toContain(LINKED_PLAIN_LIB_BODY);
                 expect(outputNames).not.toContain(ARCHIVE_FILENAME);
+            }, 30000);
+
+            test("Should package a function in a subfolder with its own named package.json, under the package root's opt-in", async () => {
+                const hooks = await buildApp(appRoot, 'hooks.ts');
+
+                const functionNames = Object.keys(hooks.manifest.backend.functions);
+                expect(functionNames).toEqual([expect.stringMatching(/\.readHookState$/)]);
+                expect(getProxiedQueryNames(hooks.frontendCode)).toEqual(functionNames);
+                expect(hooks.frontendCode).not.toContain('hooks-lib backend body');
             }, 30000);
 
             test("Should reject a banned import in an opted-in library's backend code", async () => {
@@ -370,6 +397,93 @@ describe.each<Layout>(['installed', 'linked'])(
                 ]);
                 expect(api.isDone()).toBe(true);
             }, 30000);
+
+            // Last in this block: it edits the installed (or linked) library in place.
+            test("Should run the library's edited modules on the next local execution", async () => {
+                const [queryName] = getProxiedQueryNames(
+                    await loadClientModuleGraph(server, '/main.ts'),
+                );
+                const execute = async () => {
+                    const { api, actionCalls } = mockDatadogApi({ points: [] });
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: queryName,
+                        args: [QUERY],
+                    });
+                    const res = createMockResponse();
+                    server.middlewares(req, res, jest.fn());
+                    await res.done;
+                    expect(api.isDone()).toBe(true);
+                    return actionCalls;
+                };
+                const helperFile = fs.realpathSync(
+                    path.join(
+                        appRoot,
+                        'node_modules/@fixtures/viz-lib/dist/src/visualizations/request.js',
+                    ),
+                );
+
+                expect(await execute()).toEqual([
+                    expect.objectContaining({ inputs: { query: QUERY, from: 0, to: 60 } }),
+                ]);
+
+                const source = await fsp.readFile(helperFile, 'utf-8');
+                await fsp.writeFile(helperFile, source.replace('to: 60', 'to: 120'));
+                server.watcher.emit('change', helperFile);
+                await waitForInvalidation(server, helperFile);
+
+                expect(await execute()).toEqual([
+                    expect.objectContaining({ inputs: { query: QUERY, from: 0, to: 120 } }),
+                ]);
+            }, 30000);
         });
     },
 );
+
+describe('Backend functions shipped by a package the dependency walk misses', () => {
+    let appRoot: string;
+    let cleanup: () => Promise<void>;
+    let server: ViteDevServer;
+    const errors: string[] = [];
+
+    beforeAll(async () => {
+        ({ appRoot, cleanup } = await assembleApp('installed'));
+        // Still installed, but no longer declared: an undeclared (phantom) dependency.
+        const manifestPath = path.join(appRoot, 'package.json');
+        const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf-8'));
+        delete manifest.dependencies['@fixtures/viz-lib'];
+        await fsp.writeFile(manifestPath, JSON.stringify(manifest));
+        const logger = createLogger('silent');
+        server = await createServer({
+            root: appRoot,
+            configFile: false,
+            customLogger: {
+                ...logger,
+                error: (message) => {
+                    errors.push(message);
+                },
+            },
+            server: { middlewareMode: true, hmr: false },
+            plugins: [getAppsPlugin()],
+        });
+    }, 30000);
+
+    afterAll(async () => {
+        await server.close();
+        await cleanup();
+    });
+
+    test('Should fail dev pre-bundling loudly, naming the package and the fix, instead of serving its backend body', async () => {
+        // The browser's requests for the pre-bundled package fail rather than return its body.
+        const clientCode = await loadClientModuleGraph(server, '/main.ts').catch(
+            (error: unknown) => {
+                errors.push(String(error));
+                return '';
+            },
+        );
+
+        expect(clientCode).not.toContain(VIZ_BACKEND_BODY);
+        expect(errors.join('\n')).toMatch(
+            /Dependency pre-bundling reached \S+data\.backend\.js, a backend function of "@fixtures\/viz-lib".*Add "@fixtures\/viz-lib" to optimizeDeps\.exclude/,
+        );
+    }, 30000);
+});

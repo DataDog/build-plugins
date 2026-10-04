@@ -27,21 +27,43 @@ export interface BackendFunctionPackage {
     root: string;
 }
 
+/** A package that didn't opt in, identified for error messages. */
+export interface OrdinaryPackage {
+    name: string;
+    root: string;
+}
+
 /** Who a module's source belongs to, as far as backend functions are concerned. */
 export type BackendModuleOwner =
-    /** The app's own source: inside the build root, outside package-manager directories. */
+    /**
+     * The app's own source: inside the build root, outside package-manager directories. That
+     * includes a workspace package that lives inside the root, whatever its manifest says.
+     */
     | { kind: 'app' }
-    /** Source of an installed package that opted in; treated exactly like app source. */
+    /** Source of an installed or linked package that opted in; treated exactly like app source. */
     | { kind: 'backend-package'; package: BackendFunctionPackage }
-    /** Any other installed package; its modules, `.backend.*` included, stay ordinary modules. */
-    | { kind: 'dependency' }
-    /** Outside the build root and not part of any installed package (e.g. a monorepo sibling folder). */
+    /**
+     * An installed package (under a package-manager directory) that didn't opt in. Its modules,
+     * `.backend.*` included, stay ordinary modules.
+     */
+    | { kind: 'dependency'; package?: OrdinaryPackage }
+    /**
+     * A package outside the build root, outside package-manager directories (a linked workspace
+     * package, `npm link`, a `file:` dependency) that didn't opt in. Like any linked workspace file,
+     * its `.backend.*` files are still proxied, but never analyzed as backend source, so the build
+     * fails closed instead of deploying them.
+     */
+    | { kind: 'linked-package'; package: OrdinaryPackage }
+    /** Outside the build root and not part of any package (e.g. a monorepo sibling folder). */
     | { kind: 'outside-app' };
 
 export const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
 
+// Split on both separators: Vite ids use forward slashes even on Windows.
+const splitPath = (filePath: string) => filePath.split(/[\\/]/);
+
 export function isPackageManagerModule(modulePath: string): boolean {
-    return modulePath.split(path.sep).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
+    return splitPath(modulePath).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
 }
 
 // A `..`-prefixed directory name like `..gen` is still inside the root.
@@ -84,28 +106,76 @@ function isWithin(parent: string, child: string): boolean {
     return !isOutsideRoot(path.relative(parent, child));
 }
 
+interface OwningPackage {
+    root: string;
+    name: string;
+    manifest: PackageManifest;
+}
+
+// Owners are cached per directory for the process: classification runs for every module the
+// bundler sees, and installed manifests don't change without restarting the dev server.
+const owningPackageByDir = new Map<string, OwningPackage | undefined>();
+
 /**
- * Finds the installed package a file belongs to: the nearest enclosing `package.json` that has a
- * `name` (nameless ones, like a `dist/package.json` that only sets `"type"`, don't define a package).
- * The search never climbs out of a `node_modules` directory, so a stray file directly inside one
- * can't be claimed by the app's own manifest further up.
+ * The installed package a file under `node_modules` belongs to: the directory right after the
+ * last `node_modules` segment (two for a scoped name), the way Node resolves it. A named
+ * `package.json` deeper inside, like `preact/hooks/package.json`, is part of that package and
+ * doesn't override its opt-in.
  */
-function findOwningPackage(
-    filePath: string,
-): { root: string; name: string; manifest: PackageManifest } | undefined {
-    let dir = path.dirname(filePath);
-    while (!PACKAGE_MANAGER_DIRS.has(path.basename(dir))) {
-        const manifest = readManifest(path.join(dir, 'package.json'));
-        if (manifest && typeof manifest.name === 'string') {
-            return { root: dir, name: manifest.name, manifest };
-        }
-        const parent = path.dirname(dir);
-        if (parent === dir) {
-            return undefined;
-        }
-        dir = parent;
+function findInstalledPackage(filePath: string): { root: string; dirName: string } | undefined {
+    const segments = splitPath(filePath);
+    const nodeModulesIndex = segments.lastIndexOf('node_modules');
+    if (nodeModulesIndex === -1) {
+        return undefined;
     }
-    return undefined;
+    const nameLength = segments[nodeModulesIndex + 1]?.startsWith('@') ? 2 : 1;
+    const rootEnd = nodeModulesIndex + 1 + nameLength;
+    // A file directly inside `node_modules` (or `node_modules/@scope`) belongs to no package.
+    if (rootEnd >= segments.length) {
+        return undefined;
+    }
+    return {
+        root: segments.slice(0, rootEnd).join(path.sep) || path.sep,
+        dirName: segments.slice(nodeModulesIndex + 1, rootEnd).join('/'),
+    };
+}
+
+/**
+ * The nearest enclosing `package.json` that has a `name`, for a file outside `node_modules`
+ * (nameless ones, like a `dist/package.json` that only sets `"type"`, don't define a package).
+ * Never climbs out of a package-manager directory, so a stray file inside one can't be claimed by
+ * the app's own manifest further up.
+ */
+function findNearestNamedPackage(dir: string): OwningPackage | undefined {
+    if (owningPackageByDir.has(dir)) {
+        return owningPackageByDir.get(dir);
+    }
+    let owner: OwningPackage | undefined;
+    if (!PACKAGE_MANAGER_DIRS.has(path.basename(dir))) {
+        const manifest = readManifest(path.join(dir, 'package.json'));
+        const parent = path.dirname(dir);
+        if (manifest && typeof manifest.name === 'string') {
+            owner = { root: dir, name: manifest.name, manifest };
+        } else if (parent !== dir) {
+            owner = findNearestNamedPackage(parent);
+        }
+    }
+    owningPackageByDir.set(dir, owner);
+    return owner;
+}
+
+function findOwningPackage(filePath: string): OwningPackage | undefined {
+    const installed = findInstalledPackage(filePath);
+    if (!installed) {
+        return findNearestNamedPackage(path.dirname(filePath));
+    }
+    const { root, dirName } = installed;
+    if (!owningPackageByDir.has(root)) {
+        const manifest = readManifest(path.join(root, 'package.json'));
+        const name = typeof manifest?.name === 'string' ? manifest.name : dirName;
+        owningPackageByDir.set(root, manifest ? { root, name, manifest } : undefined);
+    }
+    return owningPackageByDir.get(root);
 }
 
 /**
@@ -121,17 +191,74 @@ export function getBackendModuleOwner(moduleId: string, buildRoot: string): Back
         return { kind: 'app' };
     }
 
+    const underPackageManager = isPackageManagerModule(moduleId);
     const owner = findOwningPackage(moduleId);
     // A manifest enclosing the build root is the app's own (or its workspace's), never a dependency.
     if (owner && !isWithin(owner.root, root)) {
-        return providesBackendFunctions(owner.manifest)
-            ? { kind: 'backend-package', package: { name: owner.name, root: owner.root } }
-            : { kind: 'dependency' };
+        const pkg = { name: owner.name, root: owner.root };
+        if (providesBackendFunctions(owner.manifest)) {
+            return { kind: 'backend-package', package: pkg };
+        }
+        return underPackageManager
+            ? { kind: 'dependency', package: pkg }
+            : { kind: 'linked-package', package: pkg };
     }
 
-    return insideRoot || isPackageManagerModule(moduleId)
-        ? { kind: 'dependency' }
-        : { kind: 'outside-app' };
+    return insideRoot || underPackageManager ? { kind: 'dependency' } : { kind: 'outside-app' };
+}
+
+/**
+ * Explains why a backend function file isn't analyzable backend source, when it belongs to a
+ * package that could opt in. Used to make fail-closed errors actionable.
+ */
+export function explainExcludedBackendFile(
+    moduleId: string,
+    buildRoot: string,
+): string | undefined {
+    const owner = getBackendModuleOwner(moduleId, buildRoot);
+    const pkg =
+        owner.kind === 'linked-package' || owner.kind === 'dependency' ? owner.package : undefined;
+    if (!pkg) {
+        return undefined;
+    }
+    const { name, root } = pkg;
+    return (
+        `${moduleId} belongs to the package "${name}" (${root}), which doesn't provide backend ` +
+        `functions. Add "datadogApps": { "backendFunctions": true } to its package.json, or move ` +
+        `the file into the app.`
+    );
+}
+
+/** The package name a bare import specifier refers to, or undefined for a relative, absolute or URL-like one. */
+function getPackageName(specifier: string): string | undefined {
+    if (/^[./\\]/.test(specifier) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(specifier)) {
+        return undefined;
+    }
+    const segments = specifier.split('/');
+    const name = specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0];
+    return name || undefined;
+}
+
+/**
+ * Whether bare `specifier`, imported from module `importerId`, reaches a package that provides
+ * backend functions: the importer's own package (a self-reference) or an installed one.
+ */
+export function importsBackendFunctionPackage(
+    specifier: string,
+    importerId: string,
+    buildRoot: string,
+): boolean {
+    const name = getPackageName(specifier);
+    if (!name) {
+        return false;
+    }
+    const importerOwner = getBackendModuleOwner(importerId, buildRoot);
+    if (importerOwner.kind === 'backend-package' && importerOwner.package.name === name) {
+        return true;
+    }
+    const packageDir = locateInstalledPackage(name, path.dirname(importerId));
+    const manifest = packageDir ? readManifest(path.join(packageDir, 'package.json')) : undefined;
+    return manifest !== undefined && providesBackendFunctions(manifest);
 }
 
 /**

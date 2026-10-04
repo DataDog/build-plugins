@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build } from 'vite';
+import type { build, UserConfig } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -51,6 +51,7 @@ import {
     gracefulFsPredatesGuards,
     installGuards,
 } from './network-guard';
+import { createEsbuildPreBundleGuard, createRolldownPreBundleGuard } from './prebundle-guard';
 import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
@@ -113,6 +114,25 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+
+type OptimizeDepsConfig = NonNullable<UserConfig['optimizeDeps']>;
+
+/** Excludes packages providing backend functions from pre-bundling, and guards against any it missed. */
+function getOptimizeDepsConfig(
+    exclude: string[],
+    buildRoot: string,
+    viteVersion: string,
+): OptimizeDepsConfig {
+    const optimizeDeps: OptimizeDepsConfig = { exclude };
+    // Vite 8 optimizes dependencies with Rolldown and warns about esbuild options.
+    const viteMajor = Number.parseInt(viteVersion, 10);
+    if (viteMajor >= 8) {
+        const rolldownOptions = { plugins: [createRolldownPreBundleGuard(buildRoot)] };
+        return Object.assign(optimizeDeps, { rolldownOptions });
+    }
+    optimizeDeps.esbuildOptions = { plugins: [createEsbuildPreBundleGuard(buildRoot)] };
+    return optimizeDeps;
+}
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 /**
@@ -165,44 +185,46 @@ export const getVitePlugin = ({
             order: 'post',
             handler(userConfig, { command }) {
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
+                // require(), which throws "Cannot use import statement outside a module";
+                // ssr.noExternal forces Vite's SSR transform instead.
+                const runtimePackages = ['@datadog/apps-backend', '@datadog/action-catalog'];
+                // Only the dev server pre-bundles dependencies or loads modules through SSR; the
+                // nested backend builds configure their own resolution (see build-config.ts).
+                if (command !== 'serve') {
+                    return { ssr: { noExternal: runtimePackages } };
+                }
+
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
-                // Only the dev server pre-bundles dependencies or loads modules through SSR.
-                const backendPackageNames =
-                    command === 'serve'
-                        ? findInstalledBackendFunctionPackages(root).flatMap(
-                              (pkg) => pkg.importNames,
-                          )
-                        : [];
+                const backendPackageNames = findInstalledBackendFunctionPackages(root).flatMap(
+                    (pkg) => pkg.importNames,
+                );
                 if (backendPackageNames.length > 0) {
                     log.debug(
                         `Packages providing backend functions: ${backendPackageNames.join(', ')}`,
                     );
                 }
                 return {
-                    // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with
-                    // a plain require(), which throws "Cannot use import statement outside a
-                    // module"; ssr.noExternal forces Vite's SSR transform instead. A package
-                    // providing backend functions needs the same so local execution runs its real
-                    // modules (and its self-referencing imports) through this plugin.
+                    // A package providing backend functions needs the same, so local execution
+                    // runs its real modules (and its self-referencing imports) through this plugin.
                     ssr: {
-                        noExternal: [
-                            '@datadog/apps-backend',
-                            '@datadog/action-catalog',
-                            ...backendPackageNames,
-                        ],
+                        noExternal: [...runtimePackages, ...backendPackageNames],
                     },
                     // Pre-bundling would inline a package's backend files into a browser chunk
                     // where the transform below never sees them, shipping their real body instead
                     // of the proxy. Excluding the package also keeps it external inside any other
-                    // pre-bundled dependency that imports it.
-                    optimizeDeps: {
-                        exclude: backendPackageNames,
-                    },
+                    // pre-bundled dependency that imports it. A package the dependency walk misses
+                    // fails the optimizer loudly instead (see prebundle-guard.ts).
+                    optimizeDeps: getOptimizeDepsConfig(
+                        backendPackageNames,
+                        root,
+                        context.bundler.version,
+                    ),
                     // A backend runtime singleton must be the app's own copy, the one the backend
-                    // entry initializes, even when a package providing backend functions is linked
-                    // from somewhere that has its own copy installed.
+                    // entry initializes during local execution, even when a package providing
+                    // backend functions is linked from somewhere that has its own copy installed.
                     resolve: {
                         dedupe: getInstalledBackendRuntimePackages(root),
                     },
