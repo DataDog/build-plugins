@@ -1452,3 +1452,73 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(ssrLoadModule).not.toHaveBeenCalled();
     });
 });
+
+describe('Backend Functions - frontend build proxy modules', () => {
+    // Narrows a hook to its handler (object form) or the hook itself (function form).
+    function getHookHandler(hook: unknown): Function {
+        const handler =
+            typeof hook === 'object' && hook !== null && 'handler' in hook ? hook.handler : hook;
+        if (typeof handler !== 'function') {
+            throw new Error('Expected the hook to have a function handler.');
+        }
+        return handler;
+    }
+
+    const backendFile = '/build/src/backend/myHandler.backend.ts';
+
+    async function resolveInBuild(plugin: ReturnType<typeof getVitePlugin>): Promise<string> {
+        const configResolved = getHookHandler(plugin?.configResolved);
+        Reflect.apply(configResolved, undefined, [{ command: 'build' }]);
+        const resolveId = getHookHandler(plugin?.resolveId);
+        const resolved = await Reflect.apply(
+            resolveId,
+            { resolve: jest.fn(async () => ({ id: backendFile })) },
+            ['./backend/myHandler.backend', '/build/src/main.ts', { ssr: false }],
+        );
+        if (typeof resolved?.id !== 'string') {
+            throw new Error('Expected resolveId to resolve the backend module.');
+        }
+        return resolved.id;
+    }
+
+    test('Should resolve a client-side import of a backend module to its proxy module in a build', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const proxyId = await resolveInBuild(plugin);
+
+        expect(proxyId).toMatch(/^\0dd-apps-backend-proxy:[0-9a-f]{64}$/);
+    });
+
+    test('Should load a proxy module as the backend module transformed into its stub', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const proxyId = await resolveInBuild(plugin);
+        const load = getHookHandler(plugin?.load);
+        const loadModule = jest.fn(async () => ({ code: 'export async function myHandler() {}' }));
+
+        const code = await Reflect.apply(load, { load: loadModule }, [proxyId]);
+
+        expect(loadModule).toHaveBeenCalledWith({ id: backendFile });
+        expect(code).toBe('export async function myHandler() {}');
+    });
+
+    test('Should fail the build when the backend module behind a proxy module has no code', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const proxyId = await resolveInBuild(plugin);
+        const load = getHookHandler(plugin?.load);
+        const loadModule = jest.fn(async () => ({ code: null }));
+
+        await expect(Reflect.apply(load, { load: loadModule }, [proxyId])).rejects.toThrow(
+            `Could not load backend module ${backendFile}.`,
+        );
+    });
+
+    test('Should leave an unknown proxy module id to other plugins', async () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const load = getHookHandler(plugin?.load);
+
+        const code = await Reflect.apply(load, { load: jest.fn() }, [
+            '\0dd-apps-backend-proxy:unknown',
+        ]);
+
+        expect(code).toBeNull();
+    });
+});

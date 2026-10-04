@@ -242,7 +242,10 @@ export const getVitePlugin = ({
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
     let isBuild = false;
-    const frontendProxyModules = createFrontendProxyModules();
+    const frontendProxyModules = createFrontendProxyModules(() => ({
+        buildRoot: context.buildRoot,
+        outDir: context.bundler.outDir,
+    }));
     let backendPackages: InstalledBackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
@@ -341,7 +344,6 @@ export const getVitePlugin = ({
         configResolved(config) {
             isBuild = config.command === 'build';
         },
-        // In a frontend build, gives each backend module its own proxy module id (see load below).
         // Propagates LOCAL_EXECUTION_LOAD_SUFFIX through the backend-file dependency graph so a
         // nested `.backend.ts` import isn't replaced with the frontend proxy stub. Every subgraph
         // module gets its own suffixed id, since Vite otherwise shares one cached id across callers.
@@ -351,32 +353,25 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // Top-level guard (not folded into each branch) so any future branch added below
-                // inherits it automatically: local execution's traversal is always SSR, so without
-                // this a client-mode resolution could inherit the marker and leak real backend code.
-                if (resolveOptions.ssr !== true) {
-                    // The dev server keeps serving backend modules under their own ids, where the
-                    // transform below replaces them and edits to the file still reach the browser.
-                    if (!isBuild) {
-                        return null;
-                    }
+                // In a frontend build, each client-side import of a backend module resolves to an
+                // opaque proxy module (see frontend-proxy-modules.ts and load below), keeping the
+                // backend file's source and name out of the frontend. The dev server keeps serving
+                // backend modules under their own ids, where the transform below replaces them and
+                // edits to the file still reach the browser. This costs every client-side import in
+                // a build one extra resolution.
+                if (isBuild && resolveOptions.ssr !== true) {
                     const resolved = await this.resolve(source, importer, {
                         ...resolveOptions,
                         skipSelf: true,
                     });
-                    if (
-                        !resolved ||
-                        resolved.external ||
-                        !isBackendFunctionFile(
-                            resolved.id,
-                            context.buildRoot,
-                            context.bundler.outDir,
-                        )
-                    ) {
-                        return resolved;
-                    }
-                    const proxyId = frontendProxyModules.getProxyId(resolved.id, context.buildRoot);
-                    return { ...resolved, id: proxyId };
+                    return frontendProxyModules.resolveFrontendProxy(resolved);
+                }
+
+                // Top-level guard (not folded into each branch) so any future branch added below
+                // inherits it automatically: local execution's traversal is always SSR, so without
+                // this a client-mode resolution could inherit the marker and leak real backend code.
+                if (resolveOptions.ssr !== true) {
+                    return null;
                 }
 
                 // The other half of the scoping: the store is only populated while a local
@@ -419,7 +414,7 @@ export const getVitePlugin = ({
             },
         },
         load: {
-            filter: { id: FRONTEND_PROXY_ID_RE },
+            filter: { id: { include: [FRONTEND_PROXY_ID_RE] } },
             async handler(id) {
                 const sourceId = frontendProxyModules.getSourceId(id);
                 if (!sourceId) {
@@ -430,7 +425,7 @@ export const getVitePlugin = ({
                 // that code joins the frontend graph: nothing imports the backend module itself,
                 // so the bundler never renders it or its sourcemaps.
                 const { code } = await this.load({ id: sourceId });
-                if (code === null) {
+                if (code == null) {
                     throw new Error(`Could not load backend module ${sourceId}.`);
                 }
                 return code;
