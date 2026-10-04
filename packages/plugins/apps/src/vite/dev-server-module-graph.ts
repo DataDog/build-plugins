@@ -18,6 +18,7 @@ import {
 } from '../backend/ast-parsing/module-graph';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import {
+    getBackendModuleOwner,
     isBackendSourceModule,
     isOutsideRoot,
     isPackageManagerModule,
@@ -80,7 +81,12 @@ function trackStaleAppModules(server: ViteDevServer, buildRoot: string) {
         const pathToClassify = isOutsideRoot(relativePath)
             ? path.normalize(moduleId)
             : relativePath;
-        return !isPackageManagerModule(pathToClassify);
+        // A package that provides backend functions is backend code like the app's, so its edited
+        // modules re-run too, even when it's installed under node_modules.
+        return (
+            !isPackageManagerModule(pathToClassify) ||
+            getBackendModuleOwner(path.normalize(moduleId), buildRoot).kind === 'backend-package'
+        );
     };
     // Scanned upfront too: another plugin's transform hook can pre-transform its imports and
     // refill a stale module before the walk reaches it.
