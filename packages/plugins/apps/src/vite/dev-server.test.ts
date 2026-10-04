@@ -14,9 +14,9 @@ import {
     mockLogFn,
     moduleResolverFor,
 } from '@dd/tests/_jest/helpers/mocks';
+import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
-import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -81,37 +81,16 @@ function mockBuildResult(code: string) {
     };
 }
 
-function emitModuleParsed(
-    config: {
-        plugins?: Array<{
-            moduleParsed?: (this: { parse: typeof parseAst }, moduleInfo: unknown) => void;
-        }>;
-    },
-    id: string,
-    code: string,
-    importedIds: string[] = [],
-) {
-    for (const plugin of config.plugins ?? []) {
-        plugin.moduleParsed?.call(
-            { parse: parseAst },
-            {
-                id,
-                code,
-                importedIds,
-            },
-        );
-    }
-}
-
 function mockBuildWithParsedBackend(code = '// code') {
     mockViteBuild.mockImplementation(async (config) => {
-        for (const func of mockFunctions) {
+        const emits = mockFunctions.map((func) =>
             emitModuleParsed(
                 config,
                 func.absolutePath,
                 `export function ${func.name}() { return null; }`,
-            );
-        }
+            ),
+        );
+        await Promise.all(emits);
         return mockBuildResult(code);
     });
 }
@@ -504,12 +483,12 @@ describe('Dev Server Middleware', () => {
         test('Should reject a bundle whose imported helper module has a restricted import or global', async () => {
             // Emits moduleParsed for both the entry and a helper module, to prove the static-checks plugin covers the helper too, not just the entry file.
             mockViteBuild.mockImplementation(async (config) => {
-                emitModuleParsed(
+                await emitModuleParsed(
                     config,
                     mockFunctions[0].absolutePath,
                     `export function ${mockFunctions[0].name}() { return null; }`,
                 );
-                emitModuleParsed(
+                await emitModuleParsed(
                     config,
                     '/project/backend/helpers/secrets.ts',
                     "import fs from 'fs';\nexport function readSecret() { return fs.readFileSync('/etc/passwd'); }",
@@ -855,7 +834,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should compute allowedConnectionIds from the backend build collector', async () => {
             mockViteBuild.mockImplementation(async (config) => {
-                emitModuleParsed(
+                await emitModuleParsed(
                     config,
                     mockFunctions[0].absolutePath,
                     `

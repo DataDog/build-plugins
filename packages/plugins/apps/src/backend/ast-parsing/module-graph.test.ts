@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { createFixtureRecord } from '@dd/tests/_jest/helpers/moduleGraph';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
@@ -11,25 +12,16 @@ import {
     type ImportBinding,
     type ParsedModuleRecord,
     isPackageManagerModule,
+    resolveStaticModuleSources,
     shouldTraverseCollectedModule,
     type StaticBinding,
 } from './module-graph';
+import { ensureProgram } from './type-guards';
 
 const buildRoot = '/project';
 
-function createRecord(code: string, staticDependencies: string[] = []): ParsedModuleRecord {
-    const record = createParsedModuleRecord(
-        '/project/src/backend/actions.backend.js',
-        buildRoot,
-        parseAst(code),
-        staticDependencies,
-    );
-
-    if (!record) {
-        throw new Error('Expected module record to be created');
-    }
-    return record;
-}
+const createRecord = (code: string, resolvedIds: string[] = []): ParsedModuleRecord =>
+    createFixtureRecord('/project/src/backend/actions.backend.js', buildRoot, code, resolvedIds);
 
 function bindingsByVariableName<T>(bindings: Map<{ name: string }, T>): Record<string, T> {
     return Object.fromEntries(
@@ -48,7 +40,7 @@ describe('Backend Functions - module graph records', () => {
                     return getEcho();
                 }
             `),
-            ['/project/src/backend/helpers/http.js'],
+            [{ source: './helpers/http.js', resolvedId: '/project/src/backend/helpers/http.js' }],
         );
 
         expect(record).toMatchObject({
@@ -64,7 +56,7 @@ describe('Backend Functions - module graph records', () => {
         expect(record?.ast.type).toBe('Program');
     });
 
-    test('Should pair resolved dependency IDs with static import and export sources', () => {
+    test('Should record the resolved ID of each static import and export source', () => {
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             buildRoot,
@@ -74,9 +66,9 @@ describe('Backend Functions - module graph records', () => {
                 export * from './shared.js';
             `),
             [
-                '/project/src/backend/helpers/http.js',
-                '/project/src/backend/connections.js',
-                '/project/src/backend/shared.js',
+                { source: './helpers/http.js', resolvedId: '/project/src/backend/helpers/http.js' },
+                { source: './connections.js', resolvedId: '/project/src/backend/connections.js' },
+                { source: './shared.js', resolvedId: '/project/src/backend/shared.js' },
             ],
         );
 
@@ -96,15 +88,131 @@ describe('Backend Functions - module graph records', () => {
         ]);
     });
 
+    test('Should record one dependency per distinct source when a source repeats', () => {
+        const record = createRecord(
+            `
+                import { a } from './x.js';
+                import { b } from './y.js';
+                import { c } from './x.js';
+                import { d } from './z.js';
+            `,
+            [
+                '/project/src/backend/x.js',
+                '/project/src/backend/y.js',
+                '/project/src/backend/x.js',
+                '/project/src/backend/z.js',
+            ],
+        );
+
+        expect(record.staticDependencies).toEqual([
+            { source: './x.js', resolvedId: '/project/src/backend/x.js' },
+            { source: './y.js', resolvedId: '/project/src/backend/y.js' },
+            { source: './z.js', resolvedId: '/project/src/backend/z.js' },
+        ]);
+        const bindings = bindingsByVariableName(record.importsByVariable);
+        expect(bindings).toMatchObject({
+            c: { resolvedId: '/project/src/backend/x.js' },
+            d: { resolvedId: '/project/src/backend/z.js' },
+        });
+    });
+
+    test('Should fail closed when a static source has no resolved ID', () => {
+        const ast = parseAst(`
+            import { a } from './x.js';
+            import { b } from './y.js';
+        `);
+        const createWithMissingSource = () =>
+            createParsedModuleRecord('/project/src/backend/actions.backend.js', buildRoot, ast, [
+                { source: './x.js', resolvedId: '/project/src/backend/x.js' },
+            ]);
+        expect(createWithMissingSource).toThrow(
+            'Unsupported local module graph for /project/src/backend/actions.backend.js: static import/export source "./y.js" with no resolved ID could hide an action-catalog connectionId.',
+        );
+    });
+
+    test.each([
+        {
+            description: 'a source the module never imports',
+            staticDependencies: [
+                { source: './x.js', resolvedId: '/project/src/backend/x.js' },
+                { source: './unused.js', resolvedId: '/project/src/backend/unused.js' },
+            ],
+            message: 'resolved ID for "./unused.js"',
+        },
+        {
+            description: 'the same source twice',
+            staticDependencies: [
+                { source: './x.js', resolvedId: '/project/src/backend/x.js' },
+                { source: './x.js', resolvedId: '/project/src/backend/other.js' },
+            ],
+            message: 'resolved ID for "./x.js"',
+        },
+    ])(
+        'Should fail closed when given a resolved ID for $description',
+        ({ staticDependencies, message }) => {
+            const ast = parseAst("import { a } from './x.js';");
+            const create = () =>
+                createParsedModuleRecord(
+                    '/project/src/backend/actions.backend.js',
+                    buildRoot,
+                    ast,
+                    staticDependencies,
+                );
+            expect(create).toThrow(
+                `Unsupported local module graph for /project/src/backend/actions.backend.js: ${message}, which isn't a distinct static import/export source, could hide an action-catalog connectionId.`,
+            );
+        },
+    );
+
+    test('Should fail closed when a side-effect import has no resolved ID', () => {
+        const ast = parseAst("import './x.js';");
+        const create = () =>
+            createParsedModuleRecord('/project/src/backend/actions.backend.js', buildRoot, ast, []);
+        expect(create).toThrow(
+            'Unsupported local module graph for /project/src/backend/actions.backend.js: static import/export source "./x.js" with no resolved ID could hide an action-catalog connectionId.',
+        );
+    });
+
+    test('Should fail closed when a static source resolves to nothing', async () => {
+        const ast = parseAst("import { a } from './x.js';");
+        const program = ensureProgram(ast, 'test');
+        const resolve = async () => null;
+
+        const resolving = resolveStaticModuleSources(program, '/project/src/a.js', resolve);
+        await expect(resolving).rejects.toThrow(
+            'Unsupported local module graph for /project/src/a.js: unresolvable import specifier "./x.js" could hide an action-catalog connectionId.',
+        );
+    });
+
+    test('Should resolve each distinct static source once, in first-occurrence order', async () => {
+        const ast = parseAst(`
+            import { a } from './x.js';
+            export { b } from './y.js';
+            import { c } from './x.js';
+            export * from './z.js';
+        `);
+        const program = ensureProgram(ast, 'test');
+        const resolve = jest.fn(async (source: string) => `/resolved/${source.slice(2)}`);
+
+        const staticDependencies = await resolveStaticModuleSources(program, 'test', resolve);
+
+        expect(staticDependencies).toEqual([
+            { source: './x.js', resolvedId: '/resolved/x.js' },
+            { source: './y.js', resolvedId: '/resolved/y.js' },
+            { source: './z.js', resolvedId: '/resolved/z.js' },
+        ]);
+        expect(resolve).toHaveBeenCalledTimes(3);
+    });
+
     test.each([
         { description: 'package modules', id: '/project/node_modules/package/index.js' },
         { description: 'Yarn package cache modules', id: '/project/.yarn/cache/package/index.js' },
         { description: 'files outside buildRoot', id: '/external/helper.js' },
         { description: 'non-JavaScript files', id: '/project/src/backend/data.json' },
     ])('Should skip $description', ({ id }) => {
-        expect(
-            createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
-        ).toBeNull();
+        const ast = parseAst('export const value = true;');
+        const record = createParsedModuleRecord(id, buildRoot, ast, []);
+        expect(record).toBeNull();
     });
 
     test.each([
@@ -114,9 +222,10 @@ describe('Backend Functions - module graph records', () => {
         '/project/dist/helper.js',
         '/project/.vite/helper.js',
     ])('Should parse supported app-local module path %s', (id) => {
-        expect(
-            createParsedModuleRecord(id, buildRoot, parseAst('export const value = true;')),
-        ).toEqual(expect.objectContaining({ id }));
+        const ast = parseAst('export const value = true;');
+        const record = createParsedModuleRecord(id, buildRoot, ast, []);
+        const expectedRecord = expect.objectContaining({ id });
+        expect(record).toEqual(expectedRecord);
     });
 
     test.each([
@@ -136,23 +245,27 @@ describe('Backend Functions - module graph records', () => {
             expected: { kind: 'require', specifier: './helper.js' },
         },
     ])('Should record unsupported $description', ({ code, expected }) => {
+        const ast = parseAst(code);
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             buildRoot,
-            parseAst(code),
+            ast,
+            [],
         );
 
         expect(record?.unsupportedDependencies).toEqual([expected]);
     });
 
     test('Should ignore package dynamic imports and require calls', () => {
+        const ast = parseAst(`
+            import('package');
+            require('package');
+        `);
         const record = createParsedModuleRecord(
             '/project/src/backend/actions.backend.js',
             buildRoot,
-            parseAst(`
-                import('package');
-                require('package');
-            `),
+            ast,
+            [],
         );
 
         expect(record?.unsupportedDependencies).toEqual([]);
