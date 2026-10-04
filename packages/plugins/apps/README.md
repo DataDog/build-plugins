@@ -49,7 +49,7 @@ A package can ship backend functions too. It opts in from its `package.json`:
 }
 ```
 
-In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code. A `.backend.*` file in a package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names.
+In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code. A `.backend.*` file in a package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names. That holds for installed packages. A package linked from outside the project root (a workspace package, `npm link`, a `file:` dependency) that hasn't opted in is the exception: like any linked workspace file, its `.backend.*` files are always proxied, so the build fails rather than deploying them or shipping their bodies.
 
 A few things to know:
 

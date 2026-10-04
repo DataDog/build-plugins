@@ -29,6 +29,7 @@ const ACTION_CATALOG_DIR = path.join(FIXTURES_DIR, 'action_catalog_project');
 // Only exists in the library's backend function body, never in its proxy.
 const VIZ_BACKEND_BODY = 'viz-lib backend body';
 const PLAIN_LIB_BODY = 'plain-backend-lib ordinary module body';
+const LINKED_PLAIN_LIB_BODY = 'linked-plain-backend-lib module body';
 const QUERY = 'avg:system.cpu.user{*}';
 const PROXY_CALL_RE = /executeBackendFunction\("([0-9a-f]{64}\.[A-Za-z]+)"/g;
 
@@ -38,6 +39,7 @@ type Layout = 'installed' | 'linked';
  * Assembles the app in a temp dir. `installed` copies every package into `node_modules`, as npm or
  * a tarball install would. `linked` symlinks the viz library from its own checkout, which has its
  * own development copy of `@datadog/action-catalog` (as `npm link` or a `file:` dependency would).
+ * In both, the non-opted `linked-plain-backend-lib` is symlinked from a checkout beside the app.
  */
 async function assembleApp(
     layout: Layout,
@@ -53,6 +55,15 @@ async function assembleApp(
     await install(path.join(PROJECT_DIR, 'packages/plain-lib'), 'plain-backend-lib');
     await install(path.join(PROJECT_DIR, 'packages/banned-lib'), '@fixtures/banned-lib');
 
+    const link = async (checkout: string, name: string) => {
+        const linkPath = path.join(appRoot, 'node_modules', name);
+        await fsp.mkdir(path.dirname(linkPath), { recursive: true });
+        await fsp.symlink(checkout, linkPath, 'dir');
+    };
+    const linkedPlainCheckout = path.join(tempDir, 'linked-plain-lib');
+    await copy(path.join(PROJECT_DIR, 'packages/linked-plain-lib'), linkedPlainCheckout);
+    await link(linkedPlainCheckout, 'linked-plain-backend-lib');
+
     const vizLibSource = path.join(PROJECT_DIR, 'packages/viz-lib');
     if (layout === 'installed') {
         await install(vizLibSource, '@fixtures/viz-lib');
@@ -60,9 +71,7 @@ async function assembleApp(
         const checkout = path.join(tempDir, 'viz-lib');
         await copy(vizLibSource, checkout);
         await copy(ACTION_CATALOG_DIR, path.join(checkout, 'node_modules/@datadog/action-catalog'));
-        const link = path.join(appRoot, 'node_modules/@fixtures/viz-lib');
-        await fsp.mkdir(path.dirname(link), { recursive: true });
-        await fsp.symlink(checkout, link, 'dir');
+        await link(checkout, '@fixtures/viz-lib');
     }
 
     return { appRoot, cleanup: () => fsp.rm(tempDir, { recursive: true, force: true }) };
@@ -267,6 +276,30 @@ describe.each<Layout>(['installed', 'linked'])(
                     servedBy: VIZ_BACKEND_BODY,
                 });
             });
+
+            // Upstream's rule: a linked workspace file outside the root is always proxied, opt-in or
+            // not, and the graph checks then refuse it, so it fails closed instead of deploying.
+            test("Should fail the build for a linked .backend.js in a package that didn't opt in, without shipping its body", async () => {
+                const outDir = path.join(appRoot, 'dist');
+
+                await expect(buildApp(appRoot, 'linked-plain.ts')).rejects.toThrow(
+                    /^Unsupported local module graph for \S+[/\\]linked-plain-lib[/\\]linked\.backend\.js: missing module record/,
+                );
+
+                // Vite wrote the frontend before packaging failed: it holds only the proxy.
+                const outputNames = await fsp.readdir(outDir, { recursive: true });
+                const frontendFiles = outputNames.filter((name) => name.endsWith('.js'));
+                const frontendOutput = (
+                    await Promise.all(
+                        frontendFiles.map((name) => fsp.readFile(path.join(outDir, name), 'utf-8')),
+                    )
+                ).join('\n');
+                expect(getProxiedQueryNames(frontendOutput)).toEqual([
+                    expect.stringMatching(/\.describeLinked$/),
+                ]);
+                expect(frontendOutput).not.toContain(LINKED_PLAIN_LIB_BODY);
+                expect(outputNames).not.toContain(ARCHIVE_FILENAME);
+            }, 30000);
 
             test("Should reject a banned import in an opted-in library's backend code", async () => {
                 await expect(buildApp(appRoot, 'banned.ts')).rejects.toThrow(
