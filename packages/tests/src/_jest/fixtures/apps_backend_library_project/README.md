@@ -10,3 +10,5 @@ a real `node_modules/` layout (copied or symlinked), since that layout is what's
     `@datadog/action-catalog` peer dependency.
 -   `plain-backend-lib` ships a `.backend.js` file without opting in; it must stay an ordinary module.
 -   `@fixtures/banned-lib` opts in, but its backend function's helper imports a Node built-in.
+-   `linked-plain-backend-lib` doesn't opt in and is always symlinked from outside the app. A linked
+    workspace file is always proxied, so its `.backend.js` fails the build instead of shipping.

@@ -7,6 +7,7 @@
         "@datadog/action-catalog": "0.0.1",
         "@fixtures/banned-lib": "0.0.1",
         "@fixtures/viz-lib": "0.0.1",
+        "linked-plain-backend-lib": "0.0.1",
         "plain-backend-lib": "0.0.1"
     }
 }
