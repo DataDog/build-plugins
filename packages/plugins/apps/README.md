@@ -56,7 +56,7 @@ The opt-in governs packages outside the project root, installed or linked. Code 
 A few things to know:
 
 -   Declare `@datadog/action-catalog` and `@datadog/apps-backend` as peer dependencies. Each function uses the app's own copy, the one its runtime is set up on. This holds even when the package is linked from a checkout that has its own copy installed.
--   The dev server keeps opted-in packages it finds in the app's dependency tree out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle. If pre-bundling still reaches one (an undeclared dependency, an alias), the dev server fails with an error naming the package to add to `optimizeDeps.exclude`.
+-   The dev server keeps opted-in packages it finds in the app's dependency tree out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle. So `vite dev` serves each opted-in package as individual, unbundled modules, even in an app that never calls its backend functions. If pre-bundling still reaches one (an undeclared dependency, an alias), the dev server fails with an error naming the package to add to `optimizeDeps.exclude`.
 -   A function's name is derived from its file's path relative to the project root, so it's the same in `vite dev` and `vite build` for a given install, and distinct from every app file's.
 
 ## Development server authentication
