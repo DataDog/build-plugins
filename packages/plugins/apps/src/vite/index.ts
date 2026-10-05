@@ -21,6 +21,7 @@ import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-stati
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
+    getBackendModuleOwner,
     isBackendFunctionFile,
     isBackendSourceModule,
 } from '../backend/backend-sources';
@@ -163,6 +164,25 @@ export const getVitePlugin = ({
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
+    // Functions a package contributes are announced at info level, in dev and in builds, so they
+    // can't be deployed unnoticed. Once per file and set of names, so a re-transform stays quiet.
+    const announcedContributions = new Map<string, string>();
+    const logContributedFunctions = (fileId: string, exportNames: string[]) => {
+        const owner = getBackendModuleOwner(fileId, context.buildRoot);
+        if (owner.kind !== 'backend-package') {
+            return;
+        }
+        const names = exportNames.join(', ');
+        if (announcedContributions.get(fileId) === names) {
+            return;
+        }
+        announcedContributions.set(fileId, names);
+        const relativeFile = path.relative(owner.package.root, fileId);
+        log.info(
+            `Package "${owner.package.name}" contributes backend function(s) ${names} (${relativeFile}).`,
+        );
+    };
+
     // Vite 6 invokes closeBundle when a dev server's plugin container closes,
     // not only for production builds. configureServer only runs for dev
     // servers, so use it to mark the session and skip packaging there — a
@@ -201,9 +221,11 @@ export const getVitePlugin = ({
                 const backendPackageNames = findInstalledBackendFunctionPackages(root).flatMap(
                     (pkg) => pkg.importNames,
                 );
+                // Info, not debug: the package's own manifest is the whole consent, so the app's
+                // developer should see which packages it trusts to add backend functions.
                 if (backendPackageNames.length > 0) {
-                    log.debug(
-                        `Packages providing backend functions: ${backendPackageNames.join(', ')}`,
+                    log.info(
+                        `Packages providing backend functions, kept out of dependency pre-bundling: ${backendPackageNames.join(', ')}`,
                     );
                 }
                 return {
@@ -365,6 +387,7 @@ export const getVitePlugin = ({
                 );
                 setBackendFunctions(normalizedId, functions);
                 log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
+                logContributedFunctions(normalizedId, exportNames);
 
                 return { code: proxyCode, map: null };
             },
