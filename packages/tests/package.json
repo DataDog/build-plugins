@@ -51,10 +51,12 @@
     },
     "devDependencies": {
         "@rspack/core": "1.4.9",
+        "@types/eslint": "9.6.1",
         "@types/faker": "5.5.9",
         "@types/jest": "^29",
         "@types/node": "^20",
         "esbuild": "0.25.8",
+        "eslint": "8.57.0",
         "faker": "5.5.3",
         "nock": "14.0.1",
         "rollup": "4.45.1",

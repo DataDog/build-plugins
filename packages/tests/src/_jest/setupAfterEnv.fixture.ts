@@ -23,6 +23,7 @@ const scrubbedKeys: unknown = Reflect.get(global, 'FIXTURE_SCRUBBED_KEYS');
 if (!isStringArray(scrubbedKeys)) {
     throw new Error('The FIXTURE_SCRUBBED_KEYS global is required.');
 }
+// eslint-disable-next-line no-restricted-syntax -- captures what module-scope test code could see
 const moduleScopeEnv = { ...process.env };
 
 const childScript = 'process.stdout.write(JSON.stringify(Object.keys(process.env)))';
@@ -49,6 +50,7 @@ test(`${PROCESS_ID_TEST_TITLE_PREFIX}${process.pid}`, () => {
 });
 
 describe('Environment during test collection', () => {
+    // eslint-disable-next-line no-restricted-syntax -- captures what describe-scope test code could see
     const describeScopeEnv = { ...process.env };
     const scopes = [
         { scope: MODULE_SCOPE, isExposed: (key: string) => moduleScopeEnv[key] !== undefined },

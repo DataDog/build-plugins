@@ -1,4 +1,37 @@
 const extensions = ['.json', '.ts', '.js', '.md'];
+// Test runs start with CI secrets in their env, so a whole-env copy can carry any the setup scrub
+// misses into failure output.
+const PROCESS_ENV_IN_TESTS_MESSAGE =
+    "Don't use process.env as a whole value in tests (reassign, replace, alias, spread, pass, or assert on it). Read, set, or delete single keys, write keys with an `Object.assign(process.env, { ... });` statement, check for one with `'KEY' in process.env`, list names with Object.keys(process.env), reset Datadog keys with clearDatadogEnv() from @dd/tests/_jest/helpers/datadogEnv, and give child processes an env built from only the keys they need.";
+const envStringKey = (path) =>
+    `[${path}.value='env'], [${path}.type='TemplateLiteral'][${path}.expressions.length=0][${path}.quasis.0.value.cooked='env']`;
+// A computed identifier is a variable holding some other key, so only a plain name counts.
+const matchesEnvKey = (path) =>
+    `:matches([computed=false][${path}.name='env'], ${envStringKey(path)})`;
+const matchesEnvString = (path) => `:matches(${envStringKey(path)})`;
+const matchesProcess = (path) =>
+    `:matches([${path}.name='process'], [${path}.type='MemberExpression'][${path}.object.name=/^(global|globalThis)$/][${path}.property.name='process'], [${path}.type='CallExpression'][${path}.callee.name='require'][${path}.arguments.0.value=/^(node:)?process$/])`;
+const KEY_CHECK_CALLEE =
+    '[callee.object.name=/^(Object|Reflect)$/][callee.property.name=/^(hasOwn|has)$/]';
+const isEnvArgument = (callee) =>
+    `CallExpression${callee} > MemberExpression.arguments:first-child`;
+// Consumers that only read, write, or check single keys or names of process.env.
+const SINGLE_KEY_ENV_USES = [
+    'MemberExpression > MemberExpression.object',
+    'MemberExpression > TSNonNullExpression.object > MemberExpression.expression',
+    'MemberExpression > TSAsExpression.object > MemberExpression.expression',
+    "BinaryExpression[operator='in'] > MemberExpression.right",
+    'ForInStatement > MemberExpression.right',
+    isEnvArgument("[callee.object.name='Object'][callee.property.name='keys']"),
+    isEnvArgument(KEY_CHECK_CALLEE),
+    isEnvArgument("[callee.property.name='call'][callee.object.property.name='hasOwnProperty']"),
+    isEnvArgument("[callee.object.name='jest'][callee.property.name='replaceProperty']"),
+    `ExpressionStatement > ${isEnvArgument("[callee.object.name='Object'][callee.property.name='assign']")}`,
+    "VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init",
+    "ExpressionStatement > AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right",
+    "AssignmentPattern[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right",
+];
+const singleKeyEnvUse = SINGLE_KEY_ENV_USES.map((use) => `:not(${use})`).join('');
 module.exports = {
     root: true,
     rules: {
@@ -370,6 +403,49 @@ module.exports = {
                 'jest/no-identical-title': 'error',
                 'jest/prefer-to-have-length': 'warn',
                 'jest/valid-expect': 'warn',
+            },
+        },
+        {
+            files: [
+                'packages/tests/src/_jest/**/*.*',
+                'packages/tests/src/_playwright/**/*.*',
+                'packages/tests/src/e2e/**/*.*',
+                '**/*.test.*',
+                '**/*.fixture.*',
+                '**/*.fixtures.*',
+                '**/*.spec.*',
+                '**/*.bench.*',
+                'packages/tests/src/bench/**/*.*',
+                'packages/plugins/*/scripts/benchmark*.js',
+                'packages/tests/jest.config.ts',
+                'packages/tests/playwright*.config.ts',
+            ],
+            // The preflight CLI scripts run in a job without credentials.
+            excludedFiles: [
+                'packages/tests/src/bench/**/preflight.js',
+                'packages/tests/src/bench/**/preflight-build.js',
+            ],
+            rules: {
+                'no-restricted-syntax': [
+                    'error',
+                    {
+                        selector: `MemberExpression${matchesProcess('object')}${matchesEnvKey('property')}${singleKeyEnvUse}`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector: `:matches(VariableDeclarator${matchesProcess('init')} > ObjectPattern.id, AssignmentExpression${matchesProcess('right')} > ObjectPattern.left, AssignmentPattern${matchesProcess('right')} > ObjectPattern.left) > Property${matchesEnvKey('key')}:not(:matches([value.type='ObjectPattern'], [value.left.type='ObjectPattern']):not(:has(RestElement)))`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector: `CallExpression${matchesProcess('arguments.0')}${matchesEnvString('arguments.1')}:not(${KEY_CHECK_CALLEE})`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector:
+                            "ImportDeclaration[importKind!='type'][source.value=/^(node:)?process$/] > ImportSpecifier[importKind!='type'][imported.name='env']",
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                ],
             },
         },
         {
