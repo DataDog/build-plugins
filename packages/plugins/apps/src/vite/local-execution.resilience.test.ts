@@ -8,9 +8,19 @@ import { mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import { ROOT } from '@dd/tools/constants';
 import { spawnSync } from 'child_process';
 import path from 'path';
+import { isDeepStrictEqual } from 'util';
 
-import { func, stubExecuteAction, stubGetRuntimeContext } from './local-execution.fixtures';
+import {
+    func,
+    PROCESS_EXIT_FIXTURE_CODE,
+    stubExecuteAction,
+    stubGetRuntimeContext,
+} from './local-execution.fixtures';
 import { executeScriptLocally } from './local-execution';
+
+// Only a hang guard: a loaded full-suite run can slow the child Jest's startup far past its usual
+// few seconds. spawnSync blocks the event loop, so this test's own Jest timeout can't fire first.
+const SPAWN_TIMEOUT_MS = 60000;
 
 describe('local-execution resilience (in-process execution known limitations)', () => {
     // A real `while (true) {}` would hang this test forever, since nothing — not even the timeout's
@@ -47,10 +57,9 @@ describe('local-execution resilience (in-process execution known limitations)', 
 
     // process.exit() would kill this Jest process, so the fixture runs as its own real Jest process —
     // proving runScriptLocally's try/finally offers no protection, since exit() acts at the OS level.
-    // `--runInBand` keeps it in the spawned process itself (not a worker) so exit code 7 surfaces here.
-    // `--globalSetup` is overridden to a no-op: the real globalSetup.ts's `yarn install` + git setup
-    // exists for the fixtures directory this run never touches, and re-paying that cost on every
-    // invocation ate into the timeout budget below for no benefit.
+    // `--runInBand` keeps it in the spawned process itself (not a worker) so its exit code surfaces here.
+    // `--globalSetup` is a no-op: the real globalSetup.ts's `yarn install` + git setup serves the
+    // fixtures directory this run never touches, and would only add startup time.
     test("Should confirm process.exit() inside the customer function crashes the whole process, bypassing runScriptLocally's own try/finally cleanup — known, real risk, not a safely-contained failure", () => {
         const fixturePath = path.join(__dirname, 'local-execution.process-exit.fixture.ts');
         const fixtureFilename = path.basename(fixturePath);
@@ -78,14 +87,19 @@ describe('local-execution resilience (in-process execution known limitations)', 
                 noopGlobalSetupPath,
                 '--runInBand',
             ],
-            { encoding: 'utf8', timeout: 15000 },
+            { encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
         );
 
-        expect(result.status).toBe(7);
+        const exit = { status: result.status, signal: result.signal };
+        const expectedExit = { status: PROCESS_EXIT_FIXTURE_CODE, signal: null };
+        if (!isDeepStrictEqual(exit, expectedExit)) {
+            const exitText = JSON.stringify(exit);
+            const spawnErrorText = result.error ? ` (${result.error.message})` : '';
+            throw new Error(
+                `Unexpected child exit ${exitText}${spawnErrorText}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+            );
+        }
         expect(result.stdout).toContain('FIXTURE_STARTED');
         expect(result.stdout).not.toContain('FIXTURE_CLEANUP_RAN');
-        // Longer than spawnSync's own 15000ms timeout above, so a slow child that legitimately hits
-        // its own timeout fails with a clear assertion on `result.status` instead of racing this
-        // test's own timeout and reporting an ambiguous "test timed out" instead.
-    }, 20000);
+    });
 });
