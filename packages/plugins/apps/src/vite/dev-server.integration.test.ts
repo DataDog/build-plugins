@@ -27,6 +27,7 @@ import fs from 'fs';
 import nock from 'nock';
 import os from 'os';
 import path from 'path';
+import { parseAst } from 'rollup/parseAst';
 import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
@@ -34,6 +35,12 @@ import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+
+// Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
+// entry and no `parseAst`; the published build keeps the real import.
+jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
+    loadViteParseAst: async () => parseAst,
+}));
 
 const FIXTURE_ROOT = path.resolve(
     __dirname,
@@ -321,12 +328,17 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const loadModule = server.ssrLoadModule.bind(server);
         // collectModuleGraphFromServer appends LOCAL_EXECUTION_LOAD_SUFFIX internally, so this
         // closure only handles the bare id — matching vite/index.ts's real wiring.
-        const getAllowedConnectionIds = async (entryId: string) =>
-            extractConnectionIdsFromModuleGraph(
+        const getAllowedConnectionIds = async (entryId: string) => {
+            const log = getMockLogger();
+            const moduleGraph = await collectModuleGraphFromServer(
+                server,
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
+                log,
+                parseAst,
             );
+            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+        };
 
         const auth: AuthOptionsWithDefaults = {
             apiKey: 'test-api-key',
@@ -366,12 +378,17 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // must read each module's original source from disk instead of the transformed output.
     test('Should recognize a connectionId-scoped action-catalog call and allow it, not silently reject it', async () => {
         const loadModule = server.ssrLoadModule.bind(server);
-        const getAllowedConnectionIds = async (entryId: string) =>
-            extractConnectionIdsFromModuleGraph(
+        const getAllowedConnectionIds = async (entryId: string) => {
+            const log = getMockLogger();
+            const moduleGraph = await collectModuleGraphFromServer(
+                server,
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
+                log,
+                parseAst,
             );
+            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+        };
 
         const auth: AuthOptionsWithDefaults = {
             apiKey: 'test-api-key',
@@ -420,12 +437,17 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
         const loadModule = server.ssrLoadModule.bind(server);
-        const getAllowedConnectionIds = async (entryId: string) =>
-            extractConnectionIdsFromModuleGraph(
+        const getAllowedConnectionIds = async (entryId: string) => {
+            const log = getMockLogger();
+            const moduleGraph = await collectModuleGraphFromServer(
+                server,
                 entryId,
-                await collectModuleGraphFromServer(server, entryId, FIXTURE_ROOT, getMockLogger()),
                 FIXTURE_ROOT,
+                log,
+                parseAst,
             );
+            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+        };
 
         const auth: AuthOptionsWithDefaults = {
             apiKey: 'test-api-key',

@@ -2,8 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { ModuleInfo } from 'rollup';
-import type { Plugin } from 'vite';
+import type { Plugin, Rollup } from 'vite';
 
 import {
     createParsedModuleRecord,
@@ -25,7 +24,7 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
     return {
         plugin: {
             name: 'dd-backend-module-graph-collector',
-            moduleParsed(moduleInfo: ModuleInfo) {
+            moduleParsed(moduleInfo: Rollup.ModuleInfo) {
                 const moduleId = normalizeViteModuleId(moduleInfo.id);
                 if (isViteVirtualModuleId(moduleId)) {
                     return;
@@ -91,7 +90,7 @@ export function normalizeViteModuleId(id: string): string {
     return id.split('?')[0];
 }
 
-function getStaticDependencyIds(moduleInfo: ModuleInfo): string[] {
+function getStaticDependencyIds(moduleInfo: Rollup.ModuleInfo): string[] {
     return moduleInfo.importedIdResolutions?.map(({ id }) => id) ?? [...moduleInfo.importedIds];
 }
 

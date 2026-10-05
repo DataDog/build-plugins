@@ -6,6 +6,7 @@ import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { parseAst } from 'rollup/parseAst';
 import type { ViteDevServer } from 'vite';
 
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
@@ -103,7 +104,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         const resolveToDependency = async () => ({ id: DEPENDENCY_ID });
         const collect = (server: ViteDevServer) => {
             const log = getMockLogger();
-            return collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, log);
+            return collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, log, parseAst);
         };
         const entryImporting = (...dependencyIds: string[]): FakeModuleNode => {
             const dependencies = dependencyIds.map((id) => ({
@@ -175,7 +176,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             withSsrEnvironmentGraph(server, [entry]);
             const log = getMockLogger();
 
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log);
+            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
 
             expect(entry.transformResult).toBeNull();
         });
@@ -192,7 +193,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             withSsrEnvironmentGraph(server, [entry]);
             const log = getMockLogger();
 
-            await collectModuleGraphFromServer(server, dotPrefixedEntryId, nestedRoot, log);
+            await collectModuleGraphFromServer(
+                server,
+                dotPrefixedEntryId,
+                nestedRoot,
+                log,
+                parseAst,
+            );
 
             expect(entry.transformResult).toBeNull();
         });
@@ -226,7 +233,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             ]);
             const log = getMockLogger();
 
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log);
+            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
 
             expect(updateModuleTransformResult).not.toHaveBeenCalled();
         });
@@ -383,20 +390,33 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
     test('Should fail closed, not fall back to the raw specifier, when resolveId fails to resolve a static import', async () => {
         const server = makeFakeServer(async () => null);
 
-        await expect(
-            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-        ).rejects.toThrow(/unresolvable import specifier ".\/getRuntimeUsers\.backend"/);
+        const log = getMockLogger();
+
+        const collecting = collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            log,
+            parseAst,
+        );
+
+        await expect(collecting).rejects.toThrow(
+            /unresolvable import specifier ".\/getRuntimeUsers\.backend"/,
+        );
     });
 
     test('Should use the resolved id when resolveId succeeds', async () => {
         const resolvedPath = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
         const server = makeFakeServer(async () => ({ id: resolvedPath }));
 
+        const log = getMockLogger();
+
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            getMockLogger(),
+            log,
+            parseAst,
         );
 
         expect(records.has(ENTRY_ID)).toBe(true);
@@ -411,9 +431,17 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => null, entryNode);
 
-        await expect(
-            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-        ).rejects.toThrow(/unreadable module source/);
+        const log = getMockLogger();
+
+        const collecting = collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            log,
+            parseAst,
+        );
+
+        await expect(collecting).rejects.toThrow(/unreadable module source/);
     });
 
     describe('when a module file fails to parse', () => {
@@ -438,9 +466,17 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             };
             const server = makeFakeServer(async () => null, entryNode);
 
-            await expect(
-                collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-            ).rejects.toThrow(/unparseable module source/);
+            const log = getMockLogger();
+
+            const collecting = collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                log,
+                parseAst,
+            );
+
+            await expect(collecting).rejects.toThrow(/unparseable module source/);
         });
     });
 
@@ -458,9 +494,17 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: rawImportPath }), entryNode);
 
-        await expect(
-            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-        ).rejects.toThrow(/Vite resource query on module id/);
+        const log = getMockLogger();
+
+        const collecting = collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            log,
+            parseAst,
+        );
+
+        await expect(collecting).rejects.toThrow(/Vite resource query on module id/);
     });
 
     test('Should fail closed on a semantic Vite resource query even when a plain (unqueried) node for the same file was visited first', async () => {
@@ -485,9 +529,17 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: sharedFile }), entryNode);
 
-        await expect(
-            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-        ).rejects.toThrow(/Vite resource query on module id/);
+        const log = getMockLogger();
+
+        const collecting = collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            log,
+            parseAst,
+        );
+
+        await expect(collecting).rejects.toThrow(/Vite resource query on module id/);
     });
 
     test('Should not infinite-loop or double-process a module reached through a cycle in the import graph', async () => {
@@ -503,11 +555,14 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         entryNode.importedModules.add(entryNode);
         const server = makeFakeServer(async () => ({ id: resolvedPath }), entryNode);
 
+        const log = getMockLogger();
+
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            getMockLogger(),
+            log,
+            parseAst,
         );
 
         expect(records.size).toBe(1);
@@ -531,8 +586,18 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
 
-        await expect(
-            collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, getMockLogger()),
-        ).rejects.toThrow(/Importing Node built-in module "fs" is not supported/);
+        const log = getMockLogger();
+
+        const collecting = collectModuleGraphFromServer(
+            server,
+            ENTRY_ID,
+            FIXTURE_ROOT,
+            log,
+            parseAst,
+        );
+
+        await expect(collecting).rejects.toThrow(
+            /Importing Node built-in module "fs" is not supported/,
+        );
     });
 });
