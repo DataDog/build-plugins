@@ -17,6 +17,8 @@ export const func: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+export const PROCESS_EXIT_FIXTURE_CODE = 7;
+
 export const stubExecuteAction: ExecuteAction = async (fqn) => ({ data: null, stub: true, fqn });
 
 // A factory, not a shared constant: local-execution.ts spreads this shallowly onto `$`, so a
