@@ -2,10 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { spawnSync } from 'child_process';
 import path from 'path';
 
 import { ENV_OVERRIDE_VARIABLES } from './helpers/datadogEnv';
+import type { JestJsonReport } from './helpers/spawnJestFixture';
+import {
+    FIXTURE_TEST_TIMEOUT_MS,
+    NOOP_SETUP_PATH,
+    parseJestReport,
+    spawnJestFixture,
+} from './helpers/spawnJestFixture';
 import {
     ALL_SCOPES,
     CHILD_PROCESSES_SCOPE,
@@ -16,14 +22,6 @@ import {
     getExposureLabel,
 } from './setupAfterEnvFixtureLabels';
 
-type JestJsonReport = {
-    numTotalTests: number;
-    testResults: {
-        message: string;
-        assertionResults: { title: string; status: string }[];
-    }[];
-};
-
 const NAMED_SECRETS = [...ENV_OVERRIDE_VARIABLES, 'GITHUB_TOKEN'];
 const namedSecretEntries: [string, string][] = NAMED_SECRETS.map((name) => [name, `fake-${name}`]);
 const FAKE_SECRETS: Record<string, string> = {
@@ -32,16 +30,8 @@ const FAKE_SECRETS: Record<string, string> = {
     DD_TRACE_AGENT_URL: 'http://fake-user:fake-token@127.0.0.1:8126',
 };
 const FAKE_SECRET_NAMES = Object.keys(FAKE_SECRETS);
-const jestPackagePath = require.resolve('jest/package.json');
-const jestBinDir = path.dirname(jestPackagePath);
-const JEST_BIN_PATH = path.join(jestBinDir, 'bin/jest.js');
-const JEST_CONFIG_PATH = path.resolve(__dirname, '../../jest.config.ts');
 const SETUP_AFTER_ENV_PATH = path.resolve(__dirname, 'setupAfterEnv.ts');
 const SCRUB_GLOBAL_SETUP_PATH = path.resolve(__dirname, 'scrubEnvGlobalSetup.ts');
-const NOOP_SETUP_PATH = path.resolve(__dirname, 'noopGlobalSetup.ts');
-// Only a hang guard: inside a loaded full-suite run, the child's startup alone can pass 15s.
-const SPAWN_TIMEOUT_MS = 60000;
-const TEST_TIMEOUT_MS = SPAWN_TIMEOUT_MS + 5000;
 
 type FixtureRun = {
     globalSetupPath: string;
@@ -59,54 +49,14 @@ const runFixture = ({
     const executionArgs = inWorker
         ? ['--maxWorkers=1', '--workerIdleMemoryLimit=1GB']
         : ['--runInBand'];
-    const result = spawnSync(
-        process.execPath,
-        [
-            JEST_BIN_PATH,
-            '--config',
-            JEST_CONFIG_PATH,
-            '--testMatch',
-            '**/setupAfterEnv.fixture.ts',
-            '--globalSetup',
-            globalSetupPath,
-            '--setupFilesAfterEnv',
-            setupFilesAfterEnvPath,
-            '--globals',
-            fixtureGlobals,
-            ...executionArgs,
-            '--ci',
-            '--no-watchman',
-            '--json',
-        ],
-        {
-            encoding: 'utf8',
-            timeout: SPAWN_TIMEOUT_MS,
-            // Built from scratch so CI's NODE_OPTIONS dd-trace preload doesn't start in the child
-            // and report with the fake key.
-            env: {
-                PATH: process.env.PATH,
-                PROJECT_CWD: process.env.PROJECT_CWD,
-                TMPDIR: process.env.TMPDIR,
-                BUILD_PLUGINS_ENV: process.env.BUILD_PLUGINS_ENV,
-                JEST_CONFIG_TRANSPILE_ONLY: process.env.JEST_CONFIG_TRANSPILE_ONLY,
-                // Keeps the child's console off stdout, which carries the --json report.
-                JEST_SILENT: '1',
-                ...FAKE_SECRETS,
-            },
-        },
+    const run = spawnJestFixture(
+        '**/setupAfterEnv.fixture.ts',
+        ['--setupFilesAfterEnv', setupFilesAfterEnvPath, '--globals', fixtureGlobals, '--json'],
+        FAKE_SECRETS,
+        { globalSetupPath, executionArgs },
     );
-
-    const output = `status: ${result.status}, signal: ${result.signal}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`;
-    if (result.error) {
-        throw new Error(`Fixture run failed: ${result.error.message}\n${output}`);
-    }
-    let report: JestJsonReport;
-    try {
-        report = JSON.parse(result.stdout);
-    } catch {
-        throw new Error(`Fixture run produced no JSON report.\n${output}`);
-    }
-    return { report, jestProcessId: result.pid };
+    const report = parseJestReport(run);
+    return { report, jestProcessId: run.pid };
 };
 
 const getExposures = (report: JestJsonReport) => {
@@ -218,6 +168,6 @@ describe('Test env scrub', () => {
             expect(isFixtureFileClean).toBe(expectedExposures.length === 0);
             expect(exposures).toEqual(expectedExposures);
         },
-        TEST_TIMEOUT_MS,
+        FIXTURE_TEST_TIMEOUT_MS,
     );
 });
