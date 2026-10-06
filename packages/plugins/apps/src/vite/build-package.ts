@@ -47,7 +47,8 @@ async function writeManifestFile(
     const manifestDir = await fsp.mkdtemp(manifestDirPrefix);
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
-        await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+        const manifestJson = JSON.stringify(manifest, null, 2);
+        await fsp.writeFile(manifestPath, manifestJson);
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -109,8 +110,10 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        log.debug(`App tags: ${tags.length > 0 ? tags.join(', ') : '(none)'}.`);
-        const manifest = await writeManifestFile(buildManifest(backendFunctions, tags));
+        const tagList = tags.length > 0 ? tags.join(', ') : '(none)';
+        log.debug(`App tags: ${tagList}.`);
+        const manifestContents = buildManifest(backendFunctions, tags);
+        const manifest = await writeManifestFile(manifestContents);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);

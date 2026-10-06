@@ -87,25 +87,37 @@ const USED_SURFACED_MARKER = 'dd-app-input/v1 datadog.dashboard surfaces=';
 const USED_SURFACELESS_MARKER = 'dd-app-input/v1 datadog.theme surfaces=';
 const UNUSED_MARKER = 'dd-app-input/v1 datadog.service-panel surfaces=';
 
+/** Reads a text file from the app package, failing the test if it's missing. */
+async function readPackageText(zip: JSZip, name: string) {
+    const file = zip.file(name);
+    if (!file) {
+        throw new Error(`Expected ${name} in the app package.`);
+    }
+    return file.async('string');
+}
+
 async function readPackage(appRoot: string) {
-    const zip = await JSZip.loadAsync(
-        await fs.readFile(path.join(appRoot, 'dist', ARCHIVE_FILENAME)),
-    );
-    const read = async (pattern: RegExp) =>
-        Object.fromEntries(
-            await Promise.all(
-                zip.file(pattern).map(async (file) => [file.name, await file.async('string')]),
-            ),
-        ) as Record<string, string>;
-    const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-    const html = await zip.file('frontend/index.html')!.async('string');
-    const entryScript = `frontend${html.match(/<script[^>]* src="([^"]+)"/)![1]}`;
-    return {
-        manifest,
-        entryScript,
-        scripts: await read(/^frontend\/.*\.js$/),
-        sourceMaps: await read(/^frontend\/.*\.js\.map$/),
+    const archivePath = path.join(appRoot, 'dist', ARCHIVE_FILENAME);
+    const archiveData = await fs.readFile(archivePath);
+    const zip = await JSZip.loadAsync(archiveData);
+    const read = async (pattern: RegExp): Promise<Record<string, string>> => {
+        const files = zip.file(pattern);
+        const pendingEntries = files.map(
+            async (file): Promise<[string, string]> => [file.name, await file.async('string')],
+        );
+        const entries = await Promise.all(pendingEntries);
+        return Object.fromEntries(entries);
     };
+    const manifestJson = await readPackageText(zip, 'manifest.json');
+    const manifest = JSON.parse(manifestJson);
+    const html = await readPackageText(zip, 'frontend/index.html');
+    const scriptSrc = html.match(/<script[^>]* src="([^"]+)"/)?.[1];
+    if (!scriptSrc) {
+        throw new Error('Expected an entry script in index.html.');
+    }
+    const scripts = await read(/^frontend\/.*\.js$/);
+    const sourceMaps = await read(/^frontend\/.*\.js\.map$/);
+    return { manifest, entryScript: `frontend${scriptSrc}`, scripts, sourceMaps };
 }
 
 const filesContaining = (files: Record<string, string>, text: string) =>
@@ -119,6 +131,11 @@ async function buildApp(layout: SdkLayout) {
     try {
         await fs.cp(path.join(FIXTURE_ROOT, 'app'), appRoot, { recursive: true });
         await installSdk(appRoot, layout);
+        // As read from datadog-app.config.json, which nothing type-checks. The empty string and
+        // number are skipped with a warning, not fatal.
+        const authoredTags: string[] = JSON.parse(
+            '["team:apps", "surface:datadog.dashboard", "", 42]',
+        );
         await build({
             root: appRoot,
             configFile: false,
@@ -127,15 +144,7 @@ async function buildApp(layout: SdkLayout) {
             plugins: [
                 datadogVitePlugin({
                     logLevel: 'warn',
-                    // The empty string and number are skipped with a warning, not fatal.
-                    apps: {
-                        tags: [
-                            'team:apps',
-                            'surface:datadog.dashboard',
-                            '',
-                            42 as unknown as string,
-                        ],
-                    },
+                    apps: { tags: authoredTags },
                 }),
             ],
         });

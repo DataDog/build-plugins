@@ -45,10 +45,14 @@ const readInputMarkers = (code: string): InputMarkers => {
         INPUT_MARKER_RE.lastIndex = index;
         const match = INPUT_MARKER_RE.exec(code);
         if (match) {
-            markers.surfaces.push(...match[1].split(',').filter(Boolean));
+            const surfaces = match[1].split(',').filter(Boolean);
+            markers.surfaces.push(...surfaces);
         } else {
             UNRECOGNIZED_MARKER_RE.lastIndex = index;
-            markers.unrecognized.push(UNRECOGNIZED_MARKER_RE.exec(code)![0]);
+            const unrecognized = UNRECOGNIZED_MARKER_RE.exec(code);
+            if (unrecognized) {
+                markers.unrecognized.push(unrecognized[0]);
+            }
         }
     }
     return markers;

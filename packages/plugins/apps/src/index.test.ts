@@ -356,9 +356,12 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             const manifestAsset = archiveAssets.find(
                 (asset) => asset.relativePath === 'manifest.json',
             );
-            writtenTags.push(
-                JSON.parse(await fs.readFile(manifestAsset!.absolutePath, 'utf8')).tags,
-            );
+            if (!manifestAsset) {
+                throw new Error('Expected the package to include manifest.json.');
+            }
+            const manifestJson = await fs.readFile(manifestAsset.absolutePath, 'utf8');
+            const { tags } = JSON.parse(manifestJson);
+            writtenTags.push(tags);
             return {
                 archivePath: path.join(outDir, ARCHIVE_FILENAME),
                 assets: archiveAssets,
@@ -374,21 +377,25 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
             },
         );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const vite = getPlugins(args)[0].vite as any;
+        const [plugin] = getPlugins(args);
+        const { buildStart, generateBundle, closeBundle } = plugin.vite ?? {};
+        if (
+            typeof buildStart !== 'function' ||
+            typeof closeBundle !== 'function' ||
+            typeof generateBundle !== 'object' ||
+            typeof generateBundle.handler !== 'function'
+        ) {
+            throw new Error('Expected buildStart, generateBundle and closeBundle Vite hooks.');
+        }
+        const generateBundleHandler = generateBundle.handler;
         const buildShipping = (marker: string) => {
-            vite.buildStart();
-            vite.generateBundle.handler(
-                {},
-                {
-                    'assets/index.js': {
-                        type: 'chunk',
-                        fileName: 'assets/index.js',
-                        code: `f(${JSON.stringify(marker)})`,
-                    },
-                },
-            );
-            return vite.closeBundle();
+            const chunkCode = `f(${JSON.stringify(marker)})`;
+            const bundle = {
+                'assets/index.js': { type: 'chunk', fileName: 'assets/index.js', code: chunkCode },
+            };
+            Reflect.apply(buildStart, {}, []);
+            Reflect.apply(generateBundleHandler, {}, [{}, bundle]);
+            return Reflect.apply(closeBundle, {}, []);
         };
 
         // Vite's watcher can start the next build while the previous package is still being written.

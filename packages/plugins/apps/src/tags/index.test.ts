@@ -4,13 +4,13 @@
 
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
-import type { AppsOptionsWithDefaults } from '../types';
+import { validateOptions } from '../validate';
 
 import { createTagSources, resolveTags } from './index';
 
 describe('Apps Plugin - tags', () => {
     const context = {
-        options: { tags: ['team:apps', 'surface:datadog.dashboard'] } as AppsOptionsWithDefaults,
+        options: validateOptions({ apps: { tags: ['team:apps', 'surface:datadog.dashboard'] } }),
         log: getMockLogger(),
     };
     const readChunk = (sources: ReturnType<typeof createTagSources>, code: string) => {

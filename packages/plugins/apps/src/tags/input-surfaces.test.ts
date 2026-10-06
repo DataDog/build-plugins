@@ -4,7 +4,7 @@
 
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
-import type { AppsOptionsWithDefaults } from '../types';
+import { validateOptions } from '../validate';
 
 import { inputSurfaceTagSource } from './input-surfaces';
 
@@ -50,8 +50,9 @@ describe('Apps Plugin - input surface tags', () => {
 
     test.each(cases)('Should $description', ({ chunks, expected }) => {
         const warn = jest.fn();
+        const options = validateOptions({ apps: {} });
         const source = inputSurfaceTagSource({
-            options: {} as AppsOptionsWithDefaults,
+            options,
             log: getMockLogger({ warn }),
         });
 
