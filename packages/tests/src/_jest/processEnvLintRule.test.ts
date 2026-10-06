@@ -393,6 +393,36 @@ describe('process.env lint rule for tests', () => {
             code: 'const read = ({ ...rest } = process.env) => rest;',
             expected: 1,
         },
+        {
+            description: 'allow a type assertion and a non-null assertion before a key access',
+            code: 'const home = (process.env as Record<string, string>)!.HOME;',
+            expected: 0,
+        },
+        {
+            description: 'allow a satisfies check before a key access',
+            code: 'const home = (process.env satisfies NodeJS.ProcessEnv).HOME;',
+            expected: 0,
+        },
+        {
+            description: 'flag spreading it through two TypeScript wrappers',
+            code: 'const copy = { ...(process.env as Record<string, string>)! };',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing it with Object.assign onto process',
+            code: 'Object.assign(process, { env: {} });',
+            expected: 1,
+        },
+        {
+            description: 'flag replacing it with Object.defineProperties onto process',
+            code: 'Object.defineProperties(process, { env: { value: {} } });',
+            expected: 1,
+        },
+        {
+            description: 'allow assigning another key onto process with Object.assign',
+            code: 'Object.assign(process, { exitCode: 1 });',
+            expected: 0,
+        },
     ];
 
     test.each(cases)('Should $description in a test file', async ({ code, expected }) => {

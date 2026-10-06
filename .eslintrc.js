@@ -15,11 +15,13 @@ const KEY_CHECK_CALLEE =
     '[callee.object.name=/^(Object|Reflect)$/][callee.property.name=/^(hasOwn|has)$/]';
 const isEnvArgument = (callee) =>
     `CallExpression${callee} > MemberExpression.arguments:first-child`;
+const TS_WRAPPER = ':matches(TSAsExpression, TSNonNullExpression, TSSatisfiesExpression)';
 // Consumers that only read, write, or check single keys or names of process.env.
 const SINGLE_KEY_ENV_USES = [
     'MemberExpression > MemberExpression.object',
-    'MemberExpression > TSNonNullExpression.object > MemberExpression.expression',
-    'MemberExpression > TSAsExpression.object > MemberExpression.expression',
+    // A key read through one or two TypeScript wrappers, as in `(process.env as X)!.HOME`.
+    `MemberExpression > ${TS_WRAPPER}.object > MemberExpression.expression`,
+    `MemberExpression > ${TS_WRAPPER}.object > ${TS_WRAPPER}.expression > MemberExpression.expression`,
     "BinaryExpression[operator='in'] > MemberExpression.right",
     'ForInStatement > MemberExpression.right',
     isEnvArgument("[callee.object.name='Object'][callee.property.name='keys']"),
@@ -438,6 +440,10 @@ module.exports = {
                     },
                     {
                         selector: `CallExpression${matchesProcess('arguments.0')}${matchesEnvString('arguments.1')}:not(${KEY_CHECK_CALLEE})`,
+                        message: PROCESS_ENV_IN_TESTS_MESSAGE,
+                    },
+                    {
+                        selector: `CallExpression[callee.object.name='Object'][callee.property.name=/^(assign|defineProperties)$/]${matchesProcess('arguments.0')} > ObjectExpression.arguments > Property${matchesEnvKey('key')}`,
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {
