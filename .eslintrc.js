@@ -9,32 +9,57 @@ const envStringKey = (path) =>
 const matchesEnvKey = (path) =>
     `:matches([computed=false][${path}.name='env'], ${envStringKey(path)})`;
 const matchesEnvString = (path) => `:matches(${envStringKey(path)})`;
+const processModuleSpecifier = (path) =>
+    `:matches([${path}.value=/^(node:)?process$/], [${path}.type='TemplateLiteral'][${path}.expressions.length=0][${path}.quasis.0.value.cooked=/^(node:)?process$/])`;
+const processModuleLoad = (path) =>
+    `[${path}.type='CallExpression']:matches([${path}.callee.name='require'], [${path}.callee.object.name='jest'][${path}.callee.property.name=/^require(Actual|Mock)$/])${processModuleSpecifier(`${path}.arguments.0`)}`;
 const matchesProcess = (path) =>
-    `:matches([${path}.name='process'], [${path}.type='MemberExpression'][${path}.object.name=/^(global|globalThis)$/][${path}.property.name='process'], [${path}.type='CallExpression'][${path}.callee.name='require'][${path}.arguments.0.value=/^(node:)?process$/])`;
+    `:matches([${path}.name='process'], [${path}.type='MemberExpression'][${path}.object.name=/^(global|globalThis)$/][${path}.property.name='process'], ${processModuleLoad(path)})`;
 const KEY_CHECK_CALLEE =
     '[callee.object.name=/^(Object|Reflect)$/][callee.property.name=/^(hasOwn|has)$/]';
+const HAS_OWN_PROPERTY_CALL_CALLEE =
+    "[callee.property.name='call'][callee.object.property.name='hasOwnProperty']";
 const isEnvArgument = (callee) =>
     `CallExpression${callee} > MemberExpression.arguments:first-child`;
 const TS_WRAPPER =
     ':matches(TSAsExpression, TSNonNullExpression, TSSatisfiesExpression, TSTypeAssertion)';
 // Consumers that only read, write, or check single keys or names of process.env.
-const SINGLE_KEY_ENV_USES = [
+const SINGLE_KEY_ENV_CONSUMERS = [
     'MemberExpression > MemberExpression.object',
-    // A key read through one or two TypeScript wrappers, as in `(process.env as X)!.HOME`.
-    `MemberExpression > ${TS_WRAPPER}.object > MemberExpression.expression`,
-    `MemberExpression > ${TS_WRAPPER}.object > ${TS_WRAPPER}.expression > MemberExpression.expression`,
     "BinaryExpression[operator='in'] > MemberExpression.right",
     'ForInStatement > MemberExpression.right',
-    isEnvArgument("[callee.object.name='Object'][callee.property.name='keys']"),
+    isEnvArgument(
+        "[callee.object.name='Object'][callee.property.name=/^(keys|getOwnPropertyNames|getOwnPropertyDescriptor)$/]",
+    ),
+    isEnvArgument(
+        "[callee.object.name='Reflect'][callee.property.name=/^(get|set|deleteProperty|ownKeys)$/]",
+    ),
     isEnvArgument(KEY_CHECK_CALLEE),
-    isEnvArgument("[callee.property.name='call'][callee.object.property.name='hasOwnProperty']"),
+    isEnvArgument(HAS_OWN_PROPERTY_CALL_CALLEE),
     isEnvArgument("[callee.object.name='jest'][callee.property.name='replaceProperty']"),
-    `ExpressionStatement > ${isEnvArgument("[callee.object.name='Object'][callee.property.name='assign']")}`,
+    // These return process.env, so only a discarded result is safe.
+    `ExpressionStatement > ${isEnvArgument("[callee.object.name='Object'][callee.property.name=/^(assign|defineProperty)$/]")}`,
     "VariableDeclarator[id.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.init",
     "ExpressionStatement > AssignmentExpression[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right",
     "AssignmentPattern[left.type='ObjectPattern']:not(:has(RestElement)) > MemberExpression.right",
 ];
-const singleKeyEnvUse = SINGLE_KEY_ENV_USES.map((use) => `:not(${use})`).join('');
+// Each consumer also through one or two TypeScript wrappers, as in `(process.env as X)!.HOME`.
+const throughWrappers = (consumer) => {
+    const match = /^(.*)MemberExpression\.([\w:-]+)$/.exec(consumer);
+    if (!match) {
+        throw new Error(`Unexpected consumer selector: ${consumer}`);
+    }
+    const [, parent, slot] = match;
+    const wrapped = `${parent}${TS_WRAPPER}.${slot}`;
+    return [
+        consumer,
+        `${wrapped} > MemberExpression.expression`,
+        `${wrapped} > ${TS_WRAPPER}.expression > MemberExpression.expression`,
+    ];
+};
+const singleKeyEnvUse = SINGLE_KEY_ENV_CONSUMERS.flatMap(throughWrappers)
+    .map((use) => `:not(${use})`)
+    .join('');
 module.exports = {
     root: true,
     rules: {
@@ -440,7 +465,7 @@ module.exports = {
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {
-                        selector: `CallExpression${matchesProcess('arguments.0')}${matchesEnvString('arguments.1')}:not(${KEY_CHECK_CALLEE})`,
+                        selector: `CallExpression${matchesProcess('arguments.0')}${matchesEnvString('arguments.1')}:not(${KEY_CHECK_CALLEE}):not(${HAS_OWN_PROPERTY_CALL_CALLEE})`,
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                     {
@@ -449,7 +474,7 @@ module.exports = {
                     },
                     {
                         selector:
-                            "ImportDeclaration[importKind!='type'][source.value=/^(node:)?process$/] > ImportSpecifier[importKind!='type'][imported.name='env']",
+                            ":matches(ImportDeclaration[importKind!='type'][source.value=/^(node:)?process$/] > ImportSpecifier[importKind!='type'][imported.name='env'], ExportNamedDeclaration[exportKind!='type'][source.value=/^(node:)?process$/] > ExportSpecifier[exportKind!='type'][local.name='env'], ExportAllDeclaration[exportKind!='type'][source.value=/^(node:)?process$/])",
                         message: PROCESS_ENV_IN_TESTS_MESSAGE,
                     },
                 ],

@@ -433,6 +433,123 @@ describe('process.env lint rule for tests', () => {
             code: 'const copy = { ...(<Record<string, string>>process.env) };',
             expected: 1,
         },
+        {
+            description: 'allow destructuring named keys off it through a type assertion',
+            code: 'const { HOME } = process.env as Record<string, string>;',
+            expected: 0,
+        },
+        {
+            description: 'allow destructuring named keys off it through an angle-bracket assertion',
+            code: 'const { HOME } = <NodeJS.ProcessEnv>process.env;',
+            expected: 0,
+        },
+        {
+            description:
+                'allow assignment-destructuring named keys off it through a type assertion',
+            code: 'let HOME;\n({ HOME } = process.env as Record<string, string>);',
+            expected: 0,
+        },
+        {
+            description: 'allow listing its names through a non-null assertion',
+            code: 'const keys = Object.keys(process.env!);',
+            expected: 0,
+        },
+        {
+            description: 'allow checking for a key through a type assertion',
+            code: "const hasHome = 'HOME' in (process.env as Record<string, string>);",
+            expected: 0,
+        },
+        {
+            description: 'allow replacing one key through a type assertion',
+            code: "jest.replaceProperty(process.env as Record<string, string>, 'A', '1');",
+            expected: 0,
+        },
+        {
+            description: 'allow for...in over its names through a type assertion',
+            code: 'for (const key in process.env as Record<string, string>) {\n    delete process.env[key];\n}',
+            expected: 0,
+        },
+        {
+            description: 'flag a rest destructure of it through a type assertion',
+            code: 'const { ...rest } = process.env as Record<string, string>;',
+            expected: 1,
+        },
+        {
+            description:
+                'flag destructuring it off a require of process with a template-literal specifier',
+            code: 'const { env } = require(`process`);',
+            expected: 1,
+        },
+        {
+            description: 'flag reading it off jest.requireActual of process',
+            code: "const copy = { ...jest.requireActual('process').env };",
+            expected: 1,
+        },
+        {
+            description: 'flag destructuring it off jest.requireMock of node:process',
+            code: "const { env } = jest.requireMock('node:process');",
+            expected: 1,
+        },
+        {
+            description: 'allow reading one key off jest.requireActual of process',
+            code: "const home = jest.requireActual('process').env.HOME;",
+            expected: 0,
+        },
+        {
+            description: 'flag re-exporting it by name',
+            code: "export { env } from 'process';",
+            expected: 1,
+        },
+        {
+            description: 'flag re-exporting it by name from node:process under another name',
+            code: "export { env as environment } from 'node:process';",
+            expected: 1,
+        },
+        {
+            description: 'flag re-exporting the process module whole',
+            code: "export * from 'process';",
+            expected: 1,
+        },
+        {
+            description: 'allow re-exporting another key by name',
+            code: "export { platform } from 'process';",
+            expected: 0,
+        },
+        {
+            description: 'allow listing its names with Object.getOwnPropertyNames',
+            code: 'const names = Object.getOwnPropertyNames(process.env);',
+            expected: 0,
+        },
+        {
+            description: 'allow listing its names with Reflect.ownKeys',
+            code: 'const names = Reflect.ownKeys(process.env);',
+            expected: 0,
+        },
+        {
+            description: "allow reading one key's descriptor",
+            code: "const descriptor = Object.getOwnPropertyDescriptor(process.env, 'HOME');",
+            expected: 0,
+        },
+        {
+            description: 'allow reading, setting, and deleting one key with Reflect',
+            code: "const home = Reflect.get(process.env, 'HOME');\nReflect.set(process.env, 'A', '1');\nReflect.deleteProperty(process.env, 'A');",
+            expected: 0,
+        },
+        {
+            description: 'allow defining one key with an Object.defineProperty statement',
+            code: "Object.defineProperty(process.env, 'DD_SITE', { value: 'x', configurable: true, enumerable: true, writable: true });",
+            expected: 0,
+        },
+        {
+            description: 'flag using the result of Object.defineProperty on it',
+            code: "const env = Object.defineProperty(process.env, 'DD_SITE', { value: 'x' });",
+            expected: 1,
+        },
+        {
+            description: 'allow checking that process has it with hasOwnProperty.call',
+            code: "const hasEnv = Object.prototype.hasOwnProperty.call(process, 'env');",
+            expected: 0,
+        },
     ];
 
     test.each(cases)('Should $description in a test file', async ({ code, expected }) => {
