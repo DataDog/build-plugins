@@ -71,12 +71,16 @@ export async function buildBackendFunctions(
             const result = await viteBuild({
                 ...baseConfig,
                 // Production only: dev-server bundles stay unminified so local traces keep line
-                // numbers. keepNames preserves function and class names in function-log stack
-                // frames and for code that reads `.name`; frames still point at `1:<column>`.
+                // numbers. Function and class names are kept for function-log stack frames and
+                // code reading `.name`; frames still point at `1:<column>`.
+                //
+                // `minify: true` selects each Vite major's own minifier: esbuild before Vite 8,
+                // Oxc in Rolldown-based Vite 8, which only loads esbuild if the app installs it.
+                // Each reads its own keepNames option and ignores the other's.
                 esbuild: { keepNames: true },
                 build: {
                     ...baseConfig.build,
-                    minify: 'esbuild',
+                    minify: true,
                     write: true,
                     outDir,
                     emptyOutDir: false,
@@ -85,6 +89,8 @@ export async function buildBackendFunctions(
                         input: { [bundleName]: virtualId },
                         output: {
                             ...baseConfig.build.rollupOptions.output,
+                            // Rolldown output option, not in Rollup's types.
+                            ...({ keepNames: true } as Record<string, unknown>),
                             entryFileNames: '[name].js',
                         },
                     },
