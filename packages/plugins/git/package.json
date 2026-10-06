@@ -20,7 +20,7 @@
     },
     "dependencies": {
         "@dd/core": "workspace:*",
-        "simple-git": "3.36.0"
+        "simple-git": "4.0.2"
     },
     "devDependencies": {
         "typescript": "5.4.3"
