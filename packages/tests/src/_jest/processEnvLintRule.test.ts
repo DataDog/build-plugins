@@ -423,6 +423,16 @@ describe('process.env lint rule for tests', () => {
             code: 'Object.assign(process, { exitCode: 1 });',
             expected: 0,
         },
+        {
+            description: 'allow an angle-bracket type assertion before a key access',
+            code: 'const home = (<Record<string, string>>process.env).HOME;',
+            expected: 0,
+        },
+        {
+            description: 'flag spreading it through an angle-bracket type assertion',
+            code: 'const copy = { ...(<Record<string, string>>process.env) };',
+            expected: 1,
+        },
     ];
 
     test.each(cases)('Should $description in a test file', async ({ code, expected }) => {

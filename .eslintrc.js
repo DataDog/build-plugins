@@ -15,7 +15,8 @@ const KEY_CHECK_CALLEE =
     '[callee.object.name=/^(Object|Reflect)$/][callee.property.name=/^(hasOwn|has)$/]';
 const isEnvArgument = (callee) =>
     `CallExpression${callee} > MemberExpression.arguments:first-child`;
-const TS_WRAPPER = ':matches(TSAsExpression, TSNonNullExpression, TSSatisfiesExpression)';
+const TS_WRAPPER =
+    ':matches(TSAsExpression, TSNonNullExpression, TSSatisfiesExpression, TSTypeAssertion)';
 // Consumers that only read, write, or check single keys or names of process.env.
 const SINGLE_KEY_ENV_USES = [
     'MemberExpression > MemberExpression.object',
