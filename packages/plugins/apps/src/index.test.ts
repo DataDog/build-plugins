@@ -121,11 +121,13 @@ describe('Apps Plugin - package output', () => {
             options?: Partial<AppsOptionsWithDefaults>;
             backendOutputs?: Map<string, string>;
             backendFunctions?: BackendFunction[];
+            tags?: string[];
         } = {},
     ) {
         return {
             backendOutputs: overrides.backendOutputs ?? new Map<string, string>(),
             backendFunctions: overrides.backendFunctions ?? [],
+            tags: overrides.tags ?? [],
             context: getContextMock({
                 buildRoot: root,
                 bundler: { name: 'vite', version: 'test', outDir: packageDirectory },
@@ -192,14 +194,15 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
-    test('writes manifest.json with only backend function entries', async () => {
+    test('writes an empty tag list to manifest.json when the app has no tags', async () => {
         await buildAppPackage(packageOptions());
 
         const zip = await JSZip.loadAsync(
             await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
         );
         const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-        expect(manifest).toEqual({ backend: { functions: {} } });
+        // The manifest always carries a tag list; an empty one adds nothing.
+        expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
     test('includes backend function entries with connection allowlists in manifest.json', async () => {
@@ -341,6 +344,73 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             ),
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
         await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+    });
+
+    test("Should write each watch-mode build's own tags, even once the next build has started", async () => {
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        const writtenTags: string[][] = [];
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            if (!manifestAsset) {
+                throw new Error('Expected the package to include manifest.json.');
+            }
+            const manifestJson = await fs.readFile(manifestAsset.absolutePath, 'utf8');
+            const { tags } = JSON.parse(manifestJson);
+            writtenTags.push(tags);
+            return {
+                archivePath: path.join(outDir, ARCHIVE_FILENAME),
+                assets: archiveAssets,
+                size: 1,
+                decompressedSize: 1,
+            };
+        });
+        const args = getGetPluginsArg(
+            { apps: { tags: ['Team:Apps'] } },
+            {
+                bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                buildRoot,
+                git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+            },
+        );
+        const [plugin] = getPlugins(args);
+        const { buildStart, generateBundle, closeBundle } = plugin.vite ?? {};
+        if (
+            typeof buildStart !== 'function' ||
+            typeof closeBundle !== 'function' ||
+            typeof generateBundle !== 'object' ||
+            typeof generateBundle.handler !== 'function'
+        ) {
+            throw new Error('Expected buildStart, generateBundle and closeBundle Vite hooks.');
+        }
+        const generateBundleHandler = generateBundle.handler;
+        const buildShipping = (marker: string) => {
+            const chunkCode = `f(${JSON.stringify(marker)})`;
+            const bundle = {
+                'assets/index.js': { type: 'chunk', fileName: 'assets/index.js', code: chunkCode },
+            };
+            Reflect.apply(buildStart, {}, []);
+            Reflect.apply(generateBundleHandler, {}, [{}, bundle]);
+            return Reflect.apply(closeBundle, {}, []);
+        };
+
+        // Vite's watcher can start the next build while the previous package is still being written.
+        await Promise.all([
+            buildShipping('dd-app-input/v1 datadog.dashboard surfaces=datadog.dashboard'),
+            buildShipping('dd-app-input/v1 datadog.idp surfaces=datadog.idp.service-panel'),
+        ]);
+
+        expect(writtenTags).toHaveLength(2);
+        expect(writtenTags).toEqual(
+            expect.arrayContaining([
+                ['surface:datadog.dashboard', 'team:apps'],
+                ['surface:datadog.idp.service-panel', 'team:apps'],
+            ]),
+        );
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {

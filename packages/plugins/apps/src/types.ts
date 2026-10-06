@@ -22,11 +22,21 @@ export type LongPollingOptions = {
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
+    /**
+     * Tags to add to the app, e.g. `team:my-team`. The package also carries a `surface:<id>` tag
+     * for each surface declared by an `@datadog/apps-frontend` input the app uses.
+     */
+    tags?: string[];
     /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
     longPolling?: LongPollingOptions;
 };
 
 export type AppsManifest = {
+    /**
+     * Tags to add to the app (authored tags and derived `surface:<id>` tags), sorted.
+     * The backend adds them to the app's tags and never removes any.
+     */
+    tags: string[];
     backend: {
         /** Mapping of encoded query name to information about that backend function. */
         functions: Record<

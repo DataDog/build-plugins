@@ -24,9 +24,11 @@ export interface BuildAppPackageOptions {
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
+    /** The app's complete tag list, written to the manifest as is. */
+    tags: string[];
 }
 
-function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+function buildManifest(backendFunctions: BackendFunction[], tags: string[]): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -34,18 +36,19 @@ function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
         };
     }
 
-    return { backend: { functions } };
+    return { tags, backend: { functions } };
 }
 
 async function writeManifestFile(
-    backendFunctions: BackendFunction[],
+    manifest: AppsManifest,
 ): Promise<{ manifestAsset: Asset; cleanup: () => Promise<void> }> {
     const tmpRoot = os.tmpdir();
     const manifestDirPrefix = path.join(tmpRoot, MANIFEST_DIR_PREFIX);
     const manifestDir = await fsp.mkdtemp(manifestDirPrefix);
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
-        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+        const manifestJson = JSON.stringify(manifest, null, 2);
+        await fsp.writeFile(manifestPath, manifestJson);
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -61,6 +64,7 @@ export async function buildAppPackage({
     backendFunctions,
     context,
     options,
+    tags,
 }: BuildAppPackageOptions): Promise<string | undefined> {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -106,7 +110,10 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        const manifest = await writeManifestFile(backendFunctions);
+        const tagList = tags.length > 0 ? tags.join(', ') : '(none)';
+        log.debug(`App tags: ${tagList}.`);
+        const manifestContents = buildManifest(backendFunctions, tags);
+        const manifest = await writeManifestFile(manifestContents);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);
