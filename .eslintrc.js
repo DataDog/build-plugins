@@ -373,6 +373,26 @@ module.exports = {
             },
         },
         {
+            files: [
+                'packages/tests/src/_jest/**/*.*',
+                'packages/tests/src/_playwright/**/*.*',
+                'packages/tests/src/e2e/**/*.*',
+                '**/*.test.*',
+                '**/*.fixture.*',
+                '**/*.fixtures.*',
+                '**/*.spec.*',
+                '**/*.bench.*',
+                'packages/tests/src/bench/**/*.*',
+                'packages/plugins/*/scripts/benchmark*.js',
+                'packages/tests/jest.config.ts',
+                'packages/tests/playwright*.config.ts',
+            ],
+            plugins: ['@dd'],
+            rules: {
+                '@dd/no-whole-process-env': 'error',
+            },
+        },
+        {
             files: ['packages/tests/src/_jest/*.*'],
             rules: {
                 'no-restricted-imports': [

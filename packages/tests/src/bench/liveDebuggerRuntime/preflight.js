@@ -35,6 +35,7 @@ function exec(command, options = {}) {
         cwd: options.cwd || ROOT,
         encoding: 'utf8',
         env: {
+            // eslint-disable-next-line @dd/no-whole-process-env -- runs in a CI job without credentials
             ...process.env,
             FORCE_COLOR: 'true',
             PROJECT_CWD: ROOT,
