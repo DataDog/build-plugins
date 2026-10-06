@@ -48,6 +48,7 @@ import {
     gracefulFsPredatesGuards,
     installGuards,
 } from './network-guard';
+import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
     build: typeof build;
@@ -429,6 +430,12 @@ export const getVitePlugin = ({
                 if (gracefulFsPredatesGuards()) {
                     log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
                 }
+                // Started here so an unusable Vite is reported at startup; each execution reuses
+                // this load, or retries it after a failure.
+                loadViteParseAst().catch((error: unknown) => {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    log.warn(`Local execution can't parse backend modules: ${reason}`);
+                });
                 const ssrEnvironment = server.environments?.ssr;
                 if (ssrEnvironment) {
                     const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
@@ -443,11 +450,13 @@ export const getVitePlugin = ({
             // each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
             const getAllowedConnectionIds = async (entryId: string) => {
+                const parseAst = await loadViteParseAst();
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
                     entryId,
                     context.buildRoot,
                     log,
+                    parseAst,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };

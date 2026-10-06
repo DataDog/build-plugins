@@ -8,8 +8,7 @@ import { readFile } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { transform } from 'esbuild';
 import path from 'path';
-import { parseAst } from 'rollup/parseAst';
-import type { EnvironmentModuleNode, ModuleNode, ViteDevServer } from 'vite';
+import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 'vite';
 
 import {
     createParsedModuleRecord,
@@ -36,11 +35,20 @@ export async function collectModuleGraphFromServer(
     bareEntryId: string,
     buildRoot: string,
     log: Logger,
+    parse: typeof parseAst,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
     const staleAppModules = trackStaleAppModules(server, buildRoot);
     try {
-        await walkModuleGraph(server, bareEntryId, buildRoot, log, records, staleAppModules.record);
+        await walkModuleGraph(
+            server,
+            bareEntryId,
+            buildRoot,
+            log,
+            parse,
+            records,
+            staleAppModules.record,
+        );
     } finally {
         staleAppModules.uncache();
     }
@@ -100,6 +108,7 @@ async function walkModuleGraph(
     bareEntryId: string,
     buildRoot: string,
     log: Logger,
+    parse: typeof parseAst,
     records: Map<string, ParsedModuleRecord>,
     beforePrime: (id: string) => void,
 ): Promise<void> {
@@ -167,7 +176,7 @@ async function walkModuleGraph(
                 loader: loaderForModuleId(moduleId),
                 format: 'esm',
             });
-            ast = parseAst(stripped.code);
+            ast = parse(stripped.code);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             throw unsupportedModuleGraphDependency(
