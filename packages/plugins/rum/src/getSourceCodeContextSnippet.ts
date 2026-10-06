@@ -13,14 +13,28 @@ export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as 
 // The source code context snippet - single injection with function definition and call
 // SSR-safe: checks window before accessing, never throws
 //
+// Capture only this injected function, whose first frame identifies the bundle URL.
+// Capturing callers can trigger expensive V8 source-position collection for the entire bundle.
+// Restore the application's setting before formatting the stack (which may invoke user code).
+// Unsupported or read-only limits fall back to the existing stack capture behavior.
+//
 // Unminified version:
 // (function(c, n) {
 //     try {
 //         if (typeof window === 'undefined') return;
-//         var w = window,
-//             m = w[n] = w[n] || {},
-//             s = new Error().stack;
-//         s && (m[s] = c)
+//         var w = window, m = w[n] = w[n] || {}, l = Error.stackTraceLimit;
+//         try {
+//             if (typeof l === 'number') Error.stackTraceLimit = 1;
+//         } catch (e) {}
+//         try {
+//             var e = new Error();
+//         } finally {
+//             try {
+//                 if (typeof l === 'number') Error.stackTraceLimit = l;
+//             } catch (e) {}
+//         }
+//         var s = e.stack;
+//         s && (m[s] = c);
 //     } catch (e) {}
 // })(context, variableName);
 
@@ -52,7 +66,7 @@ export const getSourceCodeContextSnippet = (
         ddDebugId: debugId,
     };
 
-    const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
+    const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},l=Error.stackTraceLimit;try{if(typeof l==='number')Error.stackTraceLimit=1}catch(e){}try{var e=new Error()}finally{try{if(typeof l==='number')Error.stackTraceLimit=l}catch(e){}}var s=e.stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
 
     return { code, debugId };
 };
