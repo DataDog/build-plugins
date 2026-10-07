@@ -265,7 +265,7 @@ function assertWithinScriptLimit(
     if (length <= maxLength) {
         return;
     }
-    const overview = `Backend function "${displayName}"'s unminified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
+    const overview = `Backend function "${displayName}"'s minified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
     throw new HttpError(
         413,
         runtime === 'v2'

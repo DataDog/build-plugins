@@ -570,9 +570,13 @@ describe('Dev Server Middleware', () => {
                     configFile: false,
                     root: '/project',
                     logLevel: 'silent',
+                    esbuild: { keepNames: true },
                     build: expect.objectContaining({
                         write: false,
-                        minify: false,
+                        minify: true,
+                        rollupOptions: expect.objectContaining({
+                            output: expect.objectContaining({ keepNames: true }),
+                        }),
                     }),
                 }),
             );
@@ -1231,7 +1235,7 @@ describe('Dev Server Middleware', () => {
         );
 
         const overLimit = (length: number, maxLength: number, runtime: BackendRuntime) => {
-            const overview = `Backend function "${mockFunctions[0].relativePath}/${mockFunctions[0].name}"'s unminified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
+            const overview = `Backend function "${mockFunctions[0].relativePath}/${mockFunctions[0].name}"'s minified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
             const error =
                 runtime === 'v2'
                     ? `${overview}, so the dev server can't run it in the cloud. It still works once uploaded, since uploads store the script by reference, and \`npm run dev\` runs it locally now.`
