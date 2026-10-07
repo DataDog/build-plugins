@@ -10,7 +10,6 @@ import { parseAst } from 'rollup/parseAst';
 import { createParsedModuleRecord } from './ast-parsing/module-graph';
 import { walkModuleGraph } from './ast-parsing/walk-module-graph';
 import {
-    explainExcludedBackendFile,
     findInstalledBackendFunctionPackages,
     getBackendModuleOwner,
     importsBackendFunctionPackage,
@@ -81,12 +80,9 @@ describe('Backend Functions - isBackendSourceModule', () => {
  *         @scope/lib/              scoped, opted in
  *         plain/                   not opted in, depends on @scope/deep
  *         @scope/deep/             opted in, only a transitive dependency
- *         lib-alias/               "@scope/lib" installed under an alias
  *         .pnpm/opted@1.0.0/node_modules/opted/   a pnpm layout
  *         stray.backend.js         directly inside node_modules
  *     linked/                      linked from outside the root, opted in
- *       dist/package.json          nameless
- *     linked-plain/                linked from outside the root, not opted in
  *     shared/                      outside the root, no manifest of its own
  */
 describe('Backend Functions - package ownership rules', () => {
@@ -106,80 +102,53 @@ describe('Backend Functions - package ownership rules', () => {
         write('package.json', { name: 'monorepo', ...OPT_IN });
         write('app/package.json', {
             name: 'app',
-            dependencies: { opted: '1', '@scope/lib': '1', plain: '1', 'lib-alias': '1' },
+            dependencies: { opted: '1', '@scope/lib': '1', plain: '1' },
         });
         write('app/node_modules/opted/package.json', { name: 'opted', ...OPT_IN });
-        write('app/node_modules/opted/hooks/package.json', { name: 'opted-hooks' });
-        write('app/node_modules/opted/dist/package.json', { type: 'module' });
         write('app/node_modules/@scope/lib/package.json', { name: '@scope/lib', ...OPT_IN });
         write('app/node_modules/plain/package.json', {
             name: 'plain',
             dependencies: { '@scope/deep': '1' },
         });
         write('app/node_modules/@scope/deep/package.json', { name: '@scope/deep', ...OPT_IN });
-        write('app/node_modules/lib-alias/package.json', { name: '@scope/lib', ...OPT_IN });
         write('app/node_modules/.pnpm/opted@1.0.0/node_modules/opted/package.json', {
             name: 'opted',
             ...OPT_IN,
         });
         write('app/node_modules/stray.backend.js', '');
         write('linked/package.json', { name: 'linked', ...OPT_IN });
-        write('linked/dist/package.json', { type: 'module' });
-        write('linked-plain/package.json', { name: 'linked-plain' });
     });
 
     afterAll(() => {
         fs.rmSync(tree, { recursive: true, force: true });
     });
 
+    // The rows the library integration build doesn't already cover: a pnpm layout, and manifests
+    // that enclose the build root (the app's own or its monorepo's), which never opt anything in.
     test.each([
-        { file: 'app/src/data.backend.ts', expected: { kind: 'app' } },
-        {
-            file: 'app/node_modules/opted/hooks/state.backend.js',
-            expected: { kind: 'backend-package', name: 'opted', root: 'app/node_modules/opted' },
-        },
-        {
-            file: 'app/node_modules/opted/dist/data.backend.js',
-            expected: { kind: 'backend-package', name: 'opted', root: 'app/node_modules/opted' },
-        },
-        {
-            file: 'app/node_modules/@scope/lib/dist/data.backend.js',
-            expected: {
-                kind: 'backend-package',
-                name: '@scope/lib',
-                root: 'app/node_modules/@scope/lib',
-            },
-        },
         {
             file: 'app/node_modules/.pnpm/opted@1.0.0/node_modules/opted/data.backend.js',
             expected: {
                 kind: 'backend-package',
-                name: 'opted',
-                root: 'app/node_modules/.pnpm/opted@1.0.0/node_modules/opted',
+                package: {
+                    name: 'opted',
+                    root: 'app/node_modules/.pnpm/opted@1.0.0/node_modules/opted',
+                },
             },
         },
-        {
-            file: 'app/node_modules/plain/data.backend.js',
-            expected: { kind: 'dependency', name: 'plain', root: 'app/node_modules/plain' },
-        },
-        { file: 'app/node_modules/stray.backend.js', expected: { kind: 'dependency' } },
-        {
-            file: 'linked/dist/data.backend.js',
-            expected: { kind: 'backend-package', name: 'linked', root: 'linked' },
-        },
-        {
-            file: 'linked-plain/data.backend.js',
-            expected: { kind: 'linked-package', name: 'linked-plain', root: 'linked-plain' },
-        },
-        { file: 'shared/helper.ts', expected: { kind: 'outside-app' } },
+        { file: 'app/node_modules/stray.backend.js', expected: { kind: 'other' } },
+        { file: 'shared/helper.ts', expected: { kind: 'other' } },
     ])('Should classify $file as $expected.kind', ({ file, expected }) => {
         const owner = getBackendModuleOwner(at(file), appRoot);
 
-        const pkg = 'package' in owner ? owner.package : undefined;
-        expect({
-            kind: owner.kind,
-            ...(pkg ? { name: pkg.name, root: path.relative(tree, pkg.root) } : {}),
-        }).toEqual(expected);
+        expect(
+            owner.kind === 'backend-package'
+                ? {
+                      ...owner,
+                      package: { ...owner.package, root: path.relative(tree, owner.package.root) },
+                  }
+                : owner,
+        ).toEqual(expected);
     });
 
     // Bundlers and callers spell ids differently (Vite uses forward slashes even on Windows); any
@@ -202,28 +171,13 @@ describe('Backend Functions - package ownership rules', () => {
         expect(isBackendSourceModule(moduleId, appRoot)).toBe(true);
     });
 
-    test.each([
-        { file: 'app/src/data.backend.ts', expected: true },
-        { file: 'app/node_modules/opted/hooks/state.backend.js', expected: true },
-        { file: 'app/node_modules/plain/data.backend.js', expected: false },
-        { file: 'app/node_modules/stray.backend.js', expected: false },
-        // Proxied like any linked workspace file; the graph checks then fail it closed.
-        { file: 'linked-plain/data.backend.js', expected: true },
-    ])('Should decide $file is a backend function file: $expected', ({ file, expected }) => {
-        const isFunctionFile = isBackendFunctionFile(at(file), appRoot, at('app/dist'));
-        expect(isFunctionFile).toBe(expected);
-    });
-
-    test('Should name the package and the opt-in when a linked package can provide no functions', () => {
-        const file = at('linked-plain/data.backend.js');
-        const explanation = explainExcludedBackendFile(file, appRoot);
-        expect(explanation).toBe(
-            `${file} belongs to the package "linked-plain" (${at('linked-plain')}), which doesn't ` +
-                `provide backend functions. Add "datadogApps": { "backendFunctions": true } to its ` +
-                `package.json, or move the file into the app.`,
+    test('Should keep a .backend.js file directly inside node_modules from becoming a function', () => {
+        const isFunctionFile = isBackendFunctionFile(
+            at('app/node_modules/stray.backend.js'),
+            appRoot,
+            at('app/dist'),
         );
-        const appExplanation = explainExcludedBackendFile(at('app/src/data.backend.ts'), appRoot);
-        expect(appExplanation).toBeUndefined();
+        expect(isFunctionFile).toBe(false);
     });
 
     test.each([
@@ -258,43 +212,15 @@ describe('Backend Functions - package ownership rules', () => {
             throw new Error('Expected the package module to be backend source.');
         }
 
-        expect(record.unsupportedDependencies).toEqual([
-            { specifier: 'opted/helper', kind: 'backend-package-dynamic-import' },
-        ]);
         const records = new Map([[file, record]]);
         expect(() => walkModuleGraph(file, records, appRoot, () => {})).toThrow(
-            `Unsupported dynamic import in backend code of ${file}: ${file} imports "opted/helper" dynamically, from a package that provides backend functions`,
+            'dynamic-import opted/helper',
         );
     });
 
-    test('Should find opted-in packages anywhere in the dependency tree, with every name that reaches them', () => {
+    test('Should find opted-in packages anywhere in the dependency tree', () => {
         const packages = findInstalledBackendFunctionPackages(appRoot);
 
-        const found = packages.map(({ name, root, importNames }) => ({
-            name,
-            root: path.relative(tree, root),
-            importNames,
-        }));
-        expect(found).toEqual(
-            expect.arrayContaining([
-                { name: 'opted', root: 'app/node_modules/opted', importNames: ['opted'] },
-                {
-                    name: '@scope/lib',
-                    root: 'app/node_modules/@scope/lib',
-                    importNames: ['@scope/lib'],
-                },
-                {
-                    name: '@scope/lib',
-                    root: 'app/node_modules/lib-alias',
-                    importNames: ['@scope/lib', 'lib-alias'],
-                },
-                {
-                    name: '@scope/deep',
-                    root: 'app/node_modules/@scope/deep',
-                    importNames: ['@scope/deep'],
-                },
-            ]),
-        );
-        expect(found).toHaveLength(4);
+        expect(packages.sort()).toEqual(['@scope/deep', '@scope/lib', 'opted']);
     });
 });
