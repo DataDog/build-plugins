@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { explainExcludedBackendFile, isBackendSourceModule } from '../backend-sources';
+import { isBackendSourceModule } from '../backend-sources';
 
 import { type ParsedModuleRecord, unsupportedModuleGraphDependency } from './module-graph';
 
@@ -43,12 +43,6 @@ export function walkModuleGraph(
         // omitting a possible connection ID.
         const record = modules.get(moduleId);
         if (!record) {
-            // A file claimed as a function that the graph rules don't treat as backend source,
-            // like one in a linked package that didn't opt in: say which package and the fix.
-            const explanation = explainExcludedBackendFile(moduleId, buildRoot);
-            if (explanation) {
-                throw new Error(`Cannot build backend function ${entryId}: ${explanation}`);
-            }
             throw unsupportedModuleGraphDependency(
                 entryId,
                 `missing module record for ${moduleId}`,
@@ -61,13 +55,6 @@ export function walkModuleGraph(
         // action-catalog calls from static traversal. Treat them as unsupported
         // graph shapes for this PR.
         for (const dependency of record.unsupportedDependencies) {
-            if (dependency.kind === 'backend-package-dynamic-import') {
-                throw new Error(
-                    `Unsupported dynamic import in backend code of ${entryId}: ${record.id} imports ` +
-                        `"${dependency.specifier}" dynamically, from a package that provides backend ` +
-                        `functions, so its action-catalog connection IDs can't be checked. Import it statically.`,
-                );
-            }
             throw unsupportedModuleGraphDependency(
                 entryId,
                 `${dependency.kind} ${dependency.specifier}`,

@@ -1097,13 +1097,8 @@ describe('Backend Functions - getVitePlugin', () => {
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
-            optimizeDeps: {
-                exclude: [],
-                esbuildOptions: {
-                    plugins: [expect.objectContaining({ name: 'dd-apps-backend-prebundle-guard' })],
-                },
-            },
-            resolve: { dedupe: [] },
+            optimizeDeps: { exclude: [] },
+            resolve: { dedupe: ['@datadog/apps-backend', '@datadog/action-catalog'] },
         });
     });
 
@@ -1459,11 +1454,9 @@ describe('Backend Functions - getVitePlugin', () => {
     });
 });
 
-describe('Backend Functions - announcing functions packages contribute', () => {
+describe('Backend Functions - announcing packages that provide backend functions', () => {
     let tree: string;
     let appRoot: string;
-    const packageFile = () =>
-        path.join(appRoot, 'node_modules/@acme/viz/dist/visualizations/data.backend.js');
 
     beforeAll(() => {
         tree = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-announce-')));
@@ -1503,45 +1496,8 @@ describe('Backend Functions - announcing functions packages contribute', () => {
             }),
         });
 
-    const transform = (plugin: ReturnType<typeof getVitePlugin>, code: string, id: string) =>
-        getTransformHandler(plugin).call(
-            {
-                parse: parseAst,
-                resolve: jest.fn(async () => null),
-                load: jest.fn(async () => null),
-                addWatchFile: jest.fn(),
-            },
-            code,
-            id,
-        );
-
     const infoLogs = () =>
         mockLogFn.mock.calls.filter(([, level]) => level === 'info').map(([text]) => text);
-
-    test('Should log at info level each function a package contributes, once per file', () => {
-        const plugin = getPlugin();
-        const code =
-            'export async function fetchSeries() {} export async function fetchScalar() {}';
-
-        transform(plugin, code, packageFile());
-        transform(plugin, code, packageFile());
-
-        expect(infoLogs()).toEqual([
-            'Package "@acme/viz" contributes backend function(s) fetchSeries, fetchScalar (dist/visualizations/data.backend.js).',
-        ]);
-    });
-
-    test("Should not announce the app's own backend functions", () => {
-        const plugin = getPlugin();
-
-        transform(
-            plugin,
-            'export async function mine() {}',
-            path.join(appRoot, 'src/mine.backend.ts'),
-        );
-
-        expect(infoLogs()).toEqual([]);
-    });
 
     test('Should log at info level which packages provide backend functions when the dev server starts', () => {
         const plugin = getPlugin();

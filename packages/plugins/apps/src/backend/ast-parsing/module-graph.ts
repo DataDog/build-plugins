@@ -61,7 +61,7 @@ export interface StaticModuleDependency {
 
 export interface ModuleDependency {
     specifier: string;
-    kind: 'dynamic-import' | 'backend-package-dynamic-import' | 'require';
+    kind: 'dynamic-import' | 'require';
 }
 
 /**
@@ -627,13 +627,13 @@ function collectUnsupportedModuleDependencies(
 ): ModuleDependency[] {
     const dependencies: ModuleDependency[] = [];
     const getDynamicImportFailure = (specifier: string): ModuleDependency | undefined => {
-        if (shouldFailDynamicImport(specifier)) {
-            return { specifier, kind: 'dynamic-import' };
-        }
         // A package's modules are backend source like app code, so a dynamic import into one is
         // as unfollowable as a local one. Ordinary package imports stay skipped.
-        if (importsBackendFunctionPackage(specifier, moduleId, buildRoot)) {
-            return { specifier, kind: 'backend-package-dynamic-import' };
+        if (
+            shouldFailDynamicImport(specifier) ||
+            importsBackendFunctionPackage(specifier, moduleId, buildRoot)
+        ) {
+            return { specifier, kind: 'dynamic-import' };
         }
         return undefined;
     };
