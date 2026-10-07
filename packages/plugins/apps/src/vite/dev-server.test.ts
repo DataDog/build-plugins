@@ -7,7 +7,6 @@
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -59,20 +58,11 @@ const mockAuth: AuthOptionsWithDefaults = {
 };
 
 const mockLog = getMockLogger();
-// getAuthenticatedRequest reads the OAuth token from the environment. Jest's
-// setupAfterEnv cleanEnv strips env vars after collection, so the authenticated
-// request is captured once at collection time — describe bodies and test
-// bodies both reuse it. The bearer test pins the token itself to exercise a
-// live construction. Developer-provided API keys are stripped so the bearer
-// path is deterministic.
+// getAuthenticatedRequest reads auth from the environment when called, and API keys take
+// precedence over the OAuth token, so they must stay unset for the bearer path.
 const TEST_OAUTH_TOKEN = 'test-oauth-token';
-const restoreModuleEnv = cleanEnv();
 process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 const testAuthenticatedRequest = getAuthenticatedRequest();
-
-afterAll(() => {
-    restoreModuleEnv();
-});
 
 // Disable jitter/backoff so retry tests don't add unnecessary delay.
 const mockLongPolling: AppsOptionsWithDefaults['longPolling'] = {
@@ -706,9 +696,6 @@ describe('Dev Server Middleware', () => {
 
         test('Should call Datadog API with bearer auth and no API/App key headers', async () => {
             mockBuildWithParsedBackend();
-            // setupAfterEnv's cleanEnv strips env vars after collection, so the
-            // token must be set in the test body for this live construction.
-            process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 
             const bearerMiddleware = createTestMiddleware({
                 doAuthenticatedRequest: getAuthenticatedRequest(),

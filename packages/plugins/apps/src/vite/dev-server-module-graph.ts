@@ -7,12 +7,14 @@
 import { readFile } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { transform } from 'esbuild';
-import { parseAst } from 'rollup/parseAst';
-import type { ModuleNode, ViteDevServer } from 'vite';
+import path from 'path';
+import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 'vite';
 
 import {
     createParsedModuleRecord,
     getStaticModuleSources,
+    isOutsideRoot,
+    isPackageManagerModule,
     type ParsedModuleRecord,
     shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
@@ -33,13 +35,92 @@ export async function collectModuleGraphFromServer(
     bareEntryId: string,
     buildRoot: string,
     log: Logger,
+    parse: typeof parseAst,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
+    const staleAppModules = trackStaleAppModules(server, buildRoot);
+    try {
+        await walkModuleGraph(
+            server,
+            bareEntryId,
+            buildRoot,
+            log,
+            parse,
+            records,
+            staleAppModules.record,
+        );
+    } finally {
+        staleAppModules.uncache();
+    }
+    return records;
+}
+
+// Priming refills an edited module's transformResult, which Vite 6+'s SSR runner reads as "cached
+// evaluation still current", so each stale module the walk primes is un-cached again after it.
+function trackStaleAppModules(server: ViteDevServer, buildRoot: string) {
+    // Vite 5 has no environment graph; its ssrLoadModule reads ssrModule, which priming never sets.
+    const ssrGraph = server.environments?.ssr?.moduleGraph;
+    if (!ssrGraph) {
+        return { record: () => {}, uncache: () => {} };
+    }
+    const isStale = (node: EnvironmentModuleNode) => {
+        // Untransformed and never invalidated means never run, so there's no stale evaluation.
+        const wasInvalidated = node.lastInvalidationTimestamp || node.lastHMRTimestamp;
+        if (!node.id || node.transformResult || !wasInvalidated) {
+            return false;
+        }
+        // Package dependencies stay cached: re-running an SDK would drop its once-per-server setup.
+        // Relative to the root so an app under node_modules still counts; outside it, the full path
+        // decides, so a hoisted sibling package isn't mistaken for app code.
+        const moduleId = normalizeDevServerModuleId(node.id);
+        const relativePath = path.relative(buildRoot, moduleId);
+        // Vite ids always use forward slashes; path.normalize gives the platform separator.
+        const pathToClassify = isOutsideRoot(relativePath)
+            ? path.normalize(moduleId)
+            : relativePath;
+        return !isPackageManagerModule(pathToClassify);
+    };
+    // Scanned upfront too: another plugin's transform hook can pre-transform its imports and
+    // refill a stale module before the walk reaches it.
+    const staleBeforeWalk = new Set<EnvironmentModuleNode>();
+    ssrGraph.idToModuleMap.forEach((node) => {
+        if (isStale(node)) {
+            staleBeforeWalk.add(node);
+        }
+    });
+    const primedStaleModules = new Set<EnvironmentModuleNode>();
+    return {
+        // Checked again right before priming, to catch a file saved mid-walk.
+        record: (id: string) => {
+            const node = ssrGraph.getModuleById(id);
+            if (node && (staleBeforeWalk.has(node) || isStale(node))) {
+                primedStaleModules.add(node);
+            }
+        },
+        // Reverts only the priming: invalidateModule would also re-run importers that are current.
+        uncache: () =>
+            primedStaleModules.forEach((node) => ssrGraph.updateModuleTransformResult(node, null)),
+    };
+}
+
+async function walkModuleGraph(
+    server: ViteDevServer,
+    bareEntryId: string,
+    buildRoot: string,
+    log: Logger,
+    parse: typeof parseAst,
+    records: Map<string, ParsedModuleRecord>,
+    beforePrime: (id: string) => void,
+): Promise<void> {
     const visited = new Set<string>();
     const pending: ModuleNode[] = [];
+    const prime = async (id: string) => {
+        beforePrime(id);
+        await server.transformRequest(id, { ssr: true });
+    };
 
     const entryUrl = bareEntryId + LOCAL_EXECUTION_LOAD_SUFFIX;
-    await server.transformRequest(entryUrl, { ssr: true });
+    await prime(entryUrl);
     const entryNode = server.moduleGraph.getModuleById(entryUrl);
     if (entryNode) {
         pending.push(entryNode);
@@ -95,7 +176,7 @@ export async function collectModuleGraphFromServer(
                 loader: loaderForModuleId(moduleId),
                 format: 'esm',
             });
-            ast = parseAst(stripped.code);
+            ast = parse(stripped.code);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             throw unsupportedModuleGraphDependency(
@@ -141,13 +222,11 @@ export async function collectModuleGraphFromServer(
             // non-evaluating priming the entry got above — so no node in the traversal is ever
             // read before it has itself gone through this same transform-only step.
             if (dependencyNode.id) {
-                await server.transformRequest(dependencyNode.id, { ssr: true });
+                await prime(dependencyNode.id);
             }
             pending.push(dependencyNode);
         }
     }
-
-    return records;
 }
 
 function loaderForModuleId(moduleId: string): 'ts' | 'tsx' | 'jsx' | 'js' {

@@ -34,6 +34,8 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
 
     return {
         include: resolvedOptions.include || [],
+        // Passed through as configured; the authored tag source cleans it, best effort.
+        tags: resolvedOptions.tags,
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
     };
 };

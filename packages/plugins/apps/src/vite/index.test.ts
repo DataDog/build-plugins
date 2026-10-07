@@ -2,11 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
+import { rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import {
     createMockRequest,
     createMockResponse,
@@ -14,13 +15,21 @@ import {
     getRepositoryDataMock,
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
+import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
 import { createUnplugin } from 'unplugin';
-import { createServer, type Plugin as VitePlugin, type ViteDevServer } from 'vite';
+import {
+    createServer,
+    type ConfigEnv,
+    type EnvironmentOptions,
+    type Plugin as VitePlugin,
+    type UserConfig,
+    type ViteDevServer,
+} from 'vite';
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -32,6 +41,8 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+import * as networkGuard from './network-guard';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -80,6 +91,7 @@ type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
     config: { mode: string };
+    pluginContainer?: object;
 };
 
 // Narrows `plugin.configureServer` to its plain-function hook form via a runtime check, then wraps
@@ -104,16 +116,46 @@ function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
 type ConfigHookResult = {
     ssr: { noExternal: string[] };
 };
+type ConfigEnvironmentCall = (
+    name: string,
+    options: EnvironmentOptions,
+    env: ConfigEnv,
+) => EnvironmentOptions | undefined;
 
-// Narrows `plugin.config` to its plain-function hook form via a runtime check, avoiding an `as`
-// cast on its return value — mirrors `getConfigureServer` above.
-function getConfigHandler(plugin: ReturnType<typeof getVitePlugin>): () => ConfigHookResult {
+const DEV_SERVER_ENV: ConfigEnv = { command: 'serve', mode: 'development', isPreview: false };
+
+// Narrows `plugin.config` to its handler via a runtime check, avoiding an `as` cast on its return
+// value — mirrors `getConfigureServer` above.
+function getConfigHandler(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (userConfig?: UserConfig) => ConfigHookResult {
     const { config } = plugin ?? {};
-    if (typeof config !== 'function') {
-        throw new Error('Expected plugin.config to be the plain function-hook form');
+    const handler = typeof config === 'object' && config !== null ? config.handler : config;
+    if (typeof handler !== 'function') {
+        throw new Error('Expected plugin.config to have a function handler');
     }
-    return function callConfig(): ConfigHookResult {
-        return Reflect.apply(config, undefined, []);
+    return function callConfig(userConfig = {}): ConfigHookResult {
+        const result: unknown = Reflect.apply(handler, undefined, [userConfig, DEV_SERVER_ENV]);
+        if (!isConfigHookResult(result)) {
+            throw new Error('Expected plugin.config to return a config object');
+        }
+        return result;
+    };
+}
+
+function isConfigHookResult(value: unknown): value is ConfigHookResult {
+    return typeof value === 'object' && value !== null && 'ssr' in value;
+}
+
+function getConfigEnvironmentHandler(
+    plugin: ReturnType<typeof getVitePlugin>,
+): ConfigEnvironmentCall {
+    const { configEnvironment } = plugin ?? {};
+    if (typeof configEnvironment !== 'function') {
+        throw new Error('Expected plugin.configEnvironment to be the plain function-hook form');
+    }
+    return function callConfigEnvironment(name, options, env) {
+        return Reflect.apply(configEnvironment, undefined, [name, options, env]);
     };
 }
 
@@ -218,6 +260,7 @@ const defaultOptions = {
     options: {
         enable: true,
         include: [],
+        tags: [],
         longPolling: {
             maxRetries: 10,
             timeoutMs: 40000,
@@ -1035,6 +1078,7 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
+    // Exact shape: Vite 5 has no configEnvironment hook, so the warmup override must not live here.
     test('Should force @datadog/apps-backend and @datadog/action-catalog through the SSR transform pipeline instead of externalizing them', () => {
         // These SDKs ship ESM-only, but Vite's dev-server SSR mode externalizes node_modules by
         // default (a plain require()), which throws "Cannot use import statement outside a
@@ -1049,6 +1093,274 @@ describe('Backend Functions - getVitePlugin', () => {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
         });
+    });
+
+    const countWarmupNotices = () =>
+        mockLogFn.mock.calls.filter(
+            ([text, level]) => level === 'warn' && String(text).includes(SSR_WARMUP_SETTING),
+        ).length;
+
+    const ssrWarmupCases: Array<{
+        description: string;
+        userConfig: UserConfig;
+        environmentName?: string;
+        mergedOptions: EnvironmentOptions;
+        configEnv?: Partial<ConfigEnv>;
+        expectedOverride: boolean;
+        expectedNotices: number;
+    }> = [
+        {
+            description: 'server.preTransformRequests is on',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            expectedOverride: true,
+            expectedNotices: 1,
+        },
+        {
+            description: 'the merged SSR dev.preTransformRequests is on',
+            userConfig: {},
+            mergedOptions: { dev: { preTransformRequests: true } },
+            expectedOverride: true,
+            expectedNotices: 1,
+        },
+        {
+            description: 'no warmup setting is given',
+            userConfig: {},
+            mergedOptions: {},
+            expectedOverride: true,
+            expectedNotices: 0,
+        },
+        {
+            description: 'server.preTransformRequests is on but the SSR environment turns it off',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: { dev: { preTransformRequests: false } },
+            expectedOverride: true,
+            expectedNotices: 0,
+        },
+        {
+            description: 'it is vite preview',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            configEnv: { isPreview: true },
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+        {
+            description: 'it is a build',
+            userConfig: { server: { preTransformRequests: true } },
+            mergedOptions: {},
+            configEnv: { command: 'build' },
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+        {
+            description: 'the environment is not SSR',
+            userConfig: { server: { preTransformRequests: true } },
+            environmentName: 'client',
+            mergedOptions: {},
+            expectedOverride: false,
+            expectedNotices: 0,
+        },
+    ];
+    test.each(ssrWarmupCases)(
+        'Should turn SSR import warmup off: $expectedOverride, with $expectedNotices notice(s), when $description',
+        ({
+            userConfig,
+            environmentName,
+            mergedOptions,
+            configEnv,
+            expectedOverride,
+            expectedNotices,
+        }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const configHook = getConfigHandler(plugin);
+            const configEnvironment = getConfigEnvironmentHandler(plugin);
+            const env = { ...DEV_SERVER_ENV, ...configEnv };
+
+            configHook(userConfig);
+            const environmentOptions = configEnvironment(
+                environmentName ?? 'ssr',
+                mergedOptions,
+                env,
+            );
+
+            const ssrWarmup = environmentOptions?.dev?.preTransformRequests;
+            expect(ssrWarmup === false).toBe(expectedOverride);
+            expect(countWarmupNotices()).toBe(expectedNotices);
+        },
+    );
+
+    test('Should give the SSR import warmup notice only once', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const configEnvironment = getConfigEnvironmentHandler(plugin);
+        const mergedOptions = { dev: { preTransformRequests: true } };
+
+        configEnvironment('ssr', mergedOptions, DEV_SERVER_ENV);
+        configEnvironment('ssr', mergedOptions, DEV_SERVER_ENV);
+
+        expect(countWarmupNotices()).toBe(1);
+    });
+
+    // Without auth both endpoints are off, and dev-verify sends every execution to the cloud.
+    test.each([
+        { scenario: 'no authentication', mode: 'development', withAuth: false, installs: 0 },
+        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, installs: 0 },
+        { scenario: 'local execution', mode: 'development', withAuth: true, installs: 1 },
+    ])(
+        'Should install the sandbox guards only when local execution can run ($scenario)',
+        ({ mode, withAuth, installs }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const installGuards = jest
+                .spyOn(networkGuard, 'installGuards')
+                .mockImplementation(() => undefined);
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = cleanEnv();
+            if (withAuth) {
+                process.env.DD_API_KEY = 'test-api-key';
+                process.env.DD_APP_KEY = 'test-app-key';
+            }
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    config: { mode },
+                });
+
+                expect(installGuards).toHaveBeenCalledTimes(installs);
+            } finally {
+                restoreEnv();
+                installGuards.mockRestore();
+            }
+        },
+    );
+
+    test.each([
+        { predates: true, warns: true },
+        { predates: false, warns: false },
+    ])(
+        'Should warn that fs-extra/graceful-fs loaded before the dev server is unguarded (predates: $predates)',
+        ({ predates, warns }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const installGuards = jest
+                .spyOn(networkGuard, 'installGuards')
+                .mockImplementation(() => undefined);
+            const gracefulFsPredatesGuards = jest
+                .spyOn(networkGuard, 'gracefulFsPredatesGuards')
+                .mockReturnValue(predates);
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = cleanEnv();
+            process.env.DD_API_KEY = 'test-api-key';
+            process.env.DD_APP_KEY = 'test-app-key';
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    config: { mode: 'development' },
+                });
+                const warned = mockLogFn.mock.calls.some(
+                    ([text, level]) =>
+                        level === 'warn' && text === networkGuard.GRACEFUL_FS_UNGUARDED_WARNING,
+                );
+
+                expect(warned).toBe(warns);
+            } finally {
+                restoreEnv();
+                installGuards.mockRestore();
+                gracefulFsPredatesGuards.mockRestore();
+            }
+        },
+    );
+
+    // Each local execution installs again and fails closed, so the server itself must still start.
+    test('Should keep the dev server starting when installing the sandbox guards throws', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const installGuards = jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => {
+            throw new Error('Cannot redefine property: cpSync');
+        });
+        const use = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = cleanEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+
+        try {
+            expect(() =>
+                configureServer({
+                    middlewares: { use },
+                    ssrLoadModule: jest.fn(),
+                    config: { mode: 'development' },
+                }),
+            ).not.toThrow();
+            expect(installGuards).toHaveBeenCalled();
+            expect(use).toHaveBeenCalledTimes(1);
+        } finally {
+            restoreEnv();
+            installGuards.mockRestore();
+        }
+    });
+
+    // Vite 5 has no environment API, so a run's dynamic import calls the plugin container directly.
+    test("Should run a Vite 5 plugin container's resolveId, load and transform outside a run's blocked scope", async () => {
+        const cacheDir = makeProbeDirOutsideTmp('dd-vite5-container-');
+        // A class, like Vite 5.4's PluginContainer, so the methods live on the prototype and use `this`.
+        class FakePluginContainer {
+            readonly calls: unknown[][] = [];
+            async resolveId(...args: unknown[]) {
+                return this.record('resolveId', args);
+            }
+            async load(...args: unknown[]) {
+                return this.record('load', args);
+            }
+            async transform(...args: unknown[]) {
+                return this.record('transform', args);
+            }
+            record(method: string, args: unknown[]) {
+                const cacheFile = path.join(cacheDir, `${method}.json`);
+                fs.writeFileSync(cacheFile, '{}');
+                this.calls.push([method, ...args]);
+                return method;
+            }
+        }
+        const pluginContainer = new FakePluginContainer();
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = cleanEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: { mode: 'development' },
+                pluginContainer,
+            });
+            const inRunPath = path.join(cacheDir, 'in-run.txt');
+            const results = await networkGuard.runBlocked(async () => {
+                const ssr = { ssr: true };
+                const resolved = await pluginContainer.resolveId('/src/lazy.ts', undefined, ssr);
+                const loaded = await pluginContainer.load('/src/lazy.ts', ssr);
+                const transformed = await pluginContainer.transform('code', '/src/lazy.ts', ssr);
+                expect(() => fs.writeFileSync(inRunPath, 'data')).toThrow(
+                    networkGuard.FS_WRITE_BLOCKED_MESSAGE,
+                );
+                return [resolved, loaded, transformed];
+            });
+            const cacheFiles = fs.readdirSync(cacheDir).sort();
+
+            expect(results).toEqual(['resolveId', 'load', 'transform']);
+            expect(pluginContainer.calls).toEqual([
+                ['resolveId', '/src/lazy.ts', undefined, { ssr: true }],
+                ['load', '/src/lazy.ts', { ssr: true }],
+                ['transform', 'code', '/src/lazy.ts', { ssr: true }],
+            ]);
+            expect(cacheFiles).toEqual(['load.json', 'resolveId.json', 'transform.json']);
+        } finally {
+            restoreEnv();
+            rmSync(cacheDir);
+        }
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.

@@ -62,7 +62,11 @@ export function getBaseBackendBuildConfig(
             rollupOptions: {
                 output: { format: 'es', exports: 'named', inlineDynamicImports: true },
                 preserveEntrySignatures: 'exports-only',
-                treeshake: false,
+                // Each exported function is bundled separately, so without tree-shaking every
+                // bundle carries the whole import graph of its `.backend.ts` file, including code
+                // only sibling exports use. Standard tree-shaking keeps modules' top-level side
+                // effects, honoring packages' `"sideEffects"` field like the frontend build does.
+                treeshake: true,
                 onwarn(warning, defaultHandler) {
                     if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
                         return;

@@ -20,6 +20,10 @@ import { getBaseBackendBuildConfig } from './build-config';
 const VIRTUAL_PREFIX = '\0dd-backend:';
 export const BACKEND_OUT_DIR_PREFIX = 'dd-apps-backend-';
 
+// Rolldown (Vite 8) output option that keeps function and class names when minifying. Rollup's
+// types don't declare it, and Rollup-based Vite ignores it, so it is spread in rather than typed.
+const ROLLDOWN_KEEP_NAMES = { keepNames: true } satisfies Record<string, unknown>;
+
 /**
  * Build all backend functions using a separate vite.build() call.
  * Produces one standalone JS file per function in a temp directory.
@@ -70,8 +74,17 @@ export async function buildBackendFunctions(
             // eslint-disable-next-line no-await-in-loop
             const result = await viteBuild({
                 ...baseConfig,
+                // Production only: dev-server bundles stay unminified so local traces keep line
+                // numbers. Function and class names are kept for function-log stack frames and
+                // code reading `.name`; frames still point at `1:<column>`.
+                //
+                // `minify: true` selects each Vite major's own minifier: esbuild before Vite 8,
+                // Oxc in Rolldown-based Vite 8, which only loads esbuild if the app installs it.
+                // Each reads its own keepNames option and ignores the other's.
+                esbuild: { keepNames: true },
                 build: {
                     ...baseConfig.build,
+                    minify: true,
                     write: true,
                     outDir,
                     emptyOutDir: false,
@@ -80,6 +93,7 @@ export async function buildBackendFunctions(
                         input: { [bundleName]: virtualId },
                         output: {
                             ...baseConfig.build.rollupOptions.output,
+                            ...ROLLDOWN_KEEP_NAMES,
                             entryFileNames: '[name].js',
                         },
                     },

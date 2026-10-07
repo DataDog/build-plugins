@@ -13,6 +13,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
 <!-- #toc -->
 
@@ -22,6 +23,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 apps?: {
     enable?: boolean;
     include?: string[];
+    tags?: string[];
     longPolling?: {
         maxRetries?: number;
         jitter?: boolean;
@@ -62,6 +64,16 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
+
+### apps.tags
+
+> default: none
+
+Tags to add to the app, e.g. `['team:my-team']`. Tags are trimmed and lowercased. Datadog applies its remaining tag rules on upload (for example, a tag must start with a letter) and drops tags that don't pass them. Tags never fail a build: entries that aren't non-empty strings are skipped with a warning.
+
+The package's `manifest.json` carries the app's tags: these tags plus one `surface:<id>` tag for each surface declared by an `@datadog/apps-frontend` input the built frontend uses (for example `surface:datadog.dashboard`), letting product surfaces find apps meant for them. Surface tags are derived from the final bundle, so an input that is imported but tree-shaken away adds none, and an input offered on every surface (like the theme) adds none either.
+
+Deploying adds these tags to the app, along with `high-code-app`, which Datadog adds to every app uploaded from a package like this one. It never removes tags, so tags added in the App Builder UI survive the next deploy. Removing a tag is done in the UI, and a tag removed from `apps.tags`, or a surface whose input the app stopped using, stays on the app until someone removes it there.
 
 ### apps.longPolling
 

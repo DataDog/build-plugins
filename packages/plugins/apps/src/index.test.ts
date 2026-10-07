@@ -7,12 +7,13 @@ import * as assets from '@dd/apps-plugin/assets';
 import { getPlugins } from '@dd/apps-plugin';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import type { PluginOptions } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import {
     getContextMock,
     getGetPluginsArg,
     getMockBundler,
     getRepositoryDataMock,
+    mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
 import JSZip from 'jszip';
@@ -25,6 +26,13 @@ import { ARCHIVE_FILENAME } from './constants';
 import type { AppsOptionsWithDefaults } from './types';
 import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
 import { buildAppPackage, MANIFEST_DIR_PREFIX } from './vite/build-package';
+
+// Another test file in this Jest worker can install the guards, which makes fs.promises.mkdtemp
+// non-configurable for jest.spyOn, so the mock comes from the module registry instead.
+jest.mock('fs/promises', () => {
+    const actual = jest.requireActual<typeof import('fs/promises')>('fs/promises');
+    return { ...actual, mkdtemp: jest.fn(actual.mkdtemp) };
+});
 
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
@@ -42,13 +50,13 @@ function extractViteTransform(plugins: PluginOptions[]) {
 
 /** Asserts mkdtemp created a dir for each expected prefix and that none of those dirs survive. */
 async function expectNoLeakedTempDirs(
-    mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>,
+    mkdtempMock: jest.MockedFunction<typeof fs.mkdtemp>,
     expectedPrefixes: string[],
 ) {
-    if (mkdtempSpy.mock.calls.length === 0) {
+    if (mkdtempMock.mock.calls.length === 0) {
         throw new Error('fs.mkdtemp was never intercepted, so no temp dir cleanup was checked.');
     }
-    const pendingDirs = mkdtempSpy.mock.results.map(({ value }) => value);
+    const pendingDirs = mkdtempMock.mock.results.map(({ value }) => value);
     const createdDirs = await Promise.all(pendingDirs);
     const pluginDirs = createdDirs
         .map(String)
@@ -113,11 +121,13 @@ describe('Apps Plugin - package output', () => {
             options?: Partial<AppsOptionsWithDefaults>;
             backendOutputs?: Map<string, string>;
             backendFunctions?: BackendFunction[];
+            tags?: string[];
         } = {},
     ) {
         return {
             backendOutputs: overrides.backendOutputs ?? new Map<string, string>(),
             backendFunctions: overrides.backendFunctions ?? [],
+            tags: overrides.tags ?? [],
             context: getContextMock({
                 buildRoot: root,
                 bundler: { name: 'vite', version: 'test', outDir: packageDirectory },
@@ -148,6 +158,26 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
+    test('reports the decompressed size of every packaged file, backend bundles and manifest included', async () => {
+        // Multibyte content, so a character count would under-report the byte total.
+        await fs.writeFile(sourcePath, 'é'.repeat(1_000));
+        const backendPath = path.join(root, 'example.js');
+        await fs.writeFile(backendPath, 'export function main() {}');
+        const backendOutputs = new Map([['example', backendPath]]);
+        const archivePath = await buildAppPackage(packageOptions({ backendOutputs }));
+
+        const archiveData = await fs.readFile(archivePath!);
+        const zip = await JSZip.loadAsync(archiveData);
+        const entries = Object.values(zip.files).filter((file) => !file.dir);
+        const contents = await Promise.all(entries.map((file) => file.async('nodebuffer')));
+        const decompressedSize = contents.reduce((total, content) => total + content.length, 0);
+        const decompressedMb = (decompressedSize / 1_000_000).toFixed(2);
+        const expectedReport = expect.stringContaining(
+            `${entries.length} files, ${(archiveData.length / 1_000_000).toFixed(2)} MB compressed, ${decompressedMb} MB decompressed`,
+        );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedReport, 'info');
+    });
+
     test('does not nest stale generated package files into the archive', async () => {
         const staleArchive = path.join(packageDirectory, ARCHIVE_FILENAME);
         await fs.writeFile(staleArchive, 'stale archive');
@@ -164,14 +194,15 @@ describe('Apps Plugin - package output', () => {
         );
     });
 
-    test('writes manifest.json with only backend function entries', async () => {
+    test('writes an empty tag list to manifest.json when the app has no tags', async () => {
         await buildAppPackage(packageOptions());
 
         const zip = await JSZip.loadAsync(
             await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
         );
         const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-        expect(manifest).toEqual({ backend: { functions: {} } });
+        // The manifest always carries a tag list; an empty one adds nothing.
+        expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
     test('includes backend function entries with connection allowlists in manifest.json', async () => {
@@ -211,7 +242,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
     // used below; buildAppPackage needs a real outDir it can write into.
     const buildRoot = '/project';
     let outDir: string;
-    let mkdtempSpy: jest.SpiedFunction<typeof fs.mkdtemp>;
+    let mkdtempMock: jest.MockedFunction<typeof fs.mkdtemp>;
     const getArgs = () =>
         getGetPluginsArg(
             { apps: {} },
@@ -226,7 +257,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         const tmpRoot = os.tmpdir();
         const outDirPrefix = path.join(tmpRoot, 'dd-apps-closebundle-');
         outDir = await fs.mkdtemp(outDirPrefix);
-        mkdtempSpy = jest.spyOn(fs, 'mkdtemp');
+        mkdtempMock = jest.mocked(fs.mkdtemp);
+        mkdtempMock.mockClear();
     });
 
     afterEach(async () => {
@@ -250,6 +282,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
                 assets: archiveAssets,
                 size: 30,
+                decompressedSize: 100,
             };
         });
 
@@ -310,7 +343,74 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
         ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+    });
+
+    test("Should write each watch-mode build's own tags, even once the next build has started", async () => {
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
+        ]);
+        jest.spyOn(fsHelpers, 'rm').mockResolvedValue(undefined);
+        const writtenTags: string[][] = [];
+        jest.spyOn(archive, 'createArchive').mockImplementation(async (archiveAssets) => {
+            const manifestAsset = archiveAssets.find(
+                (asset) => asset.relativePath === 'manifest.json',
+            );
+            if (!manifestAsset) {
+                throw new Error('Expected the package to include manifest.json.');
+            }
+            const manifestJson = await fs.readFile(manifestAsset.absolutePath, 'utf8');
+            const { tags } = JSON.parse(manifestJson);
+            writtenTags.push(tags);
+            return {
+                archivePath: path.join(outDir, ARCHIVE_FILENAME),
+                assets: archiveAssets,
+                size: 1,
+                decompressedSize: 1,
+            };
+        });
+        const args = getGetPluginsArg(
+            { apps: { tags: ['Team:Apps'] } },
+            {
+                bundler: { ...getMockBundler({ name: 'vite' }), outDir },
+                buildRoot,
+                git: getRepositoryDataMock({ remote: 'git@github.com:org/repo.git' }),
+            },
+        );
+        const [plugin] = getPlugins(args);
+        const { buildStart, generateBundle, closeBundle } = plugin.vite ?? {};
+        if (
+            typeof buildStart !== 'function' ||
+            typeof closeBundle !== 'function' ||
+            typeof generateBundle !== 'object' ||
+            typeof generateBundle.handler !== 'function'
+        ) {
+            throw new Error('Expected buildStart, generateBundle and closeBundle Vite hooks.');
+        }
+        const generateBundleHandler = generateBundle.handler;
+        const buildShipping = (marker: string) => {
+            const chunkCode = `f(${JSON.stringify(marker)})`;
+            const bundle = {
+                'assets/index.js': { type: 'chunk', fileName: 'assets/index.js', code: chunkCode },
+            };
+            Reflect.apply(buildStart, {}, []);
+            Reflect.apply(generateBundleHandler, {}, [{}, bundle]);
+            return Reflect.apply(closeBundle, {}, []);
+        };
+
+        // Vite's watcher can start the next build while the previous package is still being written.
+        await Promise.all([
+            buildShipping('dd-app-input/v1 datadog.dashboard surfaces=datadog.dashboard'),
+            buildShipping('dd-app-input/v1 datadog.idp surfaces=datadog.idp.service-panel'),
+        ]);
+
+        expect(writtenTags).toHaveLength(2);
+        expect(writtenTags).toEqual(
+            expect.arrayContaining([
+                ['surface:datadog.dashboard', 'team:apps'],
+                ['surface:datadog.idp.service-panel', 'team:apps'],
+            ]),
+        );
     });
 
     test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
@@ -375,7 +475,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Importing Node built-in module "fs" is not supported in backend function code',
         );
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
     });
 
     test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
@@ -436,7 +536,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         await expect(closeBundleResult).rejects.toThrow(
             'Using "fetch" is not supported in backend function code',
         );
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
     });
 
     test('Should remove the backend output directory when packaging the app fails', async () => {
@@ -481,6 +581,6 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
 
         const closeBundleResult = extractCloseBundle(plugins)();
         await expect(closeBundleResult).rejects.toThrow('archive write failed');
-        await expectNoLeakedTempDirs(mkdtempSpy, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 });

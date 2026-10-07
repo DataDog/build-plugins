@@ -65,6 +65,70 @@ describe('getBaseBackendBuildConfig', () => {
         }
     });
 
+    test('Should drop code only sibling exports use while keeping imported modules top-level side effects', async () => {
+        const seed = `build-config-treeshake-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+
+        try {
+            // A dependency that registers itself at import time and does not declare itself side-effect free.
+            const dependencyPackageJson = JSON.stringify({
+                name: 'registers-on-import',
+                main: 'index.js',
+            });
+            outputFileSync(
+                `${workingDir}/node_modules/registers-on-import/package.json`,
+                dependencyPackageJson,
+            );
+            outputFileSync(
+                `${workingDir}/node_modules/registers-on-import/index.js`,
+                `globalThis.__ddRegistered = 'REGISTERED_ON_IMPORT';\nexport const unusedExport = 'UNUSED_DEPENDENCY_EXPORT';`,
+            );
+            outputFileSync(
+                `${workingDir}/src/sibling-only.ts`,
+                `export function siblingHelper() { return 'SIBLING_ONLY_CODE'; }`,
+            );
+            const absolutePath = `${workingDir}/src/pair.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            import 'registers-on-import';
+            import { siblingHelper } from './sibling-only';
+            export async function used() { return 'USED_FUNCTION_CODE'; }
+            export async function sibling() { return siblingHelper(); }
+        `,
+            );
+
+            const virtualId = 'virtual:dd-backend-test:used';
+            const virtualContent = `import { used } from ${JSON.stringify(absolutePath)};\nexport async function main($) { return await used(); }`;
+            const baseConfig = getBaseBackendBuildConfig(workingDir, {
+                [virtualId]: virtualContent,
+            });
+
+            const result = await build({
+                ...baseConfig,
+                build: {
+                    ...baseConfig.build,
+                    write: false,
+                    rollupOptions: { ...baseConfig.build.rollupOptions, input: virtualId },
+                },
+            });
+
+            const output = Array.isArray(result) ? result[0] : result;
+            if (!('output' in output)) {
+                throw new Error('Unexpected vite.build result');
+            }
+            const chunk = output.output[0];
+            const code = chunk.type === 'chunk' ? chunk.code : '';
+
+            expect(code).toContain('USED_FUNCTION_CODE');
+            expect(code).toContain('REGISTERED_ON_IMPORT');
+            expect(code).not.toContain('SIBLING_ONLY_CODE');
+            expect(code).not.toContain('UNUSED_DEPENDENCY_EXPORT');
+        } finally {
+            rmSync(workingDir);
+        }
+    });
+
     // Vite statically inlines VITE_-prefixed process.env values into the build, independent of runtime env.
     test('Should not inline a VITE_-prefixed real process.env value into the built backend function', async () => {
         const seed = `build-config-env-leak-${Date.now()}`;

@@ -5,9 +5,8 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest, MissingAuthenticationError } from '@dd/apps-plugin/auth';
-import { trustedFetch } from '@dd/apps-plugin/vite/network-guard';
 import { doRequest } from '@dd/core/helpers/request';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
+import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 
 jest.mock('@dd/core/helpers/request', () => ({
     doRequest: jest.fn(),
@@ -42,7 +41,7 @@ describe('Apps Plugin - auth', () => {
                 apiKey: 'api-key',
                 appKey: 'app-key',
             },
-            fetchImpl: trustedFetch,
+            fetchImpl: globalThis.fetch,
         });
     });
 
@@ -58,7 +57,7 @@ describe('Apps Plugin - auth', () => {
             auth: {
                 accessToken: 'oauth-token',
             },
-            fetchImpl: trustedFetch,
+            fetchImpl: globalThis.fetch,
         });
     });
 
@@ -75,7 +74,7 @@ describe('Apps Plugin - auth', () => {
             auth: {
                 accessToken: 'oauth-token',
             },
-            fetchImpl: trustedFetch,
+            fetchImpl: globalThis.fetch,
         });
     });
 
@@ -83,29 +82,78 @@ describe('Apps Plugin - auth', () => {
         expect(() => getAuthenticatedRequest()).toThrow(MissingAuthenticationError);
     });
 
-    // Regression test: a customer function running inside runAllowed can reassign globalThis.fetch
-    // to an attacker-controlled wrapper before triggering an authenticated $.Actions call. The
-    // authenticated request must still use network-guard.ts's trustedFetch (captured before any
-    // customer code could run), not whatever globalThis.fetch currently resolves to.
-    test('Should pass the trusted fetch reference through even after globalThis.fetch has been reassigned', async () => {
+    // A backend function's dependency (MSW, instrumentation) can replace the global after startup.
+    test.each([
+        { mode: 'API-key', env: { DD_API_KEY: 'api-key', DD_APP_KEY: 'app-key' } },
+        { mode: 'OAuth', env: { DD_OAUTH_ACCESS_TOKEN: 'oauth-token' } },
+    ])(
+        'Should keep using the fetch from when $mode auth was resolved after globalThis.fetch is replaced',
+        async ({ env }) => {
+            Object.assign(process.env, env);
+            doRequestMock.mockResolvedValue('ok');
+            const originalFetch = globalThis.fetch;
+            const request = getAuthenticatedRequest();
+            const replacementFetch = jest.fn();
+            Reflect.set(globalThis, 'fetch', replacementFetch);
+
+            try {
+                await request({ url: 'https://api.datadoghq.com/test' });
+            } finally {
+                Reflect.set(globalThis, 'fetch', originalFetch);
+            }
+
+            const pinnedFetchRequest = expect.objectContaining({ fetchImpl: originalFetch });
+
+            expect(doRequestMock).toHaveBeenCalledWith(pinnedFetchRequest);
+            expect(replacementFetch).not.toHaveBeenCalled();
+        },
+    );
+
+    // Vite calls configureServer again on a restart, after a dependency may have replaced fetch.
+    test('Should keep the fetch from dev server start when auth is resolved again after fetch is replaced', async () => {
+        process.env.DD_API_KEY = 'api-key';
+        process.env.DD_APP_KEY = 'app-key';
+        doRequestMock.mockResolvedValue('ok');
         const originalFetch = globalThis.fetch;
-        const attackerFetch = jest.fn().mockResolvedValue(new Response('{"stolen":"headers"}'));
-        (globalThis as { fetch: typeof fetch }).fetch = attackerFetch as unknown as typeof fetch;
+        getAuthenticatedRequest();
+        const replacementFetch = jest.fn();
+        Reflect.set(globalThis, 'fetch', replacementFetch);
 
         try {
-            process.env.DD_API_KEY = 'api-key';
-            process.env.DD_APP_KEY = 'app-key';
-            doRequestMock.mockResolvedValue('ok');
-
-            await getAuthenticatedRequest()({ url: 'https://api.datadoghq.com/test' });
-
-            expect(doRequestMock).toHaveBeenCalledWith(
-                expect.objectContaining({ fetchImpl: trustedFetch }),
-            );
-            expect(doRequestMock.mock.calls[0][0].fetchImpl).not.toBe(attackerFetch);
-            expect(attackerFetch).not.toHaveBeenCalled();
+            const requestAfterRestart = getAuthenticatedRequest();
+            await requestAfterRestart({ url: 'https://api.datadoghq.com/test' });
         } finally {
-            (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
+            Reflect.set(globalThis, 'fetch', originalFetch);
         }
+
+        const pinnedFetchRequest = expect.objectContaining({ fetchImpl: originalFetch });
+
+        expect(doRequestMock).toHaveBeenCalledWith(pinnedFetchRequest);
+    });
+
+    // Vite bundles a config's non-node_modules imports, so a restart can load a second copy.
+    test('Should keep the pinned fetch when a restart loads a separate copy of this module', async () => {
+        process.env.DD_API_KEY = 'api-key';
+        process.env.DD_APP_KEY = 'app-key';
+        doRequestMock.mockResolvedValue('ok');
+        const originalFetch = globalThis.fetch;
+        getAuthenticatedRequest();
+        const replacementFetch = jest.fn();
+        Reflect.set(globalThis, 'fetch', replacementFetch);
+        let copyDoRequest: jest.MockedFunction<typeof doRequest> | undefined;
+
+        try {
+            jest.isolateModules(() => {
+                const copy: typeof import('@dd/apps-plugin/auth') = require('@dd/apps-plugin/auth');
+                const copyRequestModule: typeof import('@dd/core/helpers/request') = require('@dd/core/helpers/request');
+                copyDoRequest = jest.mocked(copyRequestModule.doRequest);
+                copy.getAuthenticatedRequest()({ url: 'https://api.datadoghq.com/test' });
+            });
+        } finally {
+            Reflect.set(globalThis, 'fetch', originalFetch);
+        }
+        const pinnedFetchRequest = expect.objectContaining({ fetchImpl: originalFetch });
+
+        expect(copyDoRequest).toHaveBeenCalledWith(pinnedFetchRequest);
     });
 });
