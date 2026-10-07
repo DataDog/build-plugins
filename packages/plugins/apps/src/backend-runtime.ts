@@ -150,3 +150,21 @@ export function resolveBackendRuntime(site: string, log: Logger): Promise<Backen
     cache.set(cacheKey, entry);
     return entry.runtime;
 }
+
+export type BackendRuntimeStatus = { runtime: BackendRuntime; isFallback: boolean };
+
+/** Like resolveBackendRuntime, and also says whether v1 applies only because the lookup failed. */
+export async function resolveBackendRuntimeStatus(
+    site: string,
+    log: Logger,
+): Promise<BackendRuntimeStatus> {
+    const credentials = getAuthCredentials();
+    const cacheKey = getCacheKey(site, credentials);
+    const pending = resolveBackendRuntime(site, log);
+    const runtime = await pending;
+    const entry = getRuntimeCache().get(cacheKey);
+    // Only a failed lookup's entry expires; a replaced entry no longer describes this result.
+    const isFallback =
+        isCacheEntry(entry) && entry.runtime === pending && Number.isFinite(entry.expiresAt);
+    return { runtime, isFallback };
+}

@@ -12,6 +12,7 @@ import {
     getCacheKey,
     resetBackendRuntimeCache,
     resolveBackendRuntime,
+    resolveBackendRuntimeStatus,
     RUNTIME_ACTION_NAMES,
     RUNTIME_CACHE_KEY,
     TERRAPIN_BACKEND_FUNCTIONS_FLAG,
@@ -358,5 +359,86 @@ describe('Apps Plugin - resolveBackendRuntime', () => {
         for (const secret of secrets) {
             expect(logged).not.toContain(secret);
         }
+    });
+});
+
+describe('Apps Plugin - resolveBackendRuntimeStatus', () => {
+    let restoreEnv: () => void;
+    let log: Logger;
+
+    beforeEach(() => {
+        log = getMockLogger();
+        restoreEnv = cleanEnv();
+        resetBackendRuntimeCache();
+    });
+
+    afterEach(() => {
+        restoreEnv();
+        nock.cleanAll();
+    });
+
+    test.each([
+        {
+            description: 'the flag is active',
+            setAuth: useApiKeys,
+            reply: { status: 200, body: FLAG_ON_BODY },
+            expected: { runtime: 'v2', isFallback: false },
+        },
+        {
+            description: 'the flag is inactive',
+            setAuth: useApiKeys,
+            reply: { status: 200, body: FLAG_OFF_BODY },
+            expected: { runtime: 'v1', isFallback: false },
+        },
+        {
+            description: 'the lookup fails',
+            setAuth: useApiKeys,
+            reply: { status: 500, body: { errors: ['boom'] } },
+            expected: { runtime: 'v1', isFallback: true },
+        },
+        {
+            description: 'no credentials are set',
+            setAuth: () => {},
+            reply: { status: 200, body: FLAG_ON_BODY },
+            expected: { runtime: 'v1', isFallback: false },
+        },
+    ])('should report whether v1 is only the fallback when $description', async (testCase) => {
+        testCase.setAuth();
+        nock(API_ORIGIN)
+            .get(ACTIVE_FEATURE_FLAGS_PATH)
+            .reply(testCase.reply.status, testCase.reply.body);
+
+        const status = await resolveBackendRuntimeStatus(SITE, log);
+
+        expect(status).toEqual(testCase.expected);
+    });
+
+    test('should report the fallback for the credentials the lookup used, even if they change meanwhile', async () => {
+        useApiKeys();
+        nock(API_ORIGIN)
+            .get(ACTIVE_FEATURE_FLAGS_PATH)
+            .delay(50)
+            .reply(500, { errors: ['boom'] });
+
+        const pending = resolveBackendRuntimeStatus(SITE, log);
+        process.env.DD_API_KEY = 'rotated-api-key';
+        const status = await pending;
+
+        expect(status).toEqual({ runtime: 'v1', isFallback: true });
+    });
+
+    test('should keep reporting the fallback while the failed lookup is cached', async () => {
+        useApiKeys();
+        const scope = nock(API_ORIGIN)
+            .get(ACTIVE_FEATURE_FLAGS_PATH)
+            .reply(500, { errors: ['boom'] });
+
+        const first = await resolveBackendRuntimeStatus(SITE, log);
+        const second = await resolveBackendRuntimeStatus(SITE, log);
+
+        const isDone = scope.isDone();
+        expect(isDone).toBe(true);
+        expect(first).toEqual({ runtime: 'v1', isFallback: true });
+        expect(second).toEqual({ runtime: 'v1', isFallback: true });
     });
 });

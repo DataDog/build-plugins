@@ -13,6 +13,7 @@ import type { build } from 'vite';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import { CLOUD_EXECUTION_RUNTIME } from '../backend-runtime';
+import type { BackendRuntime, BackendRuntimeStatus } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
@@ -561,6 +562,8 @@ async function handleDebugBundle(
     }
 }
 
+type GetAllowedConnectionIds = (entryId: string, runtime: BackendRuntime) => Promise<string[]>;
+
 /**
  * Handles POST /__dd/executeAction — imports a backend function's real file and executes
  * it in-process (see local-execution.ts), with no bundling. Auth is checked upfront by the
@@ -574,9 +577,10 @@ async function handleExecuteAction(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     loadModule: LoadModule,
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    getAllowedConnectionIds: GetAllowedConnectionIds,
     projectRoot: string,
     log: Logger,
+    getBackendRuntime: () => Promise<BackendRuntimeStatus>,
 ): Promise<void> {
     try {
         const { func, args } = await parseAndLookupFunction(req, functionsByName);
@@ -598,6 +602,10 @@ async function handleExecuteAction(
             longPolling,
             log,
         );
+        // One lookup per request, shared by its module-graph checks and the run.
+        const runtime = await getBackendRuntime();
+        const getConnectionIdsUnderRuntime = (entryId: string) =>
+            getAllowedConnectionIds(entryId, runtime.runtime);
         const result = await executeColdActionLocally(
             func,
             projectRoot,
@@ -605,10 +613,11 @@ async function handleExecuteAction(
             executeAction,
             getRuntimeContext,
             loadModule,
-            getAllowedConnectionIds,
+            getConnectionIdsUnderRuntime,
             log,
             DEFAULT_TIMEOUT_MS,
             longPolling,
+            runtime,
         );
 
         sendSuccess(res, result);
@@ -692,13 +701,14 @@ export function createDevServerMiddleware(
     viteBuild: typeof build,
     loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    getAllowedConnectionIds: GetAllowedConnectionIds,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
     projectRoot: string,
     log: Logger,
     mode: string,
+    getBackendRuntime: () => Promise<BackendRuntimeStatus>,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
@@ -751,6 +761,7 @@ export function createDevServerMiddleware(
                     getAllowedConnectionIds,
                     projectRoot,
                     log,
+                    getBackendRuntime,
                 ),
             );
         } else {

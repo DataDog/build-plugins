@@ -46,6 +46,7 @@ jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
 jest.mock('@dd/apps-plugin/backend-runtime', () => ({
     ...jest.requireActual('@dd/apps-plugin/backend-runtime'),
     resolveBackendRuntime: async () => 'v1',
+    resolveBackendRuntimeStatus: async () => ({ runtime: 'v1', isFallback: false }),
 }));
 
 const FIXTURE_ROOT = path.resolve(
@@ -207,6 +208,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -250,6 +252,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -287,6 +290,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -364,6 +368,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -415,6 +420,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -475,6 +481,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => ({ runtime: 'v1', isFallback: false }),
         );
 
         const apiScope = nock('https://api.datadoghq.com')
