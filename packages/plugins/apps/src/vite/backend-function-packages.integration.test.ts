@@ -17,7 +17,7 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
-import { build, createLogger, createServer, type ViteDevServer } from 'vite';
+import { build, createServer, type ViteDevServer } from 'vite';
 
 import { ARCHIVE_FILENAME } from '../constants';
 import type { AppsManifest } from '../types';
@@ -294,45 +294,6 @@ describe.each<Layout>(['installed', 'linked'])(
                     servedBy: VIZ_BACKEND_BODY,
                 });
             });
-
-            // Upstream's rule: a linked workspace file outside the root is always proxied, opt-in or
-            // not, and the graph checks then refuse it, so it fails closed instead of deploying.
-            test("Should fail the build for a linked .backend.js in a package that didn't opt in, without shipping its body", async () => {
-                const outDir = path.join(appRoot, 'dist');
-
-                await expect(buildApp(appRoot, 'linked-plain.ts')).rejects.toThrow(
-                    /^Cannot build backend function \S+linked\.backend\.js: \S+linked\.backend\.js belongs to the package "linked-plain-backend-lib" \(\S+\), which doesn't provide backend functions\. Add "datadogApps": \{ "backendFunctions": true \} to its package\.json/,
-                );
-
-                // Vite wrote the frontend before packaging failed: it holds only the proxy.
-                const outputNames = await fsp.readdir(outDir, { recursive: true });
-                const frontendFiles = outputNames.filter((name) => name.endsWith('.js'));
-                const frontendOutput = (
-                    await Promise.all(
-                        frontendFiles.map((name) => fsp.readFile(path.join(outDir, name), 'utf-8')),
-                    )
-                ).join('\n');
-                expect(getProxiedQueryNames(frontendOutput)).toEqual([
-                    expect.stringMatching(/\.describeLinked$/),
-                ]);
-                expect(frontendOutput).not.toContain(LINKED_PLAIN_LIB_BODY);
-                expect(outputNames).not.toContain(ARCHIVE_FILENAME);
-            }, 30000);
-
-            test("Should package a function in a subfolder with its own named package.json, under the package root's opt-in", async () => {
-                const hooks = await buildApp(appRoot, 'hooks.ts');
-
-                const functionNames = Object.keys(hooks.manifest.backend.functions);
-                expect(functionNames).toEqual([expect.stringMatching(/\.readHookState$/)]);
-                expect(getProxiedQueryNames(hooks.frontendCode)).toEqual(functionNames);
-                expect(hooks.frontendCode).not.toContain('hooks-lib backend body');
-            }, 30000);
-
-            test("Should reject a banned import in an opted-in library's backend code", async () => {
-                await expect(buildApp(appRoot, 'banned.ts')).rejects.toThrow(
-                    'Importing Node built-in module "fs" is not supported in backend function code',
-                );
-            }, 30000);
         });
 
         describe('vite dev', () => {
@@ -439,51 +400,54 @@ describe.each<Layout>(['installed', 'linked'])(
     },
 );
 
-describe('Backend functions shipped by a package the dependency walk misses', () => {
+describe('Backend functions shipped by a package: refusals and subfolders', () => {
     let appRoot: string;
     let cleanup: () => Promise<void>;
-    let server: ViteDevServer;
-    const errors: string[] = [];
 
     beforeAll(async () => {
         ({ appRoot, cleanup } = await assembleApp('installed'));
-        // Still installed, but no longer declared: an undeclared (phantom) dependency.
-        const manifestPath = path.join(appRoot, 'package.json');
-        const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf-8'));
-        delete manifest.dependencies['@fixtures/viz-lib'];
-        await fsp.writeFile(manifestPath, JSON.stringify(manifest));
-        const logger = createLogger('silent');
-        server = await createServer({
-            root: appRoot,
-            configFile: false,
-            customLogger: {
-                ...logger,
-                error: (message) => {
-                    errors.push(message);
-                },
-            },
-            server: { middlewareMode: true, hmr: false },
-            plugins: [getAppsPlugin()],
-        });
-    }, 30000);
+    });
 
     afterAll(async () => {
-        await server.close();
         await cleanup();
     });
 
-    test('Should fail dev pre-bundling loudly, naming the package and the fix, instead of serving its backend body', async () => {
-        // The browser's requests for the pre-bundled package fail rather than return its body.
-        const clientCode = await loadClientModuleGraph(server, '/main.ts').catch(
-            (error: unknown) => {
-                errors.push(String(error));
-                return '';
-            },
+    // Upstream's rule: a linked workspace file outside the root is always proxied, opt-in or
+    // not, and the graph checks then refuse it, so it fails closed instead of deploying.
+    test("Should fail the build for a linked .backend.js in a package that didn't opt in, without shipping its body", async () => {
+        const outDir = path.join(appRoot, 'dist');
+
+        await expect(buildApp(appRoot, 'linked-plain.ts')).rejects.toThrow(
+            /missing module record for \S+linked\.backend\.js/,
         );
 
-        expect(clientCode).not.toContain(VIZ_BACKEND_BODY);
-        expect(errors.join('\n')).toMatch(
-            /Dependency pre-bundling reached \S+data\.backend\.js, a backend function of "@fixtures\/viz-lib".*Add "@fixtures\/viz-lib" to optimizeDeps\.exclude/,
+        // Vite wrote the frontend before packaging failed: it holds only the proxy.
+        const outputNames = await fsp.readdir(outDir, { recursive: true });
+        const frontendFiles = outputNames.filter((name) => name.endsWith('.js'));
+        const frontendOutput = (
+            await Promise.all(
+                frontendFiles.map((name) => fsp.readFile(path.join(outDir, name), 'utf-8')),
+            )
+        ).join('\n');
+        expect(getProxiedQueryNames(frontendOutput)).toEqual([
+            expect.stringMatching(/\.describeLinked$/),
+        ]);
+        expect(frontendOutput).not.toContain(LINKED_PLAIN_LIB_BODY);
+        expect(outputNames).not.toContain(ARCHIVE_FILENAME);
+    }, 30000);
+
+    test("Should package a function in a subfolder with its own named package.json, under the package root's opt-in", async () => {
+        const hooks = await buildApp(appRoot, 'hooks.ts');
+
+        const functionNames = Object.keys(hooks.manifest.backend.functions);
+        expect(functionNames).toEqual([expect.stringMatching(/\.readHookState$/)]);
+        expect(getProxiedQueryNames(hooks.frontendCode)).toEqual(functionNames);
+        expect(hooks.frontendCode).not.toContain('hooks-lib backend body');
+    }, 30000);
+
+    test("Should reject a banned import in an opted-in library's backend code", async () => {
+        await expect(buildApp(appRoot, 'banned.ts')).rejects.toThrow(
+            'Importing Node built-in module "fs" is not supported in backend function code',
         );
     }, 30000);
 });

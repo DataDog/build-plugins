@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build, UserConfig } from 'vite';
+import type { build } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -21,13 +21,12 @@ import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-stati
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
-    getBackendModuleOwner,
     isBackendFunctionFile,
     isBackendSourceModule,
 } from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
-import { getInstalledBackendRuntimePackages } from '../backend/shared';
+import { BACKEND_RUNTIME_PACKAGES } from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
@@ -52,7 +51,6 @@ import {
     gracefulFsPredatesGuards,
     installGuards,
 } from './network-guard';
-import { createEsbuildPreBundleGuard, createRolldownPreBundleGuard } from './prebundle-guard';
 import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
@@ -115,25 +113,6 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
-
-type OptimizeDepsConfig = NonNullable<UserConfig['optimizeDeps']>;
-
-/** Excludes packages providing backend functions from pre-bundling, and guards against any it missed. */
-function getOptimizeDepsConfig(
-    exclude: string[],
-    buildRoot: string,
-    viteVersion: string,
-): OptimizeDepsConfig {
-    const optimizeDeps: OptimizeDepsConfig = { exclude };
-    // Vite 8 optimizes dependencies with Rolldown and warns about esbuild options.
-    const viteMajor = Number.parseInt(viteVersion, 10);
-    if (viteMajor >= 8) {
-        const rolldownOptions = { plugins: [createRolldownPreBundleGuard(buildRoot)] };
-        return Object.assign(optimizeDeps, { rolldownOptions });
-    }
-    optimizeDeps.esbuildOptions = { plugins: [createEsbuildPreBundleGuard(buildRoot)] };
-    return optimizeDeps;
-}
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 /**
@@ -164,25 +143,6 @@ export const getVitePlugin = ({
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
 
-    // Functions a package contributes are announced at info level, in dev and in builds, so they
-    // can't be deployed unnoticed. Once per file and set of names, so a re-transform stays quiet.
-    const announcedContributions = new Map<string, string>();
-    const logContributedFunctions = (fileId: string, exportNames: string[]) => {
-        const owner = getBackendModuleOwner(fileId, context.buildRoot);
-        if (owner.kind !== 'backend-package') {
-            return;
-        }
-        const names = exportNames.join(', ');
-        if (announcedContributions.get(fileId) === names) {
-            return;
-        }
-        announcedContributions.set(fileId, names);
-        const relativeFile = path.relative(owner.package.root, fileId);
-        log.info(
-            `Package "${owner.package.name}" contributes backend function(s) ${names} (${relativeFile}).`,
-        );
-    };
-
     // Vite 6 invokes closeBundle when a dev server's plugin container closes,
     // not only for production builds. configureServer only runs for dev
     // servers, so use it to mark the session and skip packaging there — a
@@ -208,19 +168,16 @@ export const getVitePlugin = ({
                 // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
                 // require(), which throws "Cannot use import statement outside a module";
                 // ssr.noExternal forces Vite's SSR transform instead.
-                const runtimePackages = ['@datadog/apps-backend', '@datadog/action-catalog'];
                 // Only the dev server pre-bundles dependencies or loads modules through SSR; the
                 // nested backend builds configure their own resolution (see build-config.ts).
                 if (command !== 'serve') {
-                    return { ssr: { noExternal: runtimePackages } };
+                    return { ssr: { noExternal: BACKEND_RUNTIME_PACKAGES } };
                 }
 
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
-                const backendPackageNames = findInstalledBackendFunctionPackages(root).flatMap(
-                    (pkg) => pkg.importNames,
-                );
+                const backendPackageNames = findInstalledBackendFunctionPackages(root);
                 // Info, not debug: the package's own manifest is the whole consent, so the app's
                 // developer should see which packages it trusts to add backend functions.
                 if (backendPackageNames.length > 0) {
@@ -232,23 +189,18 @@ export const getVitePlugin = ({
                     // A package providing backend functions needs the same, so local execution
                     // runs its real modules (and its self-referencing imports) through this plugin.
                     ssr: {
-                        noExternal: [...runtimePackages, ...backendPackageNames],
+                        noExternal: [...BACKEND_RUNTIME_PACKAGES, ...backendPackageNames],
                     },
                     // Pre-bundling would inline a package's backend files into a browser chunk
                     // where the transform below never sees them, shipping their real body instead
                     // of the proxy. Excluding the package also keeps it external inside any other
-                    // pre-bundled dependency that imports it. A package the dependency walk misses
-                    // fails the optimizer loudly instead (see prebundle-guard.ts).
-                    optimizeDeps: getOptimizeDepsConfig(
-                        backendPackageNames,
-                        root,
-                        context.bundler.version,
-                    ),
+                    // pre-bundled dependency that imports it.
+                    optimizeDeps: { exclude: backendPackageNames },
                     // A backend runtime singleton must be the app's own copy, the one the backend
                     // entry initializes during local execution, even when a package providing
                     // backend functions is linked from somewhere that has its own copy installed.
                     resolve: {
-                        dedupe: getInstalledBackendRuntimePackages(root),
+                        dedupe: BACKEND_RUNTIME_PACKAGES,
                     },
                 };
             },
@@ -387,7 +339,6 @@ export const getVitePlugin = ({
                 );
                 setBackendFunctions(normalizedId, functions);
                 log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
-                logContributedFunctions(normalizedId, exportNames);
 
                 return { code: proxyCode, map: null };
             },

@@ -27,12 +27,6 @@ export interface BackendFunctionPackage {
     root: string;
 }
 
-/** A package that didn't opt in, identified for error messages. */
-export interface OrdinaryPackage {
-    name: string;
-    root: string;
-}
-
 /** Who a module's source belongs to, as far as backend functions are concerned. */
 export type BackendModuleOwner =
     /**
@@ -43,21 +37,12 @@ export type BackendModuleOwner =
     /** Source of an installed or linked package that opted in; treated exactly like app source. */
     | { kind: 'backend-package'; package: BackendFunctionPackage }
     /**
-     * An installed package (under a package-manager directory) that didn't opt in. Its modules,
-     * `.backend.*` included, stay ordinary modules.
+     * Anything else: a package that didn't opt in, installed or linked, or a folder outside the
+     * build root. Its modules are never analyzed as backend source.
      */
-    | { kind: 'dependency'; package?: OrdinaryPackage }
-    /**
-     * A package outside the build root, outside package-manager directories (a linked workspace
-     * package, `npm link`, a `file:` dependency) that didn't opt in. Like any linked workspace file,
-     * its `.backend.*` files are still proxied, but never analyzed as backend source, so the build
-     * fails closed instead of deploying them.
-     */
-    | { kind: 'linked-package'; package: OrdinaryPackage }
-    /** Outside the build root and not part of any package (e.g. a monorepo sibling folder). */
-    | { kind: 'outside-app' };
+    | { kind: 'other' };
 
-export const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
+const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
 
 // Split on both separators: Vite ids use forward slashes even on Windows.
 const splitPath = (filePath: string) => filePath.split(/[\\/]/);
@@ -190,47 +175,16 @@ function findOwningPackage(filePath: string): OwningPackage | undefined {
 export function getBackendModuleOwner(moduleId: string, buildRoot: string): BackendModuleOwner {
     const modulePath = path.normalize(moduleId);
     const root = path.resolve(buildRoot);
-    const insideRoot = isWithin(root, modulePath);
-    if (insideRoot && !isPackageManagerModule(path.relative(root, modulePath))) {
+    if (isWithin(root, modulePath) && !isPackageManagerModule(path.relative(root, modulePath))) {
         return { kind: 'app' };
     }
 
-    const underPackageManager = isPackageManagerModule(modulePath);
     const owner = findOwningPackage(modulePath);
     // A manifest enclosing the build root is the app's own (or its workspace's), never a dependency.
-    if (owner && !isWithin(owner.root, root)) {
-        const pkg = { name: owner.name, root: owner.root };
-        if (providesBackendFunctions(owner.manifest)) {
-            return { kind: 'backend-package', package: pkg };
-        }
-        return underPackageManager
-            ? { kind: 'dependency', package: pkg }
-            : { kind: 'linked-package', package: pkg };
+    if (owner && !isWithin(owner.root, root) && providesBackendFunctions(owner.manifest)) {
+        return { kind: 'backend-package', package: { name: owner.name, root: owner.root } };
     }
-
-    return insideRoot || underPackageManager ? { kind: 'dependency' } : { kind: 'outside-app' };
-}
-
-/**
- * Explains why a backend function file isn't analyzable backend source, when it belongs to a
- * package that could opt in. Used to make fail-closed errors actionable.
- */
-export function explainExcludedBackendFile(
-    moduleId: string,
-    buildRoot: string,
-): string | undefined {
-    const owner = getBackendModuleOwner(moduleId, buildRoot);
-    const pkg =
-        owner.kind === 'linked-package' || owner.kind === 'dependency' ? owner.package : undefined;
-    if (!pkg) {
-        return undefined;
-    }
-    const { name, root } = pkg;
-    return (
-        `${moduleId} belongs to the package "${name}" (${root}), which doesn't provide backend ` +
-        `functions. Add "datadogApps": { "backendFunctions": true } to its package.json, or move ` +
-        `the file into the app.`
-    );
+    return { kind: 'other' };
 }
 
 /** The package name a bare import specifier refers to, or undefined for a relative, absolute or URL-like one. */
@@ -277,17 +231,6 @@ export function isBackendSourceModule(moduleId: string, buildRoot: string): bool
     return owner.kind === 'app' || owner.kind === 'backend-package';
 }
 
-const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
-
-const isWithinDirectory = (directory: string, filePath: string): boolean => {
-    const relativePath = path.posix.relative(directory, filePath);
-    return (
-        relativePath !== '..' &&
-        !relativePath.startsWith('../') &&
-        !path.posix.isAbsolute(relativePath)
-    );
-};
-
 /**
  * Whether a module id (as a bundler hands it to a transform, query included) is a backend function
  * file: a `.backend.*` module that the frontend receives as a proxy and that is registered, bundled
@@ -300,34 +243,28 @@ export function isBackendFunctionFile(id: string, buildRoot: string, outDir: str
     }
 
     const [idWithoutQuery] = id.split(/[?#]/);
-    const filePath = toPosixPath(idWithoutQuery).replace(/^\0/, '');
+    const filePath = idWithoutQuery.replace(/^\0/, '');
     // Virtual ids aren't on disk, so on-disk exclusions don't apply; resolving them would depend on cwd.
     if (!path.posix.isAbsolute(filePath) && !path.win32.isAbsolute(filePath)) {
         return true;
     }
 
     // An opted-in package's files are functions even under node_modules or its own dist/.
-    const owner = getBackendModuleOwner(filePath, buildRoot);
-    if (owner.kind === 'backend-package') {
+    if (getBackendModuleOwner(filePath, buildRoot).kind === 'backend-package') {
         return true;
     }
 
-    const posixBuildRoot = toPosixPath(buildRoot);
     // Outside the build root the full path decides, so a hoisted package beside an app under
     // node_modules stays excluded while a linked workspace file is still proxied.
-    const isInsideBuildRoot = isWithinDirectory(posixBuildRoot, filePath);
-    const pathToClassify = isInsideBuildRoot
-        ? path.posix.relative(posixBuildRoot, filePath)
+    const pathToClassify = isWithin(buildRoot, filePath)
+        ? path.relative(buildRoot, filePath)
         : filePath;
-    const segments = pathToClassify.split('/');
-    if (segments.some((segment) => PACKAGE_MANAGER_DIRS.has(segment))) {
+    if (isPackageManagerModule(pathToClassify)) {
         return false;
     }
 
     // An outDir at or above the build root (e.g. `build.outDir: '.'`) must not exclude app files.
-    const posixOutDir = toPosixPath(outDir);
-    const outDirContainsBuildRoot = isWithinDirectory(posixOutDir, posixBuildRoot);
-    return outDirContainsBuildRoot || !isWithinDirectory(posixOutDir, filePath);
+    return isWithin(outDir, buildRoot) || !isWithin(outDir, filePath);
 }
 
 function findNearestManifestDir(fromDir: string): string | undefined {
@@ -370,26 +307,19 @@ function getDependencyNames(
     });
 }
 
-export interface InstalledBackendFunctionPackage extends BackendFunctionPackage {
-    /** Every bare specifier that reaches this package: its manifest name plus any alias it's installed under. */
-    importNames: string[];
-}
-
 /**
- * Lists every opted-in package installed in the app's dependency tree (direct or transitive), so
+ * Names every opted-in package installed in the app's dependency tree (direct or transitive), so
  * dev-server configuration that needs package names up front, like dependency pre-bundling, can
  * keep their backend files reachable by the plugin.
  */
-export function findInstalledBackendFunctionPackages(
-    buildRoot: string,
-): InstalledBackendFunctionPackage[] {
+export function findInstalledBackendFunctionPackages(buildRoot: string): string[] {
     const appDir = findNearestManifestDir(buildRoot);
     const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
     if (!appDir || !appManifest) {
         return [];
     }
 
-    const found = new Map<string, InstalledBackendFunctionPackage>();
+    const found = new Set<string>();
     const visited = new Set<string>();
     const pending: Array<{ dir: string; dependencyNames: string[] }> = [
         {
@@ -405,11 +335,6 @@ export function findInstalledBackendFunctionPackages(
             if (!packageDir) {
                 continue;
             }
-
-            const known = found.get(packageDir);
-            if (known && !known.importNames.includes(dependencyName)) {
-                known.importNames.push(dependencyName);
-            }
             if (visited.has(packageDir)) {
                 continue;
             }
@@ -420,11 +345,7 @@ export function findInstalledBackendFunctionPackages(
                 continue;
             }
             if (providesBackendFunctions(manifest) && typeof manifest.name === 'string') {
-                const importNames = [manifest.name];
-                if (dependencyName !== manifest.name) {
-                    importNames.push(dependencyName);
-                }
-                found.set(packageDir, { name: manifest.name, root: packageDir, importNames });
+                found.add(manifest.name);
             }
             pending.push({
                 dir: packageDir,
@@ -433,5 +354,5 @@ export function findInstalledBackendFunctionPackages(
         }
     }
 
-    return [...found.values()];
+    return [...found];
 }

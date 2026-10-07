@@ -26,21 +26,12 @@ export function isDatadogAppsBackendInstalled(fromDir: string): boolean {
 }
 
 /**
- * Backend runtime packages installed for the app at `fromDir`. Each holds module-level state the
- * backend entry initializes (`setExecuteActionImplementation`, `setBackend`) on the copy resolved
- * from the app root, so every importer — including a package that provides backend functions and
- * declares them as peers — must be deduplicated onto that same copy.
+ * The backend runtime packages. Each holds module-level state the backend entry initializes
+ * (`setExecuteActionImplementation`, `setBackend`) on the copy resolved from the app root, so every
+ * importer — including a package that provides backend functions and declares them as peers — must
+ * be deduplicated onto that same copy.
  */
-export function getInstalledBackendRuntimePackages(fromDir: string): string[] {
-    const packages: string[] = [];
-    if (isActionCatalogInstalled(fromDir)) {
-        packages.push('@datadog/action-catalog');
-    }
-    if (isDatadogAppsBackendInstalled(fromDir)) {
-        packages.push('@datadog/apps-backend');
-    }
-    return packages;
-}
+export const BACKEND_RUNTIME_PACKAGES = ['@datadog/apps-backend', '@datadog/action-catalog'];
 
 /** The import line to pull action-catalog's setExecuteActionImplementation into bundles. */
 export const ACTION_CATALOG_IMPORT =
