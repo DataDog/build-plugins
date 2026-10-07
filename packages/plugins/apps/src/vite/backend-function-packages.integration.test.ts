@@ -9,8 +9,6 @@
  */
 
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import type { BackendLibraryLayout } from '@dd/tests/_jest/helpers/appsBackendLibraryProject';
-import { assembleBackendLibraryApp } from '@dd/tests/_jest/helpers/appsBackendLibraryProject';
 import { createMockRequest, createMockResponse } from '@dd/tests/_jest/helpers/mocks';
 import fsp from 'fs/promises';
 import fs from 'fs';
@@ -31,12 +29,62 @@ jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
 }));
 
+const FIXTURES_DIR = path.resolve(__dirname, '../../../../tests/src/_jest/fixtures');
+const PROJECT_DIR = path.join(FIXTURES_DIR, 'apps_backend_library_project');
+const ACTION_CATALOG_DIR = path.join(FIXTURES_DIR, 'action_catalog_project');
+
 // Only exists in the library's backend function body, never in its proxy.
 const VIZ_BACKEND_BODY = 'viz-lib backend body';
 const PLAIN_LIB_BODY = 'plain-backend-lib ordinary module body';
 const LINKED_PLAIN_LIB_BODY = 'linked-plain-backend-lib module body';
 const QUERY = 'avg:system.cpu.user{*}';
 const PROXY_CALL_RE = /executeBackendFunction\("([0-9a-f]{64}\.[A-Za-z]+)"/g;
+
+type Layout = 'installed' | 'linked';
+
+/**
+ * Assembles the app in a temp dir. `installed` copies every package into `node_modules`, as npm or
+ * a tarball install would. `linked` symlinks the viz library from its own checkout, which has its
+ * own development copy of `@datadog/action-catalog` (as `npm link` or a `file:` dependency would).
+ * In both, the non-opted `linked-plain-backend-lib` is symlinked from a checkout beside the app.
+ */
+async function assembleApp(
+    layout: Layout,
+): Promise<{ appRoot: string; cleanup: () => Promise<void> }> {
+    const tempDir = fs.realpathSync(await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-library-')));
+    const appRoot = path.join(tempDir, 'app');
+    const copy = (from: string, to: string) => fsp.cp(from, to, { recursive: true });
+    const install = (from: string, name: string) =>
+        copy(from, path.join(appRoot, 'node_modules', name));
+
+    await copy(path.join(PROJECT_DIR, 'app'), appRoot);
+    await install(ACTION_CATALOG_DIR, '@datadog/action-catalog');
+    await install(path.join(PROJECT_DIR, 'packages/plain-lib'), 'plain-backend-lib');
+    await install(path.join(PROJECT_DIR, 'packages/banned-lib'), '@fixtures/banned-lib');
+    await install(path.join(PROJECT_DIR, 'packages/hooks-lib'), '@fixtures/hooks-lib');
+    await install(path.join(PROJECT_DIR, 'packages/viz-lib'), 'viz-alias');
+
+    const link = async (checkout: string, name: string) => {
+        const linkPath = path.join(appRoot, 'node_modules', name);
+        await fsp.mkdir(path.dirname(linkPath), { recursive: true });
+        await fsp.symlink(checkout, linkPath, 'dir');
+    };
+    const linkedPlainCheckout = path.join(tempDir, 'linked-plain-lib');
+    await copy(path.join(PROJECT_DIR, 'packages/linked-plain-lib'), linkedPlainCheckout);
+    await link(linkedPlainCheckout, 'linked-plain-backend-lib');
+
+    const vizLibSource = path.join(PROJECT_DIR, 'packages/viz-lib');
+    if (layout === 'installed') {
+        await install(vizLibSource, '@fixtures/viz-lib');
+    } else {
+        const checkout = path.join(tempDir, 'viz-lib');
+        await copy(vizLibSource, checkout);
+        await copy(ACTION_CATALOG_DIR, path.join(checkout, 'node_modules/@datadog/action-catalog'));
+        await link(checkout, '@fixtures/viz-lib');
+    }
+
+    return { appRoot, cleanup: () => fsp.rm(tempDir, { recursive: true, force: true }) };
+}
 
 function getAppsPlugin() {
     return datadogVitePlugin({ logLevel: 'error', apps: { enable: true } });
@@ -51,6 +99,7 @@ async function buildApp(appRoot: string, entry: string) {
             outDir: 'dist',
             emptyOutDir: true,
             minify: false,
+            sourcemap: true,
             rollupOptions: { input: path.join(appRoot, entry) },
         },
         plugins: [getAppsPlugin()],
@@ -70,7 +119,16 @@ async function buildApp(appRoot: string, entry: string) {
         .filter((file) => !file.dir && file.name.startsWith('frontend/'))
         .map((file) => file.name);
     const frontendCode = (await Promise.all(frontendNames.map(readEntry))).join('\n');
-    return { manifest, frontendCode, readEntry };
+    const mapNames = (await fsp.readdir(outDir, { recursive: true })).filter((name) =>
+        name.endsWith('.map'),
+    );
+    const sourcemaps: Array<{ sources: string[]; sourcesContent?: Array<string | null> }> =
+        await Promise.all(
+            mapNames.map(async (name) =>
+                JSON.parse(await fsp.readFile(path.join(outDir, name), 'utf-8')),
+            ),
+        );
+    return { manifest, frontendCode, sourcemaps, readEntry };
 }
 
 function getProxiedQueryNames(code: string): string[] {
@@ -190,7 +248,7 @@ function mockDatadogApi(series: unknown) {
     return { api, actionCalls };
 }
 
-describe.each<BackendLibraryLayout>(['installed', 'linked'])(
+describe.each<Layout>(['installed', 'linked'])(
     'Backend functions shipped by a package (%s layout)',
     (layout) => {
         let appRoot: string;
@@ -199,7 +257,7 @@ describe.each<BackendLibraryLayout>(['installed', 'linked'])(
         let scratchDir: string;
 
         beforeAll(async () => {
-            ({ appRoot, cleanup } = await assembleBackendLibraryApp(layout));
+            ({ appRoot, cleanup } = await assembleApp(layout));
             scratchDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-library-bundle-'));
             built = await buildApp(appRoot, 'main.ts');
         }, 60000);
@@ -223,6 +281,30 @@ describe.each<BackendLibraryLayout>(['installed', 'linked'])(
                     Object.keys(built.manifest.backend.functions),
                 );
                 expect(built.frontendCode).not.toContain(VIZ_BACKEND_BODY);
+            });
+
+            test("Should map the frontend to the library's frontend sources, but to none of its backend files", async () => {
+                const sources = built.sourcemaps.flatMap((map) => map.sources);
+                const vizLibDir = fs.realpathSync(
+                    path.join(appRoot, 'node_modules/@fixtures/viz-lib'),
+                );
+                const backendTexts = await Promise.all(
+                    ['data.backend.js', 'request.js'].map((file) =>
+                        fsp.readFile(
+                            path.join(vizLibDir, 'dist/src/visualizations', file),
+                            'utf-8',
+                        ),
+                    ),
+                );
+                const contents = built.sourcemaps.flatMap((map) => map.sourcesContent ?? []);
+
+                expect(sources).toContainEqual(
+                    expect.stringMatching(/viz-lib\/dist\/src\/index\.js$/),
+                );
+                expect(sources.filter((source) => source.includes('visualizations/'))).toEqual([]);
+                for (const text of backendTexts) {
+                    expect(contents.filter((content) => content?.includes(text))).toEqual([]);
+                }
             });
 
             test("Should keep a .backend.js file in a package that didn't opt in as an ordinary module", () => {
@@ -429,7 +511,7 @@ describe('Backend functions shipped by a package: refusals and subfolders', () =
     let cleanup: () => Promise<void>;
 
     beforeAll(async () => {
-        ({ appRoot, cleanup } = await assembleBackendLibraryApp('installed'));
+        ({ appRoot, cleanup } = await assembleApp('installed'));
     });
 
     afterAll(async () => {

@@ -49,7 +49,6 @@ import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
-import { createFrontendProxyModules, FRONTEND_PROXY_ID_RE } from './frontend-proxy-modules';
 import { localExecutionResolutionContext } from './local-execution';
 import {
     exemptFetchFromBlockedScope,
@@ -121,6 +120,15 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
+
+// The `\0` prefix is the bundler convention for "not a real file": Rollup and Rolldown both leave
+// such modules out of sourcemaps, and Vite's own resolvers and loaders don't touch them.
+// Between them goes the backend module's id, base64url-encoded. Bundlers name a chunk after its
+// module's last path segment, so the id ends in a short one: the encoded id can be longer than a
+// file name may be.
+const FRONTEND_PROXY_ID_PREFIX = '\0dd-apps-backend-proxy:';
+const FRONTEND_PROXY_ID_SUFFIX = '/proxy';
+const FRONTEND_PROXY_ID_RE = new RegExp(`^${FRONTEND_PROXY_ID_PREFIX}`);
 
 /**
  * Registers every backend function the given packages ship by running each of their backend
@@ -242,10 +250,6 @@ export const getVitePlugin = ({
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
     let isBuild = false;
-    const frontendProxyModules = createFrontendProxyModules(() => ({
-        buildRoot: context.buildRoot,
-        outDir: context.bundler.outDir,
-    }));
     let backendPackages: InstalledBackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
@@ -260,6 +264,7 @@ export const getVitePlugin = ({
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
             handler(userConfig, { command }) {
+                isBuild = command === 'build';
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
                 // A restarted dev server shares this process: read the manifests afresh.
                 forgetBackendModuleOwners();
@@ -341,9 +346,6 @@ export const getVitePlugin = ({
             // Warming SSR imports re-caches modules that local execution un-caches to re-run.
             return { dev: { preTransformRequests: false } };
         },
-        configResolved(config) {
-            isBuild = config.command === 'build';
-        },
         // Propagates LOCAL_EXECUTION_LOAD_SUFFIX through the backend-file dependency graph so a
         // nested `.backend.ts` import isn't replaced with the frontend proxy stub. Every subgraph
         // module gets its own suffixed id, since Vite otherwise shares one cached id across callers.
@@ -353,18 +355,33 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // In a frontend build, each client-side import of a backend module resolves to an
-                // opaque proxy module (see frontend-proxy-modules.ts and load below), keeping the
-                // backend file's source and name out of the frontend. The dev server keeps serving
-                // backend modules under their own ids, where the transform below replaces them and
-                // edits to the file still reach the browser. This costs every client-side import in
-                // a build one extra resolution.
+                // In a frontend build, each client-side import of a backend function file resolves
+                // to a proxy module of its own (see load below). Under the backend file's id, the
+                // stub would keep the sourcemaps earlier transforms attached to that file, whose
+                // sourcesContent is the original source: Rolldown keeps the first map's sources
+                // whatever later transforms return. The dev server keeps serving backend modules
+                // under their own ids, where the transform below replaces them and edits to the
+                // file still reach the browser. This costs every client-side import in a build one
+                // extra resolution.
                 if (isBuild && resolveOptions.ssr !== true) {
                     const resolved = await this.resolve(source, importer, {
                         ...resolveOptions,
                         skipSelf: true,
                     });
-                    return frontendProxyModules.resolveFrontendProxy(resolved);
+                    if (
+                        !resolved ||
+                        resolved.external ||
+                        !isBackendFunctionFile(
+                            resolved.id,
+                            context.buildRoot,
+                            context.bundler.outDir,
+                        )
+                    ) {
+                        return resolved;
+                    }
+                    const encodedId = Buffer.from(resolved.id).toString('base64url');
+                    const proxyId = `${FRONTEND_PROXY_ID_PREFIX}${encodedId}${FRONTEND_PROXY_ID_SUFFIX}`;
+                    return { ...resolved, id: proxyId };
                 }
 
                 // Top-level guard (not folded into each branch) so any future branch added below
@@ -416,18 +433,19 @@ export const getVitePlugin = ({
         load: {
             filter: { id: { include: [FRONTEND_PROXY_ID_RE] } },
             async handler(id) {
-                const sourceId = frontendProxyModules.getSourceId(id);
-                if (!sourceId) {
+                // Vite < 6.3 ignores hook filters.
+                if (!FRONTEND_PROXY_ID_RE.test(id)) {
                     return null;
                 }
+                const sourceId = Buffer.from(
+                    id.slice(FRONTEND_PROXY_ID_PREFIX.length, -FRONTEND_PROXY_ID_SUFFIX.length),
+                    'base64url',
+                ).toString();
                 // Loading the backend module runs it through the app's own pipeline and then the
                 // transform below, which registers its functions and returns the proxy stub. Only
                 // that code joins the frontend graph: nothing imports the backend module itself,
                 // so the bundler never renders it or its sourcemaps.
                 const { code } = await this.load({ id: sourceId });
-                if (code == null) {
-                    throw new Error(`Could not load backend module ${sourceId}.`);
-                }
                 return code;
             },
         },
