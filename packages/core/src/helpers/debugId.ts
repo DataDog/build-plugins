@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { resolveEnable } from '@dd/core/helpers/options';
+import type { ChunkInfo, Logger, Options } from '@dd/core/types';
 import { createHash } from 'crypto';
 
 const VARIANT_CHARS = ['8', '9', 'a', 'b'] as const;
@@ -20,4 +22,18 @@ export const stringToUUID = (input: string): string => {
         withVariant.slice(16, 20),
         withVariant.slice(20, 32),
     ].join('-');
+};
+
+// The debug ID of an output chunk. The RUM source code context snippet embeds it in the chunk
+// and the sourcemap uploader reads it back to key the chunk's sourcemap. Any plugin exposing a
+// chunk's debug ID must use this function so that all the values stay identical.
+export const getChunkDebugId = (chunk: ChunkInfo): string => {
+    return stringToUUID(chunk.sourceOrHash);
+};
+
+// Whether output chunks get a debug ID. The RUM plugin injects them when
+// `rum.sourceCodeContext.debugId` is enabled, which the options validation also turns on for
+// `sourcemaps.debugId`, so this expects the validated options given to plugins.
+export const areDebugIdsEnabled = (options: Options, log: Logger): boolean => {
+    return options.rum?.sourceCodeContext?.debugId === true && resolveEnable(options, 'rum', log);
 };

@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getChunkDebugId } from '@dd/core/helpers/debugId';
 import type { ChunkInfo } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 
-import { stringToUUID } from './debugId';
 import type { SourceCodeContextOptions } from './types';
 
 export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as const;
@@ -43,7 +43,7 @@ export const getSourceCodeContextSnippet = (
     // duplicate source maps for identical builds.
     let debugId: string | undefined;
     if (contextOptions.debugId === true) {
-        debugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
+        debugId = chunk ? getChunkDebugId(chunk) : randomUUID();
     }
     const context: SourceCodeContext = {
         service: contextOptions.service,
