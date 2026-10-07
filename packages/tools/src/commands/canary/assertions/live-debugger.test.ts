@@ -33,13 +33,13 @@ describe('Live Debugger canary assertions', () => {
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Live Debugger: 25/30 functions instrumented across 5/6 files'),
-                'instrumented',
+                'all-functions',
             );
         }).not.toThrow();
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Live Debugger: 0/30 functions instrumented across 0/6 files'),
-                'instrumented',
+                'all-functions',
             );
         }).toThrow('did not report any Live Debugger instrumentation');
         expect(() => {
@@ -54,7 +54,7 @@ describe('Live Debugger canary assertions', () => {
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Instrumentation Error in /consumer/app.ts: parse failed'),
-                'instrumented',
+                'all-functions',
             );
         }).toThrow('reported a Live Debugger error');
     });
@@ -69,11 +69,11 @@ describe('Live Debugger canary assertions', () => {
             'globalThis.$dd_probes = globalThis.$dd_probes || (() => []);',
         );
 
-        await expect(assertLiveDebuggerArtifacts([plainPath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([plainPath], 'named-only')).rejects.toThrow(
             'does not contain the Live Debugger runtime marker',
         );
         await expect(
-            assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'instrumented'),
+            assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'named-only'),
         ).resolves.toBeUndefined();
     });
 });
