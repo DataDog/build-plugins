@@ -10,19 +10,23 @@ import { createHash } from 'crypto';
 import type { AuthCredentials } from './auth';
 import { createAuthenticatedRequest, getAuthCredentials } from './auth';
 
-export type BackendRuntime = 'v1' | 'v2';
+export const BACKEND_RUNTIMES = ['v1', 'v2'] as const;
+export type BackendRuntime = (typeof BACKEND_RUNTIMES)[number];
 
 export const TERRAPIN_BACKEND_FUNCTIONS_FLAG = 'app-builder-code-terrapin-backend-functions';
 export const ACTIVE_FEATURE_FLAGS_PATH = '/api/ui/feature-flags/get-active-feature-flags';
 export const BACKEND_RUNTIME_TIMEOUT_MS = 3_000;
+
+export const DATATRANSFORMATION_BUNDLE_ID = 'com.datadoghq.datatransformation';
 
 export const RUNTIME_ACTION_NAMES: Record<BackendRuntime, string> = {
     v1: 'jsFunctionWithActions',
     v2: 'jsSandboxWithActions',
 };
 
-// Cloud execution submits jsFunctionWithActions queries whatever the org's runtime.
-export const CLOUD_EXECUTION_RUNTIME: BackendRuntime = 'v1';
+export function getRuntimeActionFqn(runtime: BackendRuntime): string {
+    return `${DATATRANSFORMATION_BUNDLE_ID}.${RUNTIME_ACTION_NAMES[runtime]}`;
+}
 
 // The endpoint can rate-limit, so a successful lookup is reused for the life of the process; kept on
 // globalThis because a dev server restart can load a fresh copy of this module.
@@ -33,6 +37,11 @@ export const FAILED_LOOKUP_RETRY_MS = 60_000;
 
 // doRequest appends the error body after the status line, which for a non-JSON reply can be a whole HTML page.
 export const MAX_LOGGED_REASON_LENGTH = 200;
+
+export function summarizeRequestError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.split('\n').join('; ').slice(0, MAX_LOGGED_REASON_LENGTH);
+}
 
 type CacheEntry = { runtime: Promise<BackendRuntime>; expiresAt: number };
 
@@ -104,8 +113,7 @@ async function lookUpBackendRuntime(
         );
         return { runtime, failed: false };
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const reason = message.split('\n').join('; ').slice(0, MAX_LOGGED_REASON_LENGTH);
+        const reason = summarizeRequestError(error);
         log.warn(
             `Could not read the org's backend function runtime, so v1 (${RUNTIME_ACTION_NAMES.v1}) applies and its checks run: ${reason}`,
         );

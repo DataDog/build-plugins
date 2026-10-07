@@ -10,9 +10,10 @@ import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
+import { resolveScriptMaxLengths, type ScriptMaxLengths } from '../action-script-limits';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
-import { CLOUD_EXECUTION_RUNTIME } from '../backend-runtime';
+import { getRuntimeActionFqn, type BackendRuntime } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
@@ -30,6 +31,7 @@ import { getMaxRetryDelayMs } from './retry-delay';
 interface BundleResult {
     func: BackendFunction;
     code: string;
+    runtime: BackendRuntime;
 }
 
 type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
@@ -115,6 +117,7 @@ async function bundleBackendFunction(
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
+    runtime: BackendRuntime,
 ): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
@@ -134,7 +137,7 @@ async function bundleBackendFunction(
         projectRoot,
         log,
         connectionIdCollector.getModuleRecords,
-        CLOUD_EXECUTION_RUNTIME,
+        runtime,
     );
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
@@ -172,12 +175,12 @@ async function bundleBackendFunction(
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
-    return { func: enrichedFunc, code };
+    return { func: enrichedFunc, code, runtime };
 }
 
 /**
  * Submits a query to Datadog's `preview-async` endpoint and long-polls until it resolves,
- * returning the raw `outputs`. `querySpec` is either the `jsFunctionWithActions` wrapper or
+ * returning the raw `outputs`. `querySpec` is either a backend function's script action or
  * a single action's `{fqn, inputs}` — `submitQuery` doesn't care which.
  */
 async function submitQuery(
@@ -233,27 +236,62 @@ async function submitQuery(
     return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log, signal);
 }
 
-/** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
-async function executeScriptViaDatadog(
-    scriptBody: string,
-    func: BackendFunction,
+// app-builder-code's upload omits an empty allowedConnectionIds and v2 matches it; v1's query sends `[]`,
+// which Action Platform reads the same as a missing list.
+function getScriptActionInputs(
+    runtime: BackendRuntime,
+    script: string,
+    allowedConnectionIds: string[],
     args: unknown[],
+): Record<string, unknown> {
+    const context = { backendFunctionArgs: args };
+    if (runtime === 'v1') {
+        return { script, allowedConnectionIds, context };
+    }
+    return { script, context, ...(allowedConnectionIds.length > 0 && { allowedConnectionIds }) };
+}
+
+// JSON Schema's maxLength counts code points, which never exceed the UTF-16 length.
+function assertWithinScriptLimit(
+    code: string,
+    maxLength: number | undefined,
+    runtime: BackendRuntime,
+    displayName: string,
+): void {
+    if (maxLength === undefined || code.length <= maxLength) {
+        return;
+    }
+    const length = Array.from(code).length;
+    if (length <= maxLength) {
+        return;
+    }
+    const overview = `Backend function "${displayName}"'s unminified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
+    throw new HttpError(
+        413,
+        runtime === 'v2'
+            ? `${overview}, so the dev server can't run it in the cloud. It still works once uploaded, since uploads store the script by reference, and \`npm run dev\` runs it locally now.`
+            : `${overview}.`,
+    );
+}
+
+/** Executes a bundle in Datadog's cloud as its runtime's script action, sent inline through the app-builder queries API. */
+async function executeScriptViaDatadog(
+    { func, code, runtime }: BundleResult,
+    args: unknown[],
+    scriptMaxLengths: ScriptMaxLengths,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
     const displayName = formatRef(func);
+    const fqn = getRuntimeActionFqn(runtime);
+    assertWithinScriptLimit(code, scriptMaxLengths[runtime], runtime, displayName);
 
+    log.debug(`Executing "${displayName}" via cloud as ${fqn}`);
+    const inputs = getScriptActionInputs(runtime, code, func.allowedConnectionIds, args);
     const outputs = await submitQuery(
-        {
-            fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
-            inputs: {
-                script: scriptBody,
-                allowedConnectionIds: func.allowedConnectionIds,
-                context: { backendFunctionArgs: args },
-            },
-        },
+        { fqn, inputs },
         displayName,
         auth,
         doAuthenticatedRequest,
@@ -298,7 +336,8 @@ function makeGetRuntimeContextRemotely(
             const outputs = await Promise.race([
                 submitQuery(
                     {
-                        fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                        // v1 whatever the org's runtime: v2 has no $.Source to hydrate.
+                        fqn: getRuntimeActionFqn('v1'),
                         inputs: {
                             script: RUNTIME_CONTEXT_SCRIPT,
                             allowedConnectionIds: [],
@@ -504,10 +543,7 @@ class HttpError extends Error {
     }
 }
 
-/**
- * Split out from `validateAndBundle` so `handleExecuteAction`'s no-bundling local path can
- * reuse the same parse-and-lookup step without pulling in a bundle.
- */
+/** Shared by every route, so request validation can't drift between them. */
 async function parseAndLookupFunction(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
@@ -527,21 +563,6 @@ async function parseAndLookupFunction(
 }
 
 /**
- * Shared by `handleDebugBundle` and `handleExecuteActionViaCloud` — the two handlers that
- * still need a bundle; `handleExecuteAction`'s no-bundling path calls `parseAndLookupFunction`
- * directly instead.
- */
-async function validateAndBundle(
-    req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
-    bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
-    const { func, args } = await parseAndLookupFunction(req, functionsByName);
-    const bundled = await bundle(func);
-    return { ...bundled, args };
-}
-
-/**
  * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
  */
 async function handleDebugBundle(
@@ -551,7 +572,8 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func } = await parseAndLookupFunction(req, functionsByName);
+        const { code } = await bundle(func);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -617,7 +639,7 @@ async function handleExecuteAction(
     }
 }
 
-/** Handle POST /__dd/executeActionViaCloud: bundle and execute via the production round trip (queue + Deno subprocess). */
+/** Handle POST /__dd/executeActionViaCloud: bundle and execute in Datadog's cloud on the org's backend runtime. */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
@@ -629,15 +651,15 @@ async function handleExecuteActionViaCloud(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
-        const displayName = formatRef(func);
-
-        log.debug(`Executing action via cloud: ${displayName} with args`);
+        const { func, args } = await parseAndLookupFunction(req, functionsByName);
+        // Started before bundling so the first call doesn't wait on both in turn; it never rejects.
+        const scriptMaxLengths = resolveScriptMaxLengths(auth.site, doAuthenticatedRequest, log);
+        const bundled = await bundle(func);
 
         const result = await executeScriptViaDatadog(
-            code,
-            func,
+            bundled,
             args,
+            await scriptMaxLengths,
             auth,
             doAuthenticatedRequest,
             longPolling,
@@ -699,9 +721,12 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
     mode: string,
+    getBackendRuntime: () => Promise<BackendRuntime>,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, func, projectRoot, log);
+    const bundle = async (func: BackendFunction) => {
+        const runtime = await getBackendRuntime();
+        return bundleBackendFunction(viteBuild, func, projectRoot, log, runtime);
+    };
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
 
     const initialFunctions = getBackendFunctions();

@@ -31,6 +31,7 @@ import {
     type ViteDevServer,
 } from 'vite';
 
+import * as actionScriptLimits from '../action-script-limits';
 import * as auth from '../auth';
 import * as backendRuntime from '../backend-runtime';
 import type { BackendRuntime } from '../backend-runtime';
@@ -116,18 +117,6 @@ function getConfigureServer(
     }
     return function callConfigureServer(server: FakeViteDevServer): void {
         Reflect.apply(configureServer, undefined, [server]);
-    };
-}
-
-function getConfigResolved(
-    plugin: ReturnType<typeof getVitePlugin>,
-): (config: { command: string; mode: string }) => void {
-    const { configResolved } = plugin ?? {};
-    if (typeof configResolved !== 'function') {
-        throw new Error('Expected plugin.configResolved to be the plain function-hook form');
-    }
-    return function callConfigResolved(config: { command: string; mode: string }): void {
-        Reflect.apply(configResolved, undefined, [config]);
     };
 }
 
@@ -324,6 +313,7 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.clearAllMocks();
         // A real lookup would outlive the test that started it and log into the next one.
         jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue('v1');
+        jest.spyOn(actionScriptLimits, 'resolveScriptMaxLengths').mockResolvedValue({});
         mockBuildWithParsedBackend();
         jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
@@ -611,18 +601,30 @@ describe('Backend Functions - getVitePlugin', () => {
         },
     );
 
-    test('Should apply the v1 checks without a lookup in dev:verify mode, which runs every execution as v1', async () => {
+    test("Should follow the org's backend runtime in a dev:verify session, for transforms and cloud execution", async () => {
         const resolveSpy = jest
             .spyOn(backendRuntime, 'resolveBackendRuntime')
             .mockResolvedValue('v2');
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
         const plugin = getVitePlugin(defaultOptions);
-        const configResolved = getConfigResolved(plugin);
-        configResolved({ command: 'serve', mode: DEV_VERIFY_MODE });
+        const configureServer = getConfigureServer(plugin);
 
-        const transforming = transformBackendFile(plugin, networkGlobalCode);
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: { mode: DEV_VERIFY_MODE },
+        });
+        const transformed = await transformBackendFile(plugin, networkGlobalCode);
+        const getCloudRuntime = middlewareSpy.mock.calls[0][10];
 
-        await expect(transforming).rejects.toThrow('Using "fetch" is not supported');
-        expect(resolveSpy).not.toHaveBeenCalled();
+        const transformedCode = extractTransformedCode(transformed);
+        const cloudRuntime = await getCloudRuntime();
+        expect(transformedCode).toContain('executeBackendFunction');
+        expect(cloudRuntime).toBe('v2');
+        expect(resolveSpy).toHaveBeenCalledWith(
+            defaultOptions.context.auth.site,
+            expect.anything(),
+        );
     });
 
     test('Should hold the transform until the backend runtime resolves', async () => {
@@ -1437,6 +1439,39 @@ describe('Backend Functions - getVitePlugin', () => {
             } finally {
                 restoreEnv();
                 installGuards.mockRestore();
+            }
+        },
+    );
+
+    test.each([
+        { scenario: 'a dev:verify session', mode: DEV_VERIFY_MODE, withAuth: true, lookups: 1 },
+        { scenario: 'local execution', mode: 'development', withAuth: true, lookups: 0 },
+        { scenario: 'no authentication', mode: DEV_VERIFY_MODE, withAuth: false, lookups: 0 },
+    ])(
+        'Should start reading the script limits at server start only for $scenario',
+        ({ mode, withAuth, lookups }) => {
+            const limitsSpy = jest
+                .spyOn(actionScriptLimits, 'resolveScriptMaxLengths')
+                .mockResolvedValue({});
+            jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => undefined);
+            const plugin = getVitePlugin(defaultOptions);
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = cleanEnv();
+            if (withAuth) {
+                process.env.DD_API_KEY = 'test-api-key';
+                process.env.DD_APP_KEY = 'test-app-key';
+            }
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    config: { mode },
+                });
+
+                expect(limitsSpy).toHaveBeenCalledTimes(lookups);
+            } finally {
+                restoreEnv();
             }
         },
     );

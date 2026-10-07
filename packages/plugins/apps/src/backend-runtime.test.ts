@@ -10,12 +10,14 @@ import {
     FAILED_LOOKUP_RETRY_MS,
     MAX_LOGGED_REASON_LENGTH,
     getCacheKey,
+    getRuntimeActionFqn,
     resetBackendRuntimeCache,
     resolveBackendRuntime,
     RUNTIME_ACTION_NAMES,
     RUNTIME_CACHE_KEY,
     TERRAPIN_BACKEND_FUNCTIONS_FLAG,
 } from '@dd/apps-plugin/backend-runtime';
+import type { BackendRuntime } from '@dd/apps-plugin/backend-runtime';
 import type { Logger } from '@dd/core/types';
 import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
@@ -30,6 +32,19 @@ const ACCESS_TOKEN = 'test-oauth-token';
 const loggedIn = (flags: string[]) => ({ user_status: 'logged-in', active_feature_flags: flags });
 const FLAG_ON_BODY = loggedIn(['some-other-flag', TERRAPIN_BACKEND_FUNCTIONS_FLAG]);
 const FLAG_OFF_BODY = loggedIn(['some-other-flag']);
+
+describe('Apps Plugin - getRuntimeActionFqn', () => {
+    test.each([
+        { runtime: 'v1', expected: 'com.datadoghq.datatransformation.jsFunctionWithActions' },
+        { runtime: 'v2', expected: 'com.datadoghq.datatransformation.jsSandboxWithActions' },
+    ] satisfies Array<{ runtime: BackendRuntime; expected: string }>)(
+        'should name the action app-builder-code uploads for $runtime',
+        ({ runtime, expected }) => {
+            const fqn = getRuntimeActionFqn(runtime);
+            expect(fqn).toBe(expected);
+        },
+    );
+});
 
 const useApiKeys = () => {
     process.env.DD_API_KEY = API_KEY;

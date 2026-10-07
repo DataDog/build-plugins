@@ -48,9 +48,11 @@ you to start it with `datadog-apps dev`.
 
 ## Backend function runtime
 
-The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again on the next build or transform after a minute.
+The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again the next time the runtime is needed, a minute later at the earliest.
 
-Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) still use v1.
+Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped.
+
+Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) submits the org's runtime's action, and `/__dd/debugBundle` returns a bundle built with its checks. Cloud execution sends the script inline, so a bundle longer than the action's `script` limit, read from Datadog's action manifest (after a failed or empty read, read again by the next cloud execution a minute later at the earliest), fails with a 413 before it is sent; when the limit can't be read, Datadog's own error applies. On v2 such a bundle still works once uploaded, since uploads store the script by reference, and `npm run dev` runs it locally.
 
 ## Package output
 

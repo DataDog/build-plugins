@@ -4,7 +4,17 @@
 
 /* global globalThis */
 
+import {
+    DATATRANSFORMATION_MANIFEST_PATH,
+    getInputsDefName,
+    getProperty,
+    resetScriptLimitsCache,
+    SCRIPT_LIMITS_CACHE_KEY,
+    SCRIPT_LIMITS_TIMEOUT_MS,
+} from '@dd/apps-plugin/action-script-limits';
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { BACKEND_RUNTIMES, getRuntimeActionFqn } from '@dd/apps-plugin/backend-runtime';
+import type { BackendRuntime } from '@dd/apps-plugin/backend-runtime';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
@@ -288,6 +298,7 @@ function createTestMiddleware(
         projectRoot?: CreateDevServerMiddlewareArgs[7];
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
+        getBackendRuntime?: CreateDevServerMiddlewareArgs[10];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -303,6 +314,7 @@ function createTestMiddleware(
         overrides.projectRoot ?? '/project',
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
+        overrides.getBackendRuntime ?? (async () => 'v1'),
     );
 }
 
@@ -311,9 +323,15 @@ describe('Dev Server Middleware', () => {
         jest.clearAllMocks();
         mockViteBuild.mockReset();
         mockLoadModule.mockReset();
+        resetScriptLimitsCache();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        // A cloud request whose bundle fails answers before the limits lookup it started settles.
+        const limitsCache: unknown = Reflect.get(globalThis, SCRIPT_LIMITS_CACHE_KEY);
+        const startedLookup =
+            limitsCache instanceof Map ? limitsCache.get(mockAuth.site) : undefined;
+        await getProperty(startedLookup, 'limits');
         nock.cleanAll();
     });
 
@@ -1055,6 +1073,357 @@ describe('Dev Server Middleware', () => {
         });
     });
 
+    describe("cloud execution on the org's backend runtime", () => {
+        const BUNDLED_CODE = 'export async function main($) { return $.backendFunctionArgs; }';
+        const SCRIPT_MAX_LENGTHS: Record<BackendRuntime, number> = {
+            v1: BUNDLED_CODE.length * 2,
+            v2: BUNDLED_CODE.length + 1,
+        };
+
+        function mockCloudRoundTrip(receiptId: string) {
+            const captured: { spec?: unknown } = {};
+            const scope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    const specPath = ['data', 'attributes', 'query', 'properties', 'spec'];
+                    captured.spec = specPath.reduce(getProperty, body);
+                    return true;
+                })
+                .reply(200, { data: { id: receiptId } })
+                .get(`/api/v2/app-builder/queries/execution-long-polling/${receiptId}`)
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+            return { scope, captured };
+        }
+
+        function mockManifest() {
+            const defEntries = BACKEND_RUNTIMES.map((runtime) => {
+                const maxLength = SCRIPT_MAX_LENGTHS[runtime];
+                const inputs = { properties: { script: { type: 'string', maxLength } } };
+                return [getInputsDefName(runtime), inputs];
+            });
+            const defs = Object.fromEntries(defEntries);
+            return nock(DD_API_ORIGIN)
+                .get(DATATRANSFORMATION_MANIFEST_PATH)
+                .reply(200, { data: { attributes: { types: { $defs: defs } } } });
+        }
+
+        async function callViaCloud(
+            middleware: ReturnType<typeof createDevServerMiddleware>,
+            url = '/__dd/executeActionViaCloud',
+        ) {
+            const req = createMockRequest(url, {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: ['world'],
+            });
+            const res = createMockResponse();
+            middleware(req, res, jest.fn());
+            await res.done;
+            const responseBody = res.getBody();
+            return { statusCode: res.statusCode, body: JSON.parse(responseBody) };
+        }
+
+        test.each([
+            {
+                runtime: 'v1',
+                expected: {
+                    fqn: getRuntimeActionFqn('v1'),
+                    inputs: {
+                        script: BUNDLED_CODE,
+                        allowedConnectionIds: [],
+                        context: { backendFunctionArgs: ['world'] },
+                    },
+                },
+            },
+            {
+                runtime: 'v2',
+                expected: {
+                    fqn: getRuntimeActionFqn('v2'),
+                    inputs: { script: BUNDLED_CODE, context: { backendFunctionArgs: ['world'] } },
+                },
+            },
+        ] satisfies Array<{ runtime: BackendRuntime; expected: Record<string, unknown> }>)(
+            'Should submit the $runtime action with inputs scoped like app-builder-code uploads',
+            async ({ runtime, expected }) => {
+                mockBuildWithParsedBackend(BUNDLED_CODE);
+                const { scope, captured } = mockCloudRoundTrip(`receipt-${runtime}`);
+                const middleware = createTestMiddleware({ getBackendRuntime: async () => runtime });
+
+                const { statusCode, body } = await callViaCloud(middleware);
+                const isDone = scope.isDone();
+
+                expect(statusCode).toBe(200);
+                expect(body.result).toEqual({ data: { ok: true } });
+                expect(isDone).toBe(true);
+                expect(captured.spec).toEqual(expected);
+            },
+        );
+
+        test('Should send the collected connection IDs to the v2 action when there are any, as upload does', async () => {
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `
+                        import { request } from '@datadog/action-catalog/http/http';
+
+                        export function greet() {
+                            request({ connectionId: 'conn-build', inputs: {} });
+                        }
+                    `,
+                );
+                return mockBuildResult(BUNDLED_CODE);
+            });
+            const { captured } = mockCloudRoundTrip('receipt-v2-connections');
+            const middleware = createTestMiddleware({ getBackendRuntime: async () => 'v2' });
+
+            const { statusCode } = await callViaCloud(middleware);
+            const inputs = getProperty(captured.spec, 'inputs');
+
+            expect(statusCode).toBe(200);
+            expect(inputs).toEqual({
+                script: BUNDLED_CODE,
+                context: { backendFunctionArgs: ['world'] },
+                allowedConnectionIds: ['conn-build'],
+            });
+        });
+
+        test("Should send a dev:verify execution as the org's v2 action", async () => {
+            mockBuildWithParsedBackend(BUNDLED_CODE);
+            const { captured } = mockCloudRoundTrip('receipt-verify-v2');
+            const middleware = createTestMiddleware({
+                mode: DEV_VERIFY_MODE,
+                getBackendRuntime: async () => 'v2',
+            });
+
+            const { statusCode } = await callViaCloud(middleware, '/__dd/executeAction');
+            const fqn = getProperty(captured.spec, 'fqn');
+            const v2Fqn = getRuntimeActionFqn('v2');
+
+            expect(statusCode).toBe(200);
+            expect(fqn).toBe(v2Fqn);
+            expect(mockLoadModule).not.toHaveBeenCalled();
+        });
+
+        test.each([
+            { runtime: 'v1', expectedStatus: 500, submitted: false },
+            { runtime: 'v2', expectedStatus: 200, submitted: true },
+        ] satisfies Array<{ runtime: BackendRuntime; expectedStatus: number; submitted: boolean }>)(
+            'Should bundle with the $runtime static checks',
+            async ({ runtime, expectedStatus, submitted }) => {
+                mockViteBuild.mockImplementation(async (config) => {
+                    emitModuleParsed(
+                        config,
+                        mockFunctions[0].absolutePath,
+                        "export function greet() { return fetch('https://example.com'); }",
+                    );
+                    return mockBuildResult(BUNDLED_CODE);
+                });
+                const { scope } = mockCloudRoundTrip(`receipt-checks-${runtime}`);
+                const middleware = createTestMiddleware({ getBackendRuntime: async () => runtime });
+
+                const { statusCode } = await callViaCloud(middleware);
+                const isDone = scope.isDone();
+
+                expect(statusCode).toBe(expectedStatus);
+                expect(isDone).toBe(submitted);
+            },
+        );
+
+        const overLimit = (length: number, maxLength: number, runtime: BackendRuntime) => {
+            const overview = `Backend function "${mockFunctions[0].relativePath}/${mockFunctions[0].name}"'s unminified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${getRuntimeActionFqn(runtime)}`;
+            const error =
+                runtime === 'v2'
+                    ? `${overview}, so the dev server can't run it in the cloud. It still works once uploaded, since uploads store the script by reference, and \`npm run dev\` runs it locally now.`
+                    : `${overview}.`;
+            return { statusCode: 413, error };
+        };
+        const withinLimit = () => ({ statusCode: 200, error: undefined });
+        const limitCases: Array<{
+            description: string;
+            runtime: BackendRuntime;
+            code: (maxLength: number) => string;
+            expected: (maxLength: number, runtime: BackendRuntime) => object;
+        }> = [
+            {
+                description: 'one character over',
+                runtime: 'v2',
+                code: (maxLength) => 'x'.repeat(maxLength + 1),
+                expected: (maxLength, runtime) => overLimit(maxLength + 1, maxLength, runtime),
+            },
+            {
+                description: 'exactly at',
+                runtime: 'v2',
+                code: (maxLength) => 'x'.repeat(maxLength),
+                expected: withinLimit,
+            },
+            {
+                description: 'under',
+                runtime: 'v2',
+                code: (maxLength) => 'x'.repeat(maxLength - 1),
+                expected: withinLimit,
+            },
+            {
+                description: 'of emoji, counted in code points, exactly at',
+                runtime: 'v2',
+                code: (maxLength) => '😀'.repeat(maxLength),
+                expected: withinLimit,
+            },
+            {
+                description: 'one code point over',
+                runtime: 'v2',
+                code: (maxLength) => '😀'.repeat(maxLength + 1),
+                expected: (maxLength, runtime) => overLimit(maxLength + 1, maxLength, runtime),
+            },
+            {
+                description: 'one character over',
+                runtime: 'v1',
+                code: (maxLength) => 'x'.repeat(maxLength + 1),
+                expected: (maxLength, runtime) => overLimit(maxLength + 1, maxLength, runtime),
+            },
+        ];
+        test.each(limitCases)(
+            "Should check a bundle $description the $runtime action's script limit before submitting it",
+            async ({ runtime, code, expected }) => {
+                const maxLength = SCRIPT_MAX_LENGTHS[runtime];
+                const outcome = expected(maxLength, runtime);
+                const bundledCode = code(maxLength);
+                mockBuildWithParsedBackend(bundledCode);
+                const manifestScope = mockManifest();
+                const { scope } = mockCloudRoundTrip(`receipt-limit-${runtime}`);
+                const middleware = createTestMiddleware({ getBackendRuntime: async () => runtime });
+
+                const { statusCode, body } = await callViaCloud(middleware);
+                const manifestRead = manifestScope.isDone();
+                const submitted = scope.isDone();
+
+                expect(manifestRead).toBe(true);
+                expect({ statusCode, error: body.error }).toEqual(outcome);
+                expect(submitted).toBe(statusCode === 200);
+            },
+        );
+
+        test.each([
+            {
+                description: 'times out',
+                shortenTimeout: true,
+                mockLookup: () =>
+                    nock(DD_API_ORIGIN)
+                        .get(DATATRANSFORMATION_MANIFEST_PATH)
+                        .delay(200)
+                        .reply(200, {}),
+            },
+            {
+                description: 'is not a 200',
+                shortenTimeout: false,
+                mockLookup: () =>
+                    nock(DD_API_ORIGIN).get(DATATRANSFORMATION_MANIFEST_PATH).reply(403),
+            },
+            {
+                description: 'is malformed',
+                shortenTimeout: false,
+                mockLookup: () =>
+                    nock(DD_API_ORIGIN)
+                        .get(DATATRANSFORMATION_MANIFEST_PATH)
+                        .reply(200, { data: { attributes: { types: 'unexpected' } } }),
+            },
+        ])(
+            "Should leave the limit to Datadog's own 400 when the manifest lookup $description",
+            async ({ shortenTimeout, mockLookup }) => {
+                const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+                const timeoutSpy = shortenTimeout
+                    ? jest
+                          .spyOn(AbortSignal, 'timeout')
+                          .mockImplementation((ms) =>
+                              realTimeout(ms === SCRIPT_LIMITS_TIMEOUT_MS ? 10 : ms),
+                          )
+                    : undefined;
+                try {
+                    const oversizedCode = 'x'.repeat(SCRIPT_MAX_LENGTHS.v2 + 1);
+                    mockBuildWithParsedBackend(oversizedCode);
+                    const manifestScope = mockLookup();
+                    const serverError = `script: must be at most ${SCRIPT_MAX_LENGTHS.v2} characters`;
+                    const previewScope = nock(DD_API_ORIGIN)
+                        .post('/api/v2/app-builder/queries/preview-async')
+                        .reply(400, { errors: [{ detail: serverError }] });
+                    const middleware = createTestMiddleware({
+                        getBackendRuntime: async () => 'v2',
+                    });
+
+                    const { statusCode, body } = await callViaCloud(middleware);
+                    const manifestRead = manifestScope.isDone();
+                    const submitted = previewScope.isDone();
+
+                    expect(manifestRead).toBe(true);
+                    expect(submitted).toBe(true);
+                    expect(statusCode).toBe(500);
+                    expect(body.error).toContain('HTTP 400');
+                } finally {
+                    timeoutSpy?.mockRestore();
+                }
+            },
+        );
+
+        test.each([
+            { description: 'has no functionName', body: {}, expectedStatus: 400 },
+            {
+                description: 'names an unknown function',
+                body: { functionName: 'unknown.fn', args: [] },
+                expectedStatus: 404,
+            },
+        ])(
+            'Should not read the manifest for a cloud request that $description',
+            async ({ body, expectedStatus }) => {
+                const manifestScope = mockManifest();
+                const middleware = createTestMiddleware({ getBackendRuntime: async () => 'v2' });
+                const req = createMockRequest('/__dd/executeActionViaCloud', body);
+                const res = createMockResponse();
+
+                middleware(req, res, jest.fn());
+                await res.done;
+                const manifestRead = manifestScope.isDone();
+
+                expect(res.statusCode).toBe(expectedStatus);
+                expect(manifestRead).toBe(false);
+                expect(mockViteBuild).not.toHaveBeenCalled();
+            },
+        );
+
+        test('Should read the manifest once for every later cloud execution', async () => {
+            const manifestScope = mockManifest();
+            const { scope } = mockCloudRoundTrip('receipt-first');
+            const middleware = createTestMiddleware({ getBackendRuntime: async () => 'v2' });
+            mockBuildWithParsedBackend(BUNDLED_CODE);
+            const first = await callViaCloud(middleware);
+
+            const oversizedCode = 'x'.repeat(SCRIPT_MAX_LENGTHS.v2 + 1);
+            mockBuildWithParsedBackend(oversizedCode);
+            const second = await callViaCloud(middleware);
+            const firstSubmitted = scope.isDone();
+            const manifestRead = manifestScope.isDone();
+            const pendingMocks = nock.pendingMocks();
+
+            expect(first.statusCode).toBe(200);
+            expect(firstSubmitted).toBe(true);
+            expect(second.statusCode).toBe(413);
+            expect(manifestRead).toBe(true);
+            expect(pendingMocks).toEqual([]);
+        });
+
+        test('Should keep hydrating the local runtime context with the v1 action under v2, since only it has $.Source', async () => {
+            const hydrationScope = mockRuntimeContextHydration();
+            mockLoadModuleReturning(mockFunctions[0], (arg) => arg);
+            const middleware = createTestMiddleware({ getBackendRuntime: async () => 'v2' });
+
+            const { statusCode, body } = await callViaCloud(middleware, '/__dd/executeAction');
+            const hydrated = hydrationScope.isDone();
+
+            expect(statusCode).toBe(200);
+            expect(body.result).toEqual({ data: 'world' });
+            expect(hydrated).toBe(true);
+        });
+    });
+
     describe('executeAction handler (local)', () => {
         beforeEach(() => {
             mockRuntimeContextHydration();
@@ -1180,6 +1549,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => 'v1',
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1212,6 +1582,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => 'v1',
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1512,6 +1883,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => 'v1',
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
