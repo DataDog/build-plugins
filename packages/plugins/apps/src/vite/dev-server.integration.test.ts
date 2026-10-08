@@ -32,6 +32,7 @@ import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
@@ -452,7 +453,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
 
         const functionName = encodeQueryName(actionCatalogCallFunc);
         const req = createMockRequest(
-            '/__dd/debugBundle',
+            DEBUG_BUNDLE_PATH,
             { functionName },
             { accept: 'application/json' },
         );
