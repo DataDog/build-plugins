@@ -359,6 +359,46 @@ describe.each<Layout>(['installed', 'linked'])(
                 expect(api.isDone()).toBe(true);
             }, 30000);
 
+            // Vite serves an excluded package's modules with a `?v=` query and immutable caching, so
+            // after a restart a browser can call through its cached proxy without requesting the
+            // module from the new server.
+            test('Should execute the library function after a restart, for a browser that kept its cached proxy', async () => {
+                const [queryName] = getProxiedQueryNames(
+                    await loadClientModuleGraph(server, '/main.ts'),
+                );
+                const restarted = await createServer({
+                    root: appRoot,
+                    configFile: false,
+                    logLevel: 'silent',
+                    server: { middlewareMode: true, hmr: false },
+                    plugins: [getAppsPlugin()],
+                });
+                try {
+                    const { api } = mockDatadogApi({ points: [7] });
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: queryName,
+                        args: [QUERY],
+                    });
+                    const res = createMockResponse();
+                    restarted.middlewares(req, res, jest.fn());
+                    await res.done;
+
+                    expect(JSON.parse(res.getBody())).toEqual({
+                        success: true,
+                        result: {
+                            data: {
+                                query: QUERY,
+                                series: { points: [7] },
+                                servedBy: VIZ_BACKEND_BODY,
+                            },
+                        },
+                    });
+                    expect(api.isDone()).toBe(true);
+                } finally {
+                    await restarted.close();
+                }
+            }, 30000);
+
             // Last in this block: it edits the installed (or linked) library in place.
             test("Should run the library's edited modules on the next local execution", async () => {
                 const [queryName] = getProxiedQueryNames(
