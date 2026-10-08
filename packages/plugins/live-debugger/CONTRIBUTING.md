@@ -63,8 +63,16 @@ Install the dependencies of both repositories first. A target may refuse to run
 when either checkout already has a local package-link setup, so it cannot
 overwrite an existing development environment.
 
-The default run compares control and Live Debugger-instrumented variants. Only
-Live Debugger is toggled between a target's paired builds. To select one
+Each phase builds three variants:
+
+- `control`: Live Debugger disabled;
+- `all-functions`: Live Debugger with its default options, which instrument
+  anonymous functions such as inline callbacks too;
+- `named-only`: Live Debugger with
+  [`namedOnly: true`](./README.md#livedebuggernamedonly), which skips anonymous
+  functions.
+
+Only Live Debugger settings change between a target's builds. To select one
 target-defined phase or use a non-default checkout, run:
 
 ```bash
@@ -76,9 +84,10 @@ For each phase, the result reports:
 - wall-clock build duration, excluding the separate syntax-validation pass;
 - total raw bytes across all emitted JavaScript files;
 - total gzip bytes when each emitted JavaScript file is compressed separately;
-- absolute and percentage differences between control and instrumented builds.
+- absolute and percentage differences between control and each instrumented
+  variant.
 
-Build order alternates across runs to reduce systematic warm-cache bias. A
+Build order is permuted across runs to reduce systematic warm-cache bias. A
 single duration difference is still noisy and should be interpreted as part of
 a trend, not as a hard regression threshold.
 

@@ -10,6 +10,7 @@ import path from 'path';
 
 import { runCanary, StreamingCommandRunner } from './runner';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
+import { INSTRUMENTED_VARIANTS } from './types';
 import type { CanaryReport, InterruptSignal, MetricComparison } from './types';
 
 const SUPPORTED_TARGETS = getCanaryTargetNames().join(', ');
@@ -64,9 +65,13 @@ const printReport = (report: CanaryReport): void => {
     console.log('\n[Canary] Live Debugger comparison');
     for (const phase of report.phases) {
         console.log(`\n${phase.id} (${phase.buildTool})`);
-        console.log(`  build time: ${formatDelta(phase.comparison.durationMs, formatDuration)}`);
-        console.log(`  raw JS:     ${formatDelta(phase.comparison.rawBytes, formatBytes)}`);
-        console.log(`  gzip JS:    ${formatDelta(phase.comparison.gzipBytes, formatBytes)}`);
+        for (const variant of INSTRUMENTED_VARIANTS) {
+            const comparison = phase.comparisons[variant];
+            console.log(`  ${variant}`);
+            console.log(`    build time: ${formatDelta(comparison.durationMs, formatDuration)}`);
+            console.log(`    raw JS:     ${formatDelta(comparison.rawBytes, formatBytes)}`);
+            console.log(`    gzip JS:    ${formatDelta(comparison.gzipBytes, formatBytes)}`);
+        }
     }
     console.log(`\n[Canary] JSON report: ${report.reportPath}`);
 };
