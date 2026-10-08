@@ -15,6 +15,7 @@ import {
     getRepositoryDataMock,
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
+import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
@@ -207,30 +208,9 @@ function mockBuildResult() {
     };
 }
 
-function emitModuleParsed(
-    config: {
-        plugins?: Array<{
-            moduleParsed?: (this: { parse: typeof parseAst }, moduleInfo: unknown) => void;
-        }>;
-    },
-    id: string,
-    code: string,
-) {
-    for (const plugin of config.plugins ?? []) {
-        plugin.moduleParsed?.call(
-            { parse: parseAst },
-            {
-                id,
-                code,
-                importedIds: [],
-            },
-        );
-    }
-}
-
 function mockBuildWithParsedBackend() {
     mockViteBuild.mockImplementation(async (config) => {
-        emitModuleParsed(
+        await emitModuleParsed(
             config,
             '/build/src/backend/myHandler.backend.ts',
             `
@@ -1384,7 +1364,7 @@ describe('Backend Functions - getVitePlugin', () => {
 
         // Unlike closeBundle's default mock (chunk metadata only), the cloud path bundles first and logs code.length, so this needs a real chunk `code`.
         mockViteBuild.mockImplementation(async (config) => {
-            emitModuleParsed(
+            await emitModuleParsed(
                 config,
                 '/build/src/backend/myHandler.backend.ts',
                 'export function myHandler() {} export function otherFunc() {}',

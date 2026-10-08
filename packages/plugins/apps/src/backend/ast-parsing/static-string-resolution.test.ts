@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { createFixtureRecord } from '@dd/tests/_jest/helpers/moduleGraph';
 import type { Expression } from 'estree';
-import { parseAst } from 'rollup/parseAst';
 
-import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
+import type { ParsedModuleRecord } from './module-graph';
 import {
     resolveStaticStringValue,
     type StaticStringValueResolution,
@@ -13,18 +13,8 @@ import {
 
 const buildRoot = '/project';
 
-function createRecord(
-    id: string,
-    code: string,
-    staticDependencies: string[] = [],
-): ParsedModuleRecord {
-    const record = createParsedModuleRecord(id, buildRoot, parseAst(code), staticDependencies);
-
-    if (!record) {
-        throw new Error(`Expected module record to be created for ${id}`);
-    }
-    return record;
-}
+const createRecord = (id: string, code: string, resolvedIds: string[] = []): ParsedModuleRecord =>
+    createFixtureRecord(id, buildRoot, code, resolvedIds);
 
 function createModules(records: ParsedModuleRecord[]): Map<string, ParsedModuleRecord> {
     return new Map(records.map((record) => [record.id, record]));
