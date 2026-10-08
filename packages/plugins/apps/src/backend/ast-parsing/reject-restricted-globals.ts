@@ -4,6 +4,8 @@
 
 import type { BaseNode } from 'estree';
 
+import { describeRuntime } from '../../runtime-names';
+
 import { forEachAmbientGlobalAccess } from './ambient-global-access';
 import { analyzeModuleScope } from './module-scope';
 import type { ModuleScopeAnalysis } from './module-scope';
@@ -11,7 +13,18 @@ import { ensureProgram } from './type-guards';
 
 const RESTRICTED_GLOBALS = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource']);
 
-// Rejects network-capable globals (fetch, etc.) in `.backend.ts` files — backend functions have no raw network access in production and must go through an Action Platform action instead. Only pre-v2 (legacy) apps need this; the planned Terrapin-based v2 sandbox lifts the restriction.
+const POLYFILL_HINT = "Use fetch, or import a polyfill's export by name instead of the global";
+
+// Node has no XMLHttpRequest or Deno, and the v2 runner doesn't pass --experimental-eventsource.
+const NODE_REPLACEMENT_HINTS: Readonly<Record<string, string>> = {
+    XMLHttpRequest: POLYFILL_HINT,
+    EventSource: POLYFILL_HINT,
+    Deno: 'Use a Node API or a node: built-in import instead',
+};
+const NAMES_MISSING_FROM_NODE = Object.keys(NODE_REPLACEMENT_HINTS);
+const GLOBALS_MISSING_FROM_NODE: ReadonlySet<string> = new Set(NAMES_MISSING_FROM_NODE);
+
+// v1 backend functions have no raw network access in production and must go through an Action Platform action instead.
 export function rejectRestrictedGlobals(
     ast: BaseNode,
     filePath: string,
@@ -36,11 +49,44 @@ export function rejectRestrictedGlobals(
     });
 }
 
+export class RestrictedGlobalError extends Error {
+    constructor(
+        message: string,
+        readonly globalName: string,
+    ) {
+        super(message);
+    }
+}
+
+export function isMissingFromNode(name: string): boolean {
+    return GLOBALS_MISSING_FROM_NODE.has(name);
+}
+
 function throwRestrictedGlobalError(name: string, filePath: string): never {
-    throw new Error(
+    throw new RestrictedGlobalError(
         `Using "${name}" is not supported in backend function code. ` +
             `Backend functions cannot make raw network requests in production — ` +
             `use an Action Platform action ($.Actions or an @datadog/action-catalog ` +
             `typed wrapper) instead: ${filePath}`,
+        name,
     );
+}
+
+export function rejectGlobalsMissingFromNode(
+    ast: BaseNode,
+    filePath: string,
+    scopeAnalysis: ModuleScopeAnalysis,
+): void {
+    const program = ensureProgram(ast, filePath);
+
+    forEachAmbientGlobalAccess(program, scopeAnalysis, GLOBALS_MISSING_FROM_NODE, {
+        onNamedAccess(name) {
+            const runtimeName = describeRuntime('v2');
+            throw new Error(
+                `"${name}" is not available in the ${runtimeName}. ` +
+                    `${NODE_REPLACEMENT_HINTS[name]}: ${filePath}`,
+            );
+        },
+        onBulkCopy() {},
+    });
 }

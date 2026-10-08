@@ -8,6 +8,15 @@ import fsp from 'fs/promises';
 import path from 'path';
 import { pathToFileURL } from 'url';
 
+// The build would otherwise send runBundlers' placeholder API keys to a real runtime lookup.
+jest.mock('@dd/apps-plugin/backend-runtime', () => {
+    const fixtures = jest.requireActual('@dd/apps-plugin/backend-runtime.fixtures');
+    return {
+        ...jest.requireActual('@dd/apps-plugin/backend-runtime'),
+        resolveBackendRuntime: async () => fixtures.V1_RUNTIME,
+    };
+});
+
 const BACKEND_OUT_DIR_PREFIX = 'dd-apps-backend-';
 const BUNDLE_FILENAME_RE = /^[0-9a-f]{64}\.(.+)\.js$/;
 

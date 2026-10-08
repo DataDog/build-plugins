@@ -35,6 +35,15 @@ jest.mock('fs/promises', () => {
     return { ...actual, mkdtemp: jest.fn(actual.mkdtemp) };
 });
 
+// getContextMock's placeholder API keys would otherwise reach a real runtime lookup.
+jest.mock('@dd/apps-plugin/backend-runtime', () => {
+    const fixtures = jest.requireActual('@dd/apps-plugin/backend-runtime.fixtures');
+    return {
+        ...jest.requireActual('@dd/apps-plugin/backend-runtime'),
+        resolveBackendRuntime: async () => fixtures.V1_RUNTIME,
+    };
+});
+
 /** Extract and assert closeBundle from the first plugin's vite hooks. */
 function extractCloseBundle(plugins: PluginOptions[]) {
     const plugin = plugins[0];

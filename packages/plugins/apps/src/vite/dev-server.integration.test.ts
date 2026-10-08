@@ -10,6 +10,7 @@
  */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { V1_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
@@ -47,6 +48,15 @@ import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
 }));
+
+// Every dev server here would otherwise send a real runtime lookup that nock blocks.
+jest.mock('@dd/apps-plugin/backend-runtime', () => {
+    const fixtures = jest.requireActual('@dd/apps-plugin/backend-runtime.fixtures');
+    return {
+        ...jest.requireActual('@dd/apps-plugin/backend-runtime'),
+        resolveBackendRuntime: async () => fixtures.V1_RUNTIME,
+    };
+});
 
 const FIXTURE_ROOT = path.resolve(
     __dirname,
@@ -209,6 +219,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -254,6 +265,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -293,6 +305,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -349,6 +362,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                V1_RUNTIME,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
@@ -371,6 +385,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -401,6 +416,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                V1_RUNTIME,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
@@ -423,6 +439,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -462,6 +479,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                V1_RUNTIME,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
@@ -484,6 +502,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            async () => V1_RUNTIME,
         );
 
         const apiScope = nock('https://api.datadoghq.com')

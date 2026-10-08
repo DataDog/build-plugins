@@ -14,6 +14,7 @@ import {
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
 } from '../auth';
+import { resolveBackendRuntime, type BackendRuntimeStatus } from '../backend-runtime';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import {
@@ -164,7 +165,9 @@ const shouldTransformBackendModule = (id: string, buildRoot: string, outDir: str
  * backend functions, and replaces each backend module with its frontend proxy.
  *
  * Production (closeBundle): builds backend functions (if any) then writes the
- * deployable package without resolving authentication or performing requests.
+ * deployable package. A build's only request is one backend runtime lookup,
+ * made only for backend code and only with credentials set, whose result its
+ * transforms and closeBundle share.
 
  * Dev (configureServer): registers middleware for local backend function
  * testing when auth credentials are available.
@@ -176,6 +179,7 @@ export const getVitePlugin = ({
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
     const { auth } = context;
+    const getBackendRuntime = (): Promise<BackendRuntimeStatus> => resolveBackendRuntime(auth, log);
 
     context.inject({
         type: 'file',
@@ -200,6 +204,16 @@ export const getVitePlugin = ({
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
+    // Shared by a build's transforms and closeBundle so they apply the same checks. A dev server
+    // resolves again each time, so a retried lookup applies without a restart.
+    let buildRuntime: Promise<BackendRuntimeStatus> | undefined;
+    const getBuildRuntime = (): Promise<BackendRuntimeStatus> => {
+        if (devServerActive) {
+            return getBackendRuntime();
+        }
+        buildRuntime ??= getBackendRuntime();
+        return buildRuntime;
+    };
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
     // rebuild can start before the previous closeBundle finishes.
@@ -301,7 +315,7 @@ export const getVitePlugin = ({
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
-            handler(code, id, transformOptions) {
+            async handler(code, id, transformOptions) {
                 const shouldTransform = shouldTransformBackendModule(
                     id,
                     context.buildRoot,
@@ -322,8 +336,9 @@ export const getVitePlugin = ({
                 const program = ensureProgram(ast, normalizedId);
                 // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
                 const scopeAnalysis = analyzeModuleScope(program);
+                const runtime = await getBuildRuntime();
                 // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
-                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
+                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis, runtime);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
                     // Only a genuinely no-query id can be trusted as a real re-transform of this
@@ -360,6 +375,7 @@ export const getVitePlugin = ({
         async buildStart() {
             // A watch-mode rebuild must not inherit tags derived from the previous build's code.
             buildTagSources = createBuildTagSources();
+            buildRuntime = undefined;
             parametersModuleId = undefined;
             if (options.parameters === undefined) {
                 // Resolved from the root, as app source would. An app without
@@ -433,11 +449,13 @@ export const getVitePlugin = ({
             let backendOutputs = new Map<string, string>();
             let backendFunctions = getBackendFunctions();
             if (backendFunctions.length > 0) {
+                const runtime = await getBuildRuntime();
                 const result = await buildBackendFunctions(
                     bundler.build,
                     backendFunctions,
                     context.buildRoot,
                     log,
+                    runtime,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
@@ -460,6 +478,8 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             devServerActive = true;
+            // Started now to overlap the server's startup, and caught so it can never go unhandled.
+            getBackendRuntime().catch(() => {});
             if (server.environments?.ssr?.config.dev.preTransformRequests) {
                 log.warn(
                     `SSR import warmup (${SSR_WARMUP_SETTING}) is on, so edited backend code may not run until the dev server restarts.`,
@@ -511,13 +531,16 @@ export const getVitePlugin = ({
             // each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
             const getAllowedConnectionIds = async (entryId: string) => {
-                const parseAst = await loadViteParseAst();
+                const parseAstLoad = loadViteParseAst();
+                const runtimeLookup = getBackendRuntime();
+                const [parseAst, runtime] = await Promise.all([parseAstLoad, runtimeLookup]);
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
                     entryId,
                     context.buildRoot,
                     log,
                     parseAst,
+                    runtime,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
@@ -534,6 +557,7 @@ export const getVitePlugin = ({
                 log,
                 server.config.mode,
                 isHostAllowed,
+                getBackendRuntime,
             );
             server.middlewares.use(middleware);
         },

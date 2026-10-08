@@ -11,6 +11,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
+-   [Backend function runtime](#backend-function-runtime)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -58,13 +59,19 @@ The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/execu
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
+## Backend function runtime
+
+The plugin applies the rules of the backend runtime your org's backend functions run on in Datadog: the Node backend runtime (v2) or the Deno backend runtime (v1). It looks the org's runtime up once per process for each set of credentials: the API keys every Datadog build plugin uses (`DD_API_KEY`/`DD_APP_KEY`, else the `auth.apiKey`/`auth.appKey` options), else the OAuth token above. Without credentials it assumes v1. When the lookup fails, it warns and applies the stricter v1 checks. A build keeps one lookup's result throughout, while a dev server or a later watch-mode build tries again the next time the runtime is needed, a minute later at the earliest. Meanwhile, a rejection v2 wouldn't make says the org's runtime couldn't be determined.
+
+Under v2 (Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) follow the same runtime.
+
 ## Package output
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.
 
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write the archive to a different directory.
 
-Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server authentication is described above.
+Use `datadog-apps build` to package locally, and `datadog-apps upload` to build, upload and publish. Production packaging makes no Datadog API requests beyond the runtime lookup above. Development-server authentication is described above.
 
 ### apps.enable
 
