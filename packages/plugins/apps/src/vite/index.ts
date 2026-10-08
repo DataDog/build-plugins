@@ -8,17 +8,14 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 import type { build } from 'vite';
 
+import { resolveScriptMaxLengths } from '../action-script-limits';
 import {
     AUTH_GUIDANCE,
     getAuthenticatedRequest,
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
 } from '../auth';
-import {
-    CLOUD_EXECUTION_RUNTIME,
-    resolveBackendRuntime,
-    type BackendRuntime,
-} from '../backend-runtime';
+import { resolveBackendRuntime, type BackendRuntime } from '../backend-runtime';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import {
@@ -180,12 +177,7 @@ export const getVitePlugin = ({
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
     const { auth } = context;
-    // dev:verify sends every execution to the cloud.
-    let isDevVerifySession = false;
-    const getBackendRuntime = (): Promise<BackendRuntime> =>
-        isDevVerifySession
-            ? Promise.resolve(CLOUD_EXECUTION_RUNTIME)
-            : resolveBackendRuntime(auth.site, log);
+    const getBackendRuntime = (): Promise<BackendRuntime> => resolveBackendRuntime(auth.site, log);
 
     context.inject({
         type: 'file',
@@ -226,11 +218,6 @@ export const getVitePlugin = ({
                     },
                 };
             },
-        },
-        // Before any server hook, so no transform can start a lookup in a dev:verify session.
-        configResolved(resolvedConfig) {
-            isDevVerifySession =
-                resolvedConfig.command === 'serve' && resolvedConfig.mode === DEV_VERIFY_MODE;
         },
         // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
         configEnvironment(name, environmentOptions, { command, isPreview }) {
@@ -442,8 +429,12 @@ export const getVitePlugin = ({
                     `No authentication configured. Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable. ${AUTH_GUIDANCE}`,
                 );
             }
-            // Without auth nothing executes, and dev-verify sends every execution to the cloud.
-            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
+            // Without auth nothing executes.
+            if (doAuthenticatedRequest && server.config.mode === DEV_VERIFY_MODE) {
+                // Started now so the first execution doesn't wait on it; it never rejects.
+                resolveScriptMaxLengths(auth.site, doAuthenticatedRequest, log);
+            } else if (doAuthenticatedRequest) {
+                // Local execution only, since dev-verify sends every execution to the cloud.
                 // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
                 // predate it. A failure must not stop the server: each execution installs again, failing closed.
                 try {
@@ -501,6 +492,7 @@ export const getVitePlugin = ({
                 context.buildRoot,
                 log,
                 server.config.mode,
+                getBackendRuntime,
             );
             server.middlewares.use(middleware);
         },

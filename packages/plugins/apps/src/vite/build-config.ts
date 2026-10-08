@@ -6,6 +6,10 @@ import type { BuildOptions, InlineConfig, Plugin } from 'vite';
 
 import { BACKEND_CODE_EXTENSIONS } from '../constants';
 
+// Rolldown (Vite 8) output option that keeps function and class names when minifying. Rollup's
+// types don't declare it, and Rollup-based Vite ignores it, so it is spread in rather than typed.
+const ROLLDOWN_KEEP_NAMES = { keepNames: true } satisfies Record<string, unknown>;
+
 /**
  * Create the virtual module resolver plugin used by both production and dev builds.
  * Maps virtual IDs to their generated source content.
@@ -30,9 +34,9 @@ export function createVirtualPlugin(name: string, virtualEntries: Record<string,
 }
 
 /**
- * Shared Vite/Rollup config for building backend functions.
- * Both the production build (write to disk) and dev build (in-memory)
- * use this as a base, overriding only what differs.
+ * Shared Vite/Rollup config for the backend bundles Datadog runs: uploads (written to disk) and
+ * dev-server cloud execution (in memory), so both minify alike. Local execution imports the
+ * source directly and never builds with it.
  */
 export function getBaseBackendBuildConfig(
     root: string,
@@ -52,15 +56,24 @@ export function getBaseBackendBuildConfig(
         envPrefix: [],
         root,
         logLevel: 'silent',
+        // Names stay readable in function-log stack frames and to code reading `.name`. esbuild
+        // (before Vite 8) and Oxc (Vite 8) each read only their own keepNames option.
+        esbuild: { keepNames: true },
         build: {
-            minify: false,
+            // Not 'esbuild', which Vite 8 (Rolldown) loads only if the app installs it.
+            minify: true,
             target: 'esnext',
             // Backend functions run server-side. Without this, Vite's default
             // browser-target build externalizes Node builtins (node:crypto, fs)
             // to a stub with no real exports.
             ssr: true,
             rollupOptions: {
-                output: { format: 'es', exports: 'named', inlineDynamicImports: true },
+                output: {
+                    format: 'es',
+                    exports: 'named',
+                    inlineDynamicImports: true,
+                    ...ROLLDOWN_KEEP_NAMES,
+                },
                 preserveEntrySignatures: 'exports-only',
                 // Each exported function is bundled separately, so without tree-shaking every
                 // bundle carries the whole import graph of its `.backend.ts` file, including code

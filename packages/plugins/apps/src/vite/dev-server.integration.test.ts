@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global globalThis */
+
 /**
  * Real coverage for local execution's module resolution: a real Vite dev server runs against
  * the `apps_backend_project` fixture with no mocked `viteBuild`/`loadModule`/`this.resolve()`,
@@ -9,6 +11,12 @@
  * SSR transform output, not a hand-crafted stand-in.
  */
 
+import {
+    DATATRANSFORMATION_MANIFEST_PATH,
+    getInputsDefName,
+    getProperty,
+    resetScriptLimitsCache,
+} from '@dd/apps-plugin/action-script-limits';
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
@@ -28,11 +36,13 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
+import { pathToFileURL } from 'url';
 import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { DEV_VERIFY_MODE } from '../constants';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
@@ -207,6 +217,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -250,6 +261,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -287,6 +299,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -364,6 +377,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -415,6 +429,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -475,6 +490,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            async () => 'v1',
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -503,6 +519,124 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
 // Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
 // would race other test files that copy that whole tree in parallel.
 const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
+
+describe('Dev Server Middleware — cloud execution bundles', () => {
+    beforeEach(() => {
+        resetScriptLimitsCache();
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
+        resetScriptLimitsCache();
+    });
+
+    test('Should submit a dev:verify bundle minified like an upload, with function and class names kept', async () => {
+        const seed = `dev-verify-minify-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const absolutePath = `${workingDir}/src/names.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            class BackendValidationError extends Error {}
+            const readableHelper = (value: string) => {
+                if (!value) throw new BackendValidationError('missing value');
+                return value;
+            };
+            export async function readableBackendFunction(value: string) {
+                return readableHelper(value);
+            }
+        `,
+            );
+            const namesFunc: BackendFunction = {
+                relativePath: 'src/names',
+                name: 'readableBackendFunction',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+            const scriptInputs = { properties: { script: { type: 'string', maxLength: 100_000 } } };
+            const v1InputsDefName = getInputsDefName('v1');
+            const captured: { spec?: unknown } = {};
+            const apiScope = nock('https://api.datadoghq.com')
+                .get(DATATRANSFORMATION_MANIFEST_PATH)
+                .reply(200, {
+                    data: {
+                        attributes: {
+                            types: { $defs: { [v1InputsDefName]: scriptInputs } },
+                        },
+                    },
+                })
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    const specPath = ['data', 'attributes', 'query', 'properties', 'spec'];
+                    captured.spec = specPath.reduce(getProperty, body);
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-verify-minified' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-verify-minified')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+            const middleware = createDevServerMiddleware(
+                build,
+                async () => ({}),
+                () => [namesFunc],
+                async () => [],
+                { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
+                testApiKeyRequest,
+                mockLongPolling,
+                workingDir,
+                getMockLogger(),
+                DEV_VERIFY_MODE,
+                async () => 'v1',
+            );
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(namesFunc),
+                args: [''],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            const apiDone = apiScope.isDone();
+            expect(res.statusCode).toBe(200);
+            expect(apiDone).toBe(true);
+            const inputs = getProperty(captured.spec, 'inputs');
+            const script = getProperty(inputs, 'script');
+            if (typeof script !== 'string') {
+                throw new Error('Expected the submitted script to be a string.');
+            }
+            // Minified: the unminified output spans many lines.
+            const lineCount = script.trim().split('\n').length;
+            expect(lineCount).toBeLessThan(5);
+            const scriptPath = `${workingDir}/submitted.js`;
+            outputFileSync(scriptPath, script);
+            // Dynamic: the script only exists once the request above has submitted it.
+            const scriptUrl = pathToFileURL(scriptPath).href;
+            const submitted: { main: (globals: unknown) => Promise<unknown> } = await import(
+                scriptUrl
+            );
+            // main() sets globalThis.$ through local-execution's process-wide accessor.
+            const outsideDollar: unknown = Reflect.get(globalThis, '$');
+            let failure: unknown;
+            try {
+                failure = await submitted
+                    .main({ backendFunctionArgs: [''] })
+                    .catch((error: unknown) => error);
+            } finally {
+                Reflect.set(globalThis, '$', outsideDollar);
+            }
+            if (!(failure instanceof Error)) {
+                throw new Error('Expected the backend function to throw an Error.');
+            }
+            expect(failure.constructor.name).toBe('BackendValidationError');
+            expect(failure.stack).toContain('readableHelper');
+            expect(failure.stack).toContain('readableBackendFunction');
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+});
 
 describe('Dev Server Middleware — editing files between local executions', () => {
     let editRoot: string | undefined;
