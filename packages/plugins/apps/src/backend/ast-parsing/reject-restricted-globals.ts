@@ -11,7 +11,10 @@ import { ensureProgram } from './type-guards';
 
 const RESTRICTED_GLOBALS = new Set(['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource']);
 
-// Rejects network-capable globals (fetch, etc.) in `.backend.ts` files — backend functions have no raw network access in production and must go through an Action Platform action instead. Only pre-v2 (legacy) apps need this; the planned Terrapin-based v2 sandbox lifts the restriction.
+// Node has no XMLHttpRequest, and Terrapin's runner doesn't pass --experimental-eventsource.
+const GLOBALS_MISSING_FROM_NODE = new Set(['XMLHttpRequest', 'EventSource']);
+
+// v1 backend functions have no raw network access in production and must go through an Action Platform action instead.
 export function rejectRestrictedGlobals(
     ast: BaseNode,
     filePath: string,
@@ -43,4 +46,22 @@ function throwRestrictedGlobalError(name: string, filePath: string): never {
             `use an Action Platform action ($.Actions or an @datadog/action-catalog ` +
             `typed wrapper) instead: ${filePath}`,
     );
+}
+
+export function rejectGlobalsMissingFromNode(
+    ast: BaseNode,
+    filePath: string,
+    scopeAnalysis: ModuleScopeAnalysis,
+): void {
+    const program = ensureProgram(ast, filePath);
+
+    forEachAmbientGlobalAccess(program, scopeAnalysis, GLOBALS_MISSING_FROM_NODE, {
+        onNamedAccess(name) {
+            throw new Error(
+                `"${name}" is not available in the v2 backend function runtime, which runs on ` +
+                    `Node. Use fetch, or import a polyfill's export by name instead of the global: ${filePath}`,
+            );
+        },
+        onBulkCopy() {},
+    });
 }

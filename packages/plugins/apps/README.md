@@ -10,6 +10,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
+-   [Backend function runtime](#backend-function-runtime)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -45,13 +46,19 @@ passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
 
+## Backend function runtime
+
+The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again on the next build or transform after a minute.
+
+Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) still use v1.
+
 ## Package output
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.
 
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write the archive to a different directory.
 
-Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server authentication is described above.
+Use `datadog-apps build` to package locally, and `datadog-apps upload` to build, upload and publish. Production packaging makes no Datadog API requests beyond the runtime lookup above. Development-server authentication is described above.
 
 ### apps.enable
 

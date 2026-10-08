@@ -12,6 +12,7 @@ import type { build } from 'vite';
 
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
+import { CLOUD_EXECUTION_RUNTIME } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
@@ -133,6 +134,7 @@ async function bundleBackendFunction(
         projectRoot,
         log,
         connectionIdCollector.getModuleRecords,
+        CLOUD_EXECUTION_RUNTIME,
     );
     const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,

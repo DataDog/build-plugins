@@ -42,6 +42,12 @@ jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
 }));
 
+// Every dev server here would otherwise send a real runtime lookup that nock blocks.
+jest.mock('@dd/apps-plugin/backend-runtime', () => ({
+    ...jest.requireActual('@dd/apps-plugin/backend-runtime'),
+    resolveBackendRuntime: async () => 'v1',
+}));
+
 const FIXTURE_ROOT = path.resolve(
     __dirname,
     '../../../../tests/src/_jest/fixtures/apps_backend_project',
@@ -337,6 +343,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                'v1',
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
@@ -387,6 +394,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                'v1',
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
@@ -446,6 +454,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                'v1',
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
         };
