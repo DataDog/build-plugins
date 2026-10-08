@@ -50,7 +50,7 @@ you to start it with `datadog-apps dev`.
 
 The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again on the next build or transform after a minute.
 
-Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) still use v1.
+Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is replaced by one for `process.env` uses other than `process.env.NODE_ENV`, since v2 doesn't inject your environment variables or Custom Credentials yet. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) still use v1.
 
 ## Package output
 

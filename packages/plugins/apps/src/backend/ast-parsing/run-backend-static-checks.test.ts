@@ -7,6 +7,7 @@ import { analyzeModuleScope } from '@dd/apps-plugin/backend/ast-parsing/module-s
 import { runBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '@dd/apps-plugin/backend/ast-parsing/type-guards';
 import { resetDivergentGlobalWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-divergent-globals';
+import { resetEnvReadWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-env-reads';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
 
@@ -15,6 +16,7 @@ const FILE_PATH = '/project/src/handler.backend.ts';
 const NODE_BUILTIN_IMPORT = "import os from 'os';\nexport function run() { return os.hostname(); }";
 const NETWORK_GLOBAL = 'export function run() { return fetch("https://example.com"); }';
 const DIVERGENT_GLOBAL = 'export function run() { return crypto.randomUUID(); }';
+const ENV_READ = 'export function run() { return process.env.STRIPE_KEY; }';
 
 function check(code: string, runtime: BackendRuntime): void {
     const ast = parseAst(code);
@@ -28,6 +30,7 @@ describe('Backend Functions - runBackendStaticChecks', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         resetDivergentGlobalWarnings();
+        resetEnvReadWarnings();
     });
 
     test.each([
@@ -84,6 +87,21 @@ describe('Backend Functions - runBackendStaticChecks', () => {
 
             const warnings = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
             expect(warnings.length > 0).toBe(warns);
+        },
+    );
+
+    const envReadCases: Array<{ runtime: BackendRuntime; warnings: string[] }> = [
+        { runtime: 'v1', warnings: [] },
+        { runtime: 'v2', warnings: [expect.stringContaining('process.env.STRIPE_KEY')] },
+    ];
+    test.each(envReadCases)(
+        'should warn about process.env reads only under v2 ($runtime)',
+        ({ runtime, warnings }) => {
+            check(ENV_READ, runtime);
+
+            const logged = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
+            const messages = logged.map(([message]) => message);
+            expect(messages).toEqual(warnings);
         },
     );
 });

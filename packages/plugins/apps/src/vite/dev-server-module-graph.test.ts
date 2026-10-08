@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import { resetEnvReadWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-env-reads';
+import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -642,4 +643,99 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             expect(outcome).toEqual(expected);
         },
     );
+
+    describe('warning on process.env reads', () => {
+        let tempDir: string;
+        let envReadingFile: string;
+
+        beforeAll(() => {
+            const osTempDir = tmpdir();
+            const tempDirPrefix = path.join(osTempDir, 'dev-server-module-graph-env-');
+            tempDir = mkdtempSync(tempDirPrefix);
+            envReadingFile = path.join(tempDir, 'charge.ts');
+            writeFileSync(
+                envReadingFile,
+                'export function charge(): string | undefined { return process.env.STRIPE_KEY; }',
+            );
+        });
+
+        afterAll(() => {
+            rmSync(tempDir, { recursive: true, force: true });
+        });
+
+        beforeEach(() => {
+            resetEnvReadWarnings();
+        });
+
+        const collectEnvReadingEntry = (runtime: BackendRuntime) => {
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+            const log = getMockLogger();
+            return collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                log,
+                parseAst,
+                runtime,
+            );
+        };
+
+        const warnLogs = () =>
+            mockLogFn.mock.calls
+                .filter(([, level]) => level === 'warn')
+                .map(([message]) => String(message));
+
+        const runtimeCases: Array<{ runtime: BackendRuntime; warningCount: number }> = [
+            { runtime: 'v1', warningCount: 0 },
+            { runtime: 'v2', warningCount: 1 },
+        ];
+        test.each(runtimeCases)(
+            'Should warn about a process.env read $warningCount time(s) under $runtime',
+            async ({ runtime, warningCount }) => {
+                await collectEnvReadingEntry(runtime);
+
+                const warnings = warnLogs();
+                expect(warnings).toHaveLength(warningCount);
+                for (const warning of warnings) {
+                    expect(warning).toContain('process.env.STRIPE_KEY');
+                }
+            },
+        );
+
+        test('Should not warn about a node_modules dependency that reads process.env', async () => {
+            const cleanEntryFile = path.join(tempDir, 'entry.ts');
+            writeFileSync(cleanEntryFile, 'export function entry(): number { return 1; }');
+            const dependencyId = path.join(FIXTURE_ROOT, 'node_modules/stripe-config/index.ts');
+            const dependencyNode: FakeModuleNode = {
+                id: dependencyId,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: cleanEntryFile,
+                importedModules: new Set([dependencyNode]),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+            const log = getMockLogger();
+
+            await collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, log, parseAst, 'v2');
+
+            const warnings = warnLogs();
+            expect(warnings).toEqual([]);
+        });
+
+        test('Should not warn again when a later local run collects the same module', async () => {
+            await collectEnvReadingEntry('v2');
+            await collectEnvReadingEntry('v2');
+
+            const warnings = warnLogs();
+            expect(warnings).toHaveLength(1);
+        });
+    });
 });
