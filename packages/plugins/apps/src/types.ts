@@ -19,6 +19,21 @@ export type LongPollingOptions = {
     timeoutMs?: number;
 };
 
+/** One declared parameter, in the shape Datadog stores on the app version. */
+export type AppsParameterSchema = {
+    name: string;
+    type: 'STRING' | 'NUMBER' | 'BOOLEAN';
+    defaultValue: string | number | boolean;
+    label?: string;
+    description?: string;
+    enum?: readonly string[];
+};
+
+/** The value returned by `defineDatadogAppParameters()` from `@datadog/apps-frontend/parameters`. */
+export type AppsParameters = {
+    readonly schema: readonly AppsParameterSchema[];
+};
+
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
@@ -29,6 +44,12 @@ export type AppsOptions = {
     tags?: string[];
     /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
     longPolling?: LongPollingOptions;
+    /**
+     * Overrides the parameters found in app code. By default the build reads
+     * every `defineDatadogAppParameters({...})` call, so this is only needed
+     * for declarations the build cannot read.
+     */
+    parameters?: AppsParameters;
 };
 
 export type AppsManifest = {
@@ -37,6 +58,13 @@ export type AppsManifest = {
      * The backend adds them to the app's tags and never removes any.
      */
     tags: string[];
+    /**
+     * The app's complete parameter declaration, replacing the stored one. Absent
+     * only in manifests from older plugins, which keeps the stored declaration.
+     */
+    inputSchema?: {
+        parameters: AppsParameterSchema[];
+    };
     backend: {
         /** Mapping of encoded query name to information about that backend function. */
         functions: Record<
@@ -48,6 +76,7 @@ export type AppsManifest = {
     };
 };
 
-export type AppsOptionsWithDefaults = WithRequired<AppsOptions, 'include'> & {
+export type AppsOptionsWithDefaults = Omit<WithRequired<AppsOptions, 'include'>, 'parameters'> & {
     longPolling: Required<LongPollingOptions>;
+    parameters?: AppsParameterSchema[];
 };
