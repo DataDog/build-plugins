@@ -15,7 +15,7 @@ import { collectAssets } from '../assets';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
-import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
+import type { AppsManifest, AppsOptionsWithDefaults, AppsParameterSchema } from '../types';
 
 export const MANIFEST_DIR_PREFIX = 'dd-apps-manifest-';
 
@@ -26,9 +26,15 @@ export interface BuildAppPackageOptions {
     options: AppsOptionsWithDefaults;
     /** The app's complete tag list, written to the manifest as is. */
     tags: string[];
+    /** The app's parameter declaration; empty clears any earlier one. */
+    parameters?: AppsParameterSchema[];
 }
 
-function buildManifest(backendFunctions: BackendFunction[], tags: string[]): AppsManifest {
+function buildManifest(
+    backendFunctions: BackendFunction[],
+    tags: string[],
+    parameters: AppsParameterSchema[] | undefined,
+): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -36,7 +42,13 @@ function buildManifest(backendFunctions: BackendFunction[], tags: string[]): App
         };
     }
 
-    return { tags, backend: { functions } };
+    return {
+        tags,
+        // Omitted only when the caller has no declaration to report, which
+        // tells the uploader to keep the stored one.
+        ...(parameters === undefined ? {} : { inputSchema: { parameters } }),
+        backend: { functions },
+    };
 }
 
 async function writeManifestFile(
@@ -65,6 +77,7 @@ export async function buildAppPackage({
     context,
     options,
     tags,
+    parameters,
 }: BuildAppPackageOptions): Promise<string | undefined> {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -112,7 +125,7 @@ export async function buildAppPackage({
         }
         const tagList = tags.length > 0 ? tags.join(', ') : '(none)';
         log.debug(`App tags: ${tagList}.`);
-        const manifestContents = buildManifest(backendFunctions, tags);
+        const manifestContents = buildManifest(backendFunctions, tags, parameters);
         const manifest = await writeManifestFile(manifestContents);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);

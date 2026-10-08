@@ -1,7 +1,6 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
@@ -33,10 +32,17 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
+import {
+    extractParameterDeclarations,
+    mergeParameterDeclarations,
+    PARAMETERS_MODULE,
+} from '../parameters/extract-parameters';
 import { createTagSources, resolveTags } from '../tags';
 import type { TagSource } from '../tags';
-import type { AppsOptionsWithDefaults } from '../types';
+import type { AppsOptionsWithDefaults, AppsParameterSchema } from '../types';
+import { resolveParameters } from '../validate';
 
+import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-graph-collector';
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
@@ -181,6 +187,9 @@ export const getVitePlugin = ({
     });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+    // Parameter declarations found in app modules, keyed by full module id so a
+    // module re-parsed in watch mode replaces only its own declarations.
+    const parameterDeclarations = new Map<string, AppsParameterSchema[][]>();
 
     // Vite 6 invokes closeBundle when a dev server's plugin container closes,
     // not only for production builds. configureServer only runs for dev
@@ -351,6 +360,45 @@ export const getVitePlugin = ({
             // A watch-mode rebuild must not inherit tags derived from the previous build's code.
             buildTagSources = createBuildTagSources();
         },
+        // Reads parameter declarations from compiled app modules before bundling
+        // can inline or tree-shake them. Production builds only, like the
+        // backend module-graph collector.
+        moduleParsed(moduleInfo) {
+            // An explicit declaration replaces discovery, including for code the
+            // build could not read.
+            if (options.parameters !== undefined) {
+                return;
+            }
+            // `params.ts?raw` is a different module from `params.ts` and must
+            // not replace its declarations.
+            const moduleId = normalizeViteModuleId(moduleInfo.id);
+            if (
+                isViteVirtualModuleId(moduleId) ||
+                moduleInfo.id !== moduleId ||
+                !shouldTraverseCollectedModule(moduleId, context.buildRoot) ||
+                typeof moduleInfo.code !== 'string' ||
+                !moduleInfo.code.includes(PARAMETERS_MODULE)
+            ) {
+                parameterDeclarations.delete(moduleInfo.id);
+                return;
+            }
+            // Parse rather than read moduleInfo.ast, which Rolldown does not provide.
+            const program = ensureProgram(this.parse(moduleInfo.code), moduleId);
+            parameterDeclarations.set(
+                moduleInfo.id,
+                extractParameterDeclarations(program, moduleId),
+            );
+        },
+        buildEnd() {
+            // A watch rebuild only re-parses changed modules, so drop modules
+            // that are no longer part of the app, such as a deleted import.
+            const currentModules = new Set(this.getModuleIds());
+            for (const moduleId of parameterDeclarations.keys()) {
+                if (!currentModules.has(moduleId)) {
+                    parameterDeclarations.delete(moduleId);
+                }
+            }
+        },
         generateBundle: {
             // After other plugins have finished rewriting chunk code.
             order: 'post',
@@ -369,6 +417,14 @@ export const getVitePlugin = ({
         async closeBundle() {
             // Taken before any await, so the next watch-mode build can't change what this one packages.
             const tags = resolveTags(buildTagSources);
+            // An explicit option overrides discovery. Otherwise the code is the
+            // only definition, so finding nothing clears an earlier declaration.
+            const parameters =
+                options.parameters ??
+                resolveParameters({
+                    schema: mergeParameterDeclarations(parameterDeclarations),
+                }) ??
+                [];
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
                 return;
@@ -394,6 +450,7 @@ export const getVitePlugin = ({
                     context,
                     options,
                     tags,
+                    parameters,
                 });
             } finally {
                 if (backendOutDir) {
