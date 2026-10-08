@@ -24,6 +24,7 @@ import {
     findPackageBackendFunctionFiles,
     isBackendFunctionFile,
     isBackendSourceModule,
+    isOutsideRoot,
     type BackendFunctionPackage,
 } from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -120,10 +121,9 @@ export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 /**
  * Registers every backend function the given packages ship by running each of their backend
  * function files through the transform, the same way the browser's first request would. The SSR
- * environment's, because the client one won't load a file outside `server.fs.allow` that nothing
- * has imported yet, like a linked package's; without the local-execution suffix the transform
- * still registers the file and returns its proxy. A file that fails is logged, not fatal: the
- * browser's request reports it too.
+ * environment's, the one local execution loads them through; without the local-execution suffix
+ * the transform still registers the file and returns its proxy. A file that fails is logged, not
+ * fatal: the browser's request reports it too.
  */
 async function registerPackageBackendFunctions(
     server: ViteDevServer,
@@ -155,6 +155,22 @@ async function registerPackageBackendFunctions(
             await Promise.all(files.map(register));
         }),
     );
+}
+
+/**
+ * Adds each package's real root to the dev server's `server.fs.allow`, unless an entry already
+ * covers it. Otherwise Vite only loads a file from a package linked outside the workspace once
+ * something has imported it, so after a restart local execution fails on a function the browser
+ * still calls through its cached proxy.
+ */
+function allowPackageRoots(allow: string[], packages: BackendFunctionPackage[]): void {
+    for (const { root } of packages) {
+        // Vite's entries and the paths it checks against them use forward slashes.
+        const vitePath = path.sep === '\\' ? root.split(path.sep).join('/') : root;
+        if (!allow.some((dir) => !isOutsideRoot(path.relative(dir, vitePath)))) {
+            allow.push(vitePath);
+        }
+    }
 }
 
 /**
@@ -250,6 +266,13 @@ export const getVitePlugin = ({
                     },
                 };
             },
+        },
+        configResolved(config) {
+            if (config.command === 'serve') {
+                // Mutates the resolved list: that extends Vite's default (or the user's list)
+                // without replacing it or importing vite.
+                allowPackageRoots(config.server.fs.allow, backendPackages);
+            }
         },
         // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
         configEnvironment(name, environmentOptions, { command, isPreview }) {
