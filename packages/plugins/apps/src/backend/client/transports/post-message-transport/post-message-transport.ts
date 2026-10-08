@@ -4,12 +4,15 @@
 
 /* eslint-env browser */
 
+import { DEBUG_BUNDLE_PATH } from '../../../protocol';
+import type { DebugBundleResponse, ExecuteActionRequest } from '../../../protocol';
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
 
-import type { IframeQueryResponse } from './types';
+import type { IframeQueryRequest, IframeQueryResponse } from './types';
 
-const POSTMESSAGE_TIMEOUT_MS = 120_000;
+export const POSTMESSAGE_TIMEOUT_MS = 120_000;
+export const BUNDLE_FETCH_TIMEOUT_MS = 60_000;
 
 let requestCounter = 0;
 
@@ -32,18 +35,60 @@ function isQueryResponse(data: unknown, requestId: string): data is IframeQueryR
     );
 }
 
+function isDebugBundle(data: unknown): data is DebugBundleResponse {
+    return (
+        data !== null &&
+        typeof data === 'object' &&
+        'code' in data &&
+        typeof data.code === 'string' &&
+        data.code.length > 0 &&
+        'allowedConnectionIds' in data &&
+        Array.isArray(data.allowedConnectionIds) &&
+        data.allowedConnectionIds.every((id: unknown) => typeof id === 'string')
+    );
+}
+
+/** Resolves `undefined` rather than throwing when no dev server bundle is available (e.g. a deployed app), so the call is still sent. */
+async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse | undefined> {
+    const request: Pick<ExecuteActionRequest, 'functionName'> = { functionName };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), BUNDLE_FETCH_TIMEOUT_MS);
+    try {
+        const response = await fetch(DEBUG_BUNDLE_PATH, {
+            method: 'POST',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify(request),
+            signal: controller.signal,
+        });
+        if (!response.ok) {
+            return undefined;
+        }
+        const body: unknown = await response.json();
+        if (!isDebugBundle(body)) {
+            return undefined;
+        }
+        return { code: body.code, allowedConnectionIds: body.allowedConnectionIds };
+    } catch {
+        return undefined;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 /**
  * Transport for executing backend functions via `postMessage` when the app
  * is hosted inside an iframe (e.g. App Builder preview). Sends a
  * `app-builder:run-query` message to the parent window and listens for a
  * matching `app-builder:run-query:response` reply. Rejects if no response
- * arrives within {@link POSTMESSAGE_TIMEOUT_MS}.
+ * arrives within {@link POSTMESSAGE_TIMEOUT_MS} of being sent. The message
+ * carries the function's dev server bundle when one is available.
  */
-export const postMessageTransport: BackendFunctionTransport = <TData>(
+export const postMessageTransport: BackendFunctionTransport = async <TData>(
     functionName: string,
     args: unknown[],
 ): Promise<TData> => {
     const requestId = generateRequestId();
+    const bundle = await fetchOwnBundle(functionName);
 
     return new Promise<TData>((resolve, reject) => {
         let timeoutId: ReturnType<typeof setTimeout>;
@@ -86,14 +131,18 @@ export const postMessageTransport: BackendFunctionTransport = <TData>(
             );
         }, POSTMESSAGE_TIMEOUT_MS);
 
-        window.parent.postMessage(
-            {
-                type: 'app-builder:run-query',
-                requestId,
-                queryName: functionName,
-                args,
-            },
-            '*',
-        );
+        const message: IframeQueryRequest = {
+            type: 'app-builder:run-query',
+            requestId,
+            queryName: functionName,
+            args,
+            ...(bundle && { bundle }),
+        };
+        try {
+            window.parent.postMessage(message, '*');
+        } catch (error) {
+            cleanup();
+            reject(error);
+        }
     });
 };
