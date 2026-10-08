@@ -18,6 +18,17 @@ export interface ExecuteActionRequest {
     args: unknown[];
 }
 
+// Relative, so the iframe client's fetch survives a proxy path prefix; it resolves against the page's own path.
+export const DEBUG_BUNDLE_PATH = '__dd/debugBundle';
+
+/**
+ * JSON response from the dev server's `debugBundle` endpoint.
+ */
+export interface DebugBundleResponse {
+    code: string;
+    allowedConnectionIds: string[];
+}
+
 /**
  * Response from executing a backend function.
  *

@@ -434,6 +434,39 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(apiScope.isDone()).toBe(true);
     }, 30000);
 
+    test('Should return a real bundle with the connection IDs it uses from /__dd/debugBundle as JSON', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const log = getMockLogger();
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [actionCatalogCallFunc],
+            async () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            mockLongPolling,
+            FIXTURE_ROOT,
+            log,
+            'development',
+        );
+
+        const functionName = encodeQueryName(actionCatalogCallFunc);
+        const req = createMockRequest(
+            '/__dd/debugBundle',
+            { functionName },
+            { accept: 'application/json' },
+        );
+        const res = createMockResponse();
+
+        middleware(req, res, jest.fn());
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.getBody());
+        expect(body.allowedConnectionIds).toEqual(['conn-1']);
+        expect(body.code).toContain('conn-1');
+    }, 30000);
+
     // A dynamic import sits between two static ones, so resolution must come from the AST
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {

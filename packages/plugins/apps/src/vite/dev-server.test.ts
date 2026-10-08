@@ -19,6 +19,7 @@ import nock from 'nock';
 import { parseAst } from 'rollup/parseAst';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
@@ -499,6 +500,140 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain');
             expect(res.getBody()).toContain('export function main($)');
+        });
+
+        const plainTextCases = [
+            { description: 'no Accept header', headers: {} },
+            { description: 'a wildcard Accept header', headers: { accept: '*/*' } },
+            { description: 'a text/plain Accept header', headers: { accept: 'text/plain' } },
+            {
+                description: 'an Accept header that refuses JSON with q=0',
+                headers: { accept: 'application/json;q=0, text/plain' },
+            },
+        ];
+
+        test.each(plainTextCases)(
+            'Should keep returning plain-text code for a request with $description',
+            async ({ headers }) => {
+                mockBuildWithParsedBackend('export function main($) {}');
+
+                const functionName = encodeQueryName(mockFunctions[0]);
+                const req = createMockRequest('/__dd/debugBundle', { functionName }, headers);
+                const res = createMockResponse();
+
+                middleware(req, res, jest.fn());
+                await res.done;
+
+                expect(res.statusCode).toBe(200);
+                expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain');
+                expect(res.getBody()).toBe('export function main($) {}');
+            },
+        );
+
+        const jsonAcceptCases = [
+            { description: 'application/json', accept: 'application/json' },
+            { description: 'application/json with parameters', accept: 'application/json; q=1' },
+            { description: 'mixed-case application/json', accept: 'Application/JSON' },
+            {
+                description: 'application/json among other media types',
+                accept: 'text/html, application/json;q=0.9',
+            },
+        ];
+
+        test.each(jsonAcceptCases)(
+            'Should return code and no connection IDs as JSON for an Accept header of $description',
+            async ({ accept }) => {
+                mockBuildWithParsedBackend('export function main($) {}');
+
+                const functionName = encodeQueryName(mockFunctions[0]);
+                const req = createMockRequest('/__dd/debugBundle', { functionName }, { accept });
+                const res = createMockResponse();
+
+                middleware(req, res, jest.fn());
+                await res.done;
+
+                expect(res.statusCode).toBe(200);
+                expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
+                expect(JSON.parse(res.getBody())).toEqual({
+                    code: 'export function main($) {}',
+                    allowedConnectionIds: [],
+                });
+            },
+        );
+
+        test('Should return the connection IDs the bundled function and its helpers use as JSON', async () => {
+            const helperId = '/project/backend/helpers/slack.ts';
+            const entryCode = `
+                import { request } from '@datadog/action-catalog/http/http';
+                import { notify } from './helpers/slack';
+                export function greet() {
+                    request({ connectionId: 'conn-http', inputs: {} });
+                    return notify();
+                }
+            `;
+            const helperCode = `
+                import { sendSlackMessage } from '@datadog/action-catalog';
+                export function notify() {
+                    return sendSlackMessage({ connectionId: 'conn-slack', inputs: {} });
+                }
+            `;
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode, [helperId]);
+                emitModuleParsed(config, helperId, helperCode);
+                return mockBuildResult('// bundled');
+            });
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                '/__dd/debugBundle',
+                { functionName },
+                { accept: 'application/json' },
+            );
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(JSON.parse(res.getBody())).toEqual({
+                code: '// bundled',
+                allowedConnectionIds: ['conn-http', 'conn-slack'],
+            });
+        });
+
+        test('Should serve debugBundle at the path the iframe client fetches', async () => {
+            mockBuildWithParsedBackend('export function main($) {}');
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(`/${DEBUG_BUNDLE_PATH}`, { functionName });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            await res.done;
+
+            expect(next).not.toHaveBeenCalled();
+            expect(res.getBody()).toBe('export function main($) {}');
+        });
+
+        test('Should return a JSON 404 for an unknown query name when JSON is requested', async () => {
+            const req = createMockRequest(
+                '/__dd/debugBundle',
+                { functionName: 'nonexistent.nonexistent' },
+                { accept: 'application/json' },
+            );
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(404);
+            expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
+            expect(JSON.parse(res.getBody())).toEqual({
+                success: false,
+                error: 'Backend function "nonexistent.nonexistent" not found',
+            });
+            expect(mockViteBuild).not.toHaveBeenCalled();
         });
 
         test('Should reject a bundle whose imported helper module has a restricted import or global', async () => {
