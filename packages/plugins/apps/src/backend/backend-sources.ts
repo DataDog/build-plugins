@@ -310,7 +310,8 @@ function getDependencyNames(
 /**
  * Every opted-in package installed in the app's dependency tree (direct or transitive), so
  * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
- * their backend files reachable by the plugin.
+ * their backend files reachable by the plugin. One entry per installed copy: two copies of a
+ * package share a name but not a root.
  */
 export function findInstalledBackendFunctionPackages(buildRoot: string): BackendFunctionPackage[] {
     const appDir = findNearestManifestDir(buildRoot);
@@ -319,7 +320,7 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): Backend
         return [];
     }
 
-    const found = new Map<string, BackendFunctionPackage>();
+    const found: BackendFunctionPackage[] = [];
     const visited = new Set<string>();
     const pending: Array<{ dir: string; dependencyNames: string[] }> = [
         {
@@ -345,7 +346,7 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): Backend
                 continue;
             }
             if (providesBackendFunctions(manifest) && typeof manifest.name === 'string') {
-                found.set(manifest.name, { name: manifest.name, root: packageDir });
+                found.push({ name: manifest.name, root: packageDir });
             }
             pending.push({
                 dir: packageDir,
@@ -354,7 +355,7 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): Backend
         }
     }
 
-    return [...found.values()];
+    return found;
 }
 
 /**
