@@ -361,11 +361,32 @@ describe.each<Layout>(['installed', 'linked'])(
 
             // Vite serves an excluded package's modules with a `?v=` query and immutable caching, so
             // after a restart a browser can call through its cached proxy without requesting the
-            // module from the new server.
+            // module from the new server. That holds for each installed copy of the library, even
+            // two sharing a name.
             test('Should execute the library function after a restart, for a browser that kept its cached proxy', async () => {
+                const hooksLibDir = path.join(appRoot, 'node_modules/@fixtures/hooks-lib');
+                const hooksManifestPath = path.join(hooksLibDir, 'package.json');
+                const hooksManifest = JSON.parse(await fsp.readFile(hooksManifestPath, 'utf-8'));
+                const nestedManifest = {
+                    ...hooksManifest,
+                    dependencies: { '@fixtures/viz-lib': '0.0.1' },
+                };
+                await fsp.writeFile(hooksManifestPath, JSON.stringify(nestedManifest));
+                const vizLibSource = path.join(PROJECT_DIR, 'packages/viz-lib');
+                const nestedVizLib = path.join(hooksLibDir, 'node_modules/@fixtures/viz-lib');
+                await fsp.cp(vizLibSource, nestedVizLib, { recursive: true });
+
                 const [queryName] = getProxiedQueryNames(
                     await loadClientModuleGraph(server, '/main.ts'),
                 );
+                const nestedProxy = await loadClientModuleGraph(
+                    server,
+                    '/node_modules/@fixtures/hooks-lib/node_modules/@fixtures/viz-lib/dist/src/visualizations/data.backend.js',
+                );
+                const [nestedQueryName] = getProxiedQueryNames(nestedProxy);
+                expect(nestedQueryName).toBeDefined();
+                expect(nestedQueryName).not.toBe(queryName);
+
                 const restarted = await createServer({
                     root: appRoot,
                     configFile: false,
@@ -374,26 +395,29 @@ describe.each<Layout>(['installed', 'linked'])(
                     plugins: [getAppsPlugin()],
                 });
                 try {
-                    const { api } = mockDatadogApi({ points: [7] });
-                    const req = createMockRequest('/__dd/executeAction', {
-                        functionName: queryName,
-                        args: [QUERY],
-                    });
-                    const res = createMockResponse();
-                    restarted.middlewares(req, res, jest.fn());
-                    await res.done;
+                    for (const functionName of [queryName, nestedQueryName]) {
+                        const { api } = mockDatadogApi({ points: [7] });
+                        const req = createMockRequest('/__dd/executeAction', {
+                            functionName,
+                            args: [QUERY],
+                        });
+                        const res = createMockResponse();
+                        restarted.middlewares(req, res, jest.fn());
+                        // eslint-disable-next-line no-await-in-loop
+                        await res.done;
 
-                    expect(JSON.parse(res.getBody())).toEqual({
-                        success: true,
-                        result: {
-                            data: {
-                                query: QUERY,
-                                series: { points: [7] },
-                                servedBy: VIZ_BACKEND_BODY,
+                        expect(JSON.parse(res.getBody())).toEqual({
+                            success: true,
+                            result: {
+                                data: {
+                                    query: QUERY,
+                                    series: { points: [7] },
+                                    servedBy: VIZ_BACKEND_BODY,
+                                },
                             },
-                        },
-                    });
-                    expect(api.isDone()).toBe(true);
+                        });
+                        expect(api.isDone()).toBe(true);
+                    }
                 } finally {
                     await restarted.close();
                 }

@@ -221,7 +221,9 @@ export const getVitePlugin = ({
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
                 backendPackages = findInstalledBackendFunctionPackages(root);
-                const backendPackageNames = backendPackages.map((pkg) => pkg.name);
+                // Two installed copies of a package share its name.
+                const installedPackageNames = backendPackages.map((pkg) => pkg.name);
+                const backendPackageNames = [...new Set(installedPackageNames)];
                 // Info, not debug: the package's own manifest is the whole consent, so the app's
                 // developer should see which packages it trusts to add backend functions.
                 if (backendPackageNames.length > 0) {
