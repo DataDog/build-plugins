@@ -10,6 +10,11 @@ permissions:
   contents: read
   id-token: write # Needed to federate tokens.
 
+# Cancel superseded runs of a PR. Other events get a unique group so they never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit-test:
     name: Unit tests
