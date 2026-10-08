@@ -6,7 +6,7 @@ import { existsSync, readJsonSync } from '@dd/core/helpers/fs';
 import fs from 'fs';
 import path from 'path';
 
-import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_WITH_QUERY_RE } from '../constants';
+import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_RE, BACKEND_FILE_WITH_QUERY_RE } from '../constants';
 
 /**
  * Decides which modules belong to an app's backend: the app's own source, plus the source of any
@@ -308,18 +308,18 @@ function getDependencyNames(
 }
 
 /**
- * Names every opted-in package installed in the app's dependency tree (direct or transitive), so
- * dev-server configuration that needs package names up front, like dependency pre-bundling, can
- * keep their backend files reachable by the plugin.
+ * Every opted-in package installed in the app's dependency tree (direct or transitive), so
+ * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
+ * their backend files reachable by the plugin.
  */
-export function findInstalledBackendFunctionPackages(buildRoot: string): string[] {
+export function findInstalledBackendFunctionPackages(buildRoot: string): BackendFunctionPackage[] {
     const appDir = findNearestManifestDir(buildRoot);
     const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
     if (!appDir || !appManifest) {
         return [];
     }
 
-    const found = new Set<string>();
+    const found = new Map<string, BackendFunctionPackage>();
     const visited = new Set<string>();
     const pending: Array<{ dir: string; dependencyNames: string[] }> = [
         {
@@ -345,7 +345,7 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): string[
                 continue;
             }
             if (providesBackendFunctions(manifest) && typeof manifest.name === 'string') {
-                found.add(manifest.name);
+                found.set(manifest.name, { name: manifest.name, root: packageDir });
             }
             pending.push({
                 dir: packageDir,
@@ -354,5 +354,26 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): string[
         }
     }
 
-    return [...found];
+    return [...found.values()];
+}
+
+/**
+ * The `.backend.*` files an opted-in package ships, outside its own nested `node_modules`. Every
+ * one is a backend function file (see isBackendFunctionFile), whether or not the app imports it.
+ */
+export function findPackageBackendFunctionFiles(pkg: BackendFunctionPackage): string[] {
+    const files: string[] = [];
+    const pending = [pkg.root];
+    while (pending.length > 0) {
+        const dir = pending.pop()!;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const entryPath = path.join(dir, entry.name);
+            if (entry.isDirectory() && !PACKAGE_MANAGER_DIRS.has(entry.name)) {
+                pending.push(entryPath);
+            } else if (entry.isFile() && BACKEND_FILE_RE.test(entry.name)) {
+                files.push(entryPath);
+            }
+        }
+    }
+    return files.sort();
 }

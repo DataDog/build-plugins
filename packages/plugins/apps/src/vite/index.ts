@@ -3,10 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { rm } from '@dd/core/helpers/fs';
-import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build } from 'vite';
+import type { build, ViteDevServer } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -21,8 +21,10 @@ import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-stati
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
+    findPackageBackendFunctionFiles,
     isBackendFunctionFile,
     isBackendSourceModule,
+    type BackendFunctionPackage,
 } from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
@@ -116,6 +118,46 @@ const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 /**
+ * Registers every backend function the given packages ship by running each of their backend
+ * function files through the transform, the same way the browser's first request would. The SSR
+ * environment's, because the client one won't load a file outside `server.fs.allow` that nothing
+ * has imported yet, like a linked package's; without the local-execution suffix the transform
+ * still registers the file and returns its proxy. A file that fails is logged, not fatal: the
+ * browser's request reports it too.
+ */
+async function registerPackageBackendFunctions(
+    server: ViteDevServer,
+    packages: BackendFunctionPackage[],
+    log: Logger,
+): Promise<void> {
+    // Vite 5 has no environment API.
+    const transformRequest = server.environments?.ssr
+        ? (file: string) => server.environments.ssr.transformRequest(file)
+        : (file: string) => server.transformRequest(file, { ssr: true });
+    const register = async (file: string) => {
+        try {
+            await transformRequest(file);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            log.warn(`Could not register the backend functions in ${file}: ${reason}`);
+        }
+    };
+    await Promise.all(
+        packages.map(async (pkg) => {
+            let files: string[];
+            try {
+                files = findPackageBackendFunctionFiles(pkg);
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : String(error);
+                log.warn(`Could not list the backend functions of "${pkg.name}": ${reason}`);
+                return;
+            }
+            await Promise.all(files.map(register));
+        }),
+    );
+}
+
+/**
  * Returns the Vite-specific plugin hooks for the apps plugin.
  *
  * Transform: discovers backend exports and connection allowlists, registers
@@ -151,6 +193,7 @@ export const getVitePlugin = ({
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
+    let backendPackages: BackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
     // rebuild can start before the previous closeBundle finishes.
@@ -177,7 +220,8 @@ export const getVitePlugin = ({
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
-                const backendPackageNames = findInstalledBackendFunctionPackages(root);
+                backendPackages = findInstalledBackendFunctionPackages(root);
+                const backendPackageNames = backendPackages.map((pkg) => pkg.name);
                 // Info, not debug: the package's own manifest is the whole consent, so the app's
                 // developer should see which packages it trusts to add backend functions.
                 if (backendPackageNames.length > 0) {
@@ -460,10 +504,21 @@ export const getVitePlugin = ({
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
+            // A browser keeps an opted-in package's proxy modules across dev-server restarts:
+            // Vite serves excluded dependencies with a `?v=` query, as immutable. The transform
+            // would then never run in this server and leave their functions unregistered, so
+            // every backend function file those packages ship is registered at startup, and
+            // requests wait for that.
+            const packageFunctionsRegistered =
+                backendPackages.length > 0
+                    ? registerPackageBackendFunctions(server, backendPackages, log)
+                    : undefined;
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 loadModule,
-                getBackendFunctions,
+                packageFunctionsRegistered
+                    ? () => packageFunctionsRegistered.then(getBackendFunctions)
+                    : getBackendFunctions,
                 getAllowedConnectionIds,
                 auth,
                 doAuthenticatedRequest,
