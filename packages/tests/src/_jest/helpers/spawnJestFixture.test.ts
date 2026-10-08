@@ -9,7 +9,7 @@ const validReport = {
     numPassedTests: 1,
     numRuntimeErrorTestSuites: 0,
     numTotalTests: 1,
-    testResults: [{ message: '' }],
+    testResults: [{ message: '', assertionResults: [{ title: 'Should pass', status: 'passed' }] }],
 };
 const OUTPUT = 'status: 1, signal: null';
 
@@ -46,7 +46,20 @@ describe('parseJestReport', () => {
         },
         {
             description: 'throw with the run output when a test result has no message',
-            stdout: JSON.stringify({ ...validReport, testResults: [{}] }),
+            stdout: JSON.stringify({ ...validReport, testResults: [{ assertionResults: [] }] }),
+            expected: { error: `Fixture run produced an unexpected JSON report.\n${OUTPUT}` },
+        },
+        {
+            description: 'throw with the run output when a test result has no assertion results',
+            stdout: JSON.stringify({ ...validReport, testResults: [{ message: '' }] }),
+            expected: { error: `Fixture run produced an unexpected JSON report.\n${OUTPUT}` },
+        },
+        {
+            description: 'throw with the run output when an assertion result has no status',
+            stdout: JSON.stringify({
+                ...validReport,
+                testResults: [{ message: '', assertionResults: [{ title: 'Should pass' }] }],
+            }),
             expected: { error: `Fixture run produced an unexpected JSON report.\n${OUTPUT}` },
         },
     ];

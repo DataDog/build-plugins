@@ -5,12 +5,14 @@
 import { spawnSync } from 'child_process';
 import path from 'path';
 
-type JestJsonReport = {
+type AssertionResult = { title: string; status: string };
+
+export type JestJsonReport = {
     numFailedTests: number;
     numPassedTests: number;
     numRuntimeErrorTestSuites: number;
     numTotalTests: number;
-    testResults: { message: string }[];
+    testResults: { message: string; assertionResults: AssertionResult[] }[];
 };
 
 const jestPackagePath = require.resolve('jest/package.json');
@@ -18,14 +20,21 @@ const jestBinDir = path.dirname(jestPackagePath);
 const JEST_BIN_PATH = path.join(jestBinDir, 'bin/jest.js');
 const JEST_CONFIG_PATH = path.resolve(__dirname, '../../../jest.config.ts');
 export const NOOP_SETUP_PATH = path.resolve(__dirname, '../noopGlobalSetup.ts');
-const SPAWN_TIMEOUT_MS = 20000;
+// Only a hang guard: inside a loaded full-suite run, the child's startup alone can pass 15s.
+const SPAWN_TIMEOUT_MS = 60000;
 export const FIXTURE_TEST_TIMEOUT_MS = SPAWN_TIMEOUT_MS + 5000;
+
+type FixtureRunOptions = {
+    globalSetupPath?: string;
+    executionArgs?: string[];
+};
 
 // Runs the fixture files matching `testMatch` together in one spawned Jest process.
 export const spawnJestFixture = (
     testMatch: string,
     extraArgs: string[],
     extraEnv: Record<string, string>,
+    { globalSetupPath = NOOP_SETUP_PATH, executionArgs = ['--runInBand'] }: FixtureRunOptions = {},
 ) => {
     const result = spawnSync(
         process.execPath,
@@ -36,9 +45,9 @@ export const spawnJestFixture = (
             '--testMatch',
             testMatch,
             '--globalSetup',
-            NOOP_SETUP_PATH,
+            globalSetupPath,
             ...extraArgs,
-            '--runInBand',
+            ...executionArgs,
             '--ci',
             '--no-watchman',
         ],
@@ -64,7 +73,13 @@ export const spawnJestFixture = (
     if (result.error) {
         throw new Error(`Fixture run failed: ${result.error.message}\n${output}`);
     }
-    return { status: result.status, stdout: result.stdout, stderr: result.stderr, output };
+    return {
+        status: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        output,
+        pid: result.pid,
+    };
 };
 
 const REPORT_COUNT_KEYS = [
@@ -74,22 +89,31 @@ const REPORT_COUNT_KEYS = [
     'numTotalTests',
 ] as const;
 
+const isAssertionResult = (value: unknown) =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof Reflect.get(value, 'title') === 'string' &&
+    typeof Reflect.get(value, 'status') === 'string';
+
+const isTestFileResult = (file: unknown) => {
+    if (typeof file !== 'object' || file === null) {
+        return false;
+    }
+    const assertionResults: unknown = Reflect.get(file, 'assertionResults');
+    return (
+        typeof Reflect.get(file, 'message') === 'string' &&
+        Array.isArray(assertionResults) &&
+        assertionResults.every(isAssertionResult)
+    );
+};
+
 const isJestJsonReport = (value: unknown): value is JestJsonReport => {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
     const hasCounts = REPORT_COUNT_KEYS.every((key) => typeof Reflect.get(value, key) === 'number');
     const testResults: unknown = Reflect.get(value, 'testResults');
-    return (
-        hasCounts &&
-        Array.isArray(testResults) &&
-        testResults.every(
-            (file: unknown) =>
-                typeof file === 'object' &&
-                file !== null &&
-                typeof Reflect.get(file, 'message') === 'string',
-        )
-    );
+    return hasCounts && Array.isArray(testResults) && testResults.every(isTestFileResult);
 };
 
 export const parseJestReport = (run: { stdout: string; output: string }): JestJsonReport => {
