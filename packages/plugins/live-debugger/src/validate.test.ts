@@ -34,6 +34,7 @@ describe('validateOptions', () => {
                 input: makeConfig(undefined),
                 expected: {
                     version: undefined,
+                    debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
                     fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
@@ -48,6 +49,7 @@ describe('validateOptions', () => {
                 input: makeConfig({}),
                 expected: {
                     version: undefined,
+                    debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
                     fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
@@ -62,6 +64,7 @@ describe('validateOptions', () => {
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
                     version: '1.0.0',
+                    debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
                     fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
@@ -80,6 +83,30 @@ describe('validateOptions', () => {
                 description: 'leave version undefined when only metadata.name is set',
                 input: makeConfig({}, { name: 'my-build' }),
                 expected: expect.objectContaining({ version: undefined }),
+            },
+            {
+                description: 'enable debug IDs when RUM debug IDs are enabled',
+                input: {
+                    ...makeConfig({}),
+                    rum: { sourceCodeContext: { debugId: true } },
+                } satisfies Options,
+                expected: expect.objectContaining({ debugId: true }),
+            },
+            {
+                description: 'disable debug IDs when RUM uses service and version',
+                input: {
+                    ...makeConfig({}),
+                    rum: { sourceCodeContext: { service: 'checkout' } },
+                } satisfies Options,
+                expected: expect.objectContaining({ debugId: false }),
+            },
+            {
+                description: 'disable debug IDs when the RUM plugin is disabled',
+                input: {
+                    ...makeConfig({}),
+                    rum: { enable: false, sourceCodeContext: { debugId: true } },
+                } satisfies Options,
+                expected: expect.objectContaining({ debugId: false }),
             },
         ];
 

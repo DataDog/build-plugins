@@ -145,13 +145,14 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const validatedOptions = validateOptions(options, log);
 
     // Inject no-op stubs for the runtime globals so instrumented code
-    // doesn't crash when the Datadog Browser Debugger SDK is absent.
-    // The SDK's init() overwrites these with the real implementations.
+    // doesn't crash when the Datadog Browser Debugger SDK is absent,
+    // along with the build metadata the SDK reads.
+    // The SDK's init() overwrites the stubs with the real implementations.
     context.inject({
         type: 'code',
         position: InjectPosition.BEFORE,
         injectIntoAllChunks: true,
-        value: getRuntimeBootstrap(validatedOptions.version),
+        value: getRuntimeBootstrap(validatedOptions),
     });
 
     return [getLiveDebuggerPlugin(validatedOptions, context)];

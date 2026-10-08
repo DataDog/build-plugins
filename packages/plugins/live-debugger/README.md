@@ -24,6 +24,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Skipped function types](#skipped-function-types)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
+    -   [Build metadata](#build-metadata)
     -   [Invocation handles](#invocation-handles)
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
@@ -126,7 +127,7 @@ datadogBuildPlugins({
 });
 ```
 
-When set, Live Debugger injects the value into runtime-visible build metadata so the Browser Debugger SDK uses it as the default `version` during `init()`.
+When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
 If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
 
@@ -263,6 +264,21 @@ if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = func
 ```
 
 This ensures that instrumented code never crashes, even if the SDK has not been loaded. The stub makes `$dd_probes` return `undefined`, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+
+### Build metadata
+
+The same injected code defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
+
+```javascript
+if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
+    globalThis.__DD_LIVE_DEBUGGER_BUILD__ = { version: '1.0.0', debugId: '<debug ID of the chunk>' };
+}
+```
+
+- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
+- `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
+
+The global is defined even when both fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
 
 ### Invocation handles
 
