@@ -52,7 +52,7 @@ import type { PluginBuild, Metafile } from 'esbuild';
 import esbuild from 'esbuild';
 import { EventEmitter } from 'events';
 import type { PathLike, Stats } from 'fs';
-import type { IncomingMessage, ServerResponse } from 'http';
+import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from 'http';
 import path from 'path';
 
 import { getTempWorkingDir } from './env';
@@ -150,10 +150,15 @@ export const moduleResolverFor = (
 /**
  * Create a mock IncomingMessage with a JSON body.
  */
-export function createMockRequest(url: string, body: Record<string, unknown>): IncomingMessage {
+export function createMockRequest(
+    url: string,
+    body: Record<string, unknown>,
+    headers: IncomingHttpHeaders = {},
+): IncomingMessage {
     const req = new EventEmitter() as unknown as IncomingMessage;
     req.method = 'POST';
     req.url = url;
+    req.headers = headers;
 
     // Simulate body stream in next tick.
     process.nextTick(() => {
