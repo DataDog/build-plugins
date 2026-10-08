@@ -28,7 +28,7 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
-import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
+import { build, createServer, loadEnv, type Plugin, type ViteDevServer } from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -150,7 +150,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, loadEnv },
                 context: getContextMock({ buildRoot: FIXTURE_ROOT }),
                 options: {
                     include: [],
@@ -510,7 +510,7 @@ describe('Dev Server Middleware — editing files between local executions', () 
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, loadEnv },
                 context,
                 options: { include: [], longPolling: mockLongPolling },
             }),
@@ -794,7 +794,7 @@ describe('Dev Server Middleware — SSR import warmup warnings', () => {
             const appsPlugin: Plugin = {
                 name: 'dd-apps-test',
                 ...getVitePlugin({
-                    bundler: { build },
+                    bundler: { build, loadEnv },
                     context,
                     options: { include: [], longPolling: mockLongPolling },
                 }),
@@ -892,7 +892,7 @@ describe('Dev Server Middleware — dynamic imports inside a backend function', 
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, loadEnv },
                 context: getContextMock({ buildRoot: root }),
                 options: { include: [], longPolling: mockLongPolling },
             }),
