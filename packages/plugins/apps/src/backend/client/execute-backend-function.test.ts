@@ -2,12 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-// Only the fetch (dev-server) transport is exercised here. The iframe
-// postMessage transport requires a DOM (`window`, `MessageEvent`) that this
-// repo's node-only jest harness doesn't provide — adding jsdom collides with
-// the shared `setupAfterEnv.ts` (nock → TextEncoder). postMessage coverage
-// lives with the original tests in web-ui's @datadog/apps-function-query
-// until a DOM-enabled harness is introduced.
+// Only the fetch (dev-server) transport is exercised here; the iframe
+// postMessage transport is covered by post-message-transport.test.ts.
 
 import { executeBackendFunction } from './execute-backend-function';
 import { BackendFunctionError } from './types';
