@@ -16,11 +16,18 @@ import JSZip from 'jszip';
 import nock from 'nock';
 import os from 'os';
 import path from 'path';
+import { parseAst } from 'rollup/parseAst';
 import { pathToFileURL } from 'url';
 import { build, createServer, type ViteDevServer } from 'vite';
 
 import { ARCHIVE_FILENAME } from '../constants';
 import type { AppsManifest } from '../types';
+
+// Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
+// entry and no `parseAst`; the published build keeps the real import.
+jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
+    loadViteParseAst: async () => parseAst,
+}));
 
 const FIXTURES_DIR = path.resolve(__dirname, '../../../../tests/src/_jest/fixtures');
 const PROJECT_DIR = path.join(FIXTURES_DIR, 'apps_backend_library_project');
