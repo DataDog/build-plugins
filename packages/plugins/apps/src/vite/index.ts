@@ -17,7 +17,9 @@ import {
 import {
     CLOUD_EXECUTION_RUNTIME,
     resolveBackendRuntime,
+    resolveBackendRuntimeStatus,
     type BackendRuntime,
+    type BackendRuntimeStatus,
 } from '../backend-runtime';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
@@ -186,6 +188,8 @@ export const getVitePlugin = ({
         isDevVerifySession
             ? Promise.resolve(CLOUD_EXECUTION_RUNTIME)
             : resolveBackendRuntime(auth.site, log);
+    const getLocalExecutionRuntime = (): Promise<BackendRuntimeStatus> =>
+        resolveBackendRuntimeStatus(auth.site, log);
 
     context.inject({
         type: 'file',
@@ -450,9 +454,7 @@ export const getVitePlugin = ({
                     installGuards();
                 } catch (error) {
                     const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(
-                        `Could not install the backend function sandbox guards yet: ${reason}`,
-                    );
+                    log.warn(`Could not install the local-execution guards yet: ${reason}`);
                 }
                 if (gracefulFsPredatesGuards()) {
                     log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
@@ -476,10 +478,8 @@ export const getVitePlugin = ({
             // Safe to call before `loadModule` runs anything: collectModuleGraphFromServer primes
             // each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
-            const getAllowedConnectionIds = async (entryId: string) => {
-                const parseAstLoad = loadViteParseAst();
-                const runtimeLookup = getBackendRuntime();
-                const [parseAst, runtime] = await Promise.all([parseAstLoad, runtimeLookup]);
+            const getAllowedConnectionIds = async (entryId: string, runtime: BackendRuntime) => {
+                const parseAst = await loadViteParseAst();
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
                     entryId,
@@ -501,6 +501,7 @@ export const getVitePlugin = ({
                 context.buildRoot,
                 log,
                 server.config.mode,
+                getLocalExecutionRuntime,
             );
             server.middlewares.use(middleware);
         },

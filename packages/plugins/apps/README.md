@@ -48,9 +48,11 @@ you to start it with `datadog-apps dev`.
 
 ## Backend function runtime
 
-The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again on the next build or transform after a minute.
+The plugin follows the backend function runtime your org runs in Datadog, looked up once per process for each set of credentials above. Without credentials it assumes v1 (`jsFunctionWithActions`). When the lookup fails, it warns, assumes v1, and tries again on the next build, transform or local execution after a minute.
 
 Under v2 (`jsSandboxWithActions`, Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest` or `EventSource`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped. Cloud execution and its bundles (`dev:verify`, `/__dd/executeActionViaCloud`, `/__dd/debugBundle`) still use v1.
+
+Local execution through the dev server follows the same runtime while a backend function runs, guarding against accidents rather than hostile code; a backend module's top-level code runs before that and isn't guarded. Under v1 it blocks subprocesses, worker threads, `symlink`, `cp`, writes outside `os.tmpdir()` and `/tmp`, and path writes from a run that already ended. Under v2 it allows subprocesses and worker threads, whose own writes it doesn't guard, and refuses a recursive `cp` and in-process writes to the Vite project root, its contents and its parent directories, except inside a temp dir there. Under either, it refuses writes it can't check: through a file descriptor or handle the run doesn't have open for writing, or to a path it can't resolve. When the lookup failed, a refusal v2 wouldn't make says that v1 applies only because of it.
 
 ## Package output
 

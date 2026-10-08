@@ -7,6 +7,7 @@
 import { rmSync } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -29,7 +30,15 @@ import {
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
-import { ALREADY_GUARDED, FOREIGN_GUARD_MESSAGE, FS_WRITE_BLOCKED_MESSAGE } from './network-guard';
+import {
+    ALREADY_GUARDED,
+    FOREIGN_GUARD_MESSAGE,
+    ENDED_RUN_WRITE_BLOCKED_MESSAGE,
+    FS_WRITE_BLOCKED_MESSAGE,
+    PROJECT_WRITE_BLOCKED_MESSAGE,
+    SUBPROCESS_BLOCKED_MESSAGE,
+    withRuntimeFallbackNote,
+} from './network-guard';
 
 const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['conn-1'] };
 
@@ -2217,7 +2226,7 @@ describe('local-execution — executeScriptLocally', () => {
                     }),
                     mockLogger,
                 ),
-            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+            ).rejects.toThrow(SUBPROCESS_BLOCKED_MESSAGE);
         });
 
         test('Should still let a real $.Actions call through while the rest of the function is blocked', async () => {
@@ -2247,6 +2256,90 @@ describe('local-execution — executeScriptLocally', () => {
                 { text: 'hi' },
                 undefined,
             );
+        });
+
+        describe('under the v2 runtime', () => {
+            let projectRoot: string;
+            beforeEach(() => {
+                const projectPrefix = path.join(probeDir, 'v2-project-');
+                projectRoot = fs.mkdtempSync(projectPrefix);
+            });
+            afterEach(() => {
+                rmSync(projectRoot);
+            });
+
+            function executeUnderV2(example: () => unknown) {
+                const loadModule = loadModuleReturning({ example });
+                return executeScriptLocallyWithRuntimeContext(
+                    func,
+                    projectRoot,
+                    [],
+                    stubExecuteAction,
+                    stubGetRuntimeContext,
+                    loadModule,
+                    mockLogger,
+                    DEFAULT_TIMEOUT_MS,
+                    undefined,
+                    DEFAULT_LONG_POLLING_CONFIG,
+                    { runtime: 'v2', isFallback: false },
+                );
+            }
+
+            test('Should let the customer function spawn a subprocess', async () => {
+                const script = "process.stdout.write('ok')";
+
+                const result = await executeUnderV2(() =>
+                    execFileSync(process.execPath, ['-e', script]).toString(),
+                );
+
+                expect(result).toEqual({ data: 'ok' });
+            });
+
+            test('Should let the customer function write outside the project directory', async () => {
+                const outsidePrefix = path.join(probeDir, 'v2-outside-');
+                const outsideDir = fs.mkdtempSync(outsidePrefix);
+                const target = path.join(outsideDir, 'written.txt');
+
+                await executeUnderV2(() => fs.promises.writeFile(target, 'data'));
+
+                const written = fs.readFileSync(target, 'utf8');
+                expect(written).toBe('data');
+                rmSync(outsideDir);
+            });
+
+            test('Should refuse a write into the project directory', async () => {
+                const target = path.join(projectRoot, 'source.ts');
+
+                const execution = executeUnderV2(() => fs.promises.writeFile(target, 'data'));
+
+                await expect(execution).rejects.toThrow(PROJECT_WRITE_BLOCKED_MESSAGE);
+                const exists = fs.existsSync(target);
+                expect(exists).toBe(false);
+            });
+        });
+
+        test('Should add the fallback note when v1 applies only because the runtime lookup failed', async () => {
+            const script = "process.stdout.write('ok')";
+            const loadModule = loadModuleReturning({
+                example: () => execFileSync(process.execPath, ['-e', script]),
+            });
+
+            const execution = executeScriptLocallyWithRuntimeContext(
+                func,
+                TEST_PROJECT_ROOT,
+                [],
+                stubExecuteAction,
+                stubGetRuntimeContext,
+                loadModule,
+                mockLogger,
+                DEFAULT_TIMEOUT_MS,
+                undefined,
+                DEFAULT_LONG_POLLING_CONFIG,
+                { runtime: 'v1', isFallback: true },
+            );
+
+            const expected = withRuntimeFallbackNote(SUBPROCESS_BLOCKED_MESSAGE);
+            await expect(execution).rejects.toThrow(expected);
         });
 
         test('Should refuse path writes from an execution abandoned by its timeout', async () => {
@@ -2286,7 +2379,7 @@ describe('local-execution — executeScriptLocally', () => {
                 await lateWriteFinished;
                 const written = fs.existsSync(lateFile);
 
-                expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+                expect(lateWriteError).toMatchObject({ message: ENDED_RUN_WRITE_BLOCKED_MESSAGE });
                 expect(written).toBe(false);
             } finally {
                 rmSync(workDir);

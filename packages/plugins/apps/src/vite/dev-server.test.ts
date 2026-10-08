@@ -6,6 +6,7 @@
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
+import { rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -14,14 +15,25 @@ import {
     mockLogFn,
     moduleResolverFor,
 } from '@dd/tests/_jest/helpers/mocks';
+import child_process from 'child_process';
+import fs from 'fs';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
+import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
+import type { BackendRuntimeStatus } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
+
+import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+import {
+    PROJECT_WRITE_BLOCKED_MESSAGE,
+    SUBPROCESS_BLOCKED_MESSAGE,
+    withRuntimeFallbackNote,
+} from './network-guard';
 
 /** Shape of the `$.Actions` dynamic proxy — a nested property path (e.g. `$.Actions.slack.chat.postMessage`) callable at any depth; types `globalThis.$` in tests without an `any` cast. */
 type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
@@ -275,6 +287,9 @@ function makeImmediateRuntimeContextRequest() {
 
 type CreateDevServerMiddlewareArgs = Parameters<typeof createDevServerMiddleware>;
 
+const V1_RUNTIME: BackendRuntimeStatus = { runtime: 'v1', isFallback: false };
+const V2_RUNTIME: BackendRuntimeStatus = { runtime: 'v2', isFallback: false };
+
 /** Builds a middleware with the common test defaults, so each test only names the argument(s) it's actually varying. `doAuthenticatedRequest` distinguishes "omitted" from "explicitly undefined" (the no-auth tests) via `in`, since `?? testAuthenticatedRequest` couldn't tell them apart. */
 function createTestMiddleware(
     overrides: {
@@ -288,6 +303,7 @@ function createTestMiddleware(
         projectRoot?: CreateDevServerMiddlewareArgs[7];
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
+        getBackendRuntime?: CreateDevServerMiddlewareArgs[10];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -303,6 +319,7 @@ function createTestMiddleware(
         overrides.projectRoot ?? '/project',
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
+        overrides.getBackendRuntime ?? (async () => V1_RUNTIME),
     );
 }
 
@@ -1103,6 +1120,99 @@ describe('Dev Server Middleware', () => {
             expect(mockViteBuild).not.toHaveBeenCalled();
         });
 
+        test("Should run the function under the org's backend runtime and project directory", async () => {
+            const projectRoot = makeProbeDirOutsideTmp('dd-dev-server-v2-project-');
+            const getBackendRuntime = jest.fn(
+                async (): Promise<BackendRuntimeStatus> => V2_RUNTIME,
+            );
+            const v2Middleware = createTestMiddleware({ projectRoot, getBackendRuntime });
+            const script = "process.stdout.write('ok')";
+            mockLoadModuleReturning(mockFunctions[0], async () => {
+                const output = child_process.execFileSync(process.execPath, ['-e', script]);
+                const sourceFile = path.join(projectRoot, 'source.ts');
+                const refusal = await fs.promises.writeFile(sourceFile, output).catch((err) => err);
+                return { output: output.toString(), refusal: refusal?.message };
+            });
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            try {
+                v2Middleware(req, res, jest.fn());
+                await res.done;
+
+                const rawBody = res.getBody();
+                const body = JSON.parse(rawBody);
+                const projectEntries = fs.readdirSync(projectRoot);
+                expect(res.statusCode).toBe(200);
+                expect(body.result).toEqual({
+                    data: { output: 'ok', refusal: PROJECT_WRITE_BLOCKED_MESSAGE },
+                });
+                expect(getBackendRuntime).toHaveBeenCalledTimes(1);
+                expect(projectEntries).toEqual([]);
+            } finally {
+                rmSync(projectRoot);
+            }
+        });
+
+        test('Should say v1 rules apply only as the fallback when the runtime lookup failed', async () => {
+            const fallback: BackendRuntimeStatus = { runtime: 'v1', isFallback: true };
+            const fallbackMiddleware = createTestMiddleware({
+                getBackendRuntime: async () => fallback,
+            });
+            const script = "process.stdout.write('ok')";
+            mockLoadModuleReturning(mockFunctions[0], () => {
+                try {
+                    child_process.execFileSync(process.execPath, ['-e', script]);
+                    return 'spawned';
+                } catch (err) {
+                    return err instanceof Error ? err.message : String(err);
+                }
+            });
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            fallbackMiddleware(req, res, jest.fn());
+            await res.done;
+
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
+            const expected = withRuntimeFallbackNote(SUBPROCESS_BLOCKED_MESSAGE);
+            expect(body.result).toEqual({ data: expected });
+        });
+
+        test('Should statically check and run the function under the same runtime lookup', async () => {
+            const getBackendRuntime = jest.fn(
+                async (): Promise<BackendRuntimeStatus> => V2_RUNTIME,
+            );
+            const getAllowedConnectionIds = jest.fn(async () => []);
+            const v2Middleware = createTestMiddleware({
+                getBackendRuntime,
+                getAllowedConnectionIds,
+            });
+            mockLoadModuleReturning(mockFunctions[0], () => 'done');
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            v2Middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(getBackendRuntime).toHaveBeenCalledTimes(1);
+            expect(getAllowedConnectionIds).toHaveBeenCalledWith(
+                mockFunctions[0].absolutePath,
+                'v2',
+            );
+        });
+
         test('Should reject a malformed hydrated identity before loading customer code without exposing the response body', async () => {
             nock.cleanAll();
             mockRuntimeContextHydration(1, {
@@ -1180,6 +1290,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => V1_RUNTIME,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1212,6 +1323,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => V1_RUNTIME,
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1512,6 +1624,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    async () => V1_RUNTIME,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {

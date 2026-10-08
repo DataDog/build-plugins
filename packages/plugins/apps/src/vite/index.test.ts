@@ -413,10 +413,10 @@ describe('Backend Functions - getVitePlugin', () => {
         },
     );
 
-    test('Should start resolving the backend runtime when the dev server starts, and use it for local execution checks', async () => {
+    test('Should start resolving the backend runtime when the dev server starts, and check local execution under the runtime it is given', async () => {
         const resolveSpy = jest
             .spyOn(backendRuntime, 'resolveBackendRuntime')
-            .mockResolvedValue('v2');
+            .mockResolvedValue('v1');
         const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
         jest.spyOn(viteParseAstModule, 'loadViteParseAst').mockResolvedValue(parseAst);
         const collectSpy = jest
@@ -437,7 +437,7 @@ describe('Backend Functions - getVitePlugin', () => {
             expect.anything(),
         );
         const getAllowedConnectionIds = middlewareSpy.mock.calls[0][3];
-        await getAllowedConnectionIds(BACKEND_FILE_ID);
+        await getAllowedConnectionIds(BACKEND_FILE_ID, 'v2');
         expect(collectSpy).toHaveBeenCalledWith(
             expect.anything(),
             BACKEND_FILE_ID,
@@ -446,6 +446,26 @@ describe('Backend Functions - getVitePlugin', () => {
             parseAst,
             'v2',
         );
+    });
+
+    test("Should give local execution the org's backend runtime, whether it is only the fallback, and the build root", async () => {
+        const status = { runtime: 'v1', isFallback: true } as const;
+        jest.spyOn(backendRuntime, 'resolveBackendRuntimeStatus').mockResolvedValue(status);
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
+        });
+
+        const middlewareArgs = middlewareSpy.mock.calls[0];
+        const getBackendRuntime = middlewareArgs[10];
+        const runtime = await getBackendRuntime();
+        expect(runtime).toEqual(status);
+        expect(middlewareArgs[7]).toBe(defaultOptions.context.buildRoot);
     });
 
     test('skips packaging in closeBundle after a dev server session started', async () => {

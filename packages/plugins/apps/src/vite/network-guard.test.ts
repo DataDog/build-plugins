@@ -12,14 +12,18 @@ import net from 'net';
 import { once } from 'node:events';
 import os from 'os';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import { promisify } from 'util';
+import vm from 'vm';
 import worker_threads from 'worker_threads';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import {
     ALREADY_GUARDED,
+    ENDED_RUN_WRITE_BLOCKED_MESSAGE,
     exemptFetchFromBlockedScope,
     exemptPluginContainerFromBlockedScope,
+    FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE,
     FOREIGN_GUARD_MESSAGE,
     FS_WRITE_BLOCKED_MESSAGE,
     getSharedContext,
@@ -27,9 +31,19 @@ import {
     guardWorker,
     installGuardedProperty,
     installGuards,
+    LINK_OR_COPY_BLOCKED_MESSAGE,
     networkGuardSymbol,
     NON_STRING_MODULE_ID_MESSAGE,
+    OLDER_GUARD_MESSAGE,
+    PROJECT_WRITE_BLOCKED_MESSAGE,
+    RECURSIVE_COPY_BLOCKED_MESSAGE,
     runBlocked,
+    RUNTIME_FALLBACK_NOTE,
+    SUBPROCESS_BLOCKED_MESSAGE,
+    UNCHECKABLE_PATH_BLOCKED_MESSAGE,
+    UNCHECKABLE_WRITE_BLOCKED_MESSAGE,
+    withRuntimeFallbackNote,
+    WORKER_THREAD_BLOCKED_MESSAGE,
 } from './network-guard';
 
 beforeAll(() => {
@@ -62,6 +76,44 @@ function setGlobalFetch(impl: typeof fetch): void {
 }
 
 describe('network-guard', () => {
+    test.each([
+        { description: 'subprocess', message: SUBPROCESS_BLOCKED_MESSAGE },
+        { description: 'worker thread', message: WORKER_THREAD_BLOCKED_MESSAGE },
+        { description: 'fs write', message: FS_WRITE_BLOCKED_MESSAGE },
+    ])(
+        'Should say the v1 runtime refuses the blocked $description, so it fails in production too',
+        ({ message }) => {
+            expect(message).toContain('the v1 backend function runtime does not allow it');
+        },
+    );
+
+    test.each([
+        { description: 'project-directory block', message: PROJECT_WRITE_BLOCKED_MESSAGE },
+        { description: 'symlink and cp block', message: LINK_OR_COPY_BLOCKED_MESSAGE },
+        { description: 'recursive cp block', message: RECURSIVE_COPY_BLOCKED_MESSAGE },
+        { description: 'ended-run block', message: ENDED_RUN_WRITE_BLOCKED_MESSAGE },
+        { description: 'untracked fd block', message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE },
+        { description: 'unreadable path block', message: UNCHECKABLE_PATH_BLOCKED_MESSAGE },
+    ])(
+        'Should call the $description a local-only protection, not a runtime rule',
+        ({ message }) => {
+            expect(message).toContain('local-only protection');
+            expect(message).not.toContain('runtime does not allow');
+        },
+    );
+
+    test('Should name the Vite project root as what the project-directory block protects', () => {
+        expect(PROJECT_WRITE_BLOCKED_MESSAGE).toContain('Vite project root');
+        expect(PROJECT_WRITE_BLOCKED_MESSAGE).not.toContain('source files');
+    });
+
+    test('Should put the fallback note before the final period', () => {
+        const noted = withRuntimeFallbackNote(SUBPROCESS_BLOCKED_MESSAGE);
+        const withoutPeriod = SUBPROCESS_BLOCKED_MESSAGE.slice(0, -1);
+
+        expect(noted).toBe(`${withoutPeriod} ${RUNTIME_FALLBACK_NOTE}.`);
+    });
+
     describe('runBlocked', () => {
         // spawn()/fork() synthesize a brand-new ChildProcess and never throw synchronously in real
         // Node — failure is only ever reported via the returned object's async 'error' event, so
@@ -73,7 +125,7 @@ describe('network-guard', () => {
                     child = child_process.spawn('curl', ['https://example.com']);
                 }).not.toThrow();
                 const err = await new Promise<Error>((resolve) => child?.once('error', resolve));
-                expect(err.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(err.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
             });
 
             await runBlocked(async () => {
@@ -82,7 +134,7 @@ describe('network-guard', () => {
                     child = child_process.fork('./some-script.js');
                 }).not.toThrow();
                 const err = await new Promise<Error>((resolve) => child?.once('error', resolve));
-                expect(err.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(err.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
             });
         });
 
@@ -131,7 +183,7 @@ describe('network-guard', () => {
                 expect(() => {
                     result = child_process.spawnSync('curl', ['https://example.com']);
                 }).not.toThrow();
-                expect(result?.error?.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(result?.error?.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
                 expect(result?.output).toBeNull();
                 expect(result?.stdout).toBeUndefined();
                 expect(result?.stderr).toBeUndefined();
@@ -155,7 +207,7 @@ describe('network-guard', () => {
                         ).not.toThrow();
                     },
                 );
-                expect(err.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(err.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
                 expect(stdout).toBe('');
                 expect(stderr).toBe('');
             });
@@ -172,7 +224,7 @@ describe('network-guard', () => {
                         ).not.toThrow();
                     },
                 );
-                expect(err.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(err.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
                 expect(stdout).toBe('');
                 expect(stderr).toBe('');
             });
@@ -193,12 +245,12 @@ describe('network-guard', () => {
                 runBlocked(async () => {
                     child_process.execSync('curl https://example.com');
                 }),
-            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+            ).rejects.toThrow(SUBPROCESS_BLOCKED_MESSAGE);
             await expect(
                 runBlocked(async () => {
                     child_process.execFileSync('curl', ['https://example.com']);
                 }),
-            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+            ).rejects.toThrow(SUBPROCESS_BLOCKED_MESSAGE);
         });
 
         // promisify.custom lives on the specific function object, not inherited by a fresh wrapper — @dd/tools execute() depends on the real shape.
@@ -217,7 +269,7 @@ describe('network-guard', () => {
                     await execFileP('node', ['-e', 'console.log("hi")']);
                 }),
             ).rejects.toMatchObject({
-                message: expect.stringMatching(/Spawning a subprocess is not allowed/),
+                message: expect.stringContaining(SUBPROCESS_BLOCKED_MESSAGE),
                 stdout: '',
                 stderr: '',
             });
@@ -235,7 +287,7 @@ describe('network-guard', () => {
                 runBlocked(async () => {
                     await execP('node -e "console.log(\'hi\')"');
                 }),
-            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
+            ).rejects.toThrow(SUBPROCESS_BLOCKED_MESSAGE);
         });
 
         // Matches Node's real promisify(execFile) contract: a rejected error carries stdout/stderr too, not just a resolved success.
@@ -292,7 +344,7 @@ describe('network-guard', () => {
                 expect(typeof returnValue).toBe('number');
                 expect(returnValue).toBeLessThan(0);
                 const err = await new Promise<Error>((resolve) => child.once('error', resolve));
-                expect(err.message).toMatch(/Spawning a subprocess is not allowed/);
+                expect(err.message).toMatch(SUBPROCESS_BLOCKED_MESSAGE);
             });
         });
 
@@ -303,7 +355,7 @@ describe('network-guard', () => {
                 runBlocked(async () => {
                     new worker_threads.Worker('', { eval: true });
                 }),
-            ).rejects.toThrow(/Spawning a worker thread is not allowed/);
+            ).rejects.toThrow(WORKER_THREAD_BLOCKED_MESSAGE);
         });
 
         test('Should allow constructing, messaging, and cleanly terminating a Worker outside a blocked scope', async () => {
@@ -492,11 +544,11 @@ describe('network-guard', () => {
             const invalidByte = Buffer.from([0xff]);
             const lossyPath = Buffer.concat([tmpPathBytes, invalidByte]);
 
-            await expect(
-                runBlocked(async () => {
-                    fs.writeFileSync(lossyPath, 'data');
-                }),
-            ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+            const run = runBlocked(async () => {
+                fs.writeFileSync(lossyPath, 'data');
+            });
+
+            await expect(run).rejects.toMatchObject({ message: UNCHECKABLE_PATH_BLOCKED_MESSAGE });
         });
 
         test('Should allow a UTF-8 Buffer path under the temp dir', async () => {
@@ -654,7 +706,7 @@ describe('network-guard', () => {
                     runBlocked(async () => {
                         fs.writeSync(fd, 'data');
                     }),
-                ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                ).rejects.toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
             } finally {
                 fs.closeSync(fd);
             }
@@ -672,7 +724,7 @@ describe('network-guard', () => {
                     runBlocked(async () => {
                         fs.ftruncateSync(fd, 0);
                     }),
-                ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                ).rejects.toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
             } finally {
                 fs.closeSync(fd);
             }
@@ -689,7 +741,7 @@ describe('network-guard', () => {
                             fs.write(fd, 'data', (writeErr) => resolve(writeErr)),
                         ).not.toThrow();
                     });
-                    expect(err?.message).toMatch(FS_WRITE_BLOCKED_MESSAGE);
+                    expect(err?.message).toMatch(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
                 });
             } finally {
                 fs.closeSync(fd);
@@ -708,7 +760,7 @@ describe('network-guard', () => {
                             fs.ftruncate(fd, 0, (truncateErr) => resolve(truncateErr)),
                         ).not.toThrow();
                     });
-                    expect(err?.message).toMatch(FS_WRITE_BLOCKED_MESSAGE);
+                    expect(err?.message).toMatch(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
                 });
             } finally {
                 fs.closeSync(fd);
@@ -913,7 +965,7 @@ describe('network-guard', () => {
                     runBlocked(async () => {
                         fs.writevSync(fd, [chunk]);
                     }),
-                ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                ).rejects.toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
             } finally {
                 fs.closeSync(fd);
             }
@@ -1143,10 +1195,9 @@ describe('temp dir writes', () => {
         await runBlocked(async () => {
             const link = path.join(tmpWorkDir, 'link.txt');
             const promiseLink = path.join(tmpWorkDir, 'promise-link.txt');
-            expect(() => fs.symlinkSync(outsideFile, link)).toThrow(FS_WRITE_BLOCKED_MESSAGE);
-            await expect(fs.promises.symlink(outsideFile, promiseLink)).rejects.toThrow(
-                FS_WRITE_BLOCKED_MESSAGE,
-            );
+            expect(() => fs.symlinkSync(outsideFile, link)).toThrow(LINK_OR_COPY_BLOCKED_MESSAGE);
+            const promiseSymlink = fs.promises.symlink(outsideFile, promiseLink);
+            await expect(promiseSymlink).rejects.toThrow(LINK_OR_COPY_BLOCKED_MESSAGE);
         });
         const content = fs.readFileSync(outsideFile, 'utf8');
         expect(content).toBe('ORIGINAL');
@@ -1162,7 +1213,7 @@ describe('temp dir writes', () => {
             const destination = path.join(tmpWorkDir, 'copied-dir');
             const copiedFile = path.join(tmpWorkDir, 'copied.txt');
             expect(() => fs.cpSync(sourceDir, destination, { recursive: true })).toThrow(
-                FS_WRITE_BLOCKED_MESSAGE,
+                LINK_OR_COPY_BLOCKED_MESSAGE,
             );
             expect(() => fs.copyFileSync(sourceFile, copiedFile)).not.toThrow();
         });
@@ -1188,8 +1239,8 @@ describe('temp dir writes', () => {
     // Only data writes count as console output; truncating or chmod-ing a redirected log does not.
     test('Should refuse non-write fd operations on stdout and stderr', async () => {
         await runBlocked(async () => {
-            expect(() => fs.ftruncateSync(2, 0)).toThrow(FS_WRITE_BLOCKED_MESSAGE);
-            expect(() => fs.fchmodSync(1, 0o600)).toThrow(FS_WRITE_BLOCKED_MESSAGE);
+            expect(() => fs.ftruncateSync(2, 0)).toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
+            expect(() => fs.fchmodSync(1, 0o600)).toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
         });
     });
 
@@ -1209,7 +1260,7 @@ describe('temp dir writes', () => {
             const tmpFile = path.join(tmpWorkDir, 'closed-fd.txt');
             const fd = fs.openSync(tmpFile, 'w');
             fs.closeSync(fd);
-            expect(() => fs.writeSync(fd, 'data')).toThrow(FS_WRITE_BLOCKED_MESSAGE);
+            expect(() => fs.writeSync(fd, 'data')).toThrow(UNCHECKABLE_WRITE_BLOCKED_MESSAGE);
         });
     });
 
@@ -1218,7 +1269,7 @@ describe('temp dir writes', () => {
     test('Should forget a temp fd closed from outside the run', async () => {
         const closedElsewhereError = await writeAfterClosingOutsideRun(runBlocked);
 
-        expect(closedElsewhereError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(closedElsewhereError).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
     });
 
     test('Should forget a temp fd closed from outside a run started by another copy of the guard', async () => {
@@ -1232,7 +1283,7 @@ describe('temp dir writes', () => {
 
         const closedElsewhereError = await writeAfterClosingOutsideRun(secondCopyRunBlocked);
 
-        expect(closedElsewhereError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(closedElsewhereError).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
     });
 
     // A timed-out execution is abandoned without cancelling fn, so runBlocked's own finally never runs.
@@ -1267,7 +1318,7 @@ describe('temp dir writes', () => {
         await lateWriteFinished;
         const written = fs.existsSync(lateFile);
 
-        expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(lateWriteError).toMatchObject({ message: ENDED_RUN_WRITE_BLOCKED_MESSAGE });
         expect(written).toBe(false);
     });
 
@@ -1280,7 +1331,9 @@ describe('temp dir writes', () => {
                 const tmpFd = fs.openSync(tmpFile, 'w');
                 fs.writeSync(tmpFd, 'via fd');
                 fs.closeSync(tmpFd);
-                expect(() => fs.writeSync(outsideFd, 'data')).toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                expect(() => fs.writeSync(outsideFd, 'data')).toThrow(
+                    UNCHECKABLE_WRITE_BLOCKED_MESSAGE,
+                );
                 return fs.readFileSync(tmpFile, 'utf8');
             });
             expect(tmpContent).toBe('via fd');
@@ -1312,7 +1365,7 @@ describe('temp dir writes', () => {
         await lateWriteFinished;
         const written = fs.existsSync(lateFile);
 
-        expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(lateWriteError).toMatchObject({ message: ENDED_RUN_WRITE_BLOCKED_MESSAGE });
         expect(written).toBe(false);
     });
 
@@ -1335,7 +1388,7 @@ describe('temp dir writes', () => {
             });
 
             expect(content).toBe('via handle+appended');
-            expect(outsideError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+            expect(outsideError).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
         } finally {
             await outsideHandle.close();
         }
@@ -1372,7 +1425,86 @@ describe('cold install', () => {
         );
 
         expect(child.stderr).toBe('');
-        expect(child.stdout).toBe(`refused: ${FS_WRITE_BLOCKED_MESSAGE}\n`);
+        expect(child.stdout).toBe(`refused: ${UNCHECKABLE_WRITE_BLOCKED_MESSAGE}\n`);
+    });
+});
+
+// A patched fs.promises.open can hand the FileHandle guard a plain object, whose prototype is Object's.
+describe('a FileHandle prototype captured from a patched open', () => {
+    test('Should still run when open hands back a plain object, checking paths as usual', () => {
+        const bundlePath = buildGuardBundle('network-guard-patched-open.bundle.cjs');
+        const childTmpDir = path.join(probeDir, 'patched-open-tmp');
+        fs.mkdirSync(childTmpDir, { recursive: true });
+        const projectDir = path.join(probeDir, 'patched-open-project');
+        fs.mkdirSync(projectDir, { recursive: true });
+        const target = path.join(projectDir, 'target.txt');
+        fs.writeFileSync(target, 'data');
+        const probeScript = [
+            "const fs = require('fs');",
+            "const os = require('os');",
+            "const path = require('path');",
+            "const { pathToFileURL } = require('url');",
+            'const realOpen = fs.promises.open;',
+            'fs.promises.open = (file, ...rest) =>',
+            '    file === os.devNull ? Promise.resolve({ fd: -1, close: async () => {} }) : realOpen(file, ...rest);',
+            'const guard = require(process.argv[1]);',
+            'const target = process.argv[2];',
+            'const v2 = { runtime: "v2", projectRoot: path.dirname(target) };',
+            'const attempt = (write, options) =>',
+            "    guard.runBlocked(write, options).then(() => 'allowed', (err) => 'refused: ' + err.message);",
+            '(async () => {',
+            "    console.log(await attempt(async () => fs.writeFileSync(path.join(os.tmpdir(), 'in-tmp.txt'), 'x')));",
+            "    console.log(await attempt(() => fs.promises.readFile(Buffer.from(target), { flag: 'w' })));",
+            "    console.log(await attempt(() => fs.promises.readFile(pathToFileURL(target), { flag: 'w' })));",
+            "    console.log(await attempt(async () => fs.writeFileSync(Buffer.from(target), 'x')));",
+            "    console.log(await attempt(async () => fs.writeFileSync(Buffer.from(target), 'x'), v2));",
+            '})();',
+        ].join('\n');
+
+        const child = child_process.spawnSync(
+            process.execPath,
+            ['-e', probeScript, bundlePath, target],
+            {
+                encoding: 'utf8',
+                env: { PATH: process.env.PATH, TMPDIR: childTmpDir },
+            },
+        );
+
+        const outsideTmp = `refused: ${FS_WRITE_BLOCKED_MESSAGE}`;
+        const projectWrite = `refused: ${PROJECT_WRITE_BLOCKED_MESSAGE}`;
+        const contents = fs.readFileSync(target, 'utf8');
+        expect(child.stderr).toBe('');
+        expect(child.stdout).toBe(
+            `allowed\n${outsideTmp}\n${outsideTmp}\n${outsideTmp}\n${projectWrite}\n`,
+        );
+        expect(contents).toBe('data');
+    });
+});
+
+describe('a FileHandle guard that cannot install', () => {
+    test('Should refuse to run when open rejects the null-device probe', () => {
+        const bundlePath = buildGuardBundle('network-guard-rejected-open.bundle.cjs');
+        const childTmpDir = path.join(probeDir, 'rejected-open-tmp');
+        fs.mkdirSync(childTmpDir, { recursive: true });
+        const probeScript = [
+            "const fs = require('fs');",
+            "const os = require('os');",
+            'const realOpen = fs.promises.open;',
+            'fs.promises.open = (file, ...rest) =>',
+            "    file === os.devNull ? Promise.reject(new Error('no device')) : realOpen(file, ...rest);",
+            'const guard = require(process.argv[1]);',
+            'guard',
+            "    .runBlocked(async () => 'ran')",
+            "    .then((result) => console.log(result), (err) => console.log('refused: ' + err.message));",
+        ].join('\n');
+
+        const child = child_process.spawnSync(process.execPath, ['-e', probeScript, bundlePath], {
+            encoding: 'utf8',
+            env: { PATH: process.env.PATH, TMPDIR: childTmpDir },
+        });
+
+        expect(child.stderr).toBe('');
+        expect(child.stdout).toBe(`refused: ${FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE}\n`);
     });
 });
 
@@ -1457,7 +1589,7 @@ describe('late writes from a run that ended', () => {
             const content = fs.readFileSync(unrelatedFile, 'utf8');
 
             expect(unrelatedFd).toBe(tmpFd);
-            expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+            expect(lateWriteError).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
             expect(content).toBe('');
         } finally {
             fs.closeSync(unrelatedFd);
@@ -1491,7 +1623,7 @@ describe('late writes from a run that ended', () => {
         stream.end();
         await once(stream, 'close');
 
-        expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(lateWriteError).toMatchObject({ message: ENDED_RUN_WRITE_BLOCKED_MESSAGE });
         expect(written).toBe(false);
     });
 
@@ -1551,7 +1683,7 @@ describe('late writes from a run that ended', () => {
 
             expect(opened.writeError).toBeUndefined();
             expect(unrelatedFd).toBe(opened.fd);
-            expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+            expect(lateWriteError).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
             expect(unrelatedContent).toBe('');
         } finally {
             fs.closeSync(readerFd);
@@ -1825,7 +1957,7 @@ describe('writes under the real OS temp directory', () => {
         });
 
         expect(content).toBe('via+stream');
-        expect(afterClose).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(afterClose).toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
     });
 
     // outputFile, mkdirp and make-dir first make sure the parent exists, which can be the temp root.
@@ -1952,7 +2084,7 @@ describe('writes under the real OS temp directory', () => {
             }
         });
         const outsideMode = fs.statSync(outsideFile).mode.toString(8).slice(-3);
-        const refused = expect.objectContaining({ message: FS_WRITE_BLOCKED_MESSAGE });
+        const refused = expect.objectContaining({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
 
         expect(outcome).toEqual({ chmodError: refused, utimesError: refused, tmpMode: '600' });
         expect(outsideMode).toBe('644');
@@ -2125,6 +2257,46 @@ describe('mixed plugin versions', () => {
         expect(fn).not.toHaveBeenCalled();
     });
 
+    // Released copies share this copy's context and mark their accessors with the same generation,
+    // but their wrappers ignore `policy`.
+    function loadBesideReleasedGuard() {
+        let freshCopy: typeof import('./network-guard') | undefined;
+        jest.isolateModules(() => {
+            freshCopy = require('./network-guard');
+        });
+        if (!freshCopy) {
+            throw new Error('The fresh copy of network-guard did not load.');
+        }
+        const releasedGetter = () => () => {
+            throw new Error('Spawning a subprocess is not allowed in backend functions.');
+        };
+        Object.defineProperty(releasedGetter, ALREADY_GUARDED, { value: true });
+        const releasedGeneration = Symbol.for('@dd/apps-plugin/network-guard/v3 installed');
+        Object.defineProperty(releasedGetter, releasedGeneration, { value: true });
+        const target: { execSync?: () => unknown } = {};
+        Object.defineProperty(target, 'execSync', { get: releasedGetter, configurable: true });
+        freshCopy.installGuardedProperty(target, 'execSync', (getReal: () => unknown) => getReal);
+        return { freshCopy, target };
+    }
+
+    test("Should refuse a v2 run when a released copy's guard is installed, instead of applying its v1 blocks", async () => {
+        const { freshCopy, target } = loadBesideReleasedGuard();
+        const fn = jest.fn(async () => target.execSync?.());
+
+        const running = freshCopy.runBlocked(fn, { runtime: 'v2', projectRoot: probeDir });
+
+        await expect(running).rejects.toThrow(OLDER_GUARD_MESSAGE);
+        expect(fn).not.toHaveBeenCalled();
+    });
+
+    test("Should keep running a v1 run under a released copy's guard, which enforces v1's blocks", async () => {
+        const { freshCopy } = loadBesideReleasedGuard();
+
+        const running = freshCopy.runBlocked(async () => 'ran', { runtime: 'v1' });
+
+        await expect(running).resolves.toBe('ran');
+    });
+
     test('Should keep running when the installed guards are from this same release', async () => {
         let freshRunBlocked: typeof runBlocked | undefined;
         jest.isolateModules(() => {
@@ -2219,7 +2391,7 @@ describe('installGuardedProperty resilience', () => {
 });
 
 describe('network access', () => {
-    // Local dev deliberately allows network, matching Terrapin's production sandbox.
+    // Local dev deliberately allows network, as Terrapin does.
     test('Should let a direct fetch() inside fn reach the delegate without any exemption', async () => {
         const originalFetch = globalThis.fetch;
         const fetchedUrls: string[] = [];
@@ -2423,7 +2595,7 @@ describe('installGuardedProperty security', () => {
         expect(Object.prototype.hasOwnProperty.call(target, 'doesNotExist')).toBe(false);
     });
 
-    // isCurrentlyBlocked() is the shared gate for every guard in this file, so a fake context
+    // getBlockedContext().current() is the shared gate for every guard in this file, so a fake context
     // swapped in by any code holding an `fs` reference would silently disable all of them at once.
     test('Should protect the shared-context registry entries stashed on `fs` from being overwritten by any code holding an `fs` reference', () => {
         const symbol = networkGuardSymbol('blockedContext');
@@ -2535,5 +2707,918 @@ describe('construct-trap newTarget forwarding', () => {
 
         const instance = new CustomWorker({});
         expect(instance).toBeInstanceOf(CustomWorker);
+    });
+});
+
+describe('backend runtime policy', () => {
+    const PRINT_OK = "process.stdout.write('ok')";
+    const ORIGINAL_SOURCE = 'original';
+
+    // Each project gets its own parent, so a regression that lets removing the parent through deletes
+    // only that per-test directory, not probeDir.
+    let projectParent: string;
+    let projectRoot: string;
+    let sourceFile: string;
+    let outsideDir: string;
+    beforeEach(() => {
+        const projectParentPrefix = path.join(probeDir, 'project-parent-');
+        projectParent = fs.mkdtempSync(projectParentPrefix);
+        projectRoot = path.join(projectParent, 'project');
+        fs.mkdirSync(projectRoot);
+        sourceFile = path.join(projectRoot, 'source.ts');
+        fs.writeFileSync(sourceFile, ORIGINAL_SOURCE);
+        const outsidePrefix = path.join(probeDir, 'outside-project-');
+        outsideDir = fs.mkdtempSync(outsidePrefix);
+    });
+    afterEach(() => {
+        rmSync(projectParent);
+        rmSync(outsideDir);
+    });
+
+    function runV2<T>(fn: () => Promise<T>): Promise<T> {
+        return runBlocked(fn, { runtime: 'v2', projectRoot });
+    }
+
+    function entryExists(entryPath: string): boolean {
+        try {
+            fs.lstatSync(entryPath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    test.each([
+        {
+            name: 'execSync',
+            spawn: () => child_process.execSync(`"${process.execPath}" -e "${PRINT_OK}"`),
+        },
+        {
+            name: 'execFileSync',
+            spawn: () => child_process.execFileSync(process.execPath, ['-e', PRINT_OK]),
+        },
+        {
+            name: 'spawnSync',
+            spawn: () => child_process.spawnSync(process.execPath, ['-e', PRINT_OK]).stdout,
+        },
+    ])('Should let a v2 run spawn a subprocess with $name', async ({ spawn }) => {
+        const output = await runV2(async () => spawn().toString());
+
+        expect(output).toBe('ok');
+    });
+
+    test('Should let a v2 run start a worker thread', async () => {
+        const message = await runV2(async () => {
+            const worker = new worker_threads.Worker(
+                "require('worker_threads').parentPort.postMessage('ok')",
+                { eval: true },
+            );
+            const [received] = await once(worker, 'message');
+            await worker.terminate();
+            return received;
+        });
+
+        expect(message).toBe('ok');
+    });
+
+    test.each<{ name: string; write: (target: string) => Promise<unknown> }>([
+        {
+            name: 'writeFileSync',
+            write: async (target: string) => fs.writeFileSync(target, 'data'),
+        },
+        {
+            name: 'fs.promises.writeFile',
+            write: (target: string) => fs.promises.writeFile(target, 'data'),
+        },
+        {
+            name: 'an fd from openSync',
+            write: async (target: string) => {
+                const fd = fs.openSync(target, 'w');
+                fs.writeSync(fd, 'data');
+                fs.closeSync(fd);
+            },
+        },
+        {
+            name: 'a FileHandle from fs.promises.open',
+            write: async (target: string) => {
+                const handle = await fs.promises.open(target, 'w');
+                await handle.writeFile('data');
+                await handle.close();
+            },
+        },
+        {
+            name: 'a write stream',
+            write: async (target: string) => {
+                const stream = fs.createWriteStream(target);
+                stream.end('data');
+                await once(stream, 'close');
+            },
+        },
+        {
+            name: 'mkdirSync',
+            write: async (target: string) => fs.mkdirSync(target, { recursive: true }),
+        },
+        {
+            name: 'symlinkSync',
+            write: async (target: string) => fs.symlinkSync(os.devNull, target),
+        },
+        {
+            name: 'cpSync',
+            write: async (target: string) => fs.cpSync(sourceFile, target),
+        },
+    ])(
+        'Should let a v2 run write outside the temp and project directories with $name',
+        async ({ write }) => {
+            const target = path.join(outsideDir, 'written');
+
+            await runV2(() => write(target));
+
+            const written = entryExists(target);
+            expect(written).toBe(true);
+        },
+    );
+
+    test('Should let a v2 run write outside the project directory through a Uint8Array path', async () => {
+        const target = path.join(outsideDir, 'written.txt');
+        const encodedTarget = new TextEncoder().encode(target);
+
+        await runV2(async () => Reflect.apply(fs.writeFileSync, fs, [encodedTarget, 'data']));
+
+        const written = fs.readFileSync(target, 'utf8');
+        expect(written).toBe('data');
+    });
+
+    test('Should let a v2 run remove a file outside the project directory', async () => {
+        const target = path.join(outsideDir, 'removable.txt');
+        fs.writeFileSync(target, 'data');
+
+        await runV2(async () => fs.rmSync(target));
+
+        const exists = entryExists(target);
+        expect(exists).toBe(false);
+    });
+
+    test('Should let a v2 run mkdir the project directory or an ancestor, which already exist', async () => {
+        await runV2(async () => {
+            fs.mkdirSync(projectRoot, { recursive: true });
+            fs.mkdirSync(projectParent, { recursive: true });
+        });
+
+        const projectEntries = fs.readdirSync(projectRoot);
+        expect(projectEntries).toEqual(['source.ts']);
+    });
+
+    test('Should let a v2 run write in the temp dir', async () => {
+        const target = path.join(tmpWorkDir, 'written.txt');
+
+        await runV2(async () => fs.writeFileSync(target, 'data'));
+
+        const contents = fs.readFileSync(target, 'utf8');
+        expect(contents).toBe('data');
+    });
+
+    test.each<{ name: string; write: () => Promise<unknown> }>([
+        {
+            name: 'writeFileSync over a source file',
+            write: async () => fs.writeFileSync(sourceFile, 'overwritten'),
+        },
+        {
+            name: 'fs.promises.writeFile of a new file',
+            write: () => {
+                const newFile = path.join(projectRoot, 'new.ts');
+                return fs.promises.writeFile(newFile, 'data');
+            },
+        },
+        {
+            name: 'the callback form of writeFile',
+            write: () => promisify(fs.writeFile)(sourceFile, 'overwritten'),
+        },
+        {
+            name: 'openSync with a write flag',
+            write: async () => fs.openSync(sourceFile, 'w'),
+        },
+        {
+            name: 'fs.promises.open with a write flag',
+            write: () => fs.promises.open(sourceFile, 'w'),
+        },
+        {
+            name: 'readFileSync with a write flag',
+            write: async () => fs.readFileSync(sourceFile, { flag: 'w' }),
+        },
+        {
+            name: 'fs.promises.readFile with a write flag',
+            write: () => fs.promises.readFile(sourceFile, { flag: 'w+' }),
+        },
+        {
+            name: 'mkdirSync inside the project',
+            write: async () => {
+                const newDir = path.join(projectRoot, 'new-dir');
+                fs.mkdirSync(newDir);
+            },
+        },
+        {
+            name: 'rmSync of the project directory',
+            write: async () => fs.rmSync(projectRoot, { recursive: true, force: true }),
+        },
+        {
+            name: "rmSync of the project directory's parent",
+            write: async () => fs.rmSync(projectParent, { recursive: true, force: true }),
+        },
+        {
+            name: 'renameSync of a source file out of the project',
+            write: async () => {
+                const movedFile = path.join(outsideDir, 'moved.ts');
+                fs.renameSync(sourceFile, movedFile);
+            },
+        },
+        {
+            name: 'renameSync onto a source file',
+            write: async () => {
+                const replacement = path.join(outsideDir, 'replacement.ts');
+                fs.writeFileSync(replacement, 'replacement');
+                fs.renameSync(replacement, sourceFile);
+            },
+        },
+        {
+            name: 'copyFileSync onto a source file',
+            write: async () => {
+                const replacement = path.join(outsideDir, 'replacement.ts');
+                fs.writeFileSync(replacement, 'replacement');
+                fs.copyFileSync(replacement, sourceFile);
+            },
+        },
+        {
+            name: 'cpSync onto a source file',
+            write: async () => {
+                const replacement = path.join(outsideDir, 'replacement.ts');
+                fs.writeFileSync(replacement, 'replacement');
+                fs.cpSync(replacement, sourceFile);
+            },
+        },
+        {
+            name: 'mkdtempSync with a prefix inside the project',
+            write: async () => {
+                const tmpPrefix = path.join(projectRoot, 'tmp-');
+                fs.mkdtempSync(tmpPrefix);
+            },
+        },
+        {
+            name: 'linkSync of a source file out of the project',
+            write: async () => {
+                const hardLink = path.join(outsideDir, 'hard-link.ts');
+                fs.linkSync(sourceFile, hardLink);
+            },
+        },
+        {
+            name: 'symlinkSync inside the project',
+            write: async () => {
+                const link = path.join(projectRoot, 'link');
+                fs.symlinkSync(outsideDir, link);
+            },
+        },
+        {
+            name: 'writeFileSync through a link outside the project that points into it',
+            write: async () => {
+                const linkedSource = path.join(outsideDir, 'into-project', 'source.ts');
+                fs.writeFileSync(linkedSource, 'x');
+            },
+        },
+        {
+            name: 'writeFileSync with a Uint8Array path to a source file',
+            write: async () => {
+                const encodedPath = new TextEncoder().encode(sourceFile);
+                Reflect.apply(fs.writeFileSync, fs, [encodedPath, 'overwritten']);
+            },
+        },
+        {
+            name: 'fs.promises.readFile with a write flag and a Uint8Array path',
+            write: () => {
+                const encodedPath = new TextEncoder().encode(sourceFile);
+                return Reflect.apply(fs.promises.readFile, fs.promises, [
+                    encodedPath,
+                    { flag: 'w+' },
+                ]);
+            },
+        },
+    ])(
+        'Should refuse a v2 run writing inside the project directory with $name',
+        async ({ write }) => {
+            const linkIntoProject = path.join(outsideDir, 'into-project');
+            fs.symlinkSync(projectRoot, linkIntoProject);
+
+            const run = runV2(write);
+            await expect(run).rejects.toMatchObject({
+                message: PROJECT_WRITE_BLOCKED_MESSAGE,
+                code: 'EROFS',
+            });
+
+            const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+            const projectEntries = fs.readdirSync(projectRoot);
+            expect(sourceContents).toBe(ORIGINAL_SOURCE);
+            expect(projectEntries).toEqual(['source.ts']);
+        },
+    );
+
+    describe('a file the run did not open for writing', () => {
+        let outsideFile: string;
+        let preRunFd: number;
+        let preRunWriteHandle: fs.promises.FileHandle;
+        let readHandle: fs.promises.FileHandle;
+        beforeEach(async () => {
+            outsideFile = path.join(outsideDir, 'opened-before.txt');
+            fs.writeFileSync(outsideFile, 'before');
+            preRunFd = fs.openSync(outsideFile, 'r+');
+            preRunWriteHandle = await fs.promises.open(outsideFile, 'r+');
+            readHandle = await fs.promises.open(outsideFile, 'r');
+        });
+        afterEach(async () => {
+            fs.closeSync(preRunFd);
+            await preRunWriteHandle.close();
+            await readHandle.close();
+        });
+
+        test.each<{ name: string; write: () => Promise<unknown> }>([
+            {
+                name: 'writeSync on an fd opened before the run',
+                write: async () => fs.writeSync(preRunFd, 'x'),
+            },
+            {
+                name: 'ftruncateSync on an fd opened before the run',
+                write: async () => fs.ftruncateSync(preRunFd, 0),
+            },
+            {
+                name: 'fs.promises.writeFile on a handle opened before the run',
+                write: () => fs.promises.writeFile(preRunWriteHandle, 'x'),
+            },
+            {
+                name: 'write on a handle opened before the run',
+                write: () => preRunWriteHandle.write('x'),
+            },
+            { name: 'chmod on a read-mode handle', write: () => readHandle.chmod(0o600) },
+            { name: 'truncate on a read-mode handle', write: () => readHandle.truncate(0) },
+        ])(
+            'Should refuse a v2 run using $name, saying the target cannot be checked',
+            async ({ write }) => {
+                const modeBefore = fs.statSync(outsideFile).mode;
+
+                const run = runV2(write);
+                await expect(run).rejects.toMatchObject({
+                    message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE,
+                    code: 'EROFS',
+                });
+
+                const contents = fs.readFileSync(outsideFile, 'utf8');
+                const modeAfter = fs.statSync(outsideFile).mode;
+                expect(contents).toBe('before');
+                expect(modeAfter).toBe(modeBefore);
+            },
+        );
+
+        test('Should give a v1 run the same untracked-fd message, since the fd may point into the temp dir', async () => {
+            const run = runBlocked(async () => fs.writeSync(preRunFd, 'x'), {
+                runtime: 'v1',
+                projectRoot,
+            });
+
+            await expect(run).rejects.toMatchObject({ message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE });
+        });
+
+        test('Should let a v2 run write through an fd and a handle it opened outside the project', async () => {
+            const target = path.join(outsideDir, 'opened-in-run.txt');
+
+            await runV2(async () => {
+                const fd = fs.openSync(target, 'w');
+                fs.writeSync(fd, 'fd');
+                fs.closeSync(fd);
+                const handle = await fs.promises.open(target, 'a');
+                await handle.write('+handle');
+                await handle.close();
+            });
+
+            const contents = fs.readFileSync(target, 'utf8');
+            expect(contents).toBe('fd+handle');
+        });
+    });
+
+    test('Should keep the temp dir writable under v2 even when it sits inside the project directory', async () => {
+        const tmpDir = os.tmpdir();
+        const realTmpDir = fs.realpathSync.native(tmpDir);
+        const enclosingProject = path.dirname(realTmpDir);
+        const tmpTarget = path.join(tmpWorkDir, 'written.txt');
+        const projectTarget = path.join(enclosingProject, `dd-network-guard-probe-${process.pid}`);
+
+        try {
+            const outcome = await runBlocked(
+                async () => {
+                    fs.writeFileSync(tmpTarget, 'data');
+                    return fs.promises.writeFile(projectTarget, 'data').catch((err) => err);
+                },
+                { runtime: 'v2', projectRoot: enclosingProject },
+            );
+
+            const tmpContents = fs.readFileSync(tmpTarget, 'utf8');
+            expect(tmpContents).toBe('data');
+            expect(outcome).toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+        } finally {
+            fs.rmSync(projectTarget, { force: true });
+        }
+    });
+
+    test('Should keep applying the v2 rules to a write that lands after the run ended', async () => {
+        let releaseLateWrites: (() => void) | undefined;
+        const lateWriteGate = new Promise<void>((resolve) => {
+            releaseLateWrites = resolve;
+        });
+        const outsideTarget = path.join(outsideDir, 'late.txt');
+        let lateWrites: Promise<unknown> | undefined;
+        await runV2(async () => {
+            lateWrites = lateWriteGate.then(async () => {
+                await fs.promises.writeFile(outsideTarget, 'late');
+                return fs.promises.writeFile(sourceFile, 'late').catch((err) => err);
+            });
+        });
+
+        releaseLateWrites?.();
+        const projectWriteError = await lateWrites;
+
+        const outsideContents = fs.readFileSync(outsideTarget, 'utf8');
+        const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+        expect(outsideContents).toBe('late');
+        expect(projectWriteError).toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+        expect(sourceContents).toBe(ORIGINAL_SOURCE);
+    });
+
+    test('Should protect the project when its directory is given through a symlink', async () => {
+        const linkedRoot = path.join(outsideDir, 'linked-project');
+        fs.symlinkSync(projectRoot, linkedRoot);
+
+        const run = runBlocked(async () => fs.writeFileSync(sourceFile, 'overwritten'), {
+            runtime: 'v2',
+            projectRoot: linkedRoot,
+        });
+
+        await expect(run).rejects.toThrow(PROJECT_WRITE_BLOCKED_MESSAGE);
+        const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+        expect(sourceContents).toBe(ORIGINAL_SOURCE);
+    });
+
+    test('Should protect the project when the temp dir is the project directory itself', async () => {
+        const tmpDir = os.tmpdir();
+        const realTmpDir = fs.realpathSync.native(tmpDir);
+        const target = path.join(tmpWorkDir, 'written.txt');
+
+        const run = runBlocked(async () => fs.writeFileSync(target, 'data'), {
+            runtime: 'v2',
+            projectRoot: realTmpDir,
+        });
+
+        await expect(run).rejects.toThrow(PROJECT_WRITE_BLOCKED_MESSAGE);
+        const exists = fs.existsSync(target);
+        expect(exists).toBe(false);
+    });
+
+    test("Should keep v1's blocks for a scope without a policy, such as an older copy's", () => {
+        const scope = {
+            writableFds: new Set<number>(),
+            writableHandles: new WeakSet<object>(),
+            closed: false,
+        };
+        const run = () =>
+            getSharedContext('blockedContext').run(scope, () => {
+                child_process.execSync(`"${process.execPath}" -e "${PRINT_OK}"`);
+            });
+
+        expect(run).toThrow(SUBPROCESS_BLOCKED_MESSAGE);
+    });
+
+    test.each([
+        { name: 'v1', options: () => ({ runtime: 'v1', projectRoot }) },
+        { name: 'no runtime', options: () => ({}) },
+        { name: 'an unknown runtime', options: () => ({ runtime: 'v3', projectRoot }) },
+        { name: 'v2 without a project directory', options: () => ({ runtime: 'v2' }) },
+    ])("Should keep v1's blocks for $name", async ({ options }) => {
+        const runOptions = options();
+        const runWith = (fn: () => Promise<unknown>): Promise<unknown> =>
+            Reflect.apply(runBlocked, undefined, [fn, runOptions]);
+        const outsideTarget = path.join(outsideDir, 'written.txt');
+        const tmpTarget = path.join(tmpWorkDir, 'written.txt');
+
+        const subprocessRun = runWith(async () =>
+            child_process.execSync(`"${process.execPath}" -e "${PRINT_OK}"`),
+        );
+        await expect(subprocessRun).rejects.toThrow(SUBPROCESS_BLOCKED_MESSAGE);
+        const workerRun = runWith(async () => new worker_threads.Worker('', { eval: true }));
+        await expect(workerRun).rejects.toThrow(WORKER_THREAD_BLOCKED_MESSAGE);
+        const writeRun = runWith(async () => fs.writeFileSync(outsideTarget, 'data'));
+        await expect(writeRun).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+        const symlinkRun = runWith(async () => fs.symlinkSync(os.devNull, outsideTarget));
+        await expect(symlinkRun).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+        await runWith(async () => fs.writeFileSync(tmpTarget, 'data'));
+
+        const outsideWritten = entryExists(outsideTarget);
+        const tmpContents = fs.readFileSync(tmpTarget, 'utf8');
+        expect(outsideWritten).toBe(false);
+        expect(tmpContents).toBe('data');
+    });
+
+    test('Should refuse a write from an ended v1 run with the ended-run message inside the temp dir, and the v1 message outside it', async () => {
+        let releaseLateWrites: (() => void) | undefined;
+        const lateWriteGate = new Promise<void>((resolve) => {
+            releaseLateWrites = resolve;
+        });
+        const tmpTarget = path.join(tmpWorkDir, 'late.txt');
+        const outsideTarget = path.join(outsideDir, 'late.txt');
+        let lateWrites: Promise<unknown[]> | undefined;
+        await runBlocked(
+            async () => {
+                lateWrites = lateWriteGate.then(() => {
+                    const tmpWrite = fs.promises.writeFile(tmpTarget, 'late').catch((err) => err);
+                    const outsideWrite = fs.promises
+                        .writeFile(outsideTarget, 'late')
+                        .catch((err) => err);
+                    return Promise.all([tmpWrite, outsideWrite]);
+                });
+            },
+            { runtime: 'v1', projectRoot },
+        );
+
+        releaseLateWrites?.();
+        const [tmpError, outsideError] = (await lateWrites) ?? [];
+
+        const tmpWritten = entryExists(tmpTarget);
+        const outsideWritten = entryExists(outsideTarget);
+        expect(tmpError).toMatchObject({ message: ENDED_RUN_WRITE_BLOCKED_MESSAGE });
+        expect(outsideError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+        expect(tmpWritten).toBe(false);
+        expect(outsideWritten).toBe(false);
+    });
+
+    test('Should keep the v1 message for a symlink outside the temp dir', async () => {
+        const link = path.join(outsideDir, 'link');
+
+        const run = runBlocked(async () => fs.symlinkSync(os.devNull, link), { runtime: 'v1' });
+
+        await expect(run).rejects.toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
+    });
+
+    describe('when v1 applies only because the runtime lookup failed', () => {
+        function runFallback(fn: () => Promise<unknown>): Promise<unknown> {
+            return runBlocked(fn, { runtime: 'v1', isFallbackRuntime: true, projectRoot });
+        }
+
+        test.each<{ name: string; refuse: () => Promise<unknown>; message: string }>([
+            {
+                name: 'a subprocess',
+                refuse: async () =>
+                    child_process.execSync(`"${process.execPath}" -e "${PRINT_OK}"`),
+                message: SUBPROCESS_BLOCKED_MESSAGE,
+            },
+            {
+                name: 'a spawned subprocess',
+                refuse: async () => {
+                    const child = child_process.spawn(process.execPath, ['-e', PRINT_OK]);
+                    const [error] = await once(child, 'error');
+                    throw error;
+                },
+                message: SUBPROCESS_BLOCKED_MESSAGE,
+            },
+            {
+                name: 'a worker thread',
+                refuse: async () => new worker_threads.Worker('', { eval: true }),
+                message: WORKER_THREAD_BLOCKED_MESSAGE,
+            },
+            {
+                name: 'a write outside the temp dir',
+                refuse: async () => {
+                    const target = path.join(outsideDir, 'written.txt');
+                    fs.writeFileSync(target, 'data');
+                },
+                message: FS_WRITE_BLOCKED_MESSAGE,
+            },
+            {
+                name: 'a symlink inside the temp dir',
+                refuse: async () => {
+                    const link = path.join(tmpWorkDir, 'link');
+                    fs.symlinkSync(os.devNull, link);
+                },
+                message: LINK_OR_COPY_BLOCKED_MESSAGE,
+            },
+        ])('Should add the fallback note when refusing $name', async ({ refuse, message }) => {
+            const expected = withRuntimeFallbackNote(message);
+
+            const run = runFallback(refuse);
+            await expect(run).rejects.toMatchObject({ message: expected });
+        });
+
+        test.each<{ name: string; refuse: () => Promise<unknown>; message: string }>([
+            {
+                name: 'a write into the Vite project root',
+                refuse: async () => fs.writeFileSync(path.join(projectRoot, 'written.txt'), 'data'),
+                message: FS_WRITE_BLOCKED_MESSAGE,
+            },
+            {
+                name: 'a recursive cp inside the temp dir',
+                refuse: async () =>
+                    fs.cpSync(outsideDir, path.join(tmpWorkDir, 'copy'), { recursive: true }),
+                message: LINK_OR_COPY_BLOCKED_MESSAGE,
+            },
+        ])('Should leave the note off $name, which v2 refuses too', async ({ refuse, message }) => {
+            const run = runFallback(refuse);
+
+            await expect(run).rejects.toMatchObject({ message });
+        });
+
+        test("Should leave the note off a refusal v2 makes too, since it doesn't depend on the runtime", async () => {
+            const outsideFile = path.join(outsideDir, 'opened-before.txt');
+            const preRunFd = fs.openSync(outsideFile, 'w');
+
+            try {
+                const run = runFallback(async () => fs.writeSync(preRunFd, 'x'));
+                await expect(run).rejects.toMatchObject({
+                    message: UNCHECKABLE_WRITE_BLOCKED_MESSAGE,
+                });
+            } finally {
+                fs.closeSync(preRunFd);
+            }
+        });
+
+        test('Should leave the note off a v1 run whose runtime was read', async () => {
+            const run = runBlocked(
+                async () => child_process.execSync(`"${process.execPath}" -e "${PRINT_OK}"`),
+                { runtime: 'v1', isFallbackRuntime: false, projectRoot },
+            );
+
+            await expect(run).rejects.toMatchObject({ message: SUBPROCESS_BLOCKED_MESSAGE });
+        });
+    });
+
+    test.each<{ name: string; copy: (source: string, destination: string) => Promise<unknown> }>([
+        {
+            name: 'cpSync',
+            copy: async (source, destination) =>
+                fs.cpSync(source, destination, { recursive: true }),
+        },
+        {
+            name: 'fs.promises.cp',
+            copy: (source, destination) => fs.promises.cp(source, destination, { recursive: true }),
+        },
+    ])('Should refuse a recursive $name under v2, naming the recursive copy', async ({ copy }) => {
+        const copySource = path.join(outsideDir, 'copy-source');
+        const linkedCopy = path.join(copySource, 'into-project');
+        fs.mkdirSync(linkedCopy, { recursive: true });
+        const copiedSource = path.join(linkedCopy, 'source.ts');
+        fs.writeFileSync(copiedSource, 'overwritten');
+        const linkIntoProject = path.join(outsideDir, 'into-project');
+        fs.symlinkSync(projectRoot, linkIntoProject);
+        const unrelatedDestination = path.join(outsideDir, 'unrelated-copy');
+
+        const intoLink = runV2(() => copy(copySource, outsideDir));
+        await expect(intoLink).rejects.toMatchObject({ message: RECURSIVE_COPY_BLOCKED_MESSAGE });
+        const unrelated = runV2(() => copy(copySource, unrelatedDestination));
+        await expect(unrelated).rejects.toMatchObject({ message: RECURSIVE_COPY_BLOCKED_MESSAGE });
+        const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+        expect(sourceContents).toBe(ORIGINAL_SOURCE);
+    });
+
+    test.each<{ name: string; copy: (source: string, destination: string) => Promise<unknown> }>([
+        { name: 'cpSync', copy: async (source, destination) => fs.cpSync(source, destination) },
+        {
+            name: 'fs.promises.cp',
+            copy: (source, destination) => fs.promises.cp(source, destination),
+        },
+    ])(
+        'Should refuse a v2 $name onto a symlink inside the project that points outside it',
+        async ({ copy }) => {
+            const outsideTarget = path.join(outsideDir, 'link-target.json');
+            fs.writeFileSync(outsideTarget, 'outside');
+            const linkInProject = path.join(projectRoot, 'linked.json');
+            fs.symlinkSync(outsideTarget, linkInProject);
+            const replacement = path.join(outsideDir, 'replacement.json');
+            fs.writeFileSync(replacement, 'replacement');
+
+            const run = runV2(() => copy(replacement, linkInProject));
+
+            await expect(run).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+            const isStillLink = fs.lstatSync(linkInProject).isSymbolicLink();
+            const outsideContents = fs.readFileSync(outsideTarget, 'utf8');
+            expect(isStillLink).toBe(true);
+            expect(outsideContents).toBe('outside');
+        },
+    );
+
+    test.each([
+        { name: 'v1', options: () => ({ runtime: 'v1' as const }), dir: () => tmpWorkDir },
+        {
+            name: 'v2',
+            options: () => ({ runtime: 'v2' as const, projectRoot }),
+            dir: () => outsideDir,
+        },
+    ])(
+        'Should refuse a $name write through a dangling symlink, saying the path cannot be resolved',
+        async ({ options, dir }) => {
+            const linkDir = dir();
+            const missing = path.join(linkDir, 'missing', 'file.txt');
+            const dangling = path.join(linkDir, 'dangling');
+            fs.symlinkSync(missing, dangling);
+            const runOptions = options();
+
+            const run = runBlocked(async () => fs.writeFileSync(dangling, 'x'), runOptions);
+
+            await expect(run).rejects.toMatchObject({ message: UNCHECKABLE_PATH_BLOCKED_MESSAGE });
+        },
+    );
+
+    test('Should refuse removing a symlinked parent on the configured project path', async () => {
+        const realWork = path.join(outsideDir, 'real-work');
+        const realApp = path.join(realWork, 'app');
+        fs.mkdirSync(realApp, { recursive: true });
+        const linkedWork = path.join(outsideDir, 'work');
+        fs.symlinkSync(realWork, linkedWork);
+        const configuredRoot = path.join(linkedWork, 'app');
+        const movedLink = path.join(outsideDir, 'moved-work');
+
+        const removal = runBlocked(async () => fs.rmSync(linkedWork), {
+            runtime: 'v2',
+            projectRoot: configuredRoot,
+        });
+        await expect(removal).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+        const move = runBlocked(async () => fs.renameSync(linkedWork, movedLink), {
+            runtime: 'v2',
+            projectRoot: configuredRoot,
+        });
+        await expect(move).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+
+        const isStillLink = fs.lstatSync(linkedWork).isSymbolicLink();
+        expect(isStillLink).toBe(true);
+    });
+
+    // The probe's lower-case spelling exists only on a case-insensitive volume, such as macOS's default.
+    const isCaseInsensitive = (() => {
+        const caseProbe = makeProbeDirOutsideTmp('DD-CASE-PROBE-');
+        const lowerCaseName = path.basename(caseProbe).toLowerCase();
+        const probeParent = path.dirname(caseProbe);
+        const lowerCaseProbe = path.join(probeParent, lowerCaseName);
+        const matches = fs.existsSync(lowerCaseProbe);
+        fs.rmSync(caseProbe, { recursive: true, force: true });
+        return matches;
+    })();
+    (isCaseInsensitive ? describe : describe.skip)('on a case-insensitive volume', () => {
+        test('Should refuse removing or renaming the project root named in a different case', async () => {
+            const differentCaseRoot = path.join(projectParent, 'PROJECT');
+            const movedRoot = path.join(outsideDir, 'moved-project');
+
+            const removal = runV2(async () =>
+                fs.rmSync(differentCaseRoot, { recursive: true, force: true }),
+            );
+            await expect(removal).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+            const move = runV2(async () => fs.renameSync(differentCaseRoot, movedRoot));
+            await expect(move).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+
+            const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+            expect(sourceContents).toBe(ORIGINAL_SOURCE);
+        });
+
+        test('Should refuse removing a symlinked parent on the configured path named in a different case', async () => {
+            const realWork = path.join(outsideDir, 'real-work');
+            const realApp = path.join(realWork, 'app');
+            fs.mkdirSync(realApp, { recursive: true });
+            const linkedWork = path.join(outsideDir, 'work');
+            fs.symlinkSync(realWork, linkedWork);
+            const configuredRoot = path.join(linkedWork, 'app');
+            const differentCaseLink = path.join(outsideDir, 'WORK');
+
+            const removal = runBlocked(async () => fs.rmSync(differentCaseLink), {
+                runtime: 'v2',
+                projectRoot: configuredRoot,
+            });
+
+            await expect(removal).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+            const isStillLink = fs.lstatSync(linkedWork).isSymbolicLink();
+            expect(isStillLink).toBe(true);
+        });
+    });
+
+    // macOS resolves /dev/fd/N to /dev/fd/<file name> rather than to the file the fd points to.
+    test('Should refuse a v2 write through a /dev/fd path to an fd opened on a project file', async () => {
+        const projectFd = fs.openSync(sourceFile, 'a');
+        const fdPath = `/dev/fd/${projectFd}`;
+        const expected =
+            process.platform === 'darwin'
+                ? UNCHECKABLE_PATH_BLOCKED_MESSAGE
+                : PROJECT_WRITE_BLOCKED_MESSAGE;
+
+        try {
+            const run = runV2(async () => fs.writeFileSync(fdPath, 'overwritten'));
+            await expect(run).rejects.toMatchObject({ message: expected });
+        } finally {
+            fs.closeSync(projectFd);
+        }
+
+        const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+        expect(sourceContents).toBe(ORIGINAL_SOURCE);
+    });
+
+    test('Should protect a project root that does not exist yet behind a symlinked parent', async () => {
+        const realParent = path.join(outsideDir, 'real-parent');
+        fs.mkdirSync(realParent);
+        const linkedParent = path.join(outsideDir, 'linked-parent');
+        fs.symlinkSync(realParent, linkedParent);
+        const laterRoot = path.join(linkedParent, 'later-project');
+        const realLaterSource = path.join(realParent, 'later-project', 'src');
+
+        const run = runBlocked(async () => fs.mkdirSync(realLaterSource, { recursive: true }), {
+            runtime: 'v2',
+            projectRoot: laterRoot,
+        });
+
+        await expect(run).rejects.toMatchObject({ message: PROJECT_WRITE_BLOCKED_MESSAGE });
+        const created = entryExists(realLaterSource);
+        expect(created).toBe(false);
+    });
+
+    test('Should report an invalid file URL through the API it was passed to, not a synchronous throw', async () => {
+        const invalidUrl = new URL('file:///tmp/a%2Fb');
+        const outcome = await runV2(async () => {
+            let syncError: unknown;
+            let pending: Promise<unknown> | undefined;
+            try {
+                pending = fs.promises.writeFile(invalidUrl, 'x');
+            } catch (err) {
+                syncError = err;
+            }
+            const asyncError = await pending?.catch((err: unknown) => err);
+            return { syncError, asyncError };
+        });
+
+        expect(outcome.syncError).toBeUndefined();
+        expect(outcome.asyncError).toMatchObject({ message: UNCHECKABLE_PATH_BLOCKED_MESSAGE });
+    });
+
+    describe('a path object the guard cannot read', () => {
+        // Shaped like a URL polyfill's instance, which Node's fs accepts as a file URL.
+        function urlLike(target: string): unknown {
+            const { href, protocol, hostname, pathname } = pathToFileURL(target);
+            return { href, protocol, hostname, pathname, search: '', hash: '' };
+        }
+        function crossRealmBytes(target: string): unknown {
+            const codes = [...Buffer.from(target)];
+            return vm.runInNewContext('Uint8Array.from(codes)', { codes });
+        }
+
+        test.each<{ name: string; write: (target: unknown) => Promise<unknown> }>([
+            {
+                name: 'writeFileSync',
+                write: async (target) => Reflect.apply(fs.writeFileSync, fs, [target, 'x']),
+            },
+            {
+                name: 'fs.promises.writeFile',
+                write: (target) => Reflect.apply(fs.promises.writeFile, fs.promises, [target, 'x']),
+            },
+            {
+                name: 'openSync with a write flag',
+                write: async (target) => Reflect.apply(fs.openSync, fs, [target, 'w']),
+            },
+            {
+                name: 'fs.promises.open with a write flag',
+                write: (target) => Reflect.apply(fs.promises.open, fs.promises, [target, 'w']),
+            },
+            {
+                name: 'readFileSync with a write flag',
+                write: async (target) =>
+                    Reflect.apply(fs.readFileSync, fs, [target, { flag: 'w' }]),
+            },
+            {
+                name: 'fs.promises.readFile with a write flag',
+                write: (target) =>
+                    Reflect.apply(fs.promises.readFile, fs.promises, [target, { flag: 'w' }]),
+            },
+        ])(
+            'Should refuse a v2 run using $name on a URL-like object or bytes from another realm, saying the path cannot be checked',
+            async ({ write }) => {
+                const outsideTarget = path.join(outsideDir, 'cross-realm.txt');
+                const targets = [urlLike(outsideTarget), crossRealmBytes(outsideTarget)];
+
+                for (const target of targets) {
+                    const run = runV2(() => write(target));
+                    await expect(run).rejects.toMatchObject({
+                        message: UNCHECKABLE_PATH_BLOCKED_MESSAGE,
+                        code: 'EROFS',
+                    });
+                }
+
+                const written = entryExists(outsideTarget);
+                expect(written).toBe(false);
+            },
+        );
+
+        test('Should refuse a URL-like object into the project the same way', async () => {
+            const target = urlLike(sourceFile);
+
+            const run = runV2(async () => Reflect.apply(fs.writeFileSync, fs, [target, 'x']));
+
+            await expect(run).rejects.toMatchObject({ message: UNCHECKABLE_PATH_BLOCKED_MESSAGE });
+            const sourceContents = fs.readFileSync(sourceFile, 'utf8');
+            expect(sourceContents).toBe(ORIGINAL_SOURCE);
+        });
     });
 });
