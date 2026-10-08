@@ -3,8 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 /* eslint-env browser */
+/* global globalThis */
 
-import { DEBUG_BUNDLE_PATH } from '../../../protocol';
+import { parseSite } from '@dd/core/helpers/site';
+
+import { DEBUG_BUNDLE_PATH, DEV_SERVER_MARKER } from '../../../protocol';
 import type { DebugBundleResponse, ExecuteActionRequest } from '../../../protocol';
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
@@ -48,7 +51,30 @@ function isDebugBundle(data: unknown): data is DebugBundleResponse {
     );
 }
 
-/** Resolves `undefined` rather than throwing when no dev server bundle is available (e.g. a deployed app), so the call is still sent. */
+function isDatadogOrigin(origin: string): boolean {
+    let url: URL;
+    try {
+        url = new URL(origin);
+    } catch {
+        return false;
+    }
+    return url.protocol === 'https:' && url.port === '' && parseSite(url.hostname) !== undefined;
+}
+
+/** The parent's origin when it is a Datadog page and this app runs on its dev server, else `undefined`. */
+function getBundleRecipientOrigin(): string | undefined {
+    if (Reflect.get(globalThis, DEV_SERVER_MARKER) !== true) {
+        return undefined;
+    }
+    // Absent in Firefox; without it the parent can't be identified, so no bundle is sent.
+    const parentOrigin: string | undefined = window.location.ancestorOrigins?.[0];
+    if (parentOrigin === undefined || !isDatadogOrigin(parentOrigin)) {
+        return undefined;
+    }
+    return parentOrigin;
+}
+
+/** Resolves `undefined` rather than throwing when the dev server returns no usable bundle, so the call is still sent. */
 async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse | undefined> {
     const request: Pick<ExecuteActionRequest, 'functionName'> = { functionName };
     const controller = new AbortController();
@@ -80,15 +106,16 @@ async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse
  * is hosted inside an iframe (e.g. App Builder preview). Sends a
  * `app-builder:run-query` message to the parent window and listens for a
  * matching `app-builder:run-query:response` reply. Rejects if no response
- * arrives within {@link POSTMESSAGE_TIMEOUT_MS} of being sent. The message
- * carries the function's dev server bundle when one is available.
+ * arrives within {@link POSTMESSAGE_TIMEOUT_MS} of being sent. On a dev server
+ * framed by a Datadog page, the message also carries the function's bundle.
  */
 export const postMessageTransport: BackendFunctionTransport = async <TData>(
     functionName: string,
     args: unknown[],
 ): Promise<TData> => {
     const requestId = generateRequestId();
-    const bundle = await fetchOwnBundle(functionName);
+    const recipientOrigin = getBundleRecipientOrigin();
+    const bundle = recipientOrigin === undefined ? undefined : await fetchOwnBundle(functionName);
 
     return new Promise<TData>((resolve, reject) => {
         let timeoutId: ReturnType<typeof setTimeout>;
@@ -138,8 +165,10 @@ export const postMessageTransport: BackendFunctionTransport = async <TData>(
             args,
             ...(bundle && { bundle }),
         };
+        // The browser delivers a bundle only to the exact parent origin that passed the Datadog check.
+        const targetOrigin = bundle && recipientOrigin ? recipientOrigin : '*';
         try {
-            window.parent.postMessage(message, '*');
+            window.parent.postMessage(message, targetOrigin);
         } catch (error) {
             cleanup();
             reject(error);

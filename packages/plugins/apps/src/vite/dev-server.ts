@@ -744,7 +744,7 @@ export function createDevServerMiddleware(
 
         const functionsByName = buildFunctionMap(getBackendFunctions());
 
-        if (req.url === `/${DEBUG_BUNDLE_PATH}`) {
+        if (req.url === DEBUG_BUNDLE_PATH) {
             handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });

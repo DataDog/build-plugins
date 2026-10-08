@@ -33,6 +33,7 @@ import {
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEV_SERVER_MARKER } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_WITH_QUERY_RE,
@@ -106,6 +107,19 @@ function getConfigureServer(
     }
     return function callConfigureServer(server: FakeViteDevServer): void {
         Reflect.apply(configureServer, undefined, [server]);
+    };
+}
+
+// Narrows `plugin.transformIndexHtml` to its plain-function hook form, like `getConfigureServer` above.
+function getTransformIndexHtml(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (ctx: { server?: object }) => unknown {
+    const { transformIndexHtml } = plugin ?? {};
+    if (typeof transformIndexHtml !== 'function') {
+        throw new Error('Expected plugin.transformIndexHtml to be the plain function-hook form');
+    }
+    return function callTransformIndexHtml(ctx: { server?: object }): unknown {
+        return Reflect.apply(transformIndexHtml, undefined, ['<html></html>', ctx]);
     };
 }
 
@@ -280,6 +294,26 @@ describe('Backend Functions - getVitePlugin', () => {
 
     afterEach(() => {
         nock.cleanAll();
+    });
+
+    test('Should mark pages served by the dev server so the iframe client can tell it is in dev', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformIndexHtml = getTransformIndexHtml(plugin);
+
+        expect(transformIndexHtml({ server: {} })).toEqual([
+            {
+                tag: 'script',
+                children: `globalThis.${DEV_SERVER_MARKER} = true;`,
+                injectTo: 'head-prepend',
+            },
+        ]);
+    });
+
+    test('Should not mark pages in a production build', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformIndexHtml = getTransformIndexHtml(plugin);
+
+        expect(transformIndexHtml({})).toEqual([]);
     });
 
     test('Should return a vite plugin object with closeBundle', () => {

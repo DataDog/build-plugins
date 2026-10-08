@@ -518,7 +518,7 @@ describe('Dev Server Middleware', () => {
                 mockBuildWithParsedBackend('export function main($) {}');
 
                 const functionName = encodeQueryName(mockFunctions[0]);
-                const req = createMockRequest('/__dd/debugBundle', { functionName }, headers);
+                const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName }, headers);
                 const res = createMockResponse();
 
                 middleware(req, res, jest.fn());
@@ -546,7 +546,7 @@ describe('Dev Server Middleware', () => {
                 mockBuildWithParsedBackend('export function main($) {}');
 
                 const functionName = encodeQueryName(mockFunctions[0]);
-                const req = createMockRequest('/__dd/debugBundle', { functionName }, { accept });
+                const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName }, { accept });
                 const res = createMockResponse();
 
                 middleware(req, res, jest.fn());
@@ -554,7 +554,8 @@ describe('Dev Server Middleware', () => {
 
                 expect(res.statusCode).toBe(200);
                 expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
-                expect(JSON.parse(res.getBody())).toEqual({
+                const body = JSON.parse(res.getBody());
+                expect(body).toEqual({
                     code: 'export function main($) {}',
                     allowedConnectionIds: [],
                 });
@@ -585,7 +586,7 @@ describe('Dev Server Middleware', () => {
 
             const functionName = encodeQueryName(mockFunctions[0]);
             const req = createMockRequest(
-                '/__dd/debugBundle',
+                DEBUG_BUNDLE_PATH,
                 { functionName },
                 { accept: 'application/json' },
             );
@@ -595,7 +596,8 @@ describe('Dev Server Middleware', () => {
             await res.done;
 
             expect(res.statusCode).toBe(200);
-            expect(JSON.parse(res.getBody())).toEqual({
+            const body = JSON.parse(res.getBody());
+            expect(body).toEqual({
                 code: '// bundled',
                 allowedConnectionIds: ['conn-http', 'conn-slack'],
             });
@@ -605,7 +607,7 @@ describe('Dev Server Middleware', () => {
             mockBuildWithParsedBackend('export function main($) {}');
 
             const functionName = encodeQueryName(mockFunctions[0]);
-            const req = createMockRequest(`/${DEBUG_BUNDLE_PATH}`, { functionName });
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName });
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -618,7 +620,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should return a JSON 404 for an unknown query name when JSON is requested', async () => {
             const req = createMockRequest(
-                '/__dd/debugBundle',
+                DEBUG_BUNDLE_PATH,
                 { functionName: 'nonexistent.nonexistent' },
                 { accept: 'application/json' },
             );
@@ -629,7 +631,8 @@ describe('Dev Server Middleware', () => {
 
             expect(res.statusCode).toBe(404);
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
-            expect(JSON.parse(res.getBody())).toEqual({
+            const body = JSON.parse(res.getBody());
+            expect(body).toEqual({
                 success: false,
                 error: 'Backend function "nonexistent.nonexistent" not found',
             });

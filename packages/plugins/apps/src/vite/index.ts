@@ -24,6 +24,7 @@ import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEV_SERVER_MARKER } from '../backend/protocol';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import type { BackendFunction } from '../backend/types';
 import {
@@ -400,6 +401,18 @@ export const getVitePlugin = ({
                     await rm(backendOutDir);
                 }
             }
+        },
+        transformIndexHtml(_html, ctx) {
+            if (!ctx.server) {
+                return [];
+            }
+            return [
+                {
+                    tag: 'script',
+                    children: `globalThis.${DEV_SERVER_MARKER} = true;`,
+                    injectTo: 'head-prepend',
+                },
+            ];
         },
         configureServer(server) {
             devServerActive = true;

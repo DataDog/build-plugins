@@ -4,7 +4,7 @@
 
 /* global globalThis */
 
-import { DEBUG_BUNDLE_PATH } from '../../../protocol';
+import { DEBUG_BUNDLE_PATH, DEV_SERVER_MARKER } from '../../../protocol';
 
 import {
     BUNDLE_FETCH_TIMEOUT_MS,
@@ -17,9 +17,12 @@ type MessageListener = (event: { data: unknown }) => void;
 const QUERY_NAME = 'backend/greet.greet';
 const ARGS = ['world', 42];
 const BUNDLE = { code: 'export async function main($) {}', allowedConnectionIds: ['conn-1'] };
+const DATADOG_PARENT = 'https://app.datadoghq.com';
 
 // The node-only jest harness has no DOM, so a minimal stand-in covers what the transport touches.
-function installFakeWindow() {
+function installFakeWindow(
+    location: { ancestorOrigins?: string[] } = { ancestorOrigins: [DATADOG_PARENT] },
+) {
     const listeners = new Set<MessageListener>();
     const postMessage = jest.fn();
     const fakeWindow = {
@@ -27,6 +30,7 @@ function installFakeWindow() {
         removeEventListener: (_type: string, listener: MessageListener) =>
             listeners.delete(listener),
         parent: { postMessage },
+        location,
     };
     Object.defineProperty(globalThis, 'window', {
         value: fakeWindow,
@@ -64,11 +68,13 @@ describe('postMessageTransport', () => {
 
     beforeEach(() => {
         originalFetch = global.fetch;
+        Reflect.set(globalThis, DEV_SERVER_MARKER, true);
     });
 
     afterEach(() => {
         global.fetch = originalFetch;
         Reflect.deleteProperty(globalThis, 'window');
+        Reflect.deleteProperty(globalThis, DEV_SERVER_MARKER);
         jest.useRealTimers();
     });
 
@@ -90,8 +96,98 @@ describe('postMessageTransport', () => {
         });
     });
 
-    test('Should fetch the bundle from a relative URL', () => {
-        expect(DEBUG_BUNDLE_PATH.startsWith('/')).toBe(false);
+    test('Should fetch the bundle from the dev server root, not relative to the page', () => {
+        expect(DEBUG_BUNDLE_PATH.startsWith('/')).toBe(true);
+    });
+
+    const datadogParents = [
+        'https://app.datadoghq.com',
+        'https://dd.datad0g.com',
+        'https://app.datadoghq.eu',
+        'https://us3.datadoghq.com',
+        'https://myorg.us5.datadoghq.com',
+        'https://app.ddog-gov.com',
+    ];
+
+    test.each(datadogParents)('Should attach the bundle for a %s parent', async (parentOrigin) => {
+        const { postMessage, posted, reply } = installFakeWindow({
+            ancestorOrigins: [parentOrigin],
+        });
+        mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+        await result;
+
+        expect(message).toHaveProperty('bundle', BUNDLE);
+        expect(postMessage).toHaveBeenCalledWith(message, parentOrigin);
+    });
+
+    const nonDatadogParents = [
+        { description: 'a plain-http Datadog host', parentOrigin: 'http://app.datadoghq.com' },
+        {
+            description: 'a lookalike host ending in a Datadog site',
+            parentOrigin: 'https://app.datadoghq.com.evil.example',
+        },
+        {
+            description: 'a host that only contains a site name',
+            parentOrigin: 'https://evildatadoghq.com',
+        },
+        {
+            description: 'a Datadog host on a non-default port',
+            parentOrigin: 'https://app.datadoghq.com:8443',
+        },
+        { description: 'a local page', parentOrigin: 'http://localhost:5173' },
+        { description: 'an opaque origin', parentOrigin: 'null' },
+    ];
+
+    test.each(nonDatadogParents)(
+        'Should send the call without fetching a bundle for $description',
+        async ({ parentOrigin }) => {
+            const { postMessage, posted, reply } = installFakeWindow({
+                ancestorOrigins: [parentOrigin],
+            });
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(global.fetch).not.toHaveBeenCalled();
+            expect(message).not.toHaveProperty('bundle');
+            expect(postMessage).toHaveBeenCalledWith(message, '*');
+        },
+    );
+
+    test('Should send the call without fetching a bundle when the browser has no ancestorOrigins', async () => {
+        const { postMessage, posted, reply } = installFakeWindow({});
+        mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(global.fetch).not.toHaveBeenCalled();
+        expect(message).not.toHaveProperty('bundle');
+        expect(postMessage).toHaveBeenCalledWith(message, '*');
+    });
+
+    test('Should not fetch a bundle in a deployed app', async () => {
+        Reflect.deleteProperty(globalThis, DEV_SERVER_MARKER);
+        const { postMessage, posted, reply } = installFakeWindow();
+        mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(global.fetch).not.toHaveBeenCalled();
+        expect(message).not.toHaveProperty('bundle');
+        expect(postMessage).toHaveBeenCalledWith(message, '*');
     });
 
     test('Should request the bundle as JSON', async () => {
@@ -170,7 +266,7 @@ describe('postMessageTransport', () => {
     test.each(failureCases)(
         'Should still send the call without a bundle when $description',
         async ({ setup }) => {
-            const { posted, reply } = installFakeWindow();
+            const { postMessage, posted, reply } = installFakeWindow();
             setup();
 
             const result = postMessageTransport(QUERY_NAME, ARGS);
@@ -184,6 +280,7 @@ describe('postMessageTransport', () => {
                 queryName: QUERY_NAME,
                 args: ARGS,
             });
+            expect(postMessage).toHaveBeenCalledWith(message, '*');
         },
     );
 

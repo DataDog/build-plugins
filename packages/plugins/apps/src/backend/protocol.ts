@@ -18,8 +18,10 @@ export interface ExecuteActionRequest {
     args: unknown[];
 }
 
-// Relative, so the iframe client's fetch survives a proxy path prefix; it resolves against the page's own path.
-export const DEBUG_BUNDLE_PATH = '__dd/debugBundle';
+export const DEBUG_BUNDLE_PATH = '/__dd/debugBundle';
+
+// Set on `globalThis` only by pages the dev server serves, so deployed apps never request a bundle.
+export const DEV_SERVER_MARKER = 'DD_APPS_DEV_SERVER';
 
 /**
  * JSON response from the dev server's `debugBundle` endpoint.
