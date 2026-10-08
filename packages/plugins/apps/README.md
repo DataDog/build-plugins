@@ -15,6 +15,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
     -   [apps.include](#appsinclude)
     -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
+    -   [apps.parameters](#appsparameters)
 <!-- #toc -->
 
 ## Configuration
@@ -30,6 +31,7 @@ apps?: {
         exponentialBackoff?: boolean;
         timeoutMs?: number;
     };
+    parameters?: ReturnType<typeof defineDatadogAppParameters>;
 }
 ```
 
@@ -90,3 +92,11 @@ The retry delay is capped at 2s: the server answering `done: false` is the expec
 
 > [!NOTE]
 > `timeoutMs` must stay comfortably above the server's ~30s long-poll window. Setting it at or below that window causes healthy polls to be aborted as they race their own response.
+
+### apps.parameters
+
+> default: discovered from app code
+
+Production builds read every `defineDatadogAppParameters({...})` call from `@datadog/apps-frontend/parameters` in the app's source, merge them, and write the result to `manifest.json` as `inputSchema.parameters`. Each upload stores it on the new app version, and a build that finds none clears any earlier declaration. A declaration the build cannot read literally (variables, spreads, aliased or re-exported functions) fails the build, as does one parameter declared differently in two places.
+
+Set `apps.parameters` to a `defineDatadogAppParameters()` result only to override discovery.
