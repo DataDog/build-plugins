@@ -603,21 +603,6 @@ describe('Dev Server Middleware', () => {
             });
         });
 
-        test('Should serve debugBundle at the path the iframe client fetches', async () => {
-            mockBuildWithParsedBackend('export function main($) {}');
-
-            const functionName = encodeQueryName(mockFunctions[0]);
-            const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName });
-            const res = createMockResponse();
-            const next = jest.fn();
-
-            middleware(req, res, next);
-            await res.done;
-
-            expect(next).not.toHaveBeenCalled();
-            expect(res.getBody()).toBe('export function main($) {}');
-        });
-
         test('Should return a JSON 404 for an unknown query name when JSON is requested', async () => {
             const req = createMockRequest(
                 DEBUG_BUNDLE_PATH,

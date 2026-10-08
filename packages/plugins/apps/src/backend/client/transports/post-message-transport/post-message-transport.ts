@@ -74,27 +74,56 @@ function getBundleRecipientOrigin(): string | undefined {
     return parentOrigin;
 }
 
+async function describeErrorResponse(response: Response): Promise<string> {
+    const status = `HTTP ${response.status}`;
+    try {
+        const body: unknown = await response.json();
+        if (
+            body !== null &&
+            typeof body === 'object' &&
+            'error' in body &&
+            typeof body.error === 'string'
+        ) {
+            return `${status}: ${body.error}`;
+        }
+        return status;
+    } catch {
+        return status;
+    }
+}
+
+function warnMissingBundle(functionName: string, reason: string): void {
+    // eslint-disable-next-line no-console
+    console.warn(`[dd-apps] Sending "${functionName}" without its dev server bundle: ${reason}`);
+}
+
 /** Resolves `undefined` rather than throwing when the dev server returns no usable bundle, so the call is still sent. */
 async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse | undefined> {
     const request: Pick<ExecuteActionRequest, 'functionName'> = { functionName };
+    const requestBody = JSON.stringify(request);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), BUNDLE_FETCH_TIMEOUT_MS);
     try {
         const response = await fetch(DEBUG_BUNDLE_PATH, {
             method: 'POST',
             headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify(request),
+            body: requestBody,
             signal: controller.signal,
         });
         if (!response.ok) {
+            const errorDescription = await describeErrorResponse(response);
+            warnMissingBundle(functionName, errorDescription);
             return undefined;
         }
         const body: unknown = await response.json();
         if (!isDebugBundle(body)) {
+            warnMissingBundle(functionName, 'the dev server response is not a bundle');
             return undefined;
         }
         return { code: body.code, allowedConnectionIds: body.allowedConnectionIds };
-    } catch {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        warnMissingBundle(functionName, errorMessage);
         return undefined;
     } finally {
         clearTimeout(timeoutId);

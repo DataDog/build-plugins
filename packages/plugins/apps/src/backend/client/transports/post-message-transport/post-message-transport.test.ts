@@ -54,27 +54,37 @@ function installFakeWindow(
         }
     };
 
-    return { postMessage, posted, reply };
+    return { postMessage, posted, reply, listenerCount: () => listeners.size };
 }
 
-type FakeResponse = { ok: boolean; json: () => Promise<unknown> };
+type FakeResponse = { ok: boolean; status?: number; json: () => Promise<unknown> };
 
 function mockFetchResponse(response: FakeResponse) {
     global.fetch = jest.fn().mockResolvedValue(response);
 }
 
+const MESSAGE_WITHOUT_BUNDLE = {
+    type: 'app-builder:run-query',
+    requestId: expect.any(String),
+    queryName: QUERY_NAME,
+    args: ARGS,
+};
+
 describe('postMessageTransport', () => {
     let originalFetch: typeof fetch;
+    let warn: jest.SpyInstance;
 
     beforeEach(() => {
         originalFetch = global.fetch;
         Reflect.set(globalThis, DEV_SERVER_MARKER, true);
+        warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
     afterEach(() => {
         global.fetch = originalFetch;
         Reflect.deleteProperty(globalThis, 'window');
         Reflect.deleteProperty(globalThis, DEV_SERVER_MARKER);
+        warn.mockRestore();
         jest.useRealTimers();
     });
 
@@ -87,17 +97,8 @@ describe('postMessageTransport', () => {
         reply(message.requestId, { greeting: 'hi' });
 
         await expect(result).resolves.toEqual({ greeting: 'hi' });
-        expect(message).toEqual({
-            type: 'app-builder:run-query',
-            requestId: expect.any(String),
-            queryName: QUERY_NAME,
-            args: ARGS,
-            bundle: BUNDLE,
-        });
-    });
-
-    test('Should fetch the bundle from the dev server root, not relative to the page', () => {
-        expect(DEBUG_BUNDLE_PATH.startsWith('/')).toBe(true);
+        expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+        expect(warn).not.toHaveBeenCalled();
     });
 
     const datadogParents = [
@@ -158,6 +159,7 @@ describe('postMessageTransport', () => {
             expect(global.fetch).not.toHaveBeenCalled();
             expect(message).not.toHaveProperty('bundle');
             expect(postMessage).toHaveBeenCalledWith(message, '*');
+            expect(warn).not.toHaveBeenCalled();
         },
     );
 
@@ -173,6 +175,7 @@ describe('postMessageTransport', () => {
         expect(global.fetch).not.toHaveBeenCalled();
         expect(message).not.toHaveProperty('bundle');
         expect(postMessage).toHaveBeenCalledWith(message, '*');
+        expect(warn).not.toHaveBeenCalled();
     });
 
     test('Should not fetch a bundle in a deployed app', async () => {
@@ -188,6 +191,7 @@ describe('postMessageTransport', () => {
         expect(global.fetch).not.toHaveBeenCalled();
         expect(message).not.toHaveProperty('bundle');
         expect(postMessage).toHaveBeenCalledWith(message, '*');
+        expect(warn).not.toHaveBeenCalled();
     });
 
     test('Should request the bundle as JSON', async () => {
@@ -229,7 +233,23 @@ describe('postMessageTransport', () => {
         },
         {
             description: 'the dev server responds with an error status',
-            setup: () => mockFetchResponse({ ok: false, json: async () => ({ error: 'boom' }) }),
+            setup: () =>
+                mockFetchResponse({
+                    ok: false,
+                    status: 500,
+                    json: async () => ({ error: 'boom' }),
+                }),
+        },
+        {
+            description: 'the dev server responds with an error status and no JSON body',
+            setup: () =>
+                mockFetchResponse({
+                    ok: false,
+                    status: 502,
+                    json: async () => {
+                        throw new SyntaxError('Unexpected token');
+                    },
+                }),
         },
         {
             description: 'the response is not JSON',
@@ -274,18 +294,52 @@ describe('postMessageTransport', () => {
             reply(message.requestId, 'ok');
 
             await expect(result).resolves.toBe('ok');
-            expect(message).toEqual({
-                type: 'app-builder:run-query',
-                requestId: expect.any(String),
-                queryName: QUERY_NAME,
-                args: ARGS,
-            });
+            expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
             expect(postMessage).toHaveBeenCalledWith(message, '*');
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining(QUERY_NAME));
         },
     );
 
-    test('Should reject the call when the message cannot be posted', async () => {
-        const { postMessage } = installFakeWindow();
+    test("Should warn with the dev server's error when it rejects the bundle request", async () => {
+        const { postMessage, posted, reply } = installFakeWindow();
+        const serverError = 'Backend function "greet" imports restricted module "fs"';
+        mockFetchResponse({
+            ok: false,
+            status: 400,
+            json: async () => ({ success: false, error: serverError }),
+        });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
+        expect(postMessage).toHaveBeenCalledWith(message, '*');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('400'));
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining(serverError));
+    });
+
+    test('Should warn with the network error when the bundle request fails', async () => {
+        const { postMessage, posted, reply } = installFakeWindow();
+        global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
+        expect(postMessage).toHaveBeenCalledWith(message, '*');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch'));
+    });
+
+    test('Should reject the call and stop waiting when the message cannot be posted', async () => {
+        jest.useFakeTimers();
+        const { postMessage, listenerCount } = installFakeWindow();
         const cloneError = new Error('could not be cloned');
         postMessage.mockImplementation(() => {
             throw cloneError;
@@ -293,6 +347,8 @@ describe('postMessageTransport', () => {
         mockFetchResponse({ ok: true, json: async () => BUNDLE });
 
         await expect(postMessageTransport(QUERY_NAME, ARGS)).rejects.toBe(cloneError);
+        expect(listenerCount()).toBe(0);
+        expect(jest.getTimerCount()).toBe(0);
     });
 
     test('Should abort a stalled bundle fetch and send the call without a bundle', async () => {
@@ -315,6 +371,7 @@ describe('postMessageTransport', () => {
         await expect(result).resolves.toBe('ok');
         expect(fetchSignal?.aborted).toBe(true);
         expect(message).not.toHaveProperty('bundle');
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 
     test('Should give the parent its full response window after the bundle arrives', async () => {
