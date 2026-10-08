@@ -32,6 +32,9 @@ import {
 } from 'vite';
 
 import * as auth from '../auth';
+import * as backendRuntime from '../backend-runtime';
+import type { BackendRuntime } from '../backend-runtime';
+import * as connectionIds from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import {
@@ -40,9 +43,13 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
 } from '../constants';
 
+import * as buildBackendFunctionsModule from './build-backend-functions';
 import * as buildPackage from './build-package';
+import * as devServerModuleGraph from './dev-server-module-graph';
+import * as devServer from './dev-server';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
+import * as viteParseAstModule from './vite-parse-ast';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -84,6 +91,9 @@ function extractTransformedCode(result: unknown): string | undefined {
         : undefined;
 }
 
+const toErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
 type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
 
 // The subset of Vite's real `ViteDevServer` this test's fake server object provides.
@@ -107,6 +117,44 @@ function getConfigureServer(
     return function callConfigureServer(server: FakeViteDevServer): void {
         Reflect.apply(configureServer, undefined, [server]);
     };
+}
+
+function getConfigResolved(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (config: { command: string; mode: string }) => void {
+    const { configResolved } = plugin ?? {};
+    if (typeof configResolved !== 'function') {
+        throw new Error('Expected plugin.configResolved to be the plain function-hook form');
+    }
+    return function callConfigResolved(config: { command: string; mode: string }): void {
+        Reflect.apply(configResolved, undefined, [config]);
+    };
+}
+
+function getCloseBundle(plugin: ReturnType<typeof getVitePlugin>): () => Promise<unknown> {
+    const { closeBundle } = plugin ?? {};
+    if (typeof closeBundle !== 'function') {
+        throw new Error('Expected plugin.closeBundle to be the plain function-hook form');
+    }
+    return async function callCloseBundle(): Promise<unknown> {
+        return Reflect.apply(closeBundle, undefined, []);
+    };
+}
+
+const BACKEND_FILE_ID = '/build/src/backend/myHandler.backend.ts';
+
+async function transformBackendFile(
+    plugin: ReturnType<typeof getVitePlugin>,
+    code: string,
+): Promise<unknown> {
+    const handler = getTransformHandler(plugin);
+    const transformContext = {
+        parse: parseAst,
+        resolve: jest.fn(async () => null),
+        load: jest.fn(async () => null),
+        addWatchFile: jest.fn(),
+    };
+    return handler.call(transformContext, code, BACKEND_FILE_ID);
 }
 
 function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
@@ -274,6 +322,8 @@ describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
         jest.clearAllMocks();
+        // A real lookup would outlive the test that started it and log into the next one.
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue('v1');
         mockBuildWithParsedBackend();
         jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
@@ -316,6 +366,85 @@ describe('Backend Functions - getVitePlugin', () => {
                 backendOutputs: expect.any(Map),
                 backendFunctions: expect.any(Array),
             }),
+        );
+    });
+
+    const closeBundleRuntimeCases: Array<{
+        runtime: BackendRuntime;
+        expected: unknown;
+        packagings: number;
+    }> = [
+        {
+            runtime: 'v1',
+            expected: expect.stringContaining('Using "fetch" is not supported'),
+            packagings: 0,
+        },
+        { runtime: 'v2', expected: 'packaged', packagings: 1 },
+    ];
+    test.each(closeBundleRuntimeCases)(
+        'Should build backend functions with the $runtime checks in closeBundle',
+        async ({ runtime, expected, packagings }) => {
+            jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue(runtime);
+            const buildSpy = jest.spyOn(buildBackendFunctionsModule, 'buildBackendFunctions');
+            mockViteBuild.mockImplementation(async (config) => {
+                emitModuleParsed(
+                    config,
+                    BACKEND_FILE_ID,
+                    "export function myHandler() { return fetch('https://example.com'); }",
+                );
+                return mockBuildResult();
+            });
+            const plugin = getVitePlugin(defaultOptions);
+            await transformBackendFile(plugin, 'export function myHandler() {}');
+            const closeBundle = getCloseBundle(plugin);
+
+            const packaging = closeBundle();
+            const outcome = await packaging.then(() => 'packaged', toErrorMessage);
+
+            expect(outcome).toEqual(expected);
+            expect(buildPackage.buildAppPackage).toHaveBeenCalledTimes(packagings);
+            expect(buildSpy).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.any(Array),
+                defaultOptions.context.buildRoot,
+                expect.anything(),
+                runtime,
+            );
+        },
+    );
+
+    test('Should start resolving the backend runtime when the dev server starts, and use it for local execution checks', async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValue('v2');
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        jest.spyOn(viteParseAstModule, 'loadViteParseAst').mockResolvedValue(parseAst);
+        const collectSpy = jest
+            .spyOn(devServerModuleGraph, 'collectModuleGraphFromServer')
+            .mockResolvedValue(new Map());
+        jest.spyOn(connectionIds, 'extractConnectionIdsFromModuleGraph').mockReturnValue([]);
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
+        });
+
+        expect(resolveSpy).toHaveBeenCalledWith(
+            defaultOptions.context.auth.site,
+            expect.anything(),
+        );
+        const getAllowedConnectionIds = middlewareSpy.mock.calls[0][3];
+        await getAllowedConnectionIds(BACKEND_FILE_ID);
+        expect(collectSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            BACKEND_FILE_ID,
+            defaultOptions.context.buildRoot,
+            expect.anything(),
+            parseAst,
+            'v2',
         );
     });
 
@@ -404,67 +533,139 @@ describe('Backend Functions - getVitePlugin', () => {
         );
     });
 
-    test('does not resolve authentication during production packaging', async () => {
+    test('Should not resolve authentication or the backend runtime when packaging an app without backend functions', async () => {
         const authSpy = jest.spyOn(auth, 'getAuthenticatedRequest');
+        const credentialsSpy = jest.spyOn(auth, 'getAuthCredentials');
+        const runtimeSpy = jest.spyOn(backendRuntime, 'resolveBackendRuntime');
         const plugin = getVitePlugin(defaultOptions);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (plugin as any).closeBundle();
 
         expect(authSpy).not.toHaveBeenCalled();
+        expect(credentialsSpy).not.toHaveBeenCalled();
+        expect(runtimeSpy).not.toHaveBeenCalled();
     });
 
-    test('Should reject a backend file importing a Node built-in module', () => {
+    const nodeBuiltinCode =
+        "import fs from 'node:fs';\nexport function myHandler() { return fs.readFileSync('/etc/passwd', 'utf8'); }";
+    const networkGlobalCode =
+        "export function myHandler() { return fetch('https://example.com'); }";
+    const restrictedCodeCases: Array<{
+        description: string;
+        code: string;
+        runtime: BackendRuntime;
+        expected: unknown;
+    }> = [
+        {
+            description: 'a Node built-in import',
+            code: nodeBuiltinCode,
+            runtime: 'v1',
+            expected: expect.stringContaining(
+                'Importing Node built-in module "node:fs" is not supported in backend function code',
+            ),
+        },
+        {
+            description: 'a network global',
+            code: networkGlobalCode,
+            runtime: 'v1',
+            expected: expect.stringContaining(
+                'Using "fetch" is not supported in backend function code',
+            ),
+        },
+        {
+            description: 'a Node built-in import',
+            code: nodeBuiltinCode,
+            runtime: 'v2',
+            expected: 'proxied',
+        },
+        {
+            description: 'a network global',
+            code: networkGlobalCode,
+            runtime: 'v2',
+            expected: 'proxied',
+        },
+    ];
+    test.each(restrictedCodeCases)(
+        'Should apply the $runtime checks to a backend file with $description',
+        async ({ code, runtime, expected }) => {
+            const resolveSpy = jest
+                .spyOn(backendRuntime, 'resolveBackendRuntime')
+                .mockResolvedValue(runtime);
+            const plugin = getVitePlugin(defaultOptions);
+
+            const transforming = transformBackendFile(plugin, code);
+            const outcome = await transforming.then(
+                (result) =>
+                    extractTransformedCode(result)?.includes('executeBackendFunction')
+                        ? 'proxied'
+                        : 'unexpected',
+                toErrorMessage,
+            );
+
+            expect(outcome).toEqual(expected);
+            expect(resolveSpy).toHaveBeenCalledWith(
+                defaultOptions.context.auth.site,
+                expect.anything(),
+            );
+        },
+    );
+
+    test('Should apply the v1 checks without a lookup in dev:verify mode, which runs every execution as v1', async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValue('v2');
+        const plugin = getVitePlugin(defaultOptions);
+        const configResolved = getConfigResolved(plugin);
+        configResolved({ command: 'serve', mode: DEV_VERIFY_MODE });
+
+        const transforming = transformBackendFile(plugin, networkGlobalCode);
+
+        await expect(transforming).rejects.toThrow('Using "fetch" is not supported');
+        expect(resolveSpy).not.toHaveBeenCalled();
+    });
+
+    test('Should hold the transform until the backend runtime resolves', async () => {
+        let resolveRuntime: (runtime: BackendRuntime) => void = () => {};
+        const pendingRuntime = new Promise<BackendRuntime>((resolve) => {
+            resolveRuntime = resolve;
+        });
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockReturnValue(pendingRuntime);
+        const plugin = getVitePlugin(defaultOptions);
+        let settled = false;
+
+        const transforming = transformBackendFile(plugin, networkGlobalCode).finally(() => {
+            settled = true;
+        });
+        // Lets every already-queued microtask run, so only the pending runtime holds the transform.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(settled).toBe(false);
+        resolveRuntime('v1');
+        await expect(transforming).rejects.toThrow('Using "fetch" is not supported');
+    });
+
+    test('Should warn, but not reject, a backend file referencing crypto or Intl', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
         const resolveMock = jest.fn(async () => null);
         const loadMock = jest.fn(async () => null);
         const addWatchFileMock = jest.fn();
 
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    import fs from 'node:fs';
-                    export function myHandler() {
-                        return fs.readFileSync('/etc/passwd', 'utf8');
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).toThrow(
-            'Importing Node built-in module "node:fs" is not supported in backend function code',
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            `
+                export function myHandler() {
+                    return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
+                }
+            `,
+            BACKEND_FILE_ID,
         );
-    });
-
-    test('Should warn, but not reject, a backend file referencing crypto or Intl', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const handler = getTransformHandler(plugin);
-        const resolveMock = jest.fn(async () => null);
-        const loadMock = jest.fn(async () => null);
-        const addWatchFileMock = jest.fn();
-
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    export function myHandler() {
-                        return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).not.toThrow();
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
@@ -836,7 +1037,7 @@ describe('Backend Functions - getVitePlugin', () => {
 
         test.each(transformCases)(
             'Should leave the handler result $expected for $description',
-            (transformCase) => {
+            async (transformCase) => {
                 const originalCwd = process.cwd();
                 const plugin = getPluginForCase(transformCase);
                 const handler = getTransformHandler(plugin);
@@ -844,7 +1045,7 @@ describe('Backend Functions - getVitePlugin', () => {
                 let result: unknown;
                 try {
                     process.chdir(transformCase.cwd ?? originalCwd);
-                    result = handler.call(
+                    result = await handler.call(
                         transformContext,
                         transformCase.code ?? backendCode,
                         transformCase.id,
@@ -859,13 +1060,18 @@ describe('Backend Functions - getVitePlugin', () => {
             },
         );
 
-        test('Should register a #fragment backend import under the file itself, as a plain import does', () => {
+        test('Should register a #fragment backend import under the file itself, as a plain import does', async () => {
             const plugin = getVitePlugin(defaultOptions);
             const handler = getTransformHandler(plugin);
 
-            const plainResult = handler.call(transformContext, backendCode, backendId, {});
+            const plainResult = await handler.call(transformContext, backendCode, backendId, {});
             const fragmentId = `${backendId}#fragment`;
-            const fragmentResult = handler.call(transformContext, backendCode, fragmentId, {});
+            const fragmentResult = await handler.call(
+                transformContext,
+                backendCode,
+                fragmentId,
+                {},
+            );
             const plainCode = extractTransformedCode(plainResult);
             const fragmentCode = extractTransformedCode(fragmentResult);
 
@@ -873,7 +1079,7 @@ describe('Backend Functions - getVitePlugin', () => {
         });
 
         // unplugin copies raw `vite` hooks onto the plugin, so nothing re-applies `filter` for Vite < 6.3.
-        test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', () => {
+        test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', async () => {
             const appsVitePlugin = getVitePlugin(defaultOptions);
             const unpluginOutput = createUnplugin(() => ({
                 name: 'apps-under-test',
@@ -884,7 +1090,7 @@ describe('Backend Functions - getVitePlugin', () => {
             const composedTransform = getTransformObject(composedPlugin);
             const composedHandler = getTransformHandler(composedPlugin);
 
-            const result = composedHandler.call(
+            const result = await composedHandler.call(
                 transformContext,
                 'export const helper = 1;',
                 '/build/src/util.ts',

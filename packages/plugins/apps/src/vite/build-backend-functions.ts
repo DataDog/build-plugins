@@ -9,6 +9,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import type { build } from 'vite';
 
+import type { BackendRuntime } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
@@ -36,6 +37,7 @@ export async function buildBackendFunctions(
     functions: BackendFunction[],
     buildRoot: string,
     log: Logger,
+    runtime: BackendRuntime,
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
@@ -64,6 +66,7 @@ export async function buildBackendFunctions(
                 buildRoot,
                 log,
                 connectionIdCollector.getModuleRecords,
+                runtime,
             );
             const baseConfig = getBaseBackendBuildConfig(
                 buildRoot,

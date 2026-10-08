@@ -2,7 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rejectRestrictedGlobals } from '@dd/apps-plugin/backend/ast-parsing/reject-restricted-globals';
+import { analyzeModuleScope } from '@dd/apps-plugin/backend/ast-parsing/module-scope';
+import {
+    rejectGlobalsMissingFromNode,
+    rejectRestrictedGlobals,
+} from '@dd/apps-plugin/backend/ast-parsing/reject-restricted-globals';
+import { ensureProgram } from '@dd/apps-plugin/backend/ast-parsing/type-guards';
 import { parseAst } from 'rollup/parseAst';
 
 describe('Backend Functions - rejectRestrictedGlobals', () => {
@@ -354,5 +359,79 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
     test.each(allowedCases)('Should $description', ({ code }) => {
         const ast = parseAst(code);
         expect(() => rejectRestrictedGlobals(ast, filePath)).not.toThrow();
+    });
+});
+
+describe('Backend Functions - rejectGlobalsMissingFromNode', () => {
+    const filePath = '/project/src/math.backend.ts';
+
+    const checkMissingGlobals = (code: string) => {
+        const ast = parseAst(code);
+        const program = ensureProgram(ast, filePath);
+        const scopeAnalysis = analyzeModuleScope(program);
+        rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+    };
+
+    const rejectedCases = [
+        {
+            description: 'reject new XMLHttpRequest()',
+            name: 'XMLHttpRequest',
+            code: 'export function run() { return new XMLHttpRequest(); }',
+        },
+        {
+            description: 'reject new EventSource(...)',
+            name: 'EventSource',
+            code: 'export function run() { return new EventSource("/events"); }',
+        },
+        {
+            description: 'reject globalThis.EventSource',
+            name: 'EventSource',
+            code: 'export function run() { return new globalThis.EventSource("/events"); }',
+        },
+        {
+            description: 'reject destructuring XMLHttpRequest off of globalThis',
+            name: 'XMLHttpRequest',
+            code: 'export function run() { const { XMLHttpRequest: Xhr } = globalThis; return new Xhr(); }',
+        },
+    ];
+
+    test.each(rejectedCases)('Should $description', ({ name, code }) => {
+        expect(() => checkMissingGlobals(code)).toThrow(
+            `"${name}" is not available in the v2 backend function runtime`,
+        );
+    });
+
+    test('Should suggest fetch or importing a polyfill by name', () => {
+        expect(() =>
+            checkMissingGlobals('export function run() { return new EventSource("/events"); }'),
+        ).toThrow("Use fetch, or import a polyfill's export by name instead of the global");
+    });
+
+    const allowedCases = [
+        {
+            description: 'allow an imported EventSource polyfill, which binds the name locally',
+            code: "import { EventSource } from 'eventsource';\nexport function run() { return new EventSource('/events'); }",
+        },
+        {
+            description: 'allow fetch, which Node provides',
+            code: 'export async function run() { return fetch("https://example.com"); }',
+        },
+        {
+            description: 'allow WebSocket, which Node provides',
+            code: 'export function run() { return new WebSocket("wss://example.com"); }',
+        },
+        {
+            description: 'allow a local binding named XMLHttpRequest',
+            code: 'class XMLHttpRequest {}\nexport function run() { return new XMLHttpRequest(); }',
+        },
+        {
+            description:
+                'allow copying every property of globalThis, since a missing global is just absent',
+            code: 'export function run() { const { ...all } = globalThis; return all; }',
+        },
+    ];
+
+    test.each(allowedCases)('Should $description', ({ code }) => {
+        expect(() => checkMissingGlobals(code)).not.toThrow();
     });
 });

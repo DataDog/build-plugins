@@ -12,6 +12,7 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { build } from 'vite';
 
+import type { BackendRuntime } from '../backend-runtime';
 import type { BackendFunction } from '../backend/types';
 
 jest.mock('@dd/core/helpers/fs', () => ({
@@ -55,6 +56,7 @@ describe('buildBackendFunctions', () => {
                 [func],
                 '/project',
                 mockLogger,
+                'v1',
             ),
         ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -78,6 +80,7 @@ describe('buildBackendFunctions', () => {
                 [func],
                 '/project',
                 logger,
+                'v1',
             ),
         ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -102,6 +105,7 @@ describe('buildBackendFunctions', () => {
                     [func],
                     '/project',
                     mockLogger,
+                    'v1',
                 ),
             ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -139,7 +143,13 @@ describe('buildBackendFunctions', () => {
                 allowedConnectionIds: [],
             };
 
-            const result = await buildBackendFunctions(build, [namesFunc], workingDir, mockLogger);
+            const result = await buildBackendFunctions(
+                build,
+                [namesFunc],
+                workingDir,
+                mockLogger,
+                'v1',
+            );
             outDir = result.outDir;
             const [bundlePath] = [...result.outputs.values()];
             const bundleCode = readFileSync(bundlePath);
@@ -168,4 +178,56 @@ describe('buildBackendFunctions', () => {
             }
         }
     }, 30000);
+
+    const runtimeCases: Array<{ runtime: BackendRuntime; expected: unknown }> = [
+        { runtime: 'v1', expected: expect.stringContaining('Importing Node built-in module "os"') },
+        { runtime: 'v2', expected: 'built' },
+    ];
+    test.each(runtimeCases)(
+        'Should apply the static checks for the $runtime runtime to a reachable helper module',
+        async ({ runtime, expected }) => {
+            const seed = `build-backend-runtime-${runtime}-${Date.now()}`;
+            const workingDir = getTempWorkingDir(seed);
+            let outDir: string | undefined;
+            try {
+                outputFileSync(
+                    `${workingDir}/src/helper.ts`,
+                    "import os from 'os';\nexport const host = () => os.hostname();\nexport const ping = () => fetch('https://example.com');\n",
+                );
+                const absolutePath = `${workingDir}/src/net.backend.ts`;
+                outputFileSync(
+                    absolutePath,
+                    "import { host, ping } from './helper';\nexport async function check() { await ping(); return host(); }\n",
+                );
+                const netFunc: BackendFunction = {
+                    relativePath: 'src/net',
+                    name: 'check',
+                    absolutePath,
+                    allowedConnectionIds: [],
+                };
+
+                const outcome = await buildBackendFunctions(
+                    build,
+                    [netFunc],
+                    workingDir,
+                    mockLogger,
+                    runtime,
+                ).then(
+                    (result) => {
+                        outDir = result.outDir;
+                        return 'built';
+                    },
+                    (error: unknown) => (error instanceof Error ? error.message : String(error)),
+                );
+
+                expect(outcome).toEqual(expected);
+            } finally {
+                rmSync(workingDir);
+                if (outDir) {
+                    rmSync(outDir);
+                }
+            }
+        },
+        30000,
+    );
 });

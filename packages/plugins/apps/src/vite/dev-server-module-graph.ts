@@ -10,6 +10,7 @@ import { transform } from 'esbuild';
 import path from 'path';
 import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 'vite';
 
+import type { BackendRuntime } from '../backend-runtime';
 import {
     createParsedModuleRecord,
     getStaticModuleSources,
@@ -36,6 +37,7 @@ export async function collectModuleGraphFromServer(
     buildRoot: string,
     log: Logger,
     parse: typeof parseAst,
+    runtime: BackendRuntime,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
     const staleAppModules = trackStaleAppModules(server, buildRoot);
@@ -46,6 +48,7 @@ export async function collectModuleGraphFromServer(
             buildRoot,
             log,
             parse,
+            runtime,
             records,
             staleAppModules.record,
         );
@@ -109,6 +112,7 @@ async function walkModuleGraph(
     buildRoot: string,
     log: Logger,
     parse: typeof parseAst,
+    runtime: BackendRuntime,
     records: Map<string, ParsedModuleRecord>,
     beforePrime: (id: string) => void,
 ): Promise<void> {
@@ -213,7 +217,7 @@ async function walkModuleGraph(
         if (record) {
             // No build-time moduleParsed hook here (Rollup-only), so this is what catches a
             // banned import or restricted global locally instead of only at publish time.
-            runBackendStaticChecks(record.ast, record.id, log, record.scopeAnalysis);
+            runBackendStaticChecks(record.ast, record.id, log, record.scopeAnalysis, runtime);
             records.set(record.id, record);
         }
 

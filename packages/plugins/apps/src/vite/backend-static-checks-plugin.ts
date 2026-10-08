@@ -6,6 +6,7 @@ import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 import type { Plugin, Rollup } from 'vite';
 
+import type { BackendRuntime } from '../backend-runtime';
 import {
     type ParsedModuleRecord,
     shouldTraverseCollectedModule,
@@ -19,7 +20,7 @@ import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-g
 // Distinct from module-graph.ts's `unsupportedModuleGraphDependency` — that message is specific to connection-ID collection, unrelated to this plugin's fallback parse.
 function unsupportedStaticChecksSource(filePath: string, unsupported: string): Error {
     return new Error(
-        `Unsupported module source for ${filePath}: ${unsupported} could hide a Node-builtin import or restricted-global access.`,
+        `Unsupported module source for ${filePath}: ${unsupported} could hide code the static checks reject.`,
     );
 }
 
@@ -28,6 +29,7 @@ export function createBackendStaticChecksPlugin(
     buildRoot: string,
     log: Logger,
     getModuleRecords: () => ReadonlyMap<string, ParsedModuleRecord>,
+    runtime: BackendRuntime,
 ): Plugin {
     return {
         name: 'dd-backend-static-checks',
@@ -65,7 +67,7 @@ export function createBackendStaticChecksPlugin(
                 scopeAnalysis = analyzeModuleScope(program);
             }
 
-            runBackendStaticChecks(ast, moduleId, log, scopeAnalysis);
+            runBackendStaticChecks(ast, moduleId, log, scopeAnalysis, runtime);
         },
     };
 }

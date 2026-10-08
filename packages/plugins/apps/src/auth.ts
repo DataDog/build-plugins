@@ -12,7 +12,7 @@ export const AUTH_GUIDANCE =
     'Set DD_API_KEY and DD_APP_KEY for API-key auth, or set DD_OAUTH_ACCESS_TOKEN ' +
     '(or DATADOG_OAUTH_ACCESS_TOKEN) — e.g. by starting the dev server with `datadog-apps dev`.';
 
-// Pinned on the first call, at dev server start before any backend function runs, and kept on
+// Pinned when the first authenticated request is created, before any backend function runs, and kept on
 // globalThis across restarts, which can load a fresh copy of this module, so a dependency that later
 // replaces the global never sees or breaks these requests.
 const PINNED_FETCH_KEY = Symbol.for('@datadog/vite-plugin/apps/pinned-fetch');
@@ -42,36 +42,35 @@ export class MissingAuthenticationError extends Error {
     }
 }
 
+export type AuthCredentials = { apiKey: string; appKey: string } | { accessToken: string };
+
 // API-key auth (DD_API_KEY + DD_APP_KEY) wins, else the OAuth token @datadog/apps-cli passes via
 // DD_OAUTH_ACCESS_TOKEN. Accepted risk: either stays in process.env for the session (no process
 // separation, like other local dev tools), readable by a backend function's dependencies.
-export const getAuthenticatedRequest = (): DoAuthenticatedRequest => {
-    const fetchImpl = getPinnedFetch();
+export const getAuthCredentials = (): AuthCredentials | undefined => {
     const apiKey = getDDEnvValue('API_KEY');
     const appKey = getDDEnvValue('APP_KEY');
     if (apiKey && appKey) {
-        return async (opts) =>
-            doRequest({
-                ...opts,
-                auth: {
-                    apiKey,
-                    appKey,
-                },
-                fetchImpl,
-            });
+        return { apiKey, appKey };
     }
 
     const accessToken = getDDEnvValue('OAUTH_ACCESS_TOKEN');
     if (accessToken) {
-        return async (opts) =>
-            doRequest({
-                ...opts,
-                auth: {
-                    accessToken,
-                },
-                fetchImpl,
-            });
+        return { accessToken };
     }
 
-    throw new MissingAuthenticationError();
+    return undefined;
+};
+
+export const createAuthenticatedRequest = (auth: AuthCredentials): DoAuthenticatedRequest => {
+    const fetchImpl = getPinnedFetch();
+    return async (opts) => doRequest({ ...opts, auth, fetchImpl });
+};
+
+export const getAuthenticatedRequest = (): DoAuthenticatedRequest => {
+    const auth = getAuthCredentials();
+    if (!auth) {
+        throw new MissingAuthenticationError();
+    }
+    return createAuthenticatedRequest(auth);
 };

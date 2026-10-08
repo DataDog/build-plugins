@@ -34,6 +34,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -49,6 +50,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -64,6 +66,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         callModuleParsed(plugin, {
@@ -74,11 +77,34 @@ describe('Backend Functions - backend static checks plugin', () => {
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
     });
 
+    test.each([
+        {
+            description: 'a Node built-in import',
+            code: "import os from 'os';\nexport function host() { return os.hostname(); }",
+        },
+        {
+            description: 'a restricted global',
+            code: 'export function callIt() { return fetch("https://example.com"); }',
+        },
+    ])('Should allow $description under the v2 runtime', ({ code }) => {
+        const plugin = createBackendStaticChecksPlugin(
+            '/project',
+            getMockLogger(),
+            () => new Map(),
+            'v2',
+        );
+
+        expect(() =>
+            callModuleParsed(plugin, { id: '/project/src/backend/helpers/http.js', code }),
+        ).not.toThrow();
+    });
+
     test('Should allow a module with no restricted imports or globals', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -94,6 +120,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -109,6 +136,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -130,6 +158,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -151,6 +180,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map([[moduleId, record]]),
+            'v1',
         );
         const throwIfParsed: typeof parseAst = () => {
             throw new Error('Should not re-parse a module that already has a record.');
@@ -170,6 +200,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -185,6 +216,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            'v1',
         );
 
         expect(() =>
@@ -193,7 +225,7 @@ describe('Backend Functions - backend static checks plugin', () => {
                 code: 'export function callIt( {',
             }),
         ).toThrow(
-            /Unsupported module source .*: unparseable module source .* could hide a Node-builtin import or restricted-global access/,
+            /Unsupported module source .*: unparseable module source .* could hide code the static checks reject/,
         );
     });
 });
