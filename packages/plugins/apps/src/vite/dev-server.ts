@@ -493,8 +493,8 @@ function handleHttpError(res: ServerResponse, error: unknown, log?: Logger, labe
     sendError(res, statusCode, message);
 }
 
-/** The functions a request may name, keyed by query name; settles once they're all known. */
-type FunctionsByName = Promise<Map<string, BackendFunction>>;
+/** Looks up the functions a request may name, keyed by query name, once they're all known. */
+type GetFunctionsByName = () => Promise<Map<string, BackendFunction>>;
 
 class HttpError extends Error {
     constructor(
@@ -511,15 +511,19 @@ class HttpError extends Error {
  */
 async function parseAndLookupFunction(
     req: IncomingMessage,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
 ): Promise<{ func: BackendFunction; args: unknown[] }> {
-    const { functionName, args = [] } = await parseRequestBody(req);
+    // The body is read while functions still being discovered settle.
+    const [{ functionName, args = [] }, functionsByName] = await Promise.all([
+        parseRequestBody(req),
+        getFunctionsByName(),
+    ]);
 
     if (!functionName || typeof functionName !== 'string') {
         throw new HttpError(400, 'Missing or invalid functionName');
     }
 
-    const func = (await functionsByName).get(functionName);
+    const func = functionsByName.get(functionName);
     if (!func) {
         throw new HttpError(404, `Backend function "${functionName}" not found`);
     }
@@ -534,10 +538,10 @@ async function parseAndLookupFunction(
  */
 async function validateAndBundle(
     req: IncomingMessage,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
 ): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
-    const { func, args } = await parseAndLookupFunction(req, functionsByName);
+    const { func, args } = await parseAndLookupFunction(req, getFunctionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
 }
@@ -548,11 +552,11 @@ async function validateAndBundle(
 async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { code } = await validateAndBundle(req, getFunctionsByName, bundle);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -570,7 +574,7 @@ async function handleDebugBundle(
 async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -580,7 +584,7 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, args } = await parseAndLookupFunction(req, functionsByName);
+        const { func, args } = await parseAndLookupFunction(req, getFunctionsByName);
         const displayName = formatRef(func);
 
         log.debug(`Executing action locally: ${displayName} with args`);
@@ -622,7 +626,7 @@ async function handleExecuteAction(
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
@@ -630,7 +634,7 @@ async function handleExecuteActionViaCloud(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code, args } = await validateAndBundle(req, getFunctionsByName, bundle);
         const displayName = formatRef(func);
 
         log.debug(`Executing action via cloud: ${displayName} with args`);
@@ -656,7 +660,7 @@ async function handleExecuteActionViaCloud(
 function routeToCloudHandler(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: FunctionsByName,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
@@ -667,7 +671,7 @@ function routeToCloudHandler(
         handleExecuteActionViaCloud(
             req,
             res,
-            functionsByName,
+            getFunctionsByName,
             bundle,
             auth,
             authedRequest,
@@ -705,6 +709,8 @@ export function createDevServerMiddleware(
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    // Rebuilt for each request that names a function, so renamed or removed functions show.
+    const getFunctionsByName = () => Promise.resolve(getBackendFunctions()).then(buildFunctionMap);
 
     Promise.resolve(getBackendFunctions()).then((initialFunctions) => {
         if (initialFunctions.length > 0) {
@@ -720,10 +726,8 @@ export function createDevServerMiddleware(
             return;
         }
 
-        const functionsByName = Promise.resolve(getBackendFunctions()).then(buildFunctionMap);
-
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+            handleDebugBundle(req, res, getFunctionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (
@@ -734,7 +738,7 @@ export function createDevServerMiddleware(
             routeToCloudHandler(
                 req,
                 res,
-                functionsByName,
+                getFunctionsByName,
                 bundle,
                 auth,
                 doAuthenticatedRequest,
@@ -746,7 +750,7 @@ export function createDevServerMiddleware(
                 handleExecuteAction(
                     req,
                     res,
-                    functionsByName,
+                    getFunctionsByName,
                     auth,
                     authedRequest,
                     longPolling,

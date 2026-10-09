@@ -81,7 +81,7 @@ export function getBaseBackendBuildConfig(
             // The virtual entry initializes these runtimes on the copy resolved from the root, so
             // a package providing backend functions must reach that same copy even when it's
             // linked from a location with its own copy installed.
-            dedupe: BACKEND_RUNTIME_PACKAGES,
+            dedupe: [...BACKEND_RUNTIME_PACKAGES],
         },
         // SSR mode externalizes node_modules deps by default, assuming a
         // server runtime can require() them at runtime. Backend bundles have
