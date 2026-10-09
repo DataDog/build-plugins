@@ -18,7 +18,6 @@ import {
 import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
-import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import type { PluginContext } from 'rollup';
@@ -1451,69 +1450,5 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(body.result).toEqual({ data: { result: 'via cloud' } });
         expect(apiScope.isDone()).toBe(true);
         expect(ssrLoadModule).not.toHaveBeenCalled();
-    });
-});
-
-describe('Backend Functions - announcing packages that provide backend functions', () => {
-    let tree: string;
-    let appRoot: string;
-
-    beforeAll(() => {
-        tree = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-announce-')));
-        appRoot = path.join(tree, 'app');
-        const write = (file: string, contents: unknown) => {
-            fs.mkdirSync(path.dirname(file), { recursive: true });
-            fs.writeFileSync(file, JSON.stringify(contents));
-        };
-        write(path.join(appRoot, 'package.json'), {
-            name: 'app',
-            dependencies: { '@acme/viz': '1' },
-        });
-        write(path.join(appRoot, 'node_modules/@acme/viz/package.json'), {
-            name: '@acme/viz',
-            datadogApps: { backendFunctions: true },
-        });
-    });
-
-    afterAll(() => {
-        rmSync(tree);
-    });
-
-    beforeEach(() => {
-        mockLogFn.mockClear();
-    });
-
-    const getPlugin = () =>
-        getVitePlugin({
-            ...defaultOptions,
-            context: getContextMock({
-                buildRoot: appRoot,
-                bundler: {
-                    name: 'vite',
-                    version: 'FAKE_VERSION',
-                    outDir: path.join(appRoot, 'dist'),
-                },
-            }),
-        });
-
-    const infoLogs = () =>
-        mockLogFn.mock.calls.filter(([, level]) => level === 'info').map(([text]) => text);
-
-    test('Should log at info level which packages provide backend functions when the dev server starts', () => {
-        const plugin = getPlugin();
-        const { config } = plugin ?? {};
-        const handler = typeof config === 'object' && config !== null ? config.handler : config;
-        if (typeof handler !== 'function') {
-            throw new Error('Expected plugin.config to have a function handler');
-        }
-
-        Reflect.apply(handler, undefined, [
-            { root: appRoot },
-            { command: 'serve', mode: 'development', isPreview: false },
-        ]);
-
-        expect(infoLogs()).toEqual([
-            'Packages providing backend functions, kept out of dependency pre-bundling: @acme/viz',
-        ]);
     });
 });

@@ -100,9 +100,18 @@ interface OwningPackage {
     manifest: PackageManifest;
 }
 
-// Owners are cached per directory for the process: classification runs for every module the
-// bundler sees, and installed manifests don't change without restarting the dev server.
+// Owners are cached per directory: classification runs for every module the bundler sees. A
+// manifest can change between a dev server's restarts within one process, so each configuration
+// starts over (see forgetBackendModuleOwners).
 const owningPackageByDir = new Map<string, OwningPackage | undefined>();
+
+/**
+ * Forgets every package owner looked up so far, so the next classification reads the manifests
+ * again. Call it whenever a build or dev server is configured.
+ */
+export function forgetBackendModuleOwners(): void {
+    owningPackageByDir.clear();
+}
 
 /**
  * The installed package a file under `node_modules` belongs to: the directory right after the
@@ -313,6 +322,15 @@ function getDependencyNames(
     });
 }
 
+/** An opted-in package found in the app's dependency tree. */
+export interface InstalledBackendFunctionPackage extends BackendFunctionPackage {
+    /**
+     * Every name the dependency tree installs this copy under: usually just its manifest name,
+     * plus any npm alias (`"viz": "npm:@acme/viz@1"`). Bare imports use these names.
+     */
+    installedAs: string[];
+}
+
 /**
  * Every opted-in package installed in the app's dependency tree (direct or transitive), so
  * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
@@ -323,16 +341,25 @@ function getDependencyNames(
 export function findInstalledBackendFunctionPackages(
     buildRoot: string,
     preserveSymlinks: boolean,
-): BackendFunctionPackage[] {
+): InstalledBackendFunctionPackage[] {
     const appDir = findNearestManifestDir(buildRoot);
     const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
     if (!appDir || !appManifest) {
         return [];
     }
 
-    const found: BackendFunctionPackage[] = [];
-    // Keyed by real path, so a symlink cycle ends even when roots keep their linked paths.
-    const visited = new Set<string>();
+    const found: InstalledBackendFunctionPackage[] = [];
+    const record = (name: string, root: string, installedAs: string) => {
+        const entry = found.find((pkg) => pkg.root === root);
+        if (!entry) {
+            found.push({ name, root, installedAs: [...new Set([name, installedAs])] });
+        } else if (!entry.installedAs.includes(installedAs)) {
+            entry.installedAs.push(installedAs);
+        }
+    };
+    // Keyed by real path, so a symlink cycle ends even when roots keep their linked paths. Holds
+    // the copy's manifest name if it opted in, so another way to reach it is still recorded.
+    const visited = new Map<string, string | undefined>();
     const pending: Array<{ dir: string; dependencyNames: string[] }> = [
         {
             dir: preserveSymlinks ? appDir : fs.realpathSync(appDir),
@@ -340,31 +367,40 @@ export function findInstalledBackendFunctionPackages(
         },
     ];
 
-    while (pending.length > 0) {
-        const { dir, dependencyNames } = pending.shift()!;
+    for (let next = 0; next < pending.length; next++) {
+        const { dir, dependencyNames } = pending[next];
         for (const dependencyName of dependencyNames) {
             const linkedPackageDir = locateInstalledPackage(dependencyName, dir);
             if (!linkedPackageDir) {
                 continue;
             }
             const realPackageDir = fs.realpathSync(linkedPackageDir);
+            const packageDir = preserveSymlinks ? linkedPackageDir : realPackageDir;
             if (visited.has(realPackageDir)) {
+                // Reached again: by an alias, or with preserveSymlinks by another linked path,
+                // which Vite treats as another module id.
+                const name = visited.get(realPackageDir);
+                if (name) {
+                    record(name, packageDir, dependencyName);
+                }
                 continue;
             }
-            visited.add(realPackageDir);
-            const packageDir = preserveSymlinks ? linkedPackageDir : realPackageDir;
 
             const manifest = readManifest(path.join(packageDir, 'package.json'));
-            if (!manifest) {
-                continue;
+            const name =
+                manifest && providesBackendFunctions(manifest) && typeof manifest.name === 'string'
+                    ? manifest.name
+                    : undefined;
+            visited.set(realPackageDir, name);
+            if (name) {
+                record(name, packageDir, dependencyName);
             }
-            if (providesBackendFunctions(manifest) && typeof manifest.name === 'string') {
-                found.push({ name: manifest.name, root: packageDir });
+            if (manifest) {
+                pending.push({
+                    dir: packageDir,
+                    dependencyNames: getDependencyNames(manifest, DEPENDENCY_FIELDS),
+                });
             }
-            pending.push({
-                dir: packageDir,
-                dependencyNames: getDependencyNames(manifest, DEPENDENCY_FIELDS),
-            });
         }
     }
 

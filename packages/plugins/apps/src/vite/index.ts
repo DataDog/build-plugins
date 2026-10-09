@@ -22,10 +22,13 @@ import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
     findPackageBackendFunctionFiles,
+    forgetBackendModuleOwners,
+    getBackendModuleOwner,
     isBackendFunctionFile,
     isBackendSourceModule,
     isOutsideRoot,
     type BackendFunctionPackage,
+    type InstalledBackendFunctionPackage,
 } from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
@@ -124,6 +127,9 @@ export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
  * the SSR environment's transform, the one local execution loads them through; without the
  * local-execution suffix the transform still registers the file and returns its proxy. A file that
  * fails is logged, not fatal: the browser's request reports it too.
+ *
+ * So in `vite dev` every backend function an opted-in package ships can be executed, including
+ * ones the app never imports. `vite build` packages only the ones the app's code reaches.
  */
 async function registerPackageBackendFunctions(
     server: ViteDevServer,
@@ -155,6 +161,31 @@ async function registerPackageBackendFunctions(
             await Promise.all(files.map(register));
         }),
     );
+}
+
+/**
+ * Logs, at info level, the backend functions packages contribute to the app's package. The
+ * package's own manifest is the whole consent, so whoever builds the app should see what it ships.
+ */
+function logPackageBackendFunctions(
+    functions: BackendFunction[],
+    buildRoot: string,
+    log: Logger,
+): void {
+    const namesByPackage = new Map<string, string[]>();
+    for (const func of functions) {
+        const owner = getBackendModuleOwner(func.absolutePath, buildRoot);
+        if (owner.kind === 'backend-package') {
+            const names = namesByPackage.get(owner.package.name) ?? [];
+            namesByPackage.set(owner.package.name, [...names, func.name]);
+        }
+    }
+    if (namesByPackage.size > 0) {
+        const contributions = [...namesByPackage].map(
+            ([name, names]) => `${name} (${names.join(', ')})`,
+        );
+        log.info(`Backend functions provided by packages: ${contributions.join('; ')}`);
+    }
 }
 
 /**
@@ -209,7 +240,7 @@ export const getVitePlugin = ({
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
-    let backendPackages: BackendFunctionPackage[] = [];
+    let backendPackages: InstalledBackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
     // rebuild can start before the previous closeBundle finishes.
@@ -224,13 +255,15 @@ export const getVitePlugin = ({
             order: 'post',
             handler(userConfig, { command }) {
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // A restarted dev server shares this process: read the manifests afresh.
+                forgetBackendModuleOwners();
                 // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
                 // require(), which throws "Cannot use import statement outside a module";
                 // ssr.noExternal forces Vite's SSR transform instead.
                 // Only the dev server pre-bundles dependencies or loads modules through SSR; the
                 // nested backend builds configure their own resolution (see build-config.ts).
                 if (command !== 'serve') {
-                    return { ssr: { noExternal: BACKEND_RUNTIME_PACKAGES } };
+                    return { ssr: { noExternal: [...BACKEND_RUNTIME_PACKAGES] } };
                 }
 
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
@@ -240,9 +273,11 @@ export const getVitePlugin = ({
                 // only resolves symlinks in them when preserveSymlinks is off.
                 const preserveSymlinks = userConfig.resolve?.preserveSymlinks ?? false;
                 backendPackages = findInstalledBackendFunctionPackages(root, preserveSymlinks);
-                // Two installed copies of a package share its name.
-                const installedPackageNames = backendPackages.map((pkg) => pkg.name);
-                const backendPackageNames = [...new Set(installedPackageNames)];
+                // Every name an import can use: an npm alias too, or Vite would pre-bundle the
+                // aliased package. Two installed copies of a package share its name.
+                const backendPackageNames = [
+                    ...new Set(backendPackages.flatMap((pkg) => pkg.installedAs)),
+                ];
                 // Info, not debug: the package's own manifest is the whole consent, so the app's
                 // developer should see which packages it trusts to add backend functions.
                 if (backendPackageNames.length > 0) {
@@ -265,7 +300,7 @@ export const getVitePlugin = ({
                     // entry initializes during local execution, even when a package providing
                     // backend functions is linked from somewhere that has its own copy installed.
                     resolve: {
-                        dedupe: BACKEND_RUNTIME_PACKAGES,
+                        dedupe: [...BACKEND_RUNTIME_PACKAGES],
                     },
                 };
             },
@@ -444,6 +479,7 @@ export const getVitePlugin = ({
             let backendOutDir: string | undefined;
             let backendOutputs = new Map<string, string>();
             let backendFunctions = getBackendFunctions();
+            logPackageBackendFunctions(backendFunctions, context.buildRoot, log);
             if (backendFunctions.length > 0) {
                 const result = await buildBackendFunctions(
                     bundler.build,
