@@ -5,6 +5,7 @@
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import { createHash } from 'crypto';
 import path from 'path';
 import type { build, ViteDevServer } from 'vite';
 
@@ -120,6 +121,16 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
+
+// The `\0` prefix is the bundler convention for "not a real file": Rollup and Rolldown both leave
+// such modules out of sourcemaps, and Vite's own resolvers and loaders don't touch them.
+// Between them goes a hash of the backend module's root-relative id, not the id itself: the
+// proxy id can reach build outputs such as Vite's manifest, which shouldn't name backend files
+// or depend on where the project is checked out. Bundlers name a chunk after its module's last
+// path segment, so the id ends in a short one.
+const FRONTEND_PROXY_ID_PREFIX = '\0dd-apps-backend-proxy:';
+const FRONTEND_PROXY_ID_SUFFIX = '/proxy';
+const FRONTEND_PROXY_ID_RE = new RegExp(`^${FRONTEND_PROXY_ID_PREFIX}`);
 
 /**
  * Registers every backend function the given packages ship by running each of their backend
@@ -240,6 +251,9 @@ export const getVitePlugin = ({
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
+    let isBuild = false;
+    // A build's proxy ids, each to the backend module it stands for.
+    const frontendProxySources = new Map<string, string>();
     let backendPackages: InstalledBackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
@@ -254,6 +268,7 @@ export const getVitePlugin = ({
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
             handler(userConfig, { command }) {
+                isBuild = command === 'build';
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
                 // A restarted dev server shares this process: read the manifests afresh.
                 forgetBackendModuleOwners();
@@ -344,6 +359,40 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
+                // In a frontend build, each client-side import of a backend function file resolves
+                // to a proxy module of its own (see load below). Under the backend file's id, the
+                // stub would keep the sourcemaps earlier transforms attached to that file, whose
+                // sourcesContent is the original source: Rolldown keeps the first map's sources
+                // whatever later transforms return. The dev server keeps serving backend modules
+                // under their own ids, where the transform below replaces them and edits to the
+                // file still reach the browser. This costs every client-side import in a build one
+                // extra resolution.
+                if (isBuild && resolveOptions.ssr !== true) {
+                    const resolved = await this.resolve(source, importer, {
+                        ...resolveOptions,
+                        skipSelf: true,
+                    });
+                    if (
+                        !resolved ||
+                        resolved.external ||
+                        !isBackendFunctionFile(
+                            resolved.id,
+                            context.buildRoot,
+                            context.bundler.outDir,
+                        )
+                    ) {
+                        return resolved;
+                    }
+                    const relativeId = path
+                        .relative(context.buildRoot, resolved.id)
+                        .split(path.sep)
+                        .join('/');
+                    const key = createHash('sha256').update(relativeId).digest('hex');
+                    frontendProxySources.set(key, resolved.id);
+                    const proxyId = `${FRONTEND_PROXY_ID_PREFIX}${key}${FRONTEND_PROXY_ID_SUFFIX}`;
+                    return { ...resolved, id: proxyId };
+                }
+
                 // Top-level guard (not folded into each branch) so any future branch added below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.
@@ -388,6 +437,27 @@ export const getVitePlugin = ({
                     subgraphImporters?.add(suffixedId);
                 }
                 return { ...resolved, id: suffixedId };
+            },
+        },
+        load: {
+            filter: { id: { include: [FRONTEND_PROXY_ID_RE] } },
+            async handler(id) {
+                // Vite < 6.3 ignores hook filters.
+                if (!FRONTEND_PROXY_ID_RE.test(id)) {
+                    return null;
+                }
+                const sourceId = frontendProxySources.get(
+                    id.slice(FRONTEND_PROXY_ID_PREFIX.length, -FRONTEND_PROXY_ID_SUFFIX.length),
+                );
+                if (sourceId === undefined) {
+                    return null;
+                }
+                // Loading the backend module runs it through the app's own pipeline and then the
+                // transform below, which registers its functions and returns the proxy stub. Only
+                // that code joins the frontend graph: nothing imports the backend module itself,
+                // so the bundler never renders it or its sourcemaps.
+                const { code } = await this.load({ id: sourceId });
+                return code;
             },
         },
         transform: {
@@ -442,7 +512,7 @@ export const getVitePlugin = ({
                         // so stale entries don't persist across HMR re-transforms.
                         setBackendFunctions(normalizedId, []);
                     }
-                    return { code: '', map: null };
+                    return { code: '', map: { mappings: '' } };
                 }
 
                 const { functions, proxyCode } = buildProxyModule(
@@ -453,7 +523,10 @@ export const getVitePlugin = ({
                 setBackendFunctions(normalizedId, functions);
                 log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
 
-                return { code: proxyCode, map: null };
+                // The stub doesn't correspond position-for-position to the code it replaces, which
+                // `map: null` would claim: the dev server would then trace it back into the
+                // original source and serve that alongside it. An empty mapping maps it to nothing.
+                return { code: proxyCode, map: { mappings: '' } };
             },
         },
         buildStart() {

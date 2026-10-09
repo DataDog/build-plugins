@@ -99,6 +99,7 @@ async function buildApp(appRoot: string, entry: string) {
             outDir: 'dist',
             emptyOutDir: true,
             minify: false,
+            sourcemap: true,
             rollupOptions: { input: path.join(appRoot, entry) },
         },
         plugins: [getAppsPlugin()],
@@ -115,10 +116,22 @@ async function buildApp(appRoot: string, entry: string) {
     };
     const manifest: AppsManifest = JSON.parse(await readEntry('manifest.json'));
     const frontendNames = Object.values(zip.files)
-        .filter((file) => !file.dir && file.name.startsWith('frontend/'))
+        // Code only: with sourcemaps on, a map's sourcesContent would match source text too.
+        .filter(
+            (file) => !file.dir && file.name.startsWith('frontend/') && !file.name.endsWith('.map'),
+        )
         .map((file) => file.name);
     const frontendCode = (await Promise.all(frontendNames.map(readEntry))).join('\n');
-    return { manifest, frontendCode, readEntry };
+    const mapNames = (await fsp.readdir(outDir, { recursive: true })).filter((name) =>
+        name.endsWith('.map'),
+    );
+    const sourcemaps: Array<{ sources: string[]; sourcesContent?: Array<string | null> }> =
+        await Promise.all(
+            mapNames.map(async (name) =>
+                JSON.parse(await fsp.readFile(path.join(outDir, name), 'utf-8')),
+            ),
+        );
+    return { manifest, frontendCode, sourcemaps, readEntry };
 }
 
 function getProxiedQueryNames(code: string): string[] {
@@ -271,6 +284,30 @@ describe.each<Layout>(['installed', 'linked'])(
                     Object.keys(built.manifest.backend.functions),
                 );
                 expect(built.frontendCode).not.toContain(VIZ_BACKEND_BODY);
+            });
+
+            test("Should map the frontend to the library's frontend sources, but to none of its backend files", async () => {
+                const sources = built.sourcemaps.flatMap((map) => map.sources);
+                const vizLibDir = fs.realpathSync(
+                    path.join(appRoot, 'node_modules/@fixtures/viz-lib'),
+                );
+                const backendTexts = await Promise.all(
+                    ['data.backend.js', 'request.js'].map((file) =>
+                        fsp.readFile(
+                            path.join(vizLibDir, 'dist/src/visualizations', file),
+                            'utf-8',
+                        ),
+                    ),
+                );
+                const contents = built.sourcemaps.flatMap((map) => map.sourcesContent ?? []);
+
+                expect(sources).toContainEqual(
+                    expect.stringMatching(/viz-lib\/dist\/src\/index\.js$/),
+                );
+                expect(sources.filter((source) => source.includes('visualizations/'))).toEqual([]);
+                for (const text of backendTexts) {
+                    expect(contents.filter((content) => content?.includes(text))).toEqual([]);
+                }
             });
 
             test("Should keep a .backend.js file in a package that didn't opt in as an ordinary module", () => {
