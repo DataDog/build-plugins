@@ -18,6 +18,19 @@ export interface ExecuteActionRequest {
     args: unknown[];
 }
 
+export const DEBUG_BUNDLE_PATH = '/__dd/debugBundle';
+
+// Set on `globalThis` only by pages the dev server serves, so deployed apps never request a bundle.
+export const DEV_SERVER_MARKER = 'DD_APPS_DEV_SERVER';
+
+/**
+ * JSON response from the dev server's `debugBundle` endpoint.
+ */
+export interface DebugBundleResponse {
+    code: string;
+    allowedConnectionIds: string[];
+}
+
 /**
  * Response from executing a backend function.
  *

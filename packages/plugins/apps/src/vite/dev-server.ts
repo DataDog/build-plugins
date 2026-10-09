@@ -13,7 +13,12 @@ import type { build } from 'vite';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
-import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
+import type {
+    DebugBundleResponse,
+    ExecuteActionRequest,
+    ExecuteActionResponse,
+} from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import { DEV_VERIFY_MODE } from '../constants';
@@ -539,8 +544,20 @@ async function validateAndBundle(
     return { ...bundled, args };
 }
 
+function acceptsJson(req: IncomingMessage): boolean {
+    const accept = req.headers.accept ?? '';
+    return accept.split(',').some((mediaRange) => {
+        const [mediaType, ...parameters] = mediaRange.split(';');
+        const isRefused = parameters.some((parameter) =>
+            /^\s*q\s*=\s*0(\.0*)?\s*$/i.test(parameter),
+        );
+        return mediaType.trim().toLowerCase() === 'application/json' && !isRefused;
+    });
+}
+
 /**
- * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
+ * Handle POST /__dd/debugBundle — returns the bundled script, as plain text by default or as
+ * `{ code, allowedConnectionIds }` when the Accept header lists `application/json` without q=0.
  */
 async function handleDebugBundle(
     req: IncomingMessage,
@@ -549,9 +566,19 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
 
         res.statusCode = 200;
+        if (acceptsJson(req)) {
+            const body: DebugBundleResponse = {
+                code,
+                allowedConnectionIds: func.allowedConnectionIds,
+            };
+            const serializedBody = JSON.stringify(body);
+            res.setHeader('Content-Type', 'application/json');
+            res.end(serializedBody);
+            return;
+        }
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
     } catch (error: unknown) {
@@ -717,7 +744,7 @@ export function createDevServerMiddleware(
 
         const functionsByName = buildFunctionMap(getBackendFunctions());
 
-        if (req.url === '/__dd/debugBundle') {
+        if (req.url === DEBUG_BUNDLE_PATH) {
             handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
