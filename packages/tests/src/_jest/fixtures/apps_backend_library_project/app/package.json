@@ -9,6 +9,7 @@
         "@fixtures/hooks-lib": "0.0.1",
         "@fixtures/viz-lib": "0.0.1",
         "linked-plain-backend-lib": "0.0.1",
-        "plain-backend-lib": "0.0.1"
+        "plain-backend-lib": "0.0.1",
+        "viz-alias": "npm:@fixtures/viz-lib@0.0.1"
     }
 }

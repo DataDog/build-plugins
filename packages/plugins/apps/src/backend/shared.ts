@@ -31,7 +31,10 @@ export function isDatadogAppsBackendInstalled(fromDir: string): boolean {
  * importer — including a package that provides backend functions and declares them as peers — must
  * be deduplicated onto that same copy.
  */
-export const BACKEND_RUNTIME_PACKAGES = ['@datadog/apps-backend', '@datadog/action-catalog'];
+export const BACKEND_RUNTIME_PACKAGES: readonly string[] = [
+    '@datadog/apps-backend',
+    '@datadog/action-catalog',
+];
 
 /** The import line to pull action-catalog's setExecuteActionImplementation into bundles. */
 export const ACTION_CATALOG_IMPORT =

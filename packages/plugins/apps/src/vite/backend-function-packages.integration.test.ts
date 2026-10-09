@@ -62,6 +62,7 @@ async function assembleApp(
     await install(path.join(PROJECT_DIR, 'packages/plain-lib'), 'plain-backend-lib');
     await install(path.join(PROJECT_DIR, 'packages/banned-lib'), '@fixtures/banned-lib');
     await install(path.join(PROJECT_DIR, 'packages/hooks-lib'), '@fixtures/hooks-lib');
+    await install(path.join(PROJECT_DIR, 'packages/viz-lib'), 'viz-alias');
 
     const link = async (checkout: string, name: string) => {
         const linkPath = path.join(appRoot, 'node_modules', name);
@@ -514,6 +515,28 @@ describe('Backend functions shipped by a package: refusals and subfolders', () =
         expect(functionNames).toEqual([expect.stringMatching(/\.readHookState$/)]);
         expect(getProxiedQueryNames(hooks.frontendCode)).toEqual(functionNames);
         expect(hooks.frontendCode).not.toContain('hooks-lib backend body');
+    }, 30000);
+
+    // Pre-bundling resolves the alias, not the manifest name, so excluding only the latter would
+    // inline the backend body into the browser's dependency chunk.
+    test('Should serve a proxy, not the body, for a library installed under an npm alias in vite dev', async () => {
+        const server = await createServer({
+            root: appRoot,
+            configFile: false,
+            logLevel: 'silent',
+            server: { middlewareMode: true, hmr: false },
+            plugins: [getAppsPlugin()],
+        });
+        try {
+            const clientCode = await loadClientModuleGraph(server, '/alias.ts');
+
+            expect(getProxiedQueryNames(clientCode)).toEqual([
+                expect.stringMatching(/\.fetchSeries$/),
+            ]);
+            expect(clientCode).not.toContain(VIZ_BACKEND_BODY);
+        } finally {
+            await server.close();
+        }
     }, 30000);
 
     test("Should reject a banned import in an opted-in library's backend code", async () => {
