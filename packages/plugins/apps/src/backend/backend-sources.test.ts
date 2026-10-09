@@ -219,7 +219,7 @@ describe('Backend Functions - package ownership rules', () => {
     });
 
     test('Should find opted-in packages anywhere in the dependency tree', () => {
-        const packages = findInstalledBackendFunctionPackages(appRoot);
+        const packages = findInstalledBackendFunctionPackages(appRoot, false);
 
         expect(packages.map((pkg) => pkg.name).sort()).toEqual([
             '@scope/deep',
