@@ -7,7 +7,7 @@ import https from 'https';
 import http from 'http';
 import { protectProperties } from 'jest-util';
 
-import { cleanEnv } from './helpers/cleanEnv.ts';
+import { scrubEnv } from './helpers/allowedEnv.ts';
 import { protectInterceptors } from './helpers/protectInterceptors.ts';
 import { toBeWithinRange } from './toBeWithinRange.ts';
 import { toRepeatStringTimes } from './toRepeatStringTimes.ts';
@@ -32,10 +32,11 @@ jest.mock('async-retry', () => {
     });
 });
 
-// Scrubs CI's Datadog credentials and DD_SITE before test files' module and describe scopes run.
-// Never restored: each test file gets its own process.env copy, so restoring would only re-expose
-// them to teardown.
-cleanEnv();
+// globalSetup scrubs the env that workers and child processes inherit; this repeats it for test
+// code, in case a run overrides globalSetup. It runs before test files' module and describe scopes,
+// and is never restored: each test file gets its own process.env copy, so restoring would only
+// re-expose the removed variables to teardown.
+scrubEnv();
 
 beforeAll(() => {
     const nock = jest.requireActual('nock');
