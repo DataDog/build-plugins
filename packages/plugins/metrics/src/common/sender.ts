@@ -7,6 +7,7 @@ import type { Logger, Metric, MetricToSend } from '@dd/core/types';
 import chalk from 'chalk';
 
 export const METRICS_API_PATH = 'api/v1/series';
+const METRICS_BATCH_SIZE = 500;
 
 const green = chalk.bold.green;
 
@@ -54,15 +55,28 @@ Sending ${metricsToSend.length} metrics with configuration:
 Metrics:
     - ${metricsNames.join('\n    - ')}`);
 
-    return doRequest({
-        method: 'POST',
-        url: `https://api.${auth.site}/${METRICS_API_PATH}?api_key=${auth.apiKey}`,
-        getData: () => ({
-            data: JSON.stringify({ series: metricsToSend } satisfies {
-                series: Metric[];
+    const batches: Metric[][] = [];
+    for (let i = 0; i < metricsToSend.length; i += METRICS_BATCH_SIZE) {
+        batches.push(metricsToSend.slice(i, i + METRICS_BATCH_SIZE));
+    }
+
+    if (batches.length > 1) {
+        log.debug(`Sending metrics in ${batches.length} batches of up to ${METRICS_BATCH_SIZE}.`);
+    }
+
+    return Promise.all(
+        batches.map((batch) =>
+            doRequest({
+                method: 'POST',
+                url: `https://api.${auth.site}/${METRICS_API_PATH}?api_key=${auth.apiKey}`,
+                getData: () => ({
+                    data: JSON.stringify({ series: batch } satisfies {
+                        series: Metric[];
+                    }),
+                }),
             }),
-        }),
-    }).catch((e) => {
+        ),
+    ).catch((e) => {
         log.error(`Error sending metrics ${e}`);
     });
 };
