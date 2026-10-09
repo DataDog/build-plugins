@@ -116,7 +116,10 @@ async function buildApp(appRoot: string, entry: string) {
     };
     const manifest: AppsManifest = JSON.parse(await readEntry('manifest.json'));
     const frontendNames = Object.values(zip.files)
-        .filter((file) => !file.dir && file.name.startsWith('frontend/'))
+        // Code only: with sourcemaps on, a map's sourcesContent would match source text too.
+        .filter(
+            (file) => !file.dir && file.name.startsWith('frontend/') && !file.name.endsWith('.map'),
+        )
         .map((file) => file.name);
     const frontendCode = (await Promise.all(frontendNames.map(readEntry))).join('\n');
     const mapNames = (await fsp.readdir(outDir, { recursive: true })).filter((name) =>
