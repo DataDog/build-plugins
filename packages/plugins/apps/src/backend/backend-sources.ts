@@ -23,7 +23,10 @@ import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_RE, BACKEND_FILE_WITH_QUERY_RE } 
 export interface BackendFunctionPackage {
     /** The package's own manifest `name`, used when it imports itself by package specifier. */
     name: string;
-    /** Real (symlink-resolved) path of the package directory, the same form Vite uses for module ids. */
+    /**
+     * Path of the package directory in the form Vite uses for module ids: symlink-resolved, unless
+     * the discovery preserved symlinks the way Vite's `resolve.preserveSymlinks` does.
+     */
     root: string;
 }
 
@@ -281,13 +284,16 @@ function findNearestManifestDir(fromDir: string): string | undefined {
     }
 }
 
-/** Locates an installed dependency the way Node does: `node_modules/<name>` in each ancestor directory. */
+/**
+ * Locates an installed dependency the way Node does: `node_modules/<name>` in each ancestor
+ * directory. The returned path may go through a symlink.
+ */
 function locateInstalledPackage(name: string, fromDir: string): string | undefined {
     let dir = fromDir;
     while (true) {
         const candidate = path.join(dir, 'node_modules', name);
         if (existsSync(path.join(candidate, 'package.json'))) {
-            return fs.realpathSync(candidate);
+            return candidate;
         }
         const parent = path.dirname(dir);
         if (parent === dir) {
@@ -311,9 +317,13 @@ function getDependencyNames(
  * Every opted-in package installed in the app's dependency tree (direct or transitive), so
  * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
  * their backend files reachable by the plugin. One entry per installed copy: two copies of a
- * package share a name but not a root.
+ * package share a name but not a root. With `preserveSymlinks` (Vite's `resolve.preserveSymlinks`),
+ * roots and the lookups from them keep the linked path, as Vite's module ids do.
  */
-export function findInstalledBackendFunctionPackages(buildRoot: string): BackendFunctionPackage[] {
+export function findInstalledBackendFunctionPackages(
+    buildRoot: string,
+    preserveSymlinks: boolean,
+): BackendFunctionPackage[] {
     const appDir = findNearestManifestDir(buildRoot);
     const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
     if (!appDir || !appManifest) {
@@ -321,10 +331,11 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): Backend
     }
 
     const found: BackendFunctionPackage[] = [];
+    // Keyed by real path, so a symlink cycle ends even when roots keep their linked paths.
     const visited = new Set<string>();
     const pending: Array<{ dir: string; dependencyNames: string[] }> = [
         {
-            dir: fs.realpathSync(appDir),
+            dir: preserveSymlinks ? appDir : fs.realpathSync(appDir),
             dependencyNames: getDependencyNames(appManifest, APP_DEPENDENCY_FIELDS),
         },
     ];
@@ -332,14 +343,16 @@ export function findInstalledBackendFunctionPackages(buildRoot: string): Backend
     while (pending.length > 0) {
         const { dir, dependencyNames } = pending.shift()!;
         for (const dependencyName of dependencyNames) {
-            const packageDir = locateInstalledPackage(dependencyName, dir);
-            if (!packageDir) {
+            const linkedPackageDir = locateInstalledPackage(dependencyName, dir);
+            if (!linkedPackageDir) {
                 continue;
             }
-            if (visited.has(packageDir)) {
+            const realPackageDir = fs.realpathSync(linkedPackageDir);
+            if (visited.has(realPackageDir)) {
                 continue;
             }
-            visited.add(packageDir);
+            visited.add(realPackageDir);
+            const packageDir = preserveSymlinks ? linkedPackageDir : realPackageDir;
 
             const manifest = readManifest(path.join(packageDir, 'package.json'));
             if (!manifest) {

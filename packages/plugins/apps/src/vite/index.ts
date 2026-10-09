@@ -120,10 +120,10 @@ export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 /**
  * Registers every backend function the given packages ship by running each of their backend
- * function files through the transform, the same way the browser's first request would. The SSR
- * environment's, the one local execution loads them through; without the local-execution suffix
- * the transform still registers the file and returns its proxy. A file that fails is logged, not
- * fatal: the browser's request reports it too.
+ * function files through the transform, the same way the browser's first request would. It uses
+ * the SSR environment's transform, the one local execution loads them through; without the
+ * local-execution suffix the transform still registers the file and returns its proxy. A file that
+ * fails is logged, not fatal: the browser's request reports it too.
  */
 async function registerPackageBackendFunctions(
     server: ViteDevServer,
@@ -158,7 +158,7 @@ async function registerPackageBackendFunctions(
 }
 
 /**
- * Adds each package's real root to the dev server's `server.fs.allow`, unless an entry already
+ * Adds each package's root to the dev server's `server.fs.allow`, unless an entry already
  * covers it. Otherwise Vite only loads a file from a package linked outside the workspace once
  * something has imported it, so after a restart local execution fails on a function the browser
  * still calls through its cached proxy.
@@ -236,7 +236,10 @@ export const getVitePlugin = ({
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
-                backendPackages = findInstalledBackendFunctionPackages(root);
+                // Registration at startup must use the ids the browser's requests will, and Vite
+                // only resolves symlinks in them when preserveSymlinks is off.
+                const preserveSymlinks = userConfig.resolve?.preserveSymlinks ?? false;
+                backendPackages = findInstalledBackendFunctionPackages(root, preserveSymlinks);
                 // Two installed copies of a package share its name.
                 const installedPackageNames = backendPackages.map((pkg) => pkg.name);
                 const backendPackageNames = [...new Set(installedPackageNames)];
