@@ -131,26 +131,31 @@ describe('Backend Functions - package ownership rules', () => {
         ).toEqual(expected);
     });
 
-    test('Should reject a dynamic import into a backend function package from backend code', () => {
-        const file = at('app/node_modules/opted/hooks/state.backend.js');
-        const code = `
-            import { plainValue } from 'plain';
-            export async function readState() {
-                const ordinary = await import('plain');
-                const { helper } = await import('opted/helper');
-                return [plainValue, ordinary, helper()];
+    // A package's modules are backend source, so a dynamic import into one, whether by package
+    // name or by the package's own `#` subpath import, can't be followed and fails closed.
+    test.each(['opted/helper', '#internal'])(
+        'Should reject a dynamic import of %s from backend code',
+        (specifier) => {
+            const file = at('app/node_modules/opted/hooks/state.backend.js');
+            const code = `
+                import { plainValue } from 'plain';
+                export async function readState() {
+                    const ordinary = await import('plain');
+                    const { helper } = await import('${specifier}');
+                    return [plainValue, ordinary, helper()];
+                }
+            `;
+            const record = createParsedModuleRecord(file, appRoot, parseAst(code), [
+                at('app/node_modules/plain/index.js'),
+            ]);
+            if (!record) {
+                throw new Error('Expected the package module to be backend source.');
             }
-        `;
-        const record = createParsedModuleRecord(file, appRoot, parseAst(code), [
-            at('app/node_modules/plain/index.js'),
-        ]);
-        if (!record) {
-            throw new Error('Expected the package module to be backend source.');
-        }
 
-        const records = new Map([[file, record]]);
-        expect(() => walkModuleGraph(file, records, appRoot, () => {})).toThrow(
-            'dynamic-import opted/helper',
-        );
-    });
+            const records = new Map([[file, record]]);
+            expect(() => walkModuleGraph(file, records, appRoot, () => {})).toThrow(
+                `dynamic-import ${specifier}`,
+            );
+        },
+    );
 });

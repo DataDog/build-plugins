@@ -727,10 +727,11 @@ function isLocalRequireCall(node: SimpleCallExpression): boolean {
 }
 
 /**
- * Returns whether an import specifier points at an app-local path.
+ * Returns whether an import specifier points at a module of the importer's own package: a relative
+ * or absolute path, or a `#` subpath import, which the package's own `imports` field maps.
  */
 function isLocalSpecifier(specifier: string): boolean {
-    return specifier.startsWith('.') || specifier.startsWith('/');
+    return specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('#');
 }
 
 /**
