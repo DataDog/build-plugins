@@ -336,11 +336,14 @@ export interface InstalledBackendFunctionPackage extends BackendFunctionPackage 
  * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
  * their backend files reachable by the plugin. One entry per installed copy: two copies of a
  * package share a name but not a root. With `preserveSymlinks` (Vite's `resolve.preserveSymlinks`),
- * roots and the lookups from them keep the linked path, as Vite's module ids do.
+ * roots and the lookups from them keep the linked path, as Vite's module ids do, so each linked
+ * path is its own entry and resolves its own dependencies. `extraNames` are specifiers of packages
+ * the app imports without declaring them, looked up from the app like its dependencies.
  */
 export function findInstalledBackendFunctionPackages(
     buildRoot: string,
     preserveSymlinks: boolean,
+    extraNames: string[] = [],
 ): InstalledBackendFunctionPackage[] {
     const appDir = findNearestManifestDir(buildRoot);
     const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
@@ -357,18 +360,27 @@ export function findInstalledBackendFunctionPackages(
             entry.installedAs.push(installedAs);
         }
     };
-    // Keyed by real path, so a symlink cycle ends even when roots keep their linked paths. Holds
-    // the copy's manifest name if it opted in, so another way to reach it is still recorded.
+    // Keyed by the path lookups continue from (the real path, unless preserveSymlinks keeps the
+    // linked one). Holds the copy's manifest name if it opted in, so another name for the same
+    // path is still recorded.
     const visited = new Map<string, string | undefined>();
-    const pending: Array<{ dir: string; dependencyNames: string[] }> = [
+    const realAppDir = fs.realpathSync(appDir);
+    // `realAncestors` ends a symlink cycle, whose linked paths would otherwise grow forever.
+    const pending: Array<{ dir: string; dependencyNames: string[]; realAncestors: string[] }> = [
         {
-            dir: preserveSymlinks ? appDir : fs.realpathSync(appDir),
-            dependencyNames: getDependencyNames(appManifest, APP_DEPENDENCY_FIELDS),
+            dir: preserveSymlinks ? appDir : realAppDir,
+            dependencyNames: [
+                ...new Set([
+                    ...getDependencyNames(appManifest, APP_DEPENDENCY_FIELDS),
+                    ...extraNames.flatMap((specifier) => getPackageName(specifier) ?? []),
+                ]),
+            ],
+            realAncestors: [realAppDir],
         },
     ];
 
     for (let next = 0; next < pending.length; next++) {
-        const { dir, dependencyNames } = pending[next];
+        const { dir, dependencyNames, realAncestors } = pending[next];
         for (const dependencyName of dependencyNames) {
             const linkedPackageDir = locateInstalledPackage(dependencyName, dir);
             if (!linkedPackageDir) {
@@ -376,10 +388,9 @@ export function findInstalledBackendFunctionPackages(
             }
             const realPackageDir = fs.realpathSync(linkedPackageDir);
             const packageDir = preserveSymlinks ? linkedPackageDir : realPackageDir;
-            if (visited.has(realPackageDir)) {
-                // Reached again: by an alias, or with preserveSymlinks by another linked path,
-                // which Vite treats as another module id.
-                const name = visited.get(realPackageDir);
+            if (visited.has(packageDir)) {
+                // Reached again, by an alias for instance.
+                const name = visited.get(packageDir);
                 if (name) {
                     record(name, packageDir, dependencyName);
                 }
@@ -391,14 +402,16 @@ export function findInstalledBackendFunctionPackages(
                 manifest && providesBackendFunctions(manifest) && typeof manifest.name === 'string'
                     ? manifest.name
                     : undefined;
-            visited.set(realPackageDir, name);
+            visited.set(packageDir, name);
             if (name) {
                 record(name, packageDir, dependencyName);
             }
-            if (manifest) {
+            // Its dependencies are followed unless this path closes a symlink cycle.
+            if (manifest && !realAncestors.includes(realPackageDir)) {
                 pending.push({
                     dir: packageDir,
                     dependencyNames: getDependencyNames(manifest, DEPENDENCY_FIELDS),
+                    realAncestors: [...realAncestors, realPackageDir],
                 });
             }
         }

@@ -272,7 +272,13 @@ export const getVitePlugin = ({
                 // Registration at startup must use the ids the browser's requests will, and Vite
                 // only resolves symlinks in them when preserveSymlinks is off.
                 const preserveSymlinks = userConfig.resolve?.preserveSymlinks ?? false;
-                backendPackages = findInstalledBackendFunctionPackages(root, preserveSymlinks);
+                // A package the app imports without declaring it is found through the
+                // optimizeDeps.exclude entry the README asks for, so it's configured like the rest.
+                backendPackages = findInstalledBackendFunctionPackages(
+                    root,
+                    preserveSymlinks,
+                    userConfig.optimizeDeps?.exclude ?? [],
+                );
                 // Every name an import can use: an npm alias too, or Vite would pre-bundle the
                 // aliased package. Two installed copies of a package share its name.
                 const backendPackageNames = [
