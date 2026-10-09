@@ -9,6 +9,8 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 
 <!-- #toc -->
 -   [Configuration](#configuration)
+-   [Backend functions](#backend-functions)
+    -   [Backend functions from packages](#backend-functions-from-packages)
 -   [Development server authentication](#development-server-authentication)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
@@ -32,6 +34,32 @@ apps?: {
     };
 }
 ```
+
+## Backend functions
+
+Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject Node built-in imports and network globals such as `fetch` in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
+
+### Backend functions from packages
+
+A package can ship backend functions too. It opts in from its `package.json`:
+
+```json
+{
+    "datadogApps": { "backendFunctions": true }
+}
+```
+
+In an opted-in package, every `.backend.*` module the app imports, directly or through the package's own code, is a backend function exactly like one of the app's. That includes files under `dist/` and imports by the package's own name, such as `@datadog/apps-frontend/visualizations/backend`. The modules it imports from its own package are checked like app code; backend code can only import such a package statically. Under `node_modules`, the package is the installed package root, so a named `package.json` in a subfolder (like `preact/hooks`) doesn't change it.
+
+The opt-in governs packages outside the project root, installed or linked. Code inside the project root is the app's own, even a workspace package with its own `package.json`. A `.backend.*` file in an installed package that hasn't opted in stays an ordinary module, so a dependency can't add functions through its file names. A package linked from outside the project root (a workspace package, `npm link`, a `file:` dependency) that hasn't opted in is the exception: like any linked workspace file, its `.backend.*` files are always proxied, so the build fails rather than deploying them or shipping their bodies.
+
+A few things to know:
+
+-   When `vite dev` starts, the plugin logs, at info level, each package that provides backend functions. `vite build` logs each function a package contributes to the app's package.
+-   Declare `@datadog/action-catalog` and `@datadog/apps-backend` as peer dependencies. Each function uses the app's own copy, the one its runtime is set up on. This holds even when the package is linked from a checkout that has its own copy installed.
+-   The dev server keeps opted-in packages it finds in the app's dependency tree out of dependency pre-bundling (`optimizeDeps`). Otherwise their backend code would be inlined into the browser bundle. So `vite dev` serves each opted-in package as individual, unbundled modules, even in an app that never calls its backend functions. Every name the package is installed under counts, npm aliases included. A package it doesn't find there (an undeclared dependency) needs adding to `optimizeDeps.exclude` by hand; the plugin then treats it like one it found. `vite build` never pre-bundles.
+-   `vite dev` can execute every backend function an opted-in package ships, including ones the app never imports: a browser may still hold a proxy from before a restart. `vite build` packages only the functions the app's code reaches.
+-   A function's name is derived from its file's path relative to the project root, so it's the same in `vite dev` and `vite build` for a given install, and distinct from every app file's. It changes when the install path does, as it can when the package's version changes under pnpm.
 
 ## Development server authentication
 

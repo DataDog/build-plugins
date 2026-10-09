@@ -493,6 +493,9 @@ function handleHttpError(res: ServerResponse, error: unknown, log?: Logger, labe
     sendError(res, statusCode, message);
 }
 
+/** Looks up the functions a request may name, keyed by query name, once they're all known. */
+type GetFunctionsByName = () => Promise<Map<string, BackendFunction>>;
+
 class HttpError extends Error {
     constructor(
         public statusCode: number,
@@ -508,9 +511,13 @@ class HttpError extends Error {
  */
 async function parseAndLookupFunction(
     req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
 ): Promise<{ func: BackendFunction; args: unknown[] }> {
-    const { functionName, args = [] } = await parseRequestBody(req);
+    // The body is read while functions still being discovered settle.
+    const [{ functionName, args = [] }, functionsByName] = await Promise.all([
+        parseRequestBody(req),
+        getFunctionsByName(),
+    ]);
 
     if (!functionName || typeof functionName !== 'string') {
         throw new HttpError(400, 'Missing or invalid functionName');
@@ -531,10 +538,10 @@ async function parseAndLookupFunction(
  */
 async function validateAndBundle(
     req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
 ): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
-    const { func, args } = await parseAndLookupFunction(req, functionsByName);
+    const { func, args } = await parseAndLookupFunction(req, getFunctionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
 }
@@ -545,11 +552,11 @@ async function validateAndBundle(
 async function handleDebugBundle(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { code } = await validateAndBundle(req, getFunctionsByName, bundle);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -567,7 +574,7 @@ async function handleDebugBundle(
 async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -577,7 +584,7 @@ async function handleExecuteAction(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, args } = await parseAndLookupFunction(req, functionsByName);
+        const { func, args } = await parseAndLookupFunction(req, getFunctionsByName);
         const displayName = formatRef(func);
 
         log.debug(`Executing action locally: ${displayName} with args`);
@@ -619,7 +626,7 @@ async function handleExecuteAction(
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
@@ -627,7 +634,7 @@ async function handleExecuteActionViaCloud(
     log: Logger,
 ): Promise<void> {
     try {
-        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code, args } = await validateAndBundle(req, getFunctionsByName, bundle);
         const displayName = formatRef(func);
 
         log.debug(`Executing action via cloud: ${displayName} with args`);
@@ -653,7 +660,7 @@ async function handleExecuteActionViaCloud(
 function routeToCloudHandler(
     req: IncomingMessage,
     res: ServerResponse,
-    functionsByName: Map<string, BackendFunction>,
+    getFunctionsByName: GetFunctionsByName,
     bundle: BundleFn,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
@@ -664,7 +671,7 @@ function routeToCloudHandler(
         handleExecuteActionViaCloud(
             req,
             res,
-            functionsByName,
+            getFunctionsByName,
             bundle,
             auth,
             authedRequest,
@@ -684,12 +691,13 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
 /**
  * Connect-compatible middleware intercepting backend function requests for the Vite dev server.
  * The lookup map rebuilds on each request via `getBackendFunctions()` so renamed/removed
- * functions are reflected without restarting the server.
+ * functions are reflected without restarting the server. It may return a promise, for functions
+ * still being discovered; a request's body is read meanwhile.
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
     loadModule: LoadModule,
-    getBackendFunctions: () => BackendFunction[],
+    getBackendFunctions: () => BackendFunction[] | Promise<BackendFunction[]>,
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
@@ -701,13 +709,16 @@ export function createDevServerMiddleware(
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    // Rebuilt for each request that names a function, so renamed or removed functions show.
+    const getFunctionsByName = () => Promise.resolve(getBackendFunctions()).then(buildFunctionMap);
 
-    const initialFunctions = getBackendFunctions();
-    if (initialFunctions.length > 0) {
-        log.info(
-            `Dev server middleware active for ${initialFunctions.length} backend function(s): ${initialFunctions.map((f) => f.name).join(', ')}`,
-        );
-    }
+    Promise.resolve(getBackendFunctions()).then((initialFunctions) => {
+        if (initialFunctions.length > 0) {
+            log.info(
+                `Dev server middleware active for ${initialFunctions.length} backend function(s): ${initialFunctions.map((f) => f.name).join(', ')}`,
+            );
+        }
+    });
 
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         if (req.method !== 'POST') {
@@ -715,10 +726,8 @@ export function createDevServerMiddleware(
             return;
         }
 
-        const functionsByName = buildFunctionMap(getBackendFunctions());
-
         if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+            handleDebugBundle(req, res, getFunctionsByName, bundle).catch(() => {
                 sendError(res, 500, 'Unexpected error');
             });
         } else if (
@@ -729,7 +738,7 @@ export function createDevServerMiddleware(
             routeToCloudHandler(
                 req,
                 res,
-                functionsByName,
+                getFunctionsByName,
                 bundle,
                 auth,
                 doAuthenticatedRequest,
@@ -741,7 +750,7 @@ export function createDevServerMiddleware(
                 handleExecuteAction(
                     req,
                     res,
-                    functionsByName,
+                    getFunctionsByName,
                     auth,
                     authedRequest,
                     longPolling,

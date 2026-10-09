@@ -7,9 +7,9 @@ import type { Plugin, Rollup } from 'vite';
 import {
     createParsedModuleRecord,
     type ParsedModuleRecord,
-    shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
+import { isBackendSourceModule } from '../backend/backend-sources';
 
 const VIRTUAL_MODULE_ID_RE = /^(?:\0|virtual:)/;
 
@@ -32,8 +32,8 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
 
                 // `createParsedModuleRecord` applies this same predicate, but
                 // only after the AST exists. Checking it here keeps us from
-                // parsing every `node_modules` module just to discard it.
-                if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
+                // parsing every ordinary `node_modules` module just to discard it.
+                if (!isBackendSourceModule(moduleId, buildRoot)) {
                     return;
                 }
 

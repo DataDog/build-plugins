@@ -1,0 +1,442 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import { existsSync, readJsonSync } from '@dd/core/helpers/fs';
+import fs from 'fs';
+import path from 'path';
+
+import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_RE, BACKEND_FILE_WITH_QUERY_RE } from '../constants';
+
+/**
+ * Decides which modules belong to an app's backend: the app's own source, plus the source of any
+ * installed package that opts in from its `package.json`:
+ *
+ *     "datadogApps": { "backendFunctions": true }
+ *
+ * This is the one answer the transform (which files become functions), the static checks and
+ * connection-ID traversal (which modules are checked like app code), the dev server and the build
+ * all ask. A dependency that hasn't opted in can never add a function through its file names.
+ */
+
+/** An installed package that opted in to providing backend functions. */
+export interface BackendFunctionPackage {
+    /** The package's own manifest `name`, used when it imports itself by package specifier. */
+    name: string;
+    /**
+     * Path of the package directory in the form Vite uses for module ids: symlink-resolved, unless
+     * the discovery preserved symlinks the way Vite's `resolve.preserveSymlinks` does.
+     */
+    root: string;
+}
+
+/** Who a module's source belongs to, as far as backend functions are concerned. */
+export type BackendModuleOwner =
+    /**
+     * The app's own source: inside the build root, outside package-manager directories. That
+     * includes a workspace package that lives inside the root, whatever its manifest says.
+     */
+    | { kind: 'app' }
+    /** Source of an installed or linked package that opted in; treated exactly like app source. */
+    | { kind: 'backend-package'; package: BackendFunctionPackage }
+    /**
+     * Anything else: a package that didn't opt in, installed or linked, or a folder outside the
+     * build root. Its modules are never analyzed as backend source.
+     */
+    | { kind: 'other' };
+
+const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
+
+// Split on both separators: Vite ids use forward slashes even on Windows.
+const splitPath = (filePath: string) => filePath.split(/[\\/]/);
+
+export function isPackageManagerModule(modulePath: string): boolean {
+    return splitPath(modulePath).some((segment) => PACKAGE_MANAGER_DIRS.has(segment));
+}
+
+// A `..`-prefixed directory name like `..gen` is still inside the root.
+export function isOutsideRoot(relativePath: string): boolean {
+    return (
+        relativePath === '..' ||
+        relativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativePath)
+    );
+}
+
+const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const;
+const APP_DEPENDENCY_FIELDS = [...DEPENDENCY_FIELDS, 'devDependencies'] as const;
+
+type PackageManifest = Record<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readManifest(manifestPath: string): PackageManifest | undefined {
+    if (!existsSync(manifestPath)) {
+        return undefined;
+    }
+    try {
+        const manifest: unknown = readJsonSync(manifestPath);
+        return isRecord(manifest) ? manifest : undefined;
+    } catch {
+        // An unreadable or malformed manifest can't opt anything in.
+        return undefined;
+    }
+}
+
+function providesBackendFunctions(manifest: PackageManifest): boolean {
+    const appsField = manifest.datadogApps;
+    return isRecord(appsField) && appsField.backendFunctions === true;
+}
+
+function isWithin(parent: string, child: string): boolean {
+    return !isOutsideRoot(path.relative(parent, child));
+}
+
+interface OwningPackage {
+    root: string;
+    name: string;
+    manifest: PackageManifest;
+}
+
+// Owners are cached per directory: classification runs for every module the bundler sees. A
+// manifest can change between a dev server's restarts within one process, so each configuration
+// starts over (see forgetBackendModuleOwners).
+const owningPackageByDir = new Map<string, OwningPackage | undefined>();
+
+/**
+ * Forgets every package owner looked up so far, so the next classification reads the manifests
+ * again. Call it whenever a build or dev server is configured.
+ */
+export function forgetBackendModuleOwners(): void {
+    owningPackageByDir.clear();
+}
+
+/**
+ * The installed package a file under `node_modules` belongs to: the directory right after the
+ * last `node_modules` segment (two for a scoped name), the way Node resolves it. A named
+ * `package.json` deeper inside, like `preact/hooks/package.json`, is part of that package and
+ * doesn't override its opt-in.
+ */
+function findInstalledPackage(filePath: string): { root: string; dirName: string } | undefined {
+    const segments = splitPath(filePath);
+    const nodeModulesIndex = segments.lastIndexOf('node_modules');
+    if (nodeModulesIndex === -1) {
+        return undefined;
+    }
+    const nameLength = segments[nodeModulesIndex + 1]?.startsWith('@') ? 2 : 1;
+    const rootEnd = nodeModulesIndex + 1 + nameLength;
+    // A file directly inside `node_modules` (or `node_modules/@scope`) belongs to no package.
+    if (rootEnd >= segments.length) {
+        return undefined;
+    }
+    return {
+        root: segments.slice(0, rootEnd).join(path.sep) || path.sep,
+        dirName: segments.slice(nodeModulesIndex + 1, rootEnd).join('/'),
+    };
+}
+
+/**
+ * The nearest enclosing `package.json` that has a `name`, for a file outside `node_modules`
+ * (nameless ones, like a `dist/package.json` that only sets `"type"`, don't define a package).
+ * Never climbs out of a package-manager directory, so a stray file inside one can't be claimed by
+ * the app's own manifest further up.
+ */
+function findNearestNamedPackage(dir: string): OwningPackage | undefined {
+    if (owningPackageByDir.has(dir)) {
+        return owningPackageByDir.get(dir);
+    }
+    let owner: OwningPackage | undefined;
+    if (!PACKAGE_MANAGER_DIRS.has(path.basename(dir))) {
+        const manifest = readManifest(path.join(dir, 'package.json'));
+        const parent = path.dirname(dir);
+        if (manifest && typeof manifest.name === 'string') {
+            owner = { root: dir, name: manifest.name, manifest };
+        } else if (parent !== dir) {
+            owner = findNearestNamedPackage(parent);
+        }
+    }
+    owningPackageByDir.set(dir, owner);
+    return owner;
+}
+
+function findOwningPackage(filePath: string): OwningPackage | undefined {
+    const installed = findInstalledPackage(filePath);
+    if (!installed) {
+        return findNearestNamedPackage(path.dirname(filePath));
+    }
+    const { root, dirName } = installed;
+    if (!owningPackageByDir.has(root)) {
+        const manifest = readManifest(path.join(root, 'package.json'));
+        const name = typeof manifest?.name === 'string' ? manifest.name : dirName;
+        owningPackageByDir.set(root, manifest ? { root, name, manifest } : undefined);
+    }
+    return owningPackageByDir.get(root);
+}
+
+/**
+ * Classifies a module id (an absolute file path, query already stripped) relative to the app at
+ * `buildRoot`. Source inside the build root is always the app's, even under a nested package.json;
+ * only modules reached through a package manager, or living outside the root, consult the owning
+ * package's opt-in.
+ *
+ * Any spelling of the path classifies the same: a Vite id with forward slashes on Windows, or one
+ * with `..` or repeated separators. A returned package root uses the platform's separators.
+ */
+export function getBackendModuleOwner(moduleId: string, buildRoot: string): BackendModuleOwner {
+    const modulePath = path.normalize(moduleId);
+    const root = path.resolve(buildRoot);
+    if (isWithin(root, modulePath) && !isPackageManagerModule(path.relative(root, modulePath))) {
+        return { kind: 'app' };
+    }
+
+    const owner = findOwningPackage(modulePath);
+    // A manifest enclosing the build root is the app's own (or its workspace's), never a dependency.
+    if (owner && !isWithin(owner.root, root) && providesBackendFunctions(owner.manifest)) {
+        return { kind: 'backend-package', package: { name: owner.name, root: owner.root } };
+    }
+    return { kind: 'other' };
+}
+
+/** The package name a bare import specifier refers to, or undefined for a relative, absolute or URL-like one. */
+function getPackageName(specifier: string): string | undefined {
+    if (/^[./\\]/.test(specifier) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(specifier)) {
+        return undefined;
+    }
+    const segments = specifier.split('/');
+    const name = specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0];
+    return name || undefined;
+}
+
+/**
+ * Whether bare `specifier`, imported from module `importerId`, reaches a package that provides
+ * backend functions: the importer's own package (a self-reference) or an installed one.
+ */
+export function importsBackendFunctionPackage(
+    specifier: string,
+    importerId: string,
+    buildRoot: string,
+): boolean {
+    const name = getPackageName(specifier);
+    if (!name) {
+        return false;
+    }
+    const importerOwner = getBackendModuleOwner(importerId, buildRoot);
+    if (importerOwner.kind === 'backend-package' && importerOwner.package.name === name) {
+        return true;
+    }
+    const packageDir = locateInstalledPackage(name, path.dirname(importerId));
+    const manifest = packageDir ? readManifest(path.join(packageDir, 'package.json')) : undefined;
+    return manifest !== undefined && providesBackendFunctions(manifest);
+}
+
+/**
+ * Whether a module is backend source the plugin analyzes like app code: traversed for connection
+ * IDs, run through the static checks, and given its own local-execution identity in the dev server.
+ */
+export function isBackendSourceModule(moduleId: string, buildRoot: string): boolean {
+    if (!BACKEND_CODE_EXTENSIONS.some((extension) => moduleId.endsWith(extension))) {
+        return false;
+    }
+    const owner = getBackendModuleOwner(moduleId, buildRoot);
+    return owner.kind === 'app' || owner.kind === 'backend-package';
+}
+
+/**
+ * Whether a module id (as a bundler hands it to a transform, query included) is a backend function
+ * file: a `.backend.*` module that the frontend receives as a proxy and that is registered, bundled
+ * and deployed per exported function. That's any such file of an opted-in package, wherever it's
+ * installed, plus the app's own outside package-manager directories and the bundler's `outDir`.
+ */
+export function isBackendFunctionFile(id: string, buildRoot: string, outDir: string): boolean {
+    if (!BACKEND_FILE_WITH_QUERY_RE.test(id)) {
+        return false;
+    }
+
+    const [idWithoutQuery] = id.split(/[?#]/);
+    const filePath = idWithoutQuery.replace(/^\0/, '');
+    // Virtual ids aren't on disk, so on-disk exclusions don't apply; resolving them would depend on cwd.
+    if (!path.posix.isAbsolute(filePath) && !path.win32.isAbsolute(filePath)) {
+        return true;
+    }
+
+    // An opted-in package's files are functions even under node_modules or its own dist/.
+    if (getBackendModuleOwner(filePath, buildRoot).kind === 'backend-package') {
+        return true;
+    }
+
+    // Outside the build root the full path decides, so a hoisted package beside an app under
+    // node_modules stays excluded while a linked workspace file is still proxied.
+    const pathToClassify = isWithin(buildRoot, filePath)
+        ? path.relative(buildRoot, filePath)
+        : filePath;
+    if (isPackageManagerModule(pathToClassify)) {
+        return false;
+    }
+
+    // An outDir at or above the build root (e.g. `build.outDir: '.'`) must not exclude app files.
+    return isWithin(outDir, buildRoot) || !isWithin(outDir, filePath);
+}
+
+function findNearestManifestDir(fromDir: string): string | undefined {
+    let dir = path.resolve(fromDir);
+    while (true) {
+        if (existsSync(path.join(dir, 'package.json'))) {
+            return dir;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) {
+            return undefined;
+        }
+        dir = parent;
+    }
+}
+
+/**
+ * Locates an installed dependency the way Node does: `node_modules/<name>` in each ancestor
+ * directory. The returned path may go through a symlink.
+ */
+function locateInstalledPackage(name: string, fromDir: string): string | undefined {
+    let dir = fromDir;
+    while (true) {
+        const candidate = path.join(dir, 'node_modules', name);
+        if (existsSync(path.join(candidate, 'package.json'))) {
+            return candidate;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) {
+            return undefined;
+        }
+        dir = parent;
+    }
+}
+
+function getDependencyNames(
+    manifest: PackageManifest,
+    fields: ReadonlyArray<(typeof APP_DEPENDENCY_FIELDS)[number]>,
+): string[] {
+    return fields.flatMap((field) => {
+        const dependencies = manifest[field];
+        return isRecord(dependencies) ? Object.keys(dependencies) : [];
+    });
+}
+
+/** An opted-in package found in the app's dependency tree. */
+export interface InstalledBackendFunctionPackage extends BackendFunctionPackage {
+    /**
+     * Every name the dependency tree installs this copy under: usually just its manifest name,
+     * plus any npm alias (`"viz": "npm:@acme/viz@1"`). Bare imports use these names.
+     */
+    installedAs: string[];
+}
+
+/**
+ * Every opted-in package installed in the app's dependency tree (direct or transitive), so
+ * dev-server configuration that needs packages up front, like dependency pre-bundling, can keep
+ * their backend files reachable by the plugin. One entry per installed copy: two copies of a
+ * package share a name but not a root. With `preserveSymlinks` (Vite's `resolve.preserveSymlinks`),
+ * roots and the lookups from them keep the linked path, as Vite's module ids do, so each linked
+ * path is its own entry and resolves its own dependencies. `extraNames` are specifiers of packages
+ * the app imports without declaring them, looked up from the app like its dependencies.
+ */
+export function findInstalledBackendFunctionPackages(
+    buildRoot: string,
+    preserveSymlinks: boolean,
+    extraNames: string[] = [],
+): InstalledBackendFunctionPackage[] {
+    const appDir = findNearestManifestDir(buildRoot);
+    const appManifest = appDir ? readManifest(path.join(appDir, 'package.json')) : undefined;
+    if (!appDir || !appManifest) {
+        return [];
+    }
+
+    const found: InstalledBackendFunctionPackage[] = [];
+    const record = (name: string, root: string, installedAs: string) => {
+        const entry = found.find((pkg) => pkg.root === root);
+        if (!entry) {
+            found.push({ name, root, installedAs: [...new Set([name, installedAs])] });
+        } else if (!entry.installedAs.includes(installedAs)) {
+            entry.installedAs.push(installedAs);
+        }
+    };
+    // Keyed by the path lookups continue from (the real path, unless preserveSymlinks keeps the
+    // linked one). Holds the copy's manifest name if it opted in, so another name for the same
+    // path is still recorded.
+    const visited = new Map<string, string | undefined>();
+    const realAppDir = fs.realpathSync(appDir);
+    // `realAncestors` ends a symlink cycle, whose linked paths would otherwise grow forever.
+    const pending: Array<{ dir: string; dependencyNames: string[]; realAncestors: string[] }> = [
+        {
+            dir: preserveSymlinks ? appDir : realAppDir,
+            dependencyNames: [
+                ...new Set([
+                    ...getDependencyNames(appManifest, APP_DEPENDENCY_FIELDS),
+                    ...extraNames.flatMap((specifier) => getPackageName(specifier) ?? []),
+                ]),
+            ],
+            realAncestors: [realAppDir],
+        },
+    ];
+
+    for (let next = 0; next < pending.length; next++) {
+        const { dir, dependencyNames, realAncestors } = pending[next];
+        for (const dependencyName of dependencyNames) {
+            const linkedPackageDir = locateInstalledPackage(dependencyName, dir);
+            if (!linkedPackageDir) {
+                continue;
+            }
+            const realPackageDir = fs.realpathSync(linkedPackageDir);
+            const packageDir = preserveSymlinks ? linkedPackageDir : realPackageDir;
+            if (visited.has(packageDir)) {
+                // Reached again, by an alias for instance.
+                const name = visited.get(packageDir);
+                if (name) {
+                    record(name, packageDir, dependencyName);
+                }
+                continue;
+            }
+
+            const manifest = readManifest(path.join(packageDir, 'package.json'));
+            const name =
+                manifest && providesBackendFunctions(manifest) && typeof manifest.name === 'string'
+                    ? manifest.name
+                    : undefined;
+            visited.set(packageDir, name);
+            if (name) {
+                record(name, packageDir, dependencyName);
+            }
+            // Its dependencies are followed unless this path closes a symlink cycle.
+            if (manifest && !realAncestors.includes(realPackageDir)) {
+                pending.push({
+                    dir: packageDir,
+                    dependencyNames: getDependencyNames(manifest, DEPENDENCY_FIELDS),
+                    realAncestors: [...realAncestors, realPackageDir],
+                });
+            }
+        }
+    }
+
+    return found;
+}
+
+/**
+ * The `.backend.*` files an opted-in package ships, outside its own nested `node_modules`. Every
+ * one is a backend function file (see isBackendFunctionFile), whether or not the app imports it.
+ */
+export function findPackageBackendFunctionFiles(pkg: BackendFunctionPackage): string[] {
+    const files: string[] = [];
+    const pending = [pkg.root];
+    while (pending.length > 0) {
+        const dir = pending.pop()!;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const entryPath = path.join(dir, entry.name);
+            if (entry.isDirectory() && !PACKAGE_MANAGER_DIRS.has(entry.name)) {
+                pending.push(entryPath);
+            } else if (entry.isFile() && BACKEND_FILE_RE.test(entry.name)) {
+                files.push(entryPath);
+            }
+        }
+    }
+    return files.sort();
+}

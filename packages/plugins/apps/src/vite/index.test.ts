@@ -135,7 +135,11 @@ function getConfigHandler(
         throw new Error('Expected plugin.config to have a function handler');
     }
     return function callConfig(userConfig = {}): ConfigHookResult {
-        const result: unknown = Reflect.apply(handler, undefined, [userConfig, DEV_SERVER_ENV]);
+        // Rooted where no packages are installed, so dependency discovery finds nothing.
+        const result: unknown = Reflect.apply(handler, undefined, [
+            { root: '/build', ...userConfig },
+            DEV_SERVER_ENV,
+        ]);
         if (!isConfigHookResult(result)) {
             throw new Error('Expected plugin.config to return a config object');
         }
@@ -1092,6 +1096,8 @@ describe('Backend Functions - getVitePlugin', () => {
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
+            optimizeDeps: { exclude: [] },
+            resolve: { dedupe: ['@datadog/apps-backend', '@datadog/action-catalog'] },
         });
     });
 
