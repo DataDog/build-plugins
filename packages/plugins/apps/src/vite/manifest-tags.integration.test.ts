@@ -17,7 +17,7 @@
  */
 
 import { datadogVitePlugin } from '@datadog/vite-plugin';
-import { cleanEnv } from '@dd/tests/_jest/helpers/cleanEnv';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import esbuild from 'esbuild';
 import fs from 'fs/promises';
 import JSZip from 'jszip';
@@ -125,7 +125,7 @@ const filesContaining = (files: Record<string, string>, text: string) =>
 
 /** Builds the fixture app against the SDK layout and returns its package and plugin warnings. */
 async function buildApp(layout: SdkLayout) {
-    const restoreEnv = cleanEnv();
+    const restoreEnv = clearDatadogEnv();
     const appRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-tags-'));
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     try {
