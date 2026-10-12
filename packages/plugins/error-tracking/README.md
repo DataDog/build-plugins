@@ -15,6 +15,7 @@ Interact with Error Tracking directly from your build system.
     -   [errorTracking.sourcemaps.bailOnError](#errortrackingsourcemapsbailonerror)
     -   [errorTracking.sourcemaps.debugId](#errortrackingsourcemapsdebugid)
     -   [errorTracking.sourcemaps.dryRun](#errortrackingsourcemapsdryrun)
+    -   [errorTracking.sourcemaps.experimentalDuplicateCheck](#errortrackingsourcemapsexperimentalduplicatecheck)
     -   [errorTracking.sourcemaps.maxConcurrency](#errortrackingsourcemapsmaxconcurrency)
     -   [errorTracking.sourcemaps.minifiedPathPrefix](#errortrackingsourcemapsminifiedpathprefix)
     -   [errorTracking.sourcemaps.releaseVersion](#errortrackingsourcemapsreleaseversion)
@@ -31,6 +32,7 @@ errorTracking?: {
               bailOnError?: boolean;
               debugId: true;
               dryRun?: boolean;
+              experimentalDuplicateCheck?: boolean;
               maxConcurrency?: number;
           }
         | {
@@ -95,6 +97,20 @@ Upload source maps using the debug IDs injected with `rum.sourceCodeContext.debu
 
 It will not upload the sourcemaps to Datadog, but will do everything else.
 
+
+### errorTracking.sourcemaps.experimentalDuplicateCheck
+
+> default: `false`
+
+Only applies when `errorTracking.sourcemaps.debugId` is enabled.
+
+Before uploading, ask Datadog which of the debug IDs it already holds a source map for, and skip
+those. Rebuilding an unchanged bundle produces the same debug IDs, so this keeps the upload step
+from sending artifacts Datadog already has.
+
+If the check fails for any reason, the plugin logs a warning and uploads everything: a redundant
+upload is preferable to skipping a source map that was actually needed. The check is expected to be
+enabled by default in an upcoming version.
 
 ### errorTracking.sourcemaps.maxConcurrency
 

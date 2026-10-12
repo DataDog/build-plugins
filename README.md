@@ -126,6 +126,7 @@ Follow the specific documentation for each bundler:
                   bailOnError?: boolean;
                   debugId: true;
                   dryRun?: boolean;
+                  experimentalDuplicateCheck?: boolean;
                   maxConcurrency?: number;
               }
             | {
@@ -394,6 +395,7 @@ datadogWebpackPlugin({
                   bailOnError?: boolean,
                   debugId: true,
                   dryRun?: boolean,
+                  experimentalDuplicateCheck?: boolean,
                   maxConcurrency?: number,
               }
             | {

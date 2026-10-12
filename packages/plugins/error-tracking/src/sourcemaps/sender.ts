@@ -16,14 +16,20 @@ import type { Logger, Metric, RepositoryData } from '@dd/core/types';
 import chalk from 'chalk';
 import PQueue from 'p-queue';
 
-import type { SourcemapsOptionsWithDefaults, Sourcemap } from '../types';
+import type {
+    DebugIdSourcemapsOptionsWithDefaults,
+    SourcemapsOptionsWithDefaults,
+    Sourcemap,
+} from '../types';
 
+import { getExistingDebugIds } from './check-exists';
 import { extractDebugId } from './debugId';
 import type { Metadata, MultipartFileValue, Payload } from './payload';
 import { getPayload } from './payload';
 import {
     addSourcemapUploadMetrics,
     createSourcemapUploadMetrics,
+    getSkippedExistingMetric,
     recordSourcemapUploadFailure,
     recordSourcemapUploadRetry,
 } from './upload-metrics';
@@ -185,6 +191,47 @@ export type SourcemapsSenderContext = UploadContext & {
     git?: RepositoryData;
 };
 
+// Asks Datadog which of the debug IDs we are about to upload it already holds a sourcemap for.
+// Fails open: on any error we log a warning and report no duplicates, so the upload proceeds with
+// everything. Skipping a sourcemap that was actually needed is worse than a redundant upload.
+const getDuplicateDebugIds = async (
+    sourcemapsWithDebugIds: SourcemapWithDebugId[],
+    options: DebugIdSourcemapsOptionsWithDefaults,
+    context: SourcemapsSenderContext,
+    log: Logger,
+): Promise<Set<string>> => {
+    const apiKey = context.apiKey;
+    if (!options.experimentalDuplicateCheck || !apiKey) {
+        return new Set();
+    }
+
+    const debugIds = sourcemapsWithDebugIds
+        .map(({ debugId }) => debugId)
+        .filter((debugId): debugId is string => debugId !== undefined);
+
+    const checkTimer = log.time('check existing sourcemaps');
+    try {
+        const duplicateDebugIds = await getExistingDebugIds(debugIds, {
+            apiKey,
+            bundlerName: context.bundlerName,
+            site: context.site,
+            version: context.version,
+        });
+        log.debug(
+            `Found ${green(`${duplicateDebugIds.size}/${debugIds.length}`)} debug IDs that already exist in Datadog.`,
+        );
+
+        return duplicateDebugIds;
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        log.warn(`Could not check for existing sourcemaps, uploading all of them: ${errorMessage}`);
+
+        return new Set();
+    } finally {
+        checkTimer.end();
+    }
+};
+
 export const sendSourcemaps = async (
     sourcemaps: Sourcemap[],
     options: SourcemapsOptionsWithDefaults,
@@ -230,11 +277,21 @@ export const sendSourcemaps = async (
         return;
     }
 
+    const duplicateDebugIds = options.debugId
+        ? await getDuplicateDebugIds(sourcemapsWithDebugIds, options, context, log)
+        : new Set<string>();
     const skippedSourcemaps = options.debugId
         ? sourcemapsWithDebugIds.filter(({ debugId }) => !debugId)
         : [];
+    const skippedDuplicates = options.debugId
+        ? sourcemapsWithDebugIds.filter(
+              ({ debugId }) => debugId !== undefined && duplicateDebugIds.has(debugId),
+          )
+        : [];
     const sourcemapsToUpload = options.debugId
-        ? sourcemapsWithDebugIds.filter(({ debugId }) => debugId)
+        ? sourcemapsWithDebugIds.filter(
+              ({ debugId }) => debugId !== undefined && !duplicateDebugIds.has(debugId),
+          )
         : sourcemapsWithDebugIds;
     const payloads: Payload[] = await payloadsQueue.addAll(
         sourcemapsToUpload.map(
@@ -244,6 +301,20 @@ export const sendSourcemaps = async (
         ),
     );
     payloadsTimer.end();
+
+    if (skippedDuplicates.length > 0) {
+        for (const { sourcemap, debugId } of skippedDuplicates) {
+            log.debug(
+                `Skipping sourcemap ${sourcemap.sourcemapFilePath}: debug ID ${debugId} already exists in Datadog.`,
+            );
+        }
+        log.info(
+            `Skipped ${green(`${skippedDuplicates.length}/${sourcemaps.length}`)} sourcemaps that already exist in Datadog.`,
+        );
+        if (context.sendMetrics) {
+            context.addMetric(getSkippedExistingMetric(skippedDuplicates.length));
+        }
+    }
 
     const errors = payloads.map((payload) => payload.errors).flat();
     const warnings = [
@@ -265,6 +336,12 @@ export const sendSourcemaps = async (
         if (options.bailOnError === true) {
             throw new Error(errorMsg);
         }
+        return;
+    }
+
+    // Every sourcemap that had a debug ID is already in Datadog, so there is no upload to run
+    // and no upload summary to report. Logged above as part of the duplicate check.
+    if (payloads.length === 0 && skippedDuplicates.length > 0) {
         return;
     }
 
