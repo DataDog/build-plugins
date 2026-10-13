@@ -120,3 +120,13 @@ module.exports = {
   /* datadog-privacy-allowlist-exclude-begin */
   `exclude range with unterminated comment 3`,
 ```
+
+## Live Debugger Function IDs
+
+When the [Live Debugger plugin](/packages/plugins/live-debugger) is enabled, every instrumented function starts with a `$dd_probes('<function ID>')` call. The privacy plugin always leaves these function IDs inline and out of the allowlist. They are not application strings, and reading them from the module's dictionary would make every instrumented function depend on its module having been evaluated.
+
+## Known Limitations
+
+### Circular Imports
+
+The string literals of a module are moved into a dictionary declared at the top of that module. A function that reads one of its own string literals therefore only works once its module has been evaluated. With circular imports, a function declaration can be called before that point. Reading the dictionary then throws a `ReferenceError` (a `TypeError` in esbuild builds), even though the original code works.

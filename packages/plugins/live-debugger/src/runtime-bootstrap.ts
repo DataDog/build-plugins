@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 import { getChunkDebugId } from '@dd/core/helpers/debugId';
 import type { ChunkInfo } from '@dd/core/types';
 
@@ -11,7 +12,7 @@ import type { LiveDebuggerOptionsWithDefaults } from './types';
 // `$dd_probes` is called unconditionally by instrumented functions, so it must
 // exist before the Browser Debugger SDK initializes. The SDK's `init()` later
 // replaces the stubbed globals with the real implementations.
-const runtimeStubs = `if(typeof globalThis.$dd_probes==='undefined'){globalThis.$dd_probes=function(){}}`;
+const runtimeStubs = `if(typeof globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}==='undefined'){globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}=function(){}}`;
 const buildMetadataGlobal = '__DD_LIVE_DEBUGGER_BUILD__' as const;
 
 type BuildMetadata = {

@@ -28,3 +28,7 @@ export const DEFAULT_SITE = SITES[0];
 export const ENV_VAR_REQUESTED_BUNDLERS = 'PLAYWRIGHT_REQUESTED_BUNDLERS';
 
 export const HOST_NAME = 'datadog-build-plugins';
+
+// Global function that Live Debugger instrumentation calls at the start of
+// every instrumented function, with the function's ID as its only argument.
+export const LIVE_DEBUGGER_PROBES_FUNCTION = '$dd_probes';
