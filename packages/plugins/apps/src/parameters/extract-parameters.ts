@@ -17,10 +17,15 @@ import type {
 import { analyzeModuleScope, getModuleVariable } from '../backend/ast-parsing/module-scope';
 import { walkAst } from '../backend/ast-parsing/walk-ast';
 import type { AppsParameterSchema } from '../types';
+import { MAX_PARAMETERS, validateParameterSchema } from '../validate';
 
 export const PARAMETERS_MODULE = '@datadog/apps-frontend/parameters';
 const DEFINE_FUNCTION = 'defineDatadogAppParameters';
-const SCHEMA_TYPES = { string: 'STRING', number: 'NUMBER', boolean: 'BOOLEAN' } as const;
+const SCHEMA_TYPES = new Map<unknown, AppsParameterSchema['type']>([
+    ['string', 'STRING'],
+    ['number', 'NUMBER'],
+    ['boolean', 'BOOLEAN'],
+]);
 const PARAMETER_KEYS = new Set(['type', 'default', 'label', 'description', 'options']);
 
 type Primitive = string | number | boolean;
@@ -78,8 +83,8 @@ function toSchema(name: string, node: Node, describe: () => string): AppsParamet
         }
     }
     const type = fields.get('type');
-    const typeName = type && literalValue(type, where);
-    if (typeof typeName !== 'string' || !(typeName in SCHEMA_TYPES)) {
+    const schemaType = type && SCHEMA_TYPES.get(literalValue(type, where));
+    if (!schemaType) {
         throw new Error(`${where()}: type must be 'string', 'number', or 'boolean'.`);
     }
     const defaultValue = fields.get('default');
@@ -96,7 +101,7 @@ function toSchema(name: string, node: Node, describe: () => string): AppsParamet
     }
     return {
         name,
-        type: SCHEMA_TYPES[typeName as keyof typeof SCHEMA_TYPES],
+        type: schemaType,
         defaultValue: literalValue(defaultValue, where),
         ...text('label'),
         ...text('description'),
@@ -133,6 +138,27 @@ function parentsOf(program: Program): Map<Node, Node> {
         },
     });
     return parents;
+}
+
+const isParametersModule = (source: Node | null | undefined): boolean =>
+    source?.type === 'Literal' && source.value === PARAMETERS_MODULE;
+
+/**
+ * Whether a module imports, re-exports, or dynamically imports
+ * `@datadog/apps-frontend/parameters`, whatever it then does with it.
+ */
+export function importsParametersModule(program: Program): boolean {
+    let found = false;
+    const check = (node: { source?: Node | null }) => {
+        found ||= isParametersModule(node.source);
+    };
+    walkAst(program as Node, null, {
+        ImportDeclaration: check,
+        ExportNamedDeclaration: check,
+        ExportAllDeclaration: check,
+        ImportExpression: check,
+    });
+    return found;
 }
 
 /**
@@ -238,16 +264,18 @@ export function extractParameterDeclarations(
             if (call.arguments.length !== 1 || declaration.type !== 'ObjectExpression') {
                 throw unsupported('passing anything other than one object literal');
             }
-            return literalProperties(declaration, describe).map(([name, value]) =>
+            const schema = literalProperties(declaration, describe).map(([name, value]) =>
                 toSchema(name, value, describe),
             );
+            return validateParameterSchema(schema, describe());
         });
 }
 
 /**
  * Combines declarations from every module into the app's one declaration, in
  * module then source order. The same name may be declared in several places
- * only if each declaration is identical.
+ * only if each declaration is identical, and the app may declare at most
+ * MAX_PARAMETERS in total.
  */
 export function mergeParameterDeclarations(
     declarationsByModule: ReadonlyMap<string, AppsParameterSchema[][]>,
@@ -260,12 +288,21 @@ export function mergeParameterDeclarations(
                 if (!existing) {
                     merged.set(parameter.name, { parameter, moduleId });
                 } else if (JSON.stringify(existing.parameter) !== JSON.stringify(parameter)) {
+                    const places =
+                        existing.moduleId === moduleId
+                            ? `twice in ${moduleId}`
+                            : `in ${existing.moduleId} and ${moduleId}`;
                     throw new Error(
-                        `App parameter "${parameter.name}" is declared differently in ${existing.moduleId} and ${moduleId}. Declare it once, or identically everywhere.`,
+                        `App parameter "${parameter.name}" is declared differently ${places}. Declare it once, or identically everywhere.`,
                     );
                 }
             }
         }
+    }
+    if (merged.size > MAX_PARAMETERS) {
+        throw new Error(
+            `The app declares ${merged.size} parameters; Datadog accepts at most ${MAX_PARAMETERS}.`,
+        );
     }
     return [...merged.values()].map(({ parameter }) => parameter);
 }
