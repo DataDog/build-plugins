@@ -6,7 +6,7 @@ import { existsSync, readJsonSync } from '@dd/core/helpers/fs';
 import fs from 'fs';
 import path from 'path';
 
-import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_RE, BACKEND_FILE_WITH_QUERY_RE } from '../constants';
+import { BACKEND_CODE_EXTENSIONS, BACKEND_FILE_WITH_QUERY_RE } from '../constants';
 
 /**
  * Decides which modules belong to an app's backend: the app's own source, plus the source of any
@@ -418,25 +418,4 @@ export function findInstalledBackendFunctionPackages(
     }
 
     return found;
-}
-
-/**
- * The `.backend.*` files an opted-in package ships, outside its own nested `node_modules`. Every
- * one is a backend function file (see isBackendFunctionFile), whether or not the app imports it.
- */
-export function findPackageBackendFunctionFiles(pkg: BackendFunctionPackage): string[] {
-    const files: string[] = [];
-    const pending = [pkg.root];
-    while (pending.length > 0) {
-        const dir = pending.pop()!;
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-            const entryPath = path.join(dir, entry.name);
-            if (entry.isDirectory() && !PACKAGE_MANAGER_DIRS.has(entry.name)) {
-                pending.push(entryPath);
-            } else if (entry.isFile() && BACKEND_FILE_RE.test(entry.name)) {
-                files.push(entryPath);
-            }
-        }
-    }
-    return files.sort();
 }

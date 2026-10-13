@@ -143,6 +143,8 @@ async function importBackendMain(code: string, dir: string): Promise<BackendMain
     return (context) => Promise.resolve(main(context));
 }
 
+const IMPORT_URL_RE = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+
 /**
  * Loads every module a browser would, starting at `entryUrl`, by following the import URLs in the
  * dev server's client-side output. Returns the concatenated code it was served.
@@ -164,7 +166,47 @@ async function loadClientModuleGraph(server: ViteDevServer, entryUrl: string): P
         }
         served.push(result.code);
         // Static (`from "x"`, `import "x"`) and dynamic (`import("x")`) imports alike.
-        for (const match of result.code.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
+        for (const match of result.code.matchAll(IMPORT_URL_RE)) {
+            pending.push(match[1]);
+        }
+    }
+    return served.join('\n');
+}
+
+/**
+ * Loads a page over HTTP like a browser that keeps what it may cache: a module served as
+ * `immutable` is taken from `cache` from then on, without asking the server again. Anything else
+ * is requested each time. Returns the code it ran.
+ */
+async function loadPageOverHttp(
+    origin: string,
+    entryUrl: string,
+    cache: Map<string, string>,
+): Promise<string> {
+    const seen = new Set<string>();
+    const pending = [entryUrl];
+    const served: string[] = [];
+    while (pending.length > 0) {
+        const url = pending.shift()!;
+        if (seen.has(url) || url.startsWith('/@vite/')) {
+            continue;
+        }
+        seen.add(url);
+        let code = cache.get(url);
+        if (code === undefined) {
+            // eslint-disable-next-line no-await-in-loop
+            const response = await fetch(new URL(url, origin));
+            // eslint-disable-next-line no-await-in-loop
+            code = await response.text();
+            if (!response.ok) {
+                throw new Error(`The dev server answered ${response.status} for ${url}.`);
+            }
+            if (response.headers.get('cache-control')?.includes('immutable')) {
+                cache.set(url, code);
+            }
+        }
+        served.push(code);
+        for (const match of code.matchAll(IMPORT_URL_RE)) {
             pending.push(match[1]);
         }
     }
@@ -367,67 +409,68 @@ describe.each<Layout>(['installed', 'linked'])(
                 expect(api.isDone()).toBe(true);
             }, 30000);
 
-            // Vite serves an excluded package's modules with a `?v=` query and immutable caching, so
-            // after a restart a browser can call through its cached proxy without requesting the
-            // module from the new server. That holds for each installed copy of the library, even
-            // two sharing a name.
-            test('Should execute the library function after a restart, for a browser that kept its cached proxy', async () => {
-                const hooksLibDir = path.join(appRoot, 'node_modules/@fixtures/hooks-lib');
-                const hooksManifestPath = path.join(hooksLibDir, 'package.json');
-                const hooksManifest = JSON.parse(await fsp.readFile(hooksManifestPath, 'utf-8'));
-                const nestedManifest = {
-                    ...hooksManifest,
-                    dependencies: { '@fixtures/viz-lib': '0.0.1' },
-                };
-                await fsp.writeFile(hooksManifestPath, JSON.stringify(nestedManifest));
-                const vizLibSource = path.join(PROJECT_DIR, 'packages/viz-lib');
-                const nestedVizLib = path.join(hooksLibDir, 'node_modules/@fixtures/viz-lib');
-                await fsp.cp(vizLibSource, nestedVizLib, { recursive: true });
-
-                const [queryName] = getProxiedQueryNames(
-                    await loadClientModuleGraph(server, '/main.ts'),
-                );
-                const nestedProxy = await loadClientModuleGraph(
-                    server,
-                    '/node_modules/@fixtures/hooks-lib/node_modules/@fixtures/viz-lib/dist/src/visualizations/data.backend.js',
-                );
-                const [nestedQueryName] = getProxiedQueryNames(nestedProxy);
-                expect(nestedQueryName).toBeDefined();
-                expect(nestedQueryName).not.toBe(queryName);
-
-                const restarted = await createServer({
-                    root: appRoot,
-                    configFile: false,
-                    logLevel: 'silent',
-                    server: { middlewareMode: true, hmr: false },
-                    plugins: [getAppsPlugin()],
-                });
-                try {
-                    for (const functionName of [queryName, nestedQueryName]) {
-                        const { api } = mockDatadogApi({ points: [7] });
-                        const req = createMockRequest('/__dd/executeAction', {
-                            functionName,
-                            args: [QUERY],
-                        });
-                        const res = createMockResponse();
-                        restarted.middlewares(req, res, jest.fn());
-                        // eslint-disable-next-line no-await-in-loop
-                        await res.done;
-
-                        expect(JSON.parse(res.getBody())).toEqual({
-                            success: true,
-                            result: {
-                                data: {
-                                    query: QUERY,
-                                    series: { points: [7] },
-                                    servedBy: VIZ_BACKEND_BODY,
-                                },
-                            },
-                        });
-                        expect(api.isDone()).toBe(true);
+            // After a restart the browser reloads the page from its cache. It must still ask the
+            // new server for the library's backend function files, as it does for the app's, so
+            // the functions it calls are registered again. Vite caches a dependency's other
+            // modules for a year, and the library's own entry imports its backend through them.
+            test('Should execute the library function after a restart, for a browser reloading the page from its cache', async () => {
+                const startServer = async () => {
+                    const listening = await createServer({
+                        root: appRoot,
+                        configFile: false,
+                        logLevel: 'silent',
+                        server: { port: 0, hmr: false },
+                        plugins: [getAppsPlugin()],
+                    });
+                    await listening.listen();
+                    const address = listening.httpServer?.address();
+                    if (!address || typeof address === 'string') {
+                        throw new Error('Expected the dev server to listen on a port.');
                     }
+                    return { listening, origin: `http://localhost:${address.port}` };
+                };
+                const browserCache = new Map<string, string>();
+                nock.enableNetConnect('localhost');
+                // The first session settles Vite's dependency versions; a restart keeps them.
+                const warmUp = await startServer();
+                await loadPageOverHttp(warmUp.origin, '/main.ts', new Map());
+                await warmUp.listening.close();
+                const first = await startServer();
+                let queryName: string;
+                try {
+                    [queryName] = getProxiedQueryNames(
+                        await loadPageOverHttp(first.origin, '/main.ts', browserCache),
+                    );
                 } finally {
-                    await restarted.close();
+                    await first.listening.close();
+                }
+
+                const restarted = await startServer();
+                try {
+                    await loadPageOverHttp(restarted.origin, '/main.ts', browserCache);
+                    const { api } = mockDatadogApi({ points: [7] });
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: queryName,
+                        args: [QUERY],
+                    });
+                    const res = createMockResponse();
+                    restarted.listening.middlewares(req, res, jest.fn());
+                    await res.done;
+
+                    expect(JSON.parse(res.getBody())).toEqual({
+                        success: true,
+                        result: {
+                            data: {
+                                query: QUERY,
+                                series: { points: [7] },
+                                servedBy: VIZ_BACKEND_BODY,
+                            },
+                        },
+                    });
+                    expect(api.isDone()).toBe(true);
+                } finally {
+                    nock.disableNetConnect();
+                    await restarted.listening.close();
                 }
             }, 30000);
 

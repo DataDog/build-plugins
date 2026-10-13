@@ -5,8 +5,9 @@
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import type { IncomingMessage } from 'http';
 import path from 'path';
-import type { build, ViteDevServer } from 'vite';
+import type { build } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -21,7 +22,6 @@ import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-stati
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
-    findPackageBackendFunctionFiles,
     forgetBackendModuleOwners,
     getBackendModuleOwner,
     isBackendFunctionFile,
@@ -122,45 +122,22 @@ const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 /**
- * Registers every backend function the given packages ship by running each of their backend
- * function files through the transform, the same way the browser's first request would. It uses
- * the SSR environment's transform, the one local execution loads them through; without the
- * local-execution suffix the transform still registers the file and returns its proxy. A file that
- * fails is logged, not fatal: the browser's request reports it too.
- *
- * So in `vite dev` every backend function an opted-in package ships can be executed, including
- * ones the app never imports. `vite build` packages only the ones the app's code reaches.
+ * Has the browser revalidate a requested backend function file, as it does the app's own modules.
+ * Vite versions a dependency's module URLs with a `v=` query and serves those with a year-long
+ * immutable cache, so after a dev-server restart the browser would keep calling through a
+ * package's cached proxy without requesting it, and the new server would never register its
+ * functions. Dropping the query from the request, not from the URLs Vite writes into importing
+ * modules, makes Vite serve the file with `no-cache`.
  */
-async function registerPackageBackendFunctions(
-    server: ViteDevServer,
-    packages: BackendFunctionPackage[],
-    log: Logger,
-): Promise<void> {
-    // Vite 5 has no environment API.
-    const transformRequest = server.environments?.ssr
-        ? (file: string) => server.environments.ssr.transformRequest(file)
-        : (file: string) => server.transformRequest(file, { ssr: true });
-    const register = async (file: string) => {
-        try {
-            await transformRequest(file);
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error);
-            log.warn(`Could not register the backend functions in ${file}: ${reason}`);
+function revalidateBackendFunctionFile(req: IncomingMessage): void {
+    if (req.method === 'GET' && req.url) {
+        const [urlPath] = req.url.split(/[?#]/);
+        if (BACKEND_FILE_RE.test(urlPath)) {
+            req.url = req.url.replace(/([?&])v=[^&#]*(&?)/, (_, separator: string, rest: string) =>
+                rest ? separator : '',
+            );
         }
-    };
-    await Promise.all(
-        packages.map(async (pkg) => {
-            let files: string[];
-            try {
-                files = findPackageBackendFunctionFiles(pkg);
-            } catch (error) {
-                const reason = error instanceof Error ? error.message : String(error);
-                log.warn(`Could not list the backend functions of "${pkg.name}": ${reason}`);
-                return;
-            }
-            await Promise.all(files.map(register));
-        }),
-    );
+    }
 }
 
 /**
@@ -190,9 +167,9 @@ function logPackageBackendFunctions(
 
 /**
  * Adds each package's root to the dev server's `server.fs.allow`, unless an entry already
- * covers it. Otherwise Vite only loads a file from a package linked outside the workspace once
- * something has imported it, so after a restart local execution fails on a function the browser
- * still calls through its cached proxy.
+ * covers it. Otherwise Vite only serves a file from a package linked outside the workspace once
+ * this server has transformed a module importing it: after a restart, a browser revalidating a
+ * linked package's backend file, imported from a module it still has cached, would be refused.
  */
 function allowPackageRoots(allow: string[], packages: BackendFunctionPackage[]): void {
     for (const { root } of packages) {
@@ -263,14 +240,15 @@ export const getVitePlugin = ({
                 // Only the dev server pre-bundles dependencies or loads modules through SSR; the
                 // nested backend builds configure their own resolution (see build-config.ts).
                 if (command !== 'serve') {
+                    backendPackages = [];
                     return { ssr: { noExternal: [...BACKEND_RUNTIME_PACKAGES] } };
                 }
 
                 // configResolved (where context.buildRoot is set) runs after this hook, so resolve
                 // the root the same way Vite does.
                 const root = path.resolve(userConfig.root ?? process.cwd());
-                // Registration at startup must use the ids the browser's requests will, and Vite
-                // only resolves symlinks in them when preserveSymlinks is off.
+                // Package roots must match the paths Vite serves, and Vite only resolves symlinks
+                // in them when preserveSymlinks is off.
                 const preserveSymlinks = userConfig.resolve?.preserveSymlinks ?? false;
                 // A package the app imports without declaring it is found through the
                 // optimizeDeps.exclude entry the README asks for, so it's configured like the rest.
@@ -574,21 +552,10 @@ export const getVitePlugin = ({
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
-            // A browser keeps an opted-in package's proxy modules across dev-server restarts:
-            // Vite serves excluded dependencies with a `?v=` query, as immutable. The transform
-            // would then never run in this server and leave their functions unregistered, so
-            // every backend function file those packages ship is registered at startup, and
-            // requests wait for that.
-            const packageFunctionsRegistered =
-                backendPackages.length > 0
-                    ? registerPackageBackendFunctions(server, backendPackages, log)
-                    : undefined;
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 loadModule,
-                packageFunctionsRegistered
-                    ? () => packageFunctionsRegistered.then(getBackendFunctions)
-                    : getBackendFunctions,
+                getBackendFunctions,
                 getAllowedConnectionIds,
                 auth,
                 doAuthenticatedRequest,
@@ -597,7 +564,10 @@ export const getVitePlugin = ({
                 log,
                 server.config.mode,
             );
-            server.middlewares.use(middleware);
+            server.middlewares.use((req, res, next) => {
+                revalidateBackendFunctionFile(req);
+                middleware(req, res, next);
+            });
         },
     };
 };
