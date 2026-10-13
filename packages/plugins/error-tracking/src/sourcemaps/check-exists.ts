@@ -14,7 +14,8 @@ export const getCheckExistsUrl = (site: string) => `https://api.${site}/${CHECK_
 type CheckExistsResponse = {
     data?: {
         attributes?: {
-            results?: Record<string, boolean>;
+            // Untrusted wire values: only an explicit `true` counts as existing.
+            results?: Record<string, unknown>;
         };
     };
 };
@@ -65,6 +66,8 @@ export const getExistingDebugIds = async (
         const response = await doRequest<CheckExistsResponse>({
             auth: { apiKey: context.apiKey },
             method: 'POST',
+            // Best effort: a failed check uploads everything anyway, so fail fast without retries.
+            retries: 0,
             type: 'json',
             url: getCheckExistsUrl(context.site),
             getData: () => requestData,
@@ -76,7 +79,7 @@ export const getExistingDebugIds = async (
         }
 
         for (const [debugId, exists] of Object.entries(results)) {
-            if (exists) {
+            if (exists === true) {
                 existingDebugIds.add(debugId);
             }
         }

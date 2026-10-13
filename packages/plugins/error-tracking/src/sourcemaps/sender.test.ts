@@ -654,6 +654,29 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             rmSync(tempDir);
         });
 
+        test('Should run the duplicate check during a dry run', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-dry-run',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+            const dryRunOptions = getDebugIdSourcemapsConfiguration({
+                dryRun: true,
+                experimentalDuplicateCheck: true,
+            });
+
+            await sendSourcemaps(sourcemaps, dryRunOptions, senderContextMock, mockLogger);
+
+            expect(getExistingDebugIdsMock).toHaveBeenCalledTimes(1);
+            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('already exists in Datadog'),
+                'debug',
+            );
+
+            rmSync(tempDir);
+        });
+
         test('Should not query the endpoint unless the duplicate check is enabled', async () => {
             const { sourcemaps, tempDir } = addDebugIdSourcemaps(
                 'dd-build-plugins-duplicate-check-disabled',

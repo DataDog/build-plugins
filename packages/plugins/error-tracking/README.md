@@ -104,13 +104,7 @@ It will not upload the sourcemaps to Datadog, but will do everything else.
 
 Only applies when `errorTracking.sourcemaps.debugId` is enabled.
 
-Before uploading, ask Datadog which of the debug IDs it already holds a source map for, and skip
-those. Rebuilding an unchanged bundle produces the same debug IDs, so this keeps the upload step
-from sending artifacts Datadog already has.
-
-If the check fails for any reason, the plugin logs a warning and uploads everything: a redundant
-upload is preferable to skipping a source map that was actually needed. The check is expected to be
-enabled by default in an upcoming version.
+Query the `check_exists` endpoint before upload and skip sourcemaps whose debug IDs already exist. If the check fails, upload proceeds as usual.
 
 ### errorTracking.sourcemaps.maxConcurrency
 

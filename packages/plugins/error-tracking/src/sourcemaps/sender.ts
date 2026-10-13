@@ -312,7 +312,8 @@ export const sendSourcemaps = async (
             `Skipped ${green(`${skippedDuplicates.length}/${sourcemaps.length}`)} sourcemaps that already exist in Datadog.`,
         );
         if (context.sendMetrics) {
-            context.addMetric(getSkippedExistingMetric(skippedDuplicates.length));
+            const skippedExistingMetric = getSkippedExistingMetric(skippedDuplicates.length);
+            context.addMetric(skippedExistingMetric);
         }
     }
 

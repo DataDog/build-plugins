@@ -61,6 +61,16 @@ describe('Error Tracking Plugin check-exists', () => {
             expect([...existing]).toEqual(['debug-id-1']);
         });
 
+        test('Should only count an explicit true as existing', async () => {
+            doRequestMock.mockResolvedValue({
+                data: { attributes: { results: { 'debug-id-1': 'false', 'debug-id-2': true } } },
+            });
+
+            const existing = await getExistingDebugIds(['debug-id-1', 'debug-id-2'], contextMock);
+
+            expect([...existing]).toEqual(['debug-id-2']);
+        });
+
         test('Should post a JSON:API body with the sourcemap origin headers', async () => {
             doRequestMock.mockResolvedValue({ data: { attributes: { results: {} } } });
 
@@ -70,6 +80,7 @@ describe('Error Tracking Plugin check-exists', () => {
             const opts = doRequestMock.mock.calls[0][0];
             expect(opts.url).toBe('https://api.datadoghq.com/api/unstable/sourcemaps/check_exists');
             expect(opts.method).toBe('POST');
+            expect(opts.retries).toBe(0);
             expect(opts.type).toBe('json');
             expect(opts.auth).toEqual({ apiKey: 'api-key' });
             expect(await getRequestBody(0)).toBe(getExpectedBody(['debug-id-1']));
