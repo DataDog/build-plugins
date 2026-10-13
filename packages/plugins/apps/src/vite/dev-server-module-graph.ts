@@ -12,10 +12,10 @@ import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 
 
 import {
     createParsedModuleRecord,
-    getStaticModuleSources,
     isOutsideRoot,
     isPackageManagerModule,
     type ParsedModuleRecord,
+    resolveStaticModuleSources,
     shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
@@ -185,31 +185,23 @@ async function walkModuleGraph(
             );
         }
 
-        // `createParsedModuleRecord` zips dependency ids positionally against the AST's static
-        // imports, so this list must be static-only, same order — resolved individually since
-        // the dev server has no Rollup-style `ModuleInfo.importedIds`.
-        const staticModuleSources = getStaticModuleSources(ast);
         const importerFile = node.file;
-        const resolutions = await Promise.all(
-            staticModuleSources.map((moduleSource) =>
-                server.pluginContainer.resolveId(moduleSource, importerFile ?? undefined, {
-                    ssr: true,
-                }),
-            ),
-        );
-        const staticDependencyIds = resolutions.map((resolved, index) => {
-            if (!resolved) {
-                // Fail closed — falling back to the raw specifier would let a connectionId
-                // silently drop out of the allowlist instead of failing loudly.
-                throw unsupportedModuleGraphDependency(
-                    moduleId,
-                    `unresolvable import specifier "${staticModuleSources[index]}"`,
+        const staticDependencies = await resolveStaticModuleSources(
+            ast,
+            moduleId,
+            async (moduleSource) => {
+                const resolved = await server.pluginContainer.resolveId(
+                    moduleSource,
+                    importerFile,
+                    {
+                        ssr: true,
+                    },
                 );
-            }
-            return normalizeDevServerModuleId(resolved.id);
-        });
+                return resolved ? normalizeDevServerModuleId(resolved.id) : null;
+            },
+        );
 
-        const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencyIds);
+        const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencies);
         if (record) {
             // No build-time moduleParsed hook here (Rollup-only), so this is what catches a
             // banned import or restricted global locally instead of only at publish time.

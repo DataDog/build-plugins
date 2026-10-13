@@ -15,6 +15,7 @@ import {
     getRepositoryDataMock,
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
+import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import fs from 'fs/promises';
 import JSZip from 'jszip';
 import os from 'os';
@@ -67,28 +68,6 @@ async function expectNoLeakedTempDirs(
     expect(createdPrefixes).toEqual(expectedPrefixes);
     const leakedDirs = pluginDirs.filter((dir) => fsHelpers.existsSync(dir));
     expect(leakedDirs).toEqual([]);
-}
-
-function emitModuleParsed(
-    config: {
-        plugins?: Array<{
-            moduleParsed?: (this: { parse: typeof parseAst }, moduleInfo: unknown) => void;
-        }>;
-    },
-    id: string,
-    code: string,
-    importedIds: string[] = [],
-) {
-    for (const plugin of config.plugins ?? []) {
-        plugin.moduleParsed?.call(
-            { parse: parseAst },
-            {
-                id,
-                code,
-                importedIds,
-            },
-        );
-    }
 }
 
 describe('Apps Plugin - package output', () => {
@@ -304,10 +283,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         `;
         const helperId = '/project/src/backend/helpers/http.js';
         const viteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
-                helperId,
-            ]);
-            emitModuleParsed(config, helperId, helperCode);
+            await emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode);
+            await emitModuleParsed(config, helperId, helperCode);
             return {
                 output: [
                     {
@@ -436,10 +413,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         `;
         const helperId = '/project/src/backend/helpers/fs-helper.js';
         const viteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
-                helperId,
-            ]);
-            emitModuleParsed(config, helperId, helperCode);
+            await emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode);
+            await emitModuleParsed(config, helperId, helperCode);
             return {
                 output: [
                     {
@@ -497,10 +472,8 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         `;
         const helperId = '/project/src/backend/helpers/http-helper.js';
         const viteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode, [
-                helperId,
-            ]);
-            emitModuleParsed(config, helperId, helperCode);
+            await emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode);
+            await emitModuleParsed(config, helperId, helperCode);
             return {
                 output: [
                     {
@@ -552,7 +525,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             }
         `;
         const viteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(config, entryId, entryCode);
+            await emitModuleParsed(config, entryId, entryCode);
             return {
                 output: [
                     {
