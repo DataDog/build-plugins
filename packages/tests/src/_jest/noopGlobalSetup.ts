@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 // A `--globalSetup` override for spawned single-fixture Jest runs that don't touch the fixtures
-// directory and so don't need globalSetup.ts's real `yarn install` + git init/config cost.
+// directory and so don't need globalSetup.ts's real `yarn install` + git init/config cost. Must stay
+// side-effect free: spawned tests also use it as an empty `--setupFilesAfterEnv`.
 const noopGlobalSetup = () => {};
 
 export default noopGlobalSetup;

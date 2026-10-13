@@ -3,12 +3,14 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
-import { existsSync, rm, rmSync } from '@dd/core/helpers/fs';
+import { existsSync, outputFileSync, readFileSync, rm, rmSync } from '@dd/core/helpers/fs';
+import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { getMockLogger, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
-import type { build } from 'vite';
+import { pathToFileURL } from 'url';
+import { build } from 'vite';
 
 import type { BackendFunction } from '../backend/types';
 
@@ -110,4 +112,60 @@ describe('buildBackendFunctions', () => {
             rmSync(decoyDir);
         }
     });
+
+    test('Should minify production bundles while keeping function and class names in stack traces', async () => {
+        const seed = `build-backend-minify-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        let outDir: string | undefined;
+        try {
+            const absolutePath = `${workingDir}/src/names.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            class BackendValidationError extends Error {}
+            const readableHelper = (value: string) => {
+                if (!value) throw new BackendValidationError('missing value');
+                return value;
+            };
+            export async function readableBackendFunction(value: string) {
+                return readableHelper(value);
+            }
+        `,
+            );
+            const namesFunc: BackendFunction = {
+                relativePath: 'src/names',
+                name: 'readableBackendFunction',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildBackendFunctions(build, [namesFunc], workingDir, mockLogger);
+            outDir = result.outDir;
+            const [bundlePath] = [...result.outputs.values()];
+            const bundleCode = readFileSync(bundlePath);
+            const bundleUrl = pathToFileURL(bundlePath).href;
+            // Dynamic: the bundle only exists once the build above has written it.
+            const bundle: { main: (globals: unknown) => Promise<unknown> } = await import(
+                bundleUrl
+            );
+            const failure: unknown = await bundle
+                .main({ backendFunctionArgs: [''] })
+                .catch((error: unknown) => error);
+
+            // Minified: the unminified output spans many lines.
+            expect(bundleCode.trim().split('\n').length).toBeLessThan(5);
+            if (!(failure instanceof Error)) {
+                throw new Error('Expected the backend function to throw an Error.');
+            }
+            const { constructor, stack } = failure;
+            expect(constructor.name).toBe('BackendValidationError');
+            expect(stack).toContain('readableHelper');
+            expect(stack).toContain('readableBackendFunction');
+        } finally {
+            rmSync(workingDir);
+            if (outDir) {
+                rmSync(outDir);
+            }
+        }
+    }, 30000);
 });

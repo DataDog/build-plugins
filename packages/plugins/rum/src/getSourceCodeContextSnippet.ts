@@ -2,10 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getChunkDebugId } from '@dd/core/helpers/debugId';
 import type { ChunkInfo } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 
-import { stringToUUID } from './debugId';
 import type { SourceCodeContextOptions } from './types';
 
 export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as const;
@@ -13,14 +13,23 @@ export const DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE = 'DD_SOURCE_CODE_CONTEXT' as 
 // The source code context snippet - single injection with function definition and call
 // SSR-safe: checks window before accessing, never throws
 //
+// Capture only this injected function, whose first frame identifies the bundle URL.
+// Capturing callers can trigger expensive V8 source-position collection for the entire bundle.
+// Restore the application's setting before formatting the stack (which may invoke user code).
+//
 // Unminified version:
 // (function(c, n) {
 //     try {
 //         if (typeof window === 'undefined') return;
-//         var w = window,
-//             m = w[n] = w[n] || {},
-//             s = new Error().stack;
-//         s && (m[s] = c)
+//         var w = window, m = w[n] = w[n] || {}, l = Error.stackTraceLimit;
+//         try {
+//             Error.stackTraceLimit = 1;
+//             var e = new Error();
+//         } finally {
+//             Error.stackTraceLimit = l;
+//         }
+//         var s = e.stack;
+//         s && (m[s] = c);
 //     } catch (e) {}
 // })(context, variableName);
 
@@ -43,7 +52,7 @@ export const getSourceCodeContextSnippet = (
     // duplicate source maps for identical builds.
     let debugId: string | undefined;
     if (contextOptions.debugId === true) {
-        debugId = chunk ? stringToUUID(chunk.sourceOrHash) : randomUUID();
+        debugId = chunk ? getChunkDebugId(chunk) : randomUUID();
     }
     const context: SourceCodeContext = {
         service: contextOptions.service,
@@ -52,7 +61,7 @@ export const getSourceCodeContextSnippet = (
         ddDebugId: debugId,
     };
 
-    const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},s=new Error().stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
+    const code = `(function(c,n){try{if(typeof window==='undefined')return;var w=window,m=w[n]=w[n]||{},l=Error.stackTraceLimit;try{Error.stackTraceLimit=1;var e=new Error()}finally{Error.stackTraceLimit=l}var s=e.stack;s&&(m[s]=c)}catch(e){}})(${JSON.stringify(context)},${JSON.stringify(DEFAULT_SOURCE_CODE_CONTEXT_VARIABLE)});`;
 
     return { code, debugId };
 };

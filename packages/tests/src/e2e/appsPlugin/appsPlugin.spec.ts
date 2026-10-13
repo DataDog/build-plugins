@@ -101,6 +101,7 @@ describe('Apps Plugin', () => {
         const manifest = JSON.parse(manifestContent);
         const greetName = greetFile!.replace(/^backend\//, '').replace(/\.js$/, '');
         expect(manifest).toEqual({
+            tags: [],
             backend: {
                 functions: {
                     [greetName]: {

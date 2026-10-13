@@ -2,10 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global NodeJS */
-
 import { SUPPORTED_BUNDLERS } from '@dd/core/constants';
-import { OVERRIDE_VARIABLES } from '@dd/core/helpers/env';
 import { mkdirSync } from '@dd/core/helpers/fs';
 import type { BundlerName } from '@dd/core/types';
 import { bgYellow, dim, green, red } from '@dd/tools/helpers';
@@ -14,14 +11,6 @@ import os from 'os';
 import path from 'path';
 
 const fsp = fs.promises;
-
-type EnvOverrideVariable =
-    | `DATADOG_${(typeof OVERRIDE_VARIABLES)[number]}`
-    | `DD_${(typeof OVERRIDE_VARIABLES)[number]}`;
-
-const ENV_OVERRIDE_VARIABLES = OVERRIDE_VARIABLES.flatMap(
-    (key) => [`DATADOG_${key}`, `DD_${key}`] as const,
-) as EnvOverrideVariable[];
 
 type TestEnv = {
     NO_CLEANUP: boolean;
@@ -74,65 +63,6 @@ export const setupEnv = (env: TestEnv): void => {
     if (JEST_SILENT) {
         process.env.JEST_SILENT = '1';
     }
-};
-
-export const cleanEnv = () => {
-    const previousEnv = Object.fromEntries(
-        ENV_OVERRIDE_VARIABLES.map((key) => [key, process.env[key]]),
-    ) as Record<EnvOverrideVariable, string | undefined>;
-
-    for (const key of ENV_OVERRIDE_VARIABLES) {
-        delete process.env[key];
-    }
-
-    return () => {
-        for (const key of ENV_OVERRIDE_VARIABLES) {
-            const value = previousEnv[key];
-            if (value === undefined) {
-                delete process.env[key];
-            } else {
-                process.env[key] = value;
-            }
-        }
-    };
-};
-
-/**
- * Swaps process.env for a small, fully-synthetic baseline for a whole test file's duration,
- * restoring the real environment once every test in the file finishes. Call this from a describe
- * body — it registers its own beforeAll/afterAll (and, with `resetBetweenTests`, afterEach) hooks.
- *
- * Captured/swapped inside beforeAll, not as a describe-body constant: a describe body runs at
- * Jest's "collection time", before any beforeAll fires, and would still capture the real,
- * unstripped environment — risking a failing assertion's Jest diff serializing real secrets.
- */
-export const installFakeProcessEnv = (
-    baseline: NodeJS.ProcessEnv,
-    options?: { resetBetweenTests?: boolean },
-): void => {
-    let realProcessEnvSnapshot: NodeJS.ProcessEnv;
-
-    beforeAll(() => {
-        // A value snapshot via spread, not a reference to process.env itself: process.env may
-        // already be a guard-installed accessor (e.g. env-guard.ts's Proxy), and restoring via
-        // that same reference later is treated as a no-op self-reassignment by its own setter,
-        // permanently stranding process.env at `baseline`.
-        realProcessEnvSnapshot = { ...process.env };
-        process.env = { ...baseline };
-    });
-
-    if (options?.resetBetweenTests) {
-        // A fresh copy each time, not the caller's own `baseline` reference: a test that mutates
-        // process.env by property (`process.env.KEY = x`) instead of reassignment would otherwise
-        // corrupt `baseline` itself, silently defeating every later reset in the same block.
-        afterEach(() => {
-            process.env = { ...baseline };
-        });
-    }
-
-    afterAll(() => {
-        process.env = realProcessEnvSnapshot;
-    });
 };
 
 export const logEnv = (env: TestEnv) => {

@@ -7,7 +7,6 @@
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
-import { cleanEnv } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -59,20 +58,11 @@ const mockAuth: AuthOptionsWithDefaults = {
 };
 
 const mockLog = getMockLogger();
-// getAuthenticatedRequest reads the OAuth token from the environment. Jest's
-// setupAfterEnv cleanEnv strips env vars after collection, so the authenticated
-// request is captured once at collection time — describe bodies and test
-// bodies both reuse it. The bearer test pins the token itself to exercise a
-// live construction. Developer-provided API keys are stripped so the bearer
-// path is deterministic.
+// getAuthenticatedRequest reads auth from the environment when called, and API keys take
+// precedence over the OAuth token, so they must stay unset for the bearer path.
 const TEST_OAUTH_TOKEN = 'test-oauth-token';
-const restoreModuleEnv = cleanEnv();
 process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 const testAuthenticatedRequest = getAuthenticatedRequest();
-
-afterAll(() => {
-    restoreModuleEnv();
-});
 
 // Disable jitter/backoff so retry tests don't add unnecessary delay.
 const mockLongPolling: AppsOptionsWithDefaults['longPolling'] = {
@@ -706,9 +696,6 @@ describe('Dev Server Middleware', () => {
 
         test('Should call Datadog API with bearer auth and no API/App key headers', async () => {
             mockBuildWithParsedBackend();
-            // setupAfterEnv's cleanEnv strips env vars after collection, so the
-            // token must be set in the test body for this live construction.
-            process.env.DD_OAUTH_ACCESS_TOKEN = TEST_OAUTH_TOKEN;
 
             const bearerMiddleware = createTestMiddleware({
                 doAuthenticatedRequest: getAuthenticatedRequest(),
@@ -1388,19 +1375,25 @@ describe('Dev Server Middleware', () => {
             expect(capturedBody?.data.attributes.query.properties.spec.connectionId).toBe('');
         });
 
-        test("Should surface a successful $.Actions call's result to the local console", async () => {
+        test("Should log a successful $.Actions call's fqn, duration, and response size at debug level without logging the response body", async () => {
             mockLoadModuleReturning(mockFunctions[0], () =>
                 testDollarActions().slack.chat.postMessage({
                     inputs: { text: 'hi' },
                 }),
             );
 
+            const responseSentinel = 'monitor-creator@example.com';
+            const actionOutputs = { ok: true, creator: responseSentinel, name: 'café' };
+            const actionDelayMs = 50;
+            // Timers can fire a few ms early relative to Date.now().
+            const timerJitterMs = 10;
             nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
                 .reply(200, { data: { id: 'receipt-success' } })
                 .get('/api/v2/app-builder/queries/execution-long-polling/receipt-success')
+                .delay(actionDelayMs)
                 .reply(200, {
-                    data: { attributes: { done: true, outputs: { ok: true } } },
+                    data: { attributes: { done: true, outputs: actionOutputs } },
                 });
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -1413,11 +1406,27 @@ describe('Dev Server Middleware', () => {
             await res.done;
 
             expect(res.statusCode).toBe(200);
-            expect(mockLogFn).toHaveBeenCalledWith(
-                expect.stringContaining('com.datadoghq.slack.chat.postMessage'),
+            const serializedOutputs = JSON.stringify(actionOutputs);
+            const expectedByteLength = Buffer.byteLength(serializedOutputs);
+            const successLine = mockLogFn.mock.calls.find(
+                ([text, level]) =>
+                    level === 'debug' && String(text).startsWith('$.Actions call to'),
+            )?.[0];
+            const successMatch = String(successLine).match(
+                /^\$\.Actions call to "com\.datadoghq\.slack\.chat\.postMessage" succeeded in (\d+)ms \((\d+) bytes\)$/,
+            );
+            expect(successMatch).not.toBeNull();
+            const loggedDurationMs = Number(successMatch?.[1]);
+            const loggedByteLength = Number(successMatch?.[2]);
+            expect(loggedDurationMs).toBeGreaterThanOrEqual(actionDelayMs - timerJitterMs);
+            expect(loggedByteLength).toBe(expectedByteLength);
+            expect(mockLogFn).not.toHaveBeenCalledWith(
+                expect.stringContaining('succeeded'),
                 'info',
             );
-            expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('"ok":true'), 'info');
+            const loggedTexts = mockLogFn.mock.calls.map(([text]) => String(text));
+            const allLoggedText = loggedTexts.join('\n');
+            expect(allLoggedText).not.toContain(responseSentinel);
         });
 
         test("Should surface a failed $.Actions call's error detail to the local console", async () => {

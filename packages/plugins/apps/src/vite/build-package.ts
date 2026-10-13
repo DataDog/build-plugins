@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global NodeJS */
-
 import { getDDEnvValue } from '@dd/core/helpers/env';
 import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext } from '@dd/core/types';
@@ -19,62 +17,18 @@ import type { BackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
 import type { AppsManifest, AppsOptionsWithDefaults } from '../types';
 
-import { CUSTOM_CREDENTIALS_LOCAL_FILENAME } from './custom-credentials-resolver';
+export const MANIFEST_DIR_PREFIX = 'dd-apps-manifest-';
 
 export interface BuildAppPackageOptions {
     backendOutputs: Map<string, string>;
     backendFunctions: BackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
+    /** The app's complete tag list, written to the manifest as is. */
+    tags: string[];
 }
 
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-    return typeof error === 'object' && error !== null && 'code' in error;
-}
-
-type FileIdentity = { dev: number; ino: number };
-
-/** Resolves the root credentials file's (device, inode) identity, or undefined if it doesn't exist. */
-async function resolveCredentialsIdentity(buildRoot: string): Promise<FileIdentity | undefined> {
-    try {
-        const stats = await fsp.stat(path.join(buildRoot, CUSTOM_CREDENTIALS_LOCAL_FILENAME));
-        return { dev: stats.dev, ino: stats.ino };
-    } catch (error) {
-        if (isErrnoException(error) && error.code === 'ENOENT') {
-            return undefined;
-        }
-        throw error;
-    }
-}
-
-/**
- * Compares an asset's (device, inode) identity against the credentials file's, since fs.stat
- * follows symlinks either way and inode identity also catches a hardlink — cases a path-string
- * comparison alone can miss. A vanished asset has nothing left to leak; any other stat failure is
- * re-thrown rather than silently treated as safe to package.
- */
-async function isCustomCredentialsAsset(
-    absolutePath: string,
-    credentialsIdentity: FileIdentity | undefined,
-): Promise<boolean> {
-    if (path.basename(absolutePath).toLowerCase() === CUSTOM_CREDENTIALS_LOCAL_FILENAME) {
-        return true;
-    }
-    if (!credentialsIdentity) {
-        return false;
-    }
-    try {
-        const stats = await fsp.stat(absolutePath);
-        return stats.dev === credentialsIdentity.dev && stats.ino === credentialsIdentity.ino;
-    } catch (error) {
-        if (isErrnoException(error) && error.code === 'ENOENT') {
-            return false;
-        }
-        throw error;
-    }
-}
-
-function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
+function buildManifest(backendFunctions: BackendFunction[], tags: string[]): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -82,16 +36,19 @@ function buildManifest(backendFunctions: BackendFunction[]): AppsManifest {
         };
     }
 
-    return { backend: { functions } };
+    return { tags, backend: { functions } };
 }
 
 async function writeManifestFile(
-    backendFunctions: BackendFunction[],
+    manifest: AppsManifest,
 ): Promise<{ manifestAsset: Asset; cleanup: () => Promise<void> }> {
-    const manifestDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dd-apps-manifest-'));
+    const tmpRoot = os.tmpdir();
+    const manifestDirPrefix = path.join(tmpRoot, MANIFEST_DIR_PREFIX);
+    const manifestDir = await fsp.mkdtemp(manifestDirPrefix);
     const manifestPath = path.join(manifestDir, 'manifest.json');
     try {
-        await fsp.writeFile(manifestPath, JSON.stringify(buildManifest(backendFunctions), null, 2));
+        const manifestJson = JSON.stringify(manifest, null, 2);
+        await fsp.writeFile(manifestPath, manifestJson);
     } catch (error) {
         await rm(manifestDir);
         throw error;
@@ -107,6 +64,7 @@ export async function buildAppPackage({
     backendFunctions,
     context,
     options,
+    tags,
 }: BuildAppPackageOptions): Promise<string | undefined> {
     const log = context.getLogger(PLUGIN_NAME);
     const {
@@ -138,25 +96,13 @@ export async function buildAppPackage({
     try {
         const generatedPaths = new Set([archivePath, defaultArchivePath]);
         const backendPaths = new Set(backendOutputs.values());
-        const candidateAssets = assets
+        const frontendAssets = assets
             .filter((asset) => !generatedPaths.has(path.resolve(asset.absolutePath)))
-            .filter((asset) => !backendPaths.has(asset.absolutePath));
-        const credentialsIdentity = await resolveCredentialsIdentity(buildRoot);
-        const nonCredentialsAssets = (
-            await Promise.all(
-                candidateAssets.map(async (asset) => ({
-                    asset,
-                    isCredentialsAsset: await isCustomCredentialsAsset(
-                        asset.absolutePath,
-                        credentialsIdentity,
-                    ),
-                })),
-            )
-        ).filter(({ isCredentialsAsset }) => !isCredentialsAsset);
-        const frontendAssets = nonCredentialsAssets.map(({ asset }) => ({
-            ...asset,
-            relativePath: `frontend/${asset.relativePath}`,
-        }));
+            .filter((asset) => !backendPaths.has(asset.absolutePath))
+            .map((asset) => ({
+                ...asset,
+                relativePath: `frontend/${asset.relativePath}`,
+            }));
         const packageAssets: Asset[] = [...frontendAssets];
         for (const [bundleName, absolutePath] of backendOutputs) {
             packageAssets.push({
@@ -164,10 +110,18 @@ export async function buildAppPackage({
                 relativePath: `backend/${bundleName}.js`,
             });
         }
-        const manifest = await writeManifestFile(backendFunctions);
+        const tagList = tags.length > 0 ? tags.join(', ') : '(none)';
+        log.debug(`App tags: ${tagList}.`);
+        const manifestContents = buildManifest(backendFunctions, tags);
+        const manifest = await writeManifestFile(manifestContents);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);
         const archive = await createArchive(packageAssets, archivePath);
+        const compressedMb = (archive.size / 1_000_000).toFixed(2);
+        const decompressedMb = (archive.decompressedSize / 1_000_000).toFixed(2);
+        log.info(
+            `App package size: ${archive.assets.length} files, ${compressedMb} MB compressed, ${decompressedMb} MB decompressed.`,
+        );
         log.info(`App package written to ${archive.archivePath}.`);
         return archive.archivePath;
     } finally {

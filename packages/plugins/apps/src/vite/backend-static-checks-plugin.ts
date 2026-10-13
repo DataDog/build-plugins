@@ -4,8 +4,7 @@
 
 import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
-import type { ModuleInfo } from 'rollup';
-import type { Plugin } from 'vite';
+import type { Plugin, Rollup } from 'vite';
 
 import {
     type ParsedModuleRecord,
@@ -32,7 +31,7 @@ export function createBackendStaticChecksPlugin(
 ): Plugin {
     return {
         name: 'dd-backend-static-checks',
-        moduleParsed(moduleInfo: ModuleInfo) {
+        moduleParsed(moduleInfo: Rollup.ModuleInfo) {
             const moduleId = normalizeViteModuleId(moduleInfo.id);
             if (
                 isViteVirtualModuleId(moduleId) ||

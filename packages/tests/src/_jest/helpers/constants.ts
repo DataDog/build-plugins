@@ -27,8 +27,7 @@ export const KNOWN_ERRORS: string[] = [
     'ExperimentalWarning: buffer.File',
     // // Used in Unplugin's xpack loaders.
     '[DEP0147] DeprecationWarning: In future versions of Node.js, fs.rmdir',
-    // Jest 30 globalsCleanup warnings for nock's internal properties that can't be protected.
-    "[JEST-01] DeprecationWarning: 'logger' property was accessed on [_FetchInterceptor]",
+    // Jest 30 globalsCleanup warning for a property that can't be protected.
     "[JEST-01] DeprecationWarning: 'now' property was accessed on [Function]",
     // Local shells may set NO_COLOR while the test script forces color output.
     "Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.",

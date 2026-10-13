@@ -7,9 +7,17 @@ import { execFileSync } from 'child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'child_process';
 import path from 'path';
 
+import { scrubEnv } from './helpers/allowedEnv';
 import { getEnv, logEnv, setupEnv } from './helpers/env';
 
 const c = chalk.bold.dim;
+// Watch mode reruns globalSetup in this process after an earlier run's scrub, so fixture setup
+// reuses the env the first run had before its scrub.
+let fixtureSetupEnv: typeof process.env | undefined;
+const getFixtureSetupEnv = () => {
+    fixtureSetupEnv ??= { ...process.env };
+    return fixtureSetupEnv;
+};
 
 const setupGit = (execOptions: ExecFileSyncOptionsWithStringEncoding) => {
     const setupSteps: { name: string; commands: string[]; fallbacks?: string[] }[] = [
@@ -74,6 +82,7 @@ const globalSetup = () => {
     const execOptions: ExecFileSyncOptionsWithStringEncoding = {
         cwd: path.resolve(__dirname, './fixtures'),
         encoding: 'utf-8',
+        env: getFixtureSetupEnv(),
         stdio: [],
     };
 
@@ -84,6 +93,10 @@ const globalSetup = () => {
     } catch (e) {
         console.error('Fixtures setup failed:', e);
     }
+
+    // Last, so the fixture setup above still runs with the full env. Test workers are forked
+    // afterwards and inherit what's left, as do their test sandboxes and child processes.
+    scrubEnv();
     console.timeEnd(timeId);
 };
 

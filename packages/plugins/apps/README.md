@@ -10,10 +10,10 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
--   [Custom Credentials for local execution](#custom-credentials-for-local-execution)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
 <!-- #toc -->
 
@@ -23,6 +23,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 apps?: {
     enable?: boolean;
     include?: string[];
+    tags?: string[];
     longPolling?: {
         maxRetries?: number;
         jitter?: boolean;
@@ -44,16 +45,6 @@ passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
 
-## Custom Credentials for local execution
-
-Backend functions read Custom Credentials from a `datadog-app.local.json` file in the project
-root — a flat JSON object mapping env var name to value. Add this file to your project's
-`.gitignore`; it holds real secret values.
-
-Values are only available while a backend function body is running — not during a module's
-top-level evaluation (e.g. `const client = new Stripe(process.env.STRIPE_API_KEY)` at import
-time). Read `process.env` inside the function body instead.
-
 ## Package output
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.
@@ -73,6 +64,16 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
+
+### apps.tags
+
+> default: none
+
+Tags to add to the app, e.g. `['team:my-team']`. Tags are trimmed and lowercased. Datadog applies its remaining tag rules on upload (for example, a tag must start with a letter) and drops tags that don't pass them. Tags never fail a build: entries that aren't non-empty strings are skipped with a warning.
+
+The package's `manifest.json` carries the app's tags: these tags plus one `surface:<id>` tag for each surface declared by an `@datadog/apps-frontend` input the built frontend uses (for example `surface:datadog.dashboard`), letting product surfaces find apps meant for them. Surface tags are derived from the final bundle, so an input that is imported but tree-shaken away adds none, and an input offered on every surface (like the theme) adds none either.
+
+Deploying adds these tags to the app. It never removes tags, so tags added in the App Builder UI survive the next deploy. Removing a tag is done in the UI, and a tag removed from `apps.tags`, or a surface whose input the app stopped using, stays on the app until someone removes it there.
 
 ### apps.longPolling
 

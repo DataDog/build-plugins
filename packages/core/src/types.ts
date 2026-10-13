@@ -344,9 +344,7 @@ export type RequestOpts = {
     minTimeout?: number;
     maxTimeout?: number;
     signal?: AbortSignal;
-    // Defaults to a fresh `globalThis.fetch` lookup at call time (so tests can keep mocking the
-    // global). Callers that must be immune to the global being reassigned at runtime (e.g. the apps
-    // plugin's authenticated dev-server transport) pass a reference captured before that could happen.
+    // Defaults to the global at call time; pass a captured reference to ignore later reassignment.
     fetchImpl?: typeof fetch;
 };
 

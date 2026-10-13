@@ -35,6 +35,8 @@ export type LiveDebuggerOptions = {
 
 export type LiveDebuggerOptionsWithDefaults = {
     version: string | undefined;
+    // Whether output chunks get a debug ID (see `rum.sourceCodeContext.debugId`).
+    debugId: boolean;
     include: (string | RegExp)[];
     exclude: (string | RegExp)[];
     fileExtensions: FileExtensions;

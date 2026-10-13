@@ -30,6 +30,7 @@ import {
     runRspack,
     runWebpack,
 } from '@dd/tests/_jest/helpers/runBundlers';
+import { loadsSpecifierThroughIdentifier } from '@dd/tests/_jest/helpers/runtimeLoads';
 import type { CleanupFn } from '@dd/tests/_jest/helpers/types';
 import { ROOT } from '@dd/tools/constants';
 import { bgGreen, bgYellow, execute, executeSync, green } from '@dd/tools/helpers';
@@ -282,6 +283,32 @@ describe('Bundling', () => {
                 `await import(${JSON.stringify(pathToFileURL(esmEntry).href)});`,
             ]);
             executeSync(process.execPath, ['--eval', `require(${JSON.stringify(cjsEntry)});`]);
+        });
+
+        // The apps plugin loads the project's Vite with a non-literal `import()`, which must
+        // survive bundling (Vite's CJS entry hides `parseAst` from `require`), and only the
+        // rollup plugin, which peers rollup, may load rollup at runtime.
+        test(`Should keep the Vite loader's dynamic import and no runtime rollup in @datadog/${bundlerName}-plugin.`, () => {
+            getPackageDestination(bundlerName);
+            const publishedExports = getPublishedExports(bundlerName);
+            const entries = [publishedExports!.import!, publishedExports!.require!].map((entry) =>
+                resolvePublishedExportPath(bundlerName, entry),
+            );
+            for (const entry of entries) {
+                const code = fs.readFileSync(entry, 'utf8');
+                const viteIdNames = [
+                    ...code.matchAll(/(?<![\w$])([A-Za-z_$][\w$]*)\s*=\s*["']vite["']/g),
+                ].map(([, name]) => name);
+                const importsViteByName = viteIdNames.some((name) =>
+                    code.includes(`import(${name})`),
+                );
+                const rollupLoads =
+                    code.match(/(?:require|import)\(\s*["']rollup["'/]|from\s*["']rollup["'/]/g) ??
+                    [];
+                const loadsRollupByName = loadsSpecifierThroughIdentifier(code, 'rollup');
+                expect(importsViteByName).toBe(true);
+                expect(rollupLoads.length > 0 || loadsRollupByName).toBe(bundlerName === 'rollup');
+            }
         });
     });
 

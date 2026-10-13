@@ -38,15 +38,26 @@ import type { Bundler, BundlerRunFunction, CleanupFn, RunResult } from './types'
 type PartialBuildOverrides = Partial<BundlerConfig>;
 
 // Get the environment variables.
-const { NO_CLEANUP, NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
+const { NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
 
 // A list of all the cleanup functions that will need to be run at the end of the tests.
 const cleanups: CleanupFn[] = [];
+const workingDirs: string[] = [];
 
 // Run the global cleaning of temp working dirs.
 // It is used in an `afterAll` hook in ./setupAfterEnv.ts.
 export const cleanupEverything = async () => {
-    await Promise.all(cleanups.map((cleanup) => cleanup()));
+    const bundlerCleanups = cleanups.splice(0).map((cleanup) => cleanup());
+    const workingDirRemovals = workingDirs.splice(0).map((workingDir) => rm(workingDir));
+    const results = await Promise.allSettled([...bundlerCleanups, ...workingDirRemovals]);
+
+    const failures = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+    );
+    if (failures.length) {
+        const failureMessages = failures.map(String).join('\n');
+        throw new AggregateError(failures, `Cleanup failed:\n${failureMessages}`);
+    }
 };
 
 const getCleanupFunction = (
@@ -56,21 +67,6 @@ const getCleanupFunction = (
     workingDir: string,
 ): CleanupFn => {
     const cleanup = async () => {
-        // Remove self from the cleanups array.
-        const remove = () => {
-            const index = cleanups.indexOf(cleanup);
-            if (index > -1) {
-                cleanups.splice(index, 1);
-            }
-        };
-
-        // We don't want to clean up in debug mode.
-        if (NO_CLEANUP) {
-            // Still remove the cleanup function from our list.
-            remove();
-            return;
-        }
-
         const proms = [];
 
         if (!outdirs.filter(Boolean).length) {
@@ -82,14 +78,10 @@ const getCleanupFunction = (
         }
 
         await Promise.all(proms);
-        remove();
     };
 
     cleanup.errors = errors;
     cleanup.workingDir = workingDir;
-
-    // Store it in the cleanups array.
-    cleanups.push(cleanup);
 
     return cleanup;
 };
@@ -239,10 +231,13 @@ export const runBundlers = async (
         (bundler) => !bundlers || bundlers.includes(bundler.name),
     );
 
+    const noCleanup = process.env.NO_CLEANUP;
     const workingDir = await prepareWorkingDir(seed);
 
-    if (NO_CLEANUP) {
+    if (noCleanup) {
         console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
+    } else {
+        workingDirs.push(workingDir);
     }
 
     const runBundlerFunction = async (bundler: Bundler) => {
@@ -256,7 +251,11 @@ export const runBundlers = async (
     const results = [];
     for (const bundler of bundlersToRun) {
         // eslint-disable-next-line no-await-in-loop
-        results.push(await runBundlerFunction(bundler));
+        const cleanup = await runBundlerFunction(bundler);
+        results.push(cleanup);
+        if (!noCleanup) {
+            cleanups.push(cleanup);
+        }
     }
     errors.push(...results.map((result) => result.errors).flat());
 

@@ -8,6 +8,7 @@ describe('Apps Plugin - validateOptions', () => {
     test('uses package-only defaults', () => {
         expect(validateOptions({ apps: {} })).toEqual({
             include: [],
+            tags: undefined,
             longPolling: {
                 maxRetries: 10,
                 timeoutMs: 40000,

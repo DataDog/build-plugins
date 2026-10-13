@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { areDebugIdsEnabled } from '@dd/core/helpers/debugId';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -125,6 +126,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         version: metadataVersion,
+        debugId: areDebugIdsEnabled(config, log),
         include: pluginConfig.include ?? [],
         exclude: pluginConfig.exclude || [
             /\/node_modules\//,

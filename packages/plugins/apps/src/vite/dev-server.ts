@@ -4,6 +4,7 @@
 
 /* eslint-disable no-await-in-loop */
 
+import { formatDuration } from '@dd/core/helpers/strings';
 import type { AuthOptionsWithDefaults, Logger } from '@dd/core/types';
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
@@ -331,7 +332,7 @@ function makeGetRuntimeContextRemotely(
     };
 }
 
-/** Submits a single-action `preview-async` query per `$.Actions` call and logs its result/error, since production's equivalent signal never reaches the `npm run dev` console. Callers must have already confirmed auth is configured (see `createDevServerMiddleware`). */
+/** Submits a single-action `preview-async` query per `$.Actions` call and logs its outcome, since production's equivalent signal never reaches the `npm run dev` console. Callers must have already confirmed auth is configured (see `createDevServerMiddleware`). */
 function makeExecuteActionRemotely(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
@@ -344,6 +345,7 @@ function makeExecuteActionRemotely(
         connectionId: string | undefined,
     ): Promise<unknown> => {
         try {
+            const startTime = Date.now();
             const result = await submitQuery(
                 connectionId !== undefined ? { fqn, inputs, connectionId } : { fqn, inputs },
                 fqn,
@@ -352,7 +354,14 @@ function makeExecuteActionRemotely(
                 longPolling,
                 log,
             );
-            log.info(`$.Actions call to "${fqn}" succeeded: ${JSON.stringify(result)}`);
+            const elapsedMs = Date.now() - startTime;
+            const duration = formatDuration(elapsedMs);
+            // Size only: action responses can be megabytes and carry other users' PII.
+            const serializedResult = JSON.stringify(result);
+            const resultByteLength = Buffer.byteLength(serializedResult);
+            log.debug(
+                `$.Actions call to "${fqn}" succeeded in ${duration} (${resultByteLength} bytes)`,
+            );
             return result;
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);

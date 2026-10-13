@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { ChunkInfo, OptionsWithDefaults } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { getContextMock, getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
 import type { UnpluginBuildContext, UnpluginContext } from 'unplugin';
@@ -15,6 +16,7 @@ const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
     version: '1.0.0',
+    debugId: false,
     include: [],
     exclude: [/\/node_modules\//],
     fileExtensions: [...DEFAULT_FILE_EXTENSIONS],
@@ -463,53 +465,85 @@ describe('getLiveDebuggerPlugin', () => {
 });
 
 describe('getPlugins', () => {
-    it('should inject runtime stubs and return a plugin when an empty config is provided', () => {
-        const arg = getGetPluginsArg({ liveDebugger: {} });
+    const chunk: ChunkInfo = {
+        sourceOrHash: 'console.log("chunk");',
+        fileName: 'chunk.js',
+        isEntry: false,
+    };
 
+    // Return what the runtime bootstrap injected by the plugin renders for `chunk`.
+    const getInjectedBootstrap = (options: Partial<OptionsWithDefaults>) => {
+        const arg = getGetPluginsArg(options);
         const plugins = getPlugins(arg);
 
         expect(plugins).toHaveLength(1);
         expect(plugins[0].name).toBe(PLUGIN_NAME);
+        expect(arg.context.inject).toHaveBeenCalledTimes(1);
         expect(arg.context.inject).toHaveBeenCalledWith({
             type: 'code',
             position: InjectPosition.BEFORE,
             injectIntoAllChunks: true,
-            value: getRuntimeBootstrap(),
-        });
-    });
-
-    it('should inject build metadata when metadata.version is provided', () => {
-        const arg = getGetPluginsArg({
-            liveDebugger: {},
-            metadata: { version: '1.0.0' },
+            value: expect.any(Function),
         });
 
-        const plugins = getPlugins(arg);
+        const [[injectedItem]] = jest.mocked(arg.context.inject).mock.calls;
+        if (typeof injectedItem.value !== 'function') {
+            throw new Error('Expected the runtime bootstrap to be a per-chunk value');
+        }
+        return injectedItem.value(chunk);
+    };
 
-        expect(plugins).toHaveLength(1);
-        expect(plugins[0].name).toBe(PLUGIN_NAME);
-        expect(arg.context.inject).toHaveBeenCalledWith({
-            type: 'code',
-            position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
-            value: getRuntimeBootstrap('1.0.0'),
-        });
-    });
+    const cases: {
+        description: string;
+        options: Partial<OptionsWithDefaults>;
+        expected: Pick<LiveDebuggerOptionsWithDefaults, 'version' | 'debugId'>;
+    }[] = [
+        {
+            description: 'inject the runtime bootstrap when an empty config is provided',
+            options: { liveDebugger: {} },
+            expected: { version: undefined, debugId: false },
+        },
+        {
+            description: 'inject the version when metadata.version is provided',
+            options: { liveDebugger: {}, metadata: { version: '1.0.0' } },
+            expected: { version: '1.0.0', debugId: false },
+        },
+        {
+            description: 'not inject a version when only metadata.name is provided',
+            options: { liveDebugger: {}, metadata: { name: 'my-build' } },
+            expected: { version: undefined, debugId: false },
+        },
+        {
+            description: 'inject the chunk debug ID when RUM debug IDs are enabled',
+            options: {
+                liveDebugger: {},
+                rum: { sourceCodeContext: { debugId: true } },
+            },
+            expected: { version: undefined, debugId: true },
+        },
+        {
+            description: 'inject the version and the chunk debug ID',
+            options: {
+                liveDebugger: {},
+                metadata: { version: '1.0.0' },
+                rum: { sourceCodeContext: { debugId: true } },
+            },
+            expected: { version: '1.0.0', debugId: true },
+        },
+        {
+            description: 'not inject the chunk debug ID when RUM uses service and version',
+            options: {
+                liveDebugger: {},
+                rum: { sourceCodeContext: { service: 'checkout' } },
+            },
+            expected: { version: undefined, debugId: false },
+        },
+    ];
 
-    it('should not inject build metadata when only metadata.name is provided', () => {
-        const arg = getGetPluginsArg({
-            liveDebugger: {},
-            metadata: { name: 'my-build' },
-        });
+    test.each(cases)('should $description', ({ options, expected }) => {
+        const injectedBootstrap = getInjectedBootstrap(options);
+        const expectedBootstrap = getRuntimeBootstrap(expected)(chunk);
 
-        const plugins = getPlugins(arg);
-
-        expect(plugins).toHaveLength(1);
-        expect(arg.context.inject).toHaveBeenCalledWith({
-            type: 'code',
-            position: InjectPosition.BEFORE,
-            injectIntoAllChunks: true,
-            value: getRuntimeBootstrap(),
-        });
+        expect(injectedBootstrap).toBe(expectedBootstrap);
     });
 });
