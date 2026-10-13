@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
+import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 
 export interface TransformOutput {
     code: string;
@@ -20,6 +21,11 @@ export function buildTransformOptions(
                     code: helperCodeExpression,
                 },
             },
+            // Live Debugger function IDs are not application strings. Moving
+            // them into the module's dictionary would also make every
+            // instrumented function read it, which throws when the function
+            // is called before its module is evaluated (circular imports).
+            excludeCallArguments: [LIVE_DEBUGGER_PROBES_FUNCTION],
         },
     };
     if (['esbuild', 'webpack', 'rspack'].includes(bundlerName)) {
