@@ -2,12 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { createFixtureRecord } from '@dd/tests/_jest/helpers/moduleGraph';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseAst } from 'rollup/parseAst';
 
-import { createParsedModuleRecord } from './ast-parsing/module-graph';
 import { walkModuleGraph } from './ast-parsing/walk-module-graph';
 import {
     getBackendModuleOwner,
@@ -145,12 +144,9 @@ describe('Backend Functions - package ownership rules', () => {
                     return [plainValue, ordinary, helper()];
                 }
             `;
-            const record = createParsedModuleRecord(file, appRoot, parseAst(code), [
+            const record = createFixtureRecord(file, appRoot, code, [
                 at('app/node_modules/plain/index.js'),
             ]);
-            if (!record) {
-                throw new Error('Expected the package module to be backend source.');
-            }
 
             const records = new Map([[file, record]]);
             expect(() => walkModuleGraph(file, records, appRoot, () => {})).toThrow(
