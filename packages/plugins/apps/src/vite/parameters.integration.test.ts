@@ -155,6 +155,36 @@ describe('Apps Plugin - parameters from a real Vite build', () => {
         });
     });
 
+    test('Should build an app whose shared package outside it only uses the hook', async () => {
+        const manifest = await buildApp({
+            'app/main.js': `
+                import { defineDatadogAppParameters } from '@datadog/apps-frontend/parameters';
+                import { useDatadogAppParameters, usePanel } from '../shared/hooks.js';
+
+                usePanel(useDatadogAppParameters(defineDatadogAppParameters({ ${ENVIRONMENT} })));`,
+            // Re-exports the hook and uses it, but declares nothing.
+            'shared/hooks.js': `
+                import { useDatadogAppParameters } from '@datadog/apps-frontend/parameters/react';
+                export { useDatadogAppParameters } from '@datadog/apps-frontend/parameters/react';
+
+                export function usePanel(parameters) {
+                    document.body.dataset.panel = JSON.stringify(useDatadogAppParameters(parameters));
+                }`,
+        });
+
+        expect(manifest.inputSchema).toEqual({
+            parameters: [
+                {
+                    name: 'environment',
+                    type: 'STRING',
+                    defaultValue: 'prod',
+                    label: 'Environment',
+                    enum: ['prod', 'staging'],
+                },
+            ],
+        });
+    });
+
     const IMPORT = `import { defineDatadogAppParameters } from '@datadog/apps-frontend/parameters';`;
     const LIMIT = `limit: { type: 'number', default: 10 }`;
     const declare = (body: string) => `${IMPORT}\ndefineDatadogAppParameters({ ${body} });`;
