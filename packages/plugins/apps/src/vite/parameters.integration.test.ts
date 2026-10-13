@@ -205,6 +205,11 @@ describe('Apps Plugin - parameters from a real Vite build', () => {
             /panel\.js parameter "limit" needs a number default/,
         ],
         [
+            'a label that is not a string',
+            { 'app/main.js': declare(`limit: { type: 'number', default: 1, label: false }`) },
+            /main\.js parameter "limit": label must be a string/,
+        ],
+        [
             'one parameter declared differently in two modules',
             {
                 'app/main.js': `${declare(LIMIT)}\nimport './panel.js';`,

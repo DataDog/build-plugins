@@ -92,8 +92,15 @@ function toSchema(name: string, node: Node, describe: () => string): AppsParamet
         throw new Error(`${where()}: needs a default.`);
     }
     const text = (key: 'label' | 'description') => {
-        const value = fields.get(key);
-        return value === undefined ? {} : { [key]: String(literalValue(value, where)) };
+        const field = fields.get(key);
+        if (field === undefined) {
+            return {};
+        }
+        const value = literalValue(field, where);
+        if (typeof value !== 'string') {
+            throw new Error(`${where()}: ${key} must be a string.`);
+        }
+        return { [key]: value };
     };
     const options = fields.get('options');
     if (options !== undefined && options.type !== 'ArrayExpression') {
