@@ -280,6 +280,7 @@ type SourcemapsUploadEnabledOptions = {
     upload: true;
     bailOnError?: boolean;
     dryRun?: boolean;
+    experimentalDuplicateCheck?: boolean;
     maxConcurrency?: number;
 };
 
@@ -287,6 +288,7 @@ type SourcemapsInjectionOnlyOptions = {
     upload?: false;
     bailOnError?: never;
     dryRun?: never;
+    experimentalDuplicateCheck?: never;
     maxConcurrency?: never;
 };
 
