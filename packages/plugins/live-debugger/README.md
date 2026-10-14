@@ -9,9 +9,9 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Limited preview prerequisites](#limited-preview-prerequisites)
-    -   [Source maps for the preview](#source-maps-for-the-preview)
--   [Required peer dependencies](#required-peer-dependencies)
+-   [Prerequisites](#prerequisites)
+    -   [Source maps](#source-maps)
+    -   [Required peer dependencies](#required-peer-dependencies)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
@@ -31,16 +31,9 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
 
-## Limited preview prerequisites
+## Prerequisites
 
-Browser Live Debugger is available in limited preview. Contact Datadog to enable it for your organization and agree on the application and expected traffic for the preview.
-
-- Use a browser-based frontend application that you can instrument at build time, and initialize the [Browser Debugger SDK](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#usage) in the application. The RUM Browser SDK is optional.
-- The application's Content Security Policy must allow `'unsafe-eval'` in `script-src` for probe conditions, dynamic log-message expressions, and capture expressions. See the [SDK's CSP prerequisite](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#content-security-policy).
-- During the limited preview, probes can only be added to named functions. Adding probes to anonymous functions is not supported, even though the transform can instrument them. Set [`liveDebugger.namedOnly: true`](#livedebuggernamedonly) to skip anonymous functions during instrumentation.
-- Source maps for the deployed frontend build must be available in the same Datadog site and organization that receives the Browser Live Debugger data. You can use your existing upload setup or configure it during onboarding.
-
-### Source maps for the preview
+### Source maps
 
 Enable debug IDs and upload the matching source maps with Git repository/commit metadata so Datadog can resolve the deployed build and its source code. For example, add these options to your Datadog build plugin configuration:
 
@@ -66,7 +59,7 @@ Use the same Datadog site for the build plugin's [`auth.site`](/#authsite) and t
 
 Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations can also [upload by debug ID](/packages/plugins/error-tracking#sourcemaps-upload). Enable `rum.sourceCodeContext.debugId` and `errorTracking.sourcemaps.debugId`, and remove the service/version matching fields from `errorTracking.sourcemaps`. Do not combine `errorTracking.sourcemaps` with the top-level [`sourcemaps`](/#sourcemaps) option.
 
-## Required peer dependencies
+### Required peer dependencies
 
 The Live Debugger transform relies on Babel and `magic-string`. To keep the cost of
 `@datadog/*-plugin` packages small for projects that don't use Live Debugger, these
@@ -118,8 +111,6 @@ Each instrumented function gets:
 
 The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
-When `metadata.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you upload sourcemaps using service/version matching, use the same value for `errorTracking.sourcemaps.releaseVersion`.
-
 **Example transformation:**
 
 ```js
@@ -166,7 +157,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-Set `metadata.version` when you want version-specific probe targeting. Build and source-code resolution through debug IDs does not require a version.
+Set `metadata.version` when you want version-specific probe targeting.
 
 ### liveDebugger.include
 
@@ -249,8 +240,6 @@ liveDebugger: {
 > default: `false`
 
 When `true`, only named functions are instrumented. Anonymous callbacks (e.g. `[].map((x) => x)`) are skipped. A function is considered "named" if it has an explicit name via declaration, variable assignment, object/class property, or assignment target.
-
-Use `true` for the limited preview, which only supports adding probes to named functions. Leaving it `false` does not enable probes on anonymous functions.
 
 **Example:**
 
