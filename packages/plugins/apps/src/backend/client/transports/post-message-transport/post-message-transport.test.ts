@@ -8,11 +8,13 @@ import { DEBUG_BUNDLE_PATH, DEV_SERVER_MARKER } from '../../../protocol';
 
 import {
     BUNDLE_FETCH_TIMEOUT_MS,
+    PARENT_PING_TIMEOUT_MS,
     POSTMESSAGE_TIMEOUT_MS,
     postMessageTransport,
 } from './post-message-transport';
 
-type MessageListener = (event: { data: unknown }) => void;
+type MessageListener = (event: { data: unknown; origin?: string; source?: unknown }) => void;
+type PostedMessage = { type: string; requestId: string };
 
 const QUERY_NAME = 'backend/greet.greet';
 const ARGS = ['world', 42];
@@ -39,8 +41,26 @@ function installFakeWindow(
     });
 
     const posted = new Promise<{ requestId: string }>((resolve) => {
-        postMessage.mockImplementation(resolve);
+        postMessage.mockImplementation((message: PostedMessage) => {
+            if (message.type === 'app-builder:run-query') {
+                resolve(message);
+            }
+        });
     });
+    const pings = () =>
+        postMessage.mock.calls
+            .map(([message]: [PostedMessage]) => message)
+            .filter((message) => message.type === 'app-builder:ping');
+    const pong = (origin: string, source: unknown = fakeWindow.parent) => {
+        const [ping] = pings();
+        for (const listener of [...listeners]) {
+            listener({
+                data: { type: 'app-builder:pong', requestId: ping.requestId, availableQueries: [] },
+                origin,
+                source,
+            });
+        }
+    };
     const reply = (requestId: string, data: unknown) => {
         for (const listener of [...listeners]) {
             listener({
@@ -54,7 +74,7 @@ function installFakeWindow(
         }
     };
 
-    return { postMessage, posted, reply, listenerCount: () => listeners.size };
+    return { postMessage, posted, reply, pings, pong, listenerCount: () => listeners.size };
 }
 
 type FakeResponse = { ok: boolean; status?: number; json: () => Promise<unknown> };
@@ -164,8 +184,152 @@ describe('postMessageTransport', () => {
         },
     );
 
-    test('Should send the call without fetching a bundle when the browser has no ancestorOrigins', async () => {
-        const { postMessage, posted, reply } = installFakeWindow({});
+    // Firefox has no ancestorOrigins, so the parent's origin comes from its answer to a ping.
+    describe('without ancestorOrigins', () => {
+        const flushPing = async () => {
+            await Promise.resolve();
+        };
+
+        test('Should attach the bundle for a Datadog parent that answers its ping', async () => {
+            const { postMessage, posted, reply, pings, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            const [ping, ...otherPings] = pings();
+            expect(otherPings).toHaveLength(0);
+            expect(postMessage).toHaveBeenCalledWith(ping, '*');
+            pong(DATADOG_PARENT);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+            expect(postMessage).toHaveBeenCalledWith(message, DATADOG_PARENT);
+        });
+
+        test('Should send the call without a bundle when a non-Datadog parent answers', async () => {
+            const { postMessage, posted, reply, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong('https://example.com');
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(global.fetch).not.toHaveBeenCalled();
+            expect(postMessage).toHaveBeenCalledWith(message, '*');
+        });
+
+        test('Should ignore a pong from any window but the parent', async () => {
+            jest.useFakeTimers();
+            const { postMessage, posted, reply, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong(DATADOG_PARENT, {});
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(global.fetch).not.toHaveBeenCalled();
+            expect(postMessage).toHaveBeenCalledWith(message, '*');
+        });
+
+        test('Should send the call without a bundle when the parent never answers', async () => {
+            jest.useFakeTimers();
+            const { postMessage, posted, reply, listenerCount } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(global.fetch).not.toHaveBeenCalled();
+            expect(postMessage).toHaveBeenCalledWith(message, '*');
+            const remainingListeners = listenerCount();
+            expect(remainingListeners).toBe(0);
+        });
+
+        test('Should ping the parent once per page', async () => {
+            const { postMessage, posted, reply, pings, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong(DATADOG_PARENT);
+            const firstMessage = await posted;
+            reply(firstMessage.requestId, 'first');
+            await expect(first).resolves.toBe('first');
+
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await new Promise((resolve) => setImmediate(resolve));
+            const [secondMessage] = postMessage.mock.calls.at(-1);
+            reply(secondMessage.requestId, 'second');
+
+            await expect(second).resolves.toBe('second');
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+            expect(secondMessage).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+        });
+    });
+
+    describe('without ancestorOrigins, across calls', () => {
+        test('Should share one ping between calls made before the parent answers', async () => {
+            const { postMessage, reply, pings, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await Promise.resolve();
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+            pong(DATADOG_PARENT);
+            await new Promise((resolve) => setImmediate(resolve));
+
+            const queries = postMessage.mock.calls
+                .map(([message]: [PostedMessage]) => message)
+                .filter((message) => message.type === 'app-builder:run-query');
+            expect(queries).toHaveLength(2);
+            for (const query of queries) {
+                expect(query).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+                reply(query.requestId, 'ok');
+            }
+            await expect(first).resolves.toBe('ok');
+            await expect(second).resolves.toBe('ok');
+        });
+
+        test('Should ping again on a later call after the parent did not answer', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply, pings } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+            const [firstQuery] = postMessage.mock.calls.at(-1);
+            reply(firstQuery.requestId, 'first');
+            await expect(first).resolves.toBe('first');
+
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(2);
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+            const [secondQuery] = postMessage.mock.calls.at(-1);
+            reply(secondQuery.requestId, 'second');
+            await expect(second).resolves.toBe('second');
+        });
+    });
+
+    test('Should not ping a parent that ancestorOrigins already names', async () => {
+        const { postMessage, posted, reply, pings } = installFakeWindow();
         mockFetchResponse({ ok: true, json: async () => BUNDLE });
 
         const result = postMessageTransport(QUERY_NAME, ARGS);
@@ -173,10 +337,24 @@ describe('postMessageTransport', () => {
         reply(message.requestId, 'ok');
 
         await expect(result).resolves.toBe('ok');
+        const sentPings = pings();
+        expect(sentPings).toHaveLength(0);
+        expect(message).toHaveProperty('bundle', BUNDLE);
+        expect(postMessage).toHaveBeenCalledWith(message, DATADOG_PARENT);
+    });
+
+    test('Should neither ping nor fetch a bundle when ancestorOrigins is empty', async () => {
+        const { posted, reply, pings } = installFakeWindow({ ancestorOrigins: [] });
+        mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        const sentPings = pings();
+        expect(sentPings).toHaveLength(0);
         expect(global.fetch).not.toHaveBeenCalled();
-        expect(message).not.toHaveProperty('bundle');
-        expect(postMessage).toHaveBeenCalledWith(message, '*');
-        expect(warn).not.toHaveBeenCalled();
     });
 
     test('Should not fetch a bundle in a deployed app', async () => {
@@ -351,9 +529,13 @@ describe('postMessageTransport', () => {
         });
         mockFetchResponse({ ok: true, json: async () => BUNDLE });
 
-        await expect(postMessageTransport(QUERY_NAME, ARGS)).rejects.toBe(cloneError);
-        expect(listenerCount()).toBe(0);
-        expect(jest.getTimerCount()).toBe(0);
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+
+        await expect(result).rejects.toBe(cloneError);
+        const remainingListeners = listenerCount();
+        const remainingTimers = jest.getTimerCount();
+        expect(remainingListeners).toBe(0);
+        expect(remainingTimers).toBe(0);
     });
 
     test('Should abort a stalled bundle fetch and send the call without a bundle', async () => {
@@ -377,6 +559,10 @@ describe('postMessageTransport', () => {
         expect(fetchSignal?.aborted).toBe(true);
         expect(message).not.toHaveProperty('bundle');
         expect(warn).toHaveBeenCalledTimes(1);
+        const timeoutWarning = expect.stringContaining(
+            `timed out after ${BUNDLE_FETCH_TIMEOUT_MS}ms`,
+        );
+        expect(warn).toHaveBeenCalledWith(timeoutWarning);
     });
 
     test('Should give the parent its full response window after the bundle arrives', async () => {

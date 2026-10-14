@@ -13,6 +13,18 @@ export type IframeQueryRequest = {
     bundle?: DebugBundleResponse;
 };
 
+// Asks the parent to identify itself: its pong's `event.origin` is set by the browser.
+export type IframeQueryPing = {
+    type: 'app-builder:ping';
+    requestId: string;
+};
+
+export type IframeQueryPong = {
+    type: 'app-builder:pong';
+    requestId: string;
+    availableQueries: string[];
+};
+
 // Response: parent → iframe, for the `app-builder:run-query` messages the
 // transport sends to the parent window.
 export type IframeQueryResponse<TData = unknown> = {

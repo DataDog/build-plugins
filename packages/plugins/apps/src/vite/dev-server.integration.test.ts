@@ -459,11 +459,13 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         );
         const res = createMockResponse();
 
-        middleware(req, res, jest.fn());
+        const next = jest.fn();
+        middleware(req, res, next);
         await res.done;
 
         expect(res.statusCode).toBe(200);
-        const body = JSON.parse(res.getBody());
+        const rawBody = res.getBody();
+        const body = JSON.parse(rawBody);
         expect(body.allowedConnectionIds).toEqual(['conn-1']);
         expect(body.code).toContain('conn-1');
     }, 30000);

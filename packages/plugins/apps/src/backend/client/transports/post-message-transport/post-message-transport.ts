@@ -12,10 +12,16 @@ import type { DebugBundleResponse, ExecuteActionRequest } from '../../../protoco
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
 
-import type { IframeQueryRequest, IframeQueryResponse } from './types';
+import type {
+    IframeQueryPing,
+    IframeQueryPong,
+    IframeQueryRequest,
+    IframeQueryResponse,
+} from './types';
 
 export const POSTMESSAGE_TIMEOUT_MS = 120_000;
 export const BUNDLE_FETCH_TIMEOUT_MS = 60_000;
+export const PARENT_PING_TIMEOUT_MS = 2_000;
 
 let requestCounter = 0;
 
@@ -33,6 +39,17 @@ function isQueryResponse(data: unknown, requestId: string): data is IframeQueryR
         typeof data === 'object' &&
         'type' in data &&
         data.type === 'app-builder:run-query:response' &&
+        'requestId' in data &&
+        data.requestId === requestId
+    );
+}
+
+function isPong(data: unknown, requestId: string): data is IframeQueryPong {
+    return (
+        data !== null &&
+        typeof data === 'object' &&
+        'type' in data &&
+        data.type === 'app-builder:pong' &&
         'requestId' in data &&
         data.requestId === requestId
     );
@@ -63,13 +80,63 @@ function isDatadogOrigin(origin: string): boolean {
     return url.protocol === 'https:' && url.port === '' && parseSite(hostname) !== undefined;
 }
 
+/** Resolves the origin the browser stamps on the parent's pong, or `undefined` if it doesn't answer in time. */
+function pingParentOrigin(): Promise<string | undefined> {
+    const requestId = generateRequestId();
+    return new Promise((resolve) => {
+        function finish(origin: string | undefined): void {
+            window.removeEventListener('message', handleMessage);
+            clearTimeout(timeoutId);
+            resolve(origin);
+        }
+
+        function handleMessage(event: MessageEvent): void {
+            if (event.source === window.parent && isPong(event.data, requestId)) {
+                finish(event.origin);
+            }
+        }
+
+        window.addEventListener('message', handleMessage);
+        const timeoutId = setTimeout(() => finish(undefined), PARENT_PING_TIMEOUT_MS);
+        const ping: IframeQueryPing = { type: 'app-builder:ping', requestId };
+        try {
+            window.parent.postMessage(ping, '*');
+        } catch {
+            finish(undefined);
+        }
+    });
+}
+
+const parentOriginPings = new WeakMap<object, Promise<string | undefined>>();
+
+async function getParentOrigin(): Promise<string | undefined> {
+    const ancestorOrigins = window.location.ancestorOrigins;
+    if (ancestorOrigins) {
+        return ancestorOrigins[0];
+    }
+    if (window.parent === window) {
+        return undefined;
+    }
+    // Firefox has no ancestorOrigins; App Builder's bridge answers a ping from its frame.
+    // Calls share one ping; an unanswered one is dropped so a later call asks again.
+    let ping = parentOriginPings.get(window);
+    if (ping === undefined) {
+        ping = pingParentOrigin();
+        parentOriginPings.set(window, ping);
+    }
+    const origin = await ping;
+    if (origin === undefined && parentOriginPings.get(window) === ping) {
+        parentOriginPings.delete(window);
+    }
+    return origin;
+}
+
 /** The parent's origin when it is a Datadog page and this app runs on its dev server, else `undefined`. */
-function getBundleRecipientOrigin(): string | undefined {
+async function getBundleRecipientOrigin(): Promise<string | undefined> {
     if (Reflect.get(globalThis, DEV_SERVER_MARKER) !== true) {
         return undefined;
     }
-    // Absent in Firefox; without it the parent can't be identified, so no bundle is sent.
-    const parentOrigin: string | undefined = window.location.ancestorOrigins?.[0];
+    const parentOrigin = await getParentOrigin();
     if (parentOrigin === undefined || !isDatadogOrigin(parentOrigin)) {
         return undefined;
     }
@@ -104,7 +171,10 @@ async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse
     const request: Pick<ExecuteActionRequest, 'functionName'> = { functionName };
     const requestBody = JSON.stringify(request);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), BUNDLE_FETCH_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => {
+        const timeoutError = new Error(`timed out after ${BUNDLE_FETCH_TIMEOUT_MS}ms`);
+        controller.abort(timeoutError);
+    }, BUNDLE_FETCH_TIMEOUT_MS);
     try {
         const response = await fetch(DEBUG_BUNDLE_PATH, {
             method: 'POST',
@@ -145,7 +215,7 @@ export const postMessageTransport: BackendFunctionTransport = async <TData>(
     args: unknown[],
 ): Promise<TData> => {
     const requestId = generateRequestId();
-    const recipientOrigin = getBundleRecipientOrigin();
+    const recipientOrigin = await getBundleRecipientOrigin();
     const bundle = recipientOrigin === undefined ? undefined : await fetchOwnBundle(functionName);
 
     return new Promise<TData>((resolve, reject) => {

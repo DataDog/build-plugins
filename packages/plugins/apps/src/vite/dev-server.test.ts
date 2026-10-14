@@ -513,12 +513,14 @@ describe('Dev Server Middleware', () => {
                 const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName }, headers);
                 const res = createMockResponse();
 
-                middleware(req, res, jest.fn());
+                const next = jest.fn();
+                middleware(req, res, next);
                 await res.done;
 
                 expect(res.statusCode).toBe(200);
                 expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/plain');
-                expect(res.getBody()).toBe('export function main($) {}');
+                const body = res.getBody();
+                expect(body).toBe('export function main($) {}');
             },
         );
 
@@ -541,12 +543,14 @@ describe('Dev Server Middleware', () => {
                 const req = createMockRequest(DEBUG_BUNDLE_PATH, { functionName }, { accept });
                 const res = createMockResponse();
 
-                middleware(req, res, jest.fn());
+                const next = jest.fn();
+                middleware(req, res, next);
                 await res.done;
 
                 expect(res.statusCode).toBe(200);
                 expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
-                const body = JSON.parse(res.getBody());
+                const rawBody = res.getBody();
+                const body = JSON.parse(rawBody);
                 expect(body).toEqual({
                     code: 'export function main($) {}',
                     allowedConnectionIds: [],
@@ -584,11 +588,13 @@ describe('Dev Server Middleware', () => {
             );
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            const next = jest.fn();
+            middleware(req, res, next);
             await res.done;
 
             expect(res.statusCode).toBe(200);
-            const body = JSON.parse(res.getBody());
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
             expect(body).toEqual({
                 code: '// bundled',
                 allowedConnectionIds: ['conn-http', 'conn-slack'],
@@ -603,12 +609,14 @@ describe('Dev Server Middleware', () => {
             );
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            const next = jest.fn();
+            middleware(req, res, next);
             await res.done;
 
             expect(res.statusCode).toBe(404);
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
-            const body = JSON.parse(res.getBody());
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
             expect(body).toEqual({
                 success: false,
                 error: 'Backend function "nonexistent.nonexistent" not found',

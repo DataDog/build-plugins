@@ -280,7 +280,9 @@ describe('Backend Functions - getVitePlugin', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformIndexHtml = getTransformIndexHtml(plugin);
 
-        expect(transformIndexHtml({ server: {} })).toEqual([
+        const tags = transformIndexHtml({ server: {} });
+
+        expect(tags).toEqual([
             {
                 tag: 'script',
                 children: `globalThis.${DEV_SERVER_MARKER} = true;`,
@@ -293,7 +295,9 @@ describe('Backend Functions - getVitePlugin', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformIndexHtml = getTransformIndexHtml(plugin);
 
-        expect(transformIndexHtml({})).toEqual([]);
+        const tags = transformIndexHtml({});
+
+        expect(tags).toEqual([]);
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
