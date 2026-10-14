@@ -10,6 +10,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
+-   [Custom Credentials for local execution](#custom-credentials-for-local-execution)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -44,6 +45,31 @@ Backend function execution authenticates in this order:
 passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
+
+## Custom Credentials for local execution
+
+During `vite dev`, backend functions read Custom Credentials from `process.env`, under the same
+names the deployed app uses. Set them in the shell that starts the dev server, or in Vite's
+`.env`, `.env.local`, `.env.[mode]` and `.env.[mode].local` files. A shell variable takes
+precedence over a file.
+
+-   Don't give a credential Vite's `envPrefix` (`VITE_` by default): Vite exposes those keys to
+    the frontend, so they are not loaded for backend functions.
+-   `DD_*` and `DATADOG_*` keys in these files are ignored. Set the authentication variables above
+    in the shell, or start the dev server with `datadog-apps dev`.
+-   Keys that change Node or process behavior are ignored too, and left to the shell: `NODE_*`,
+    `LD_*`, `DYLD_*`, `OPENSSL_*`, proxy, DNS resolver and CA certificate settings, `TZ`, `PATH`,
+    `PATHEXT`, `COMSPEC`, `SystemRoot`, `windir`, `ESBUILD_BINARY_PATH`, `UV_THREADPOOL_SIZE`,
+    `UV_USE_IO_URING`, home and temp directories.
+-   `dev:verify`, which runs backend functions in the cloud, doesn't load these files, and neither
+    does a Vitest run or a dev server in `test` mode.
+-   After a dev server restart, `vite.config`, other plugins' `config` and `configureServer` hooks
+    and `${VAR}` references in `envPrefix` keys still see the values loaded before the restart.
+-   Don't pass `process.env` to Vite's `define`, as in `define: { 'process.env': process.env }`:
+    it would inline the loaded values, backend-only credentials included, into the frontend
+    bundle, notably after a restart, while the previous load is still in `process.env`.
+-   Keep files that hold real secrets, such as `.env.local`, out of version control.
+-   Values from these files are never bundled into the deployed backend functions.
 
 ## Package output
 

@@ -6,7 +6,7 @@ import { rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
-import type { build } from 'vite';
+import type { build, loadEnv, ViteDevServer } from 'vite';
 
 import {
     AUTH_GUIDANCE,
@@ -41,6 +41,7 @@ import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createDevServerMiddleware } from './dev-server';
+import { loadEnvFileCredentials } from './dotenv-credentials';
 import { localExecutionResolutionContext } from './local-execution';
 import {
     exemptFetchFromBlockedScope,
@@ -53,6 +54,7 @@ import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
     build: typeof build;
+    loadEnv: typeof loadEnv;
 };
 
 export interface VitePluginOptions {
@@ -197,6 +199,72 @@ export const getVitePlugin = ({
     // Created in buildStart, so each build gets its own sources and authored-tag warnings fire
     // once per build rather than also at plugin init.
     let buildTagSources: TagSource[] = [];
+
+    // Runs in configureServer's post hook, which Vite only reaches once every plugin's
+    // configureServer has run, so a restart that fails there keeps the previous load.
+    const loadEnvFiles = (server: ViteDevServer) => {
+        const serverConfig = server.config;
+        const { root, mode, envDir, envPrefix, inlineConfig } = serverConfig;
+        // Vitest also calls configureServer, and its test workers would inherit the values.
+        if (process.env.VITEST || mode === 'test') {
+            log.debug('Skipping .env file loading: test run.');
+            return;
+        }
+        // dev-verify runs every execution in the cloud, which never sees local .env values. Vite 5
+        // keeps envDir set when the inline envFile option is false.
+        const isEnvFileDisabled = mode === DEV_VERIFY_MODE || inlineConfig.envFile === false;
+        // Vite 8 restarts without calling the replaced server's close, but swaps its config.
+        const isServerActive = () => server.config === serverConfig;
+        const envFileCredentials = loadEnvFileCredentials(
+            bundler.loadEnv,
+            { root, mode, envDir: isEnvFileDisabled ? false : envDir, envPrefix },
+            isServerActive,
+        );
+        const logKeys = (
+            keys: string[],
+            level: 'info' | 'warn',
+            describe: (names: string) => string,
+        ) => {
+            if (keys.length > 0) {
+                const names = keys.join(', ');
+                const message = describe(names);
+                log[level](message);
+            }
+        };
+        logKeys(
+            envFileCredentials.loaded,
+            'info',
+            (names) =>
+                `Loaded ${names} from .env files into process.env. Shell variables take precedence.`,
+        );
+        logKeys(
+            envFileCredentials.ignoredDatadogKeys,
+            'warn',
+            (names) =>
+                `Ignoring ${names} from .env files. Set Datadog settings in the shell or start the dev server with \`datadog-apps dev\`.`,
+        );
+        logKeys(
+            envFileCredentials.ignoredProcessKeys,
+            'warn',
+            (names) =>
+                `Ignoring ${names} from .env files. Set settings that change Node or process behavior in the shell.`,
+        );
+        logKeys(
+            envFileCredentials.shadowedKeys,
+            'warn',
+            (names) =>
+                `Ignoring ${names} from .env files. Another dev server in this process, or the one being restarted, loaded them first; this server's values apply once no other server holds them.`,
+        );
+        // Per server, as closeBundle can't tell which server closed on Vite 5.
+        const closeServer = server.close.bind(server);
+        server.close = async () => {
+            try {
+                await closeServer();
+            } finally {
+                envFileCredentials.drop();
+            }
+        };
+    };
 
     return {
         config: {
@@ -477,6 +545,7 @@ export const getVitePlugin = ({
                 server.config.mode,
             );
             server.middlewares.use(middleware);
+            return () => loadEnvFiles(server);
         },
     };
 };

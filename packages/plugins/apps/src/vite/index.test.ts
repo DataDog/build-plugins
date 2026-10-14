@@ -5,9 +5,10 @@
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
-import { rmSync } from '@dd/core/helpers/fs';
+import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
+import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
     createMockResponse,
@@ -25,6 +26,7 @@ import type { PluginContext } from 'rollup';
 import { createUnplugin } from 'unplugin';
 import {
     createServer,
+    loadEnv,
     type ConfigEnv,
     type EnvironmentOptions,
     type Plugin as VitePlugin,
@@ -42,6 +44,7 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import { dropEnvFileCredentials, loadEnvFileCredentials } from './dotenv-credentials';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
 
@@ -91,8 +94,14 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
-    config: { mode: string };
+    config: {
+        root: string;
+        mode: string;
+        envDir: string | false;
+        inlineConfig: { envFile?: false };
+    };
     pluginContainer?: object;
+    close: () => Promise<void>;
 };
 
 // Narrows `plugin.configureServer` to its plain-function hook form via a runtime check, then wraps
@@ -105,8 +114,12 @@ function getConfigureServer(
     if (typeof configureServer !== 'function') {
         throw new Error('Expected plugin.configureServer to be the plain function-hook form');
     }
+    // Runs the returned post hook too, as Vite does once every plugin's configureServer has run.
     return function callConfigureServer(server: FakeViteDevServer): void {
-        Reflect.apply(configureServer, undefined, [server]);
+        const postHook: unknown = Reflect.apply(configureServer, undefined, [server]);
+        if (typeof postHook === 'function') {
+            postHook();
+        }
     };
 }
 
@@ -195,6 +208,7 @@ function getResolveIdHandler(plugin: ReturnType<typeof getVitePlugin>): Function
 const mockViteBuild = jest.fn();
 const mockVite = {
     build: mockViteBuild,
+    loadEnv: jest.fn(() => ({})),
     transformWithEsbuild: jest.fn(),
 } as unknown as ViteBundler;
 const mockInject = jest.fn();
@@ -223,6 +237,7 @@ function mockBuildWithParsedBackend() {
 }
 
 const DD_API_ORIGIN = 'https://api.datadoghq.com';
+const isAlwaysActive = () => true;
 
 const defaultOptions = {
     bundler: mockVite,
@@ -316,7 +331,8 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            close: jest.fn(),
+            config: { mode: 'development', envDir: false, root: '/build', inlineConfig: {} },
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
@@ -345,7 +361,8 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            close: jest.fn(),
+            config: { mode: 'development', envDir: false, root: '/build', inlineConfig: {} },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -373,7 +390,8 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            close: jest.fn(),
+            config: { mode: 'development', envDir: false, root: '/build', inlineConfig: {} },
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -1204,7 +1222,8 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
-                    config: { mode },
+                    close: jest.fn(),
+                    config: { mode, envDir: false, root: '/build', inlineConfig: {} },
                 });
 
                 expect(installGuards).toHaveBeenCalledTimes(installs);
@@ -1237,7 +1256,13 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
-                    config: { mode: 'development' },
+                    close: jest.fn(),
+                    config: {
+                        mode: 'development',
+                        envDir: false,
+                        root: '/build',
+                        inlineConfig: {},
+                    },
                 });
                 const warned = mockLogFn.mock.calls.some(
                     ([text, level]) =>
@@ -1270,7 +1295,13 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use },
                     ssrLoadModule: jest.fn(),
-                    config: { mode: 'development' },
+                    close: jest.fn(),
+                    config: {
+                        mode: 'development',
+                        envDir: false,
+                        root: '/build',
+                        inlineConfig: {},
+                    },
                 }),
             ).not.toThrow();
             expect(installGuards).toHaveBeenCalled();
@@ -1314,7 +1345,8 @@ describe('Backend Functions - getVitePlugin', () => {
             configureServer({
                 middlewares: { use: jest.fn() },
                 ssrLoadModule: jest.fn(),
-                config: { mode: 'development' },
+                close: jest.fn(),
+                config: { mode: 'development', envDir: false, root: '/build', inlineConfig: {} },
                 pluginContainer,
             });
             const inRunPath = path.join(cacheDir, 'in-run.txt');
@@ -1384,7 +1416,8 @@ describe('Backend Functions - getVitePlugin', () => {
         configureServer({
             middlewares: { use },
             ssrLoadModule,
-            config: { mode: DEV_VERIFY_MODE },
+            close: jest.fn(),
+            config: { mode: DEV_VERIFY_MODE, envDir: false, root: '/build', inlineConfig: {} },
         });
         restoreEnv();
 
@@ -1424,5 +1457,637 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(body.result).toEqual({ data: { result: 'via cloud' } });
         expect(apiScope.isDone()).toBe(true);
         expect(ssrLoadModule).not.toHaveBeenCalled();
+    });
+
+    test('Should load unprefixed .env values into process.env when the dev server starts', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+            });
+            const loggedValue = mockLogFn.mock.calls.some(([text]) =>
+                String(text).includes('from-dotenv'),
+            );
+            // No auth is configured here, so the message must not promise backend execution.
+            const claimedReadable = mockLogFn.mock.calls.some(([text]) =>
+                String(text).includes('can read'),
+            );
+
+            const loadedMessage = expect.stringContaining(
+                'Loaded QA_CONFIGURE_SECRET from .env files',
+            );
+
+            expect(process.env.QA_CONFIGURE_SECRET).toBe('from-dotenv');
+            expect(mockLogFn).toHaveBeenCalledWith(loadedMessage, 'info');
+            expect(loggedValue).toBe(false);
+            expect(claimedReadable).toBe(false);
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test('Should drop the .env values a dev server loaded once its close resolves', async () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-close-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_CLOSE_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        const closeServer = jest.fn(async () => {
+            expect(process.env.QA_CONFIGURE_CLOSE_SECRET).toBe('from-dotenv');
+        });
+        const server: FakeViteDevServer = {
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+            close: closeServer,
+        };
+
+        try {
+            configureServer(server);
+            const loadedAtStart = process.env.QA_CONFIGURE_CLOSE_SECRET;
+            await server.close();
+
+            expect(loadedAtStart).toBe('from-dotenv');
+            expect(closeServer).toHaveBeenCalledTimes(1);
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_CLOSE_SECRET');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_CLOSE_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test('Should keep Datadog auth from the shell and warn about Datadog keys in a .env file', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-auth-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'DD_API_KEY=dotenv-api-key\nDD_APP_KEY=dotenv-app-key\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'shell-oauth-token';
+        const getAuthenticatedRequest = jest.spyOn(auth, 'getAuthenticatedRequest');
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+            });
+            const ignoredMessage = expect.stringContaining('DD_API_KEY, DD_APP_KEY');
+            const missingAuthMessage = expect.stringContaining('No authentication configured');
+            const loggedValue = mockLogFn.mock.calls.some(([text]) =>
+                String(text).includes('dotenv-api-key'),
+            );
+
+            expect(process.env).not.toHaveProperty('DD_API_KEY');
+            expect(process.env.DD_OAUTH_ACCESS_TOKEN).toBe('shell-oauth-token');
+            expect(getAuthenticatedRequest).toHaveReturned();
+            expect(mockLogFn).toHaveBeenCalledWith(ignoredMessage, 'warn');
+            expect(mockLogFn).not.toHaveBeenCalledWith(missingAuthMessage, 'warn');
+            expect(loggedValue).toBe(false);
+        } finally {
+            dropEnvFileCredentials();
+            getAuthenticatedRequest.mockRestore();
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test('Should warn about and ignore .env keys that change Node or process behavior', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-process-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'NODE_TLS_REJECT_UNAUTHORIZED=0\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        const shellValue = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+            });
+            const ignoredMessage = expect.stringContaining(
+                'Ignoring NODE_TLS_REJECT_UNAUTHORIZED from .env files',
+            );
+
+            expect(process.env).not.toHaveProperty('NODE_TLS_REJECT_UNAUTHORIZED');
+            expect(mockLogFn).toHaveBeenCalledWith(ignoredMessage, 'warn');
+        } finally {
+            dropEnvFileCredentials();
+            if (shellValue !== undefined) {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = shellValue;
+            }
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test('Should keep the previous .env load when configureServer throws before it finishes', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-throws-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_EARLIER=from-dotenv\n');
+        loadEnvFileCredentials(
+            loadEnv,
+            { root: envDir, mode: 'development', envDir },
+            isAlwaysActive,
+        );
+        outputFileSync(envFilePath, 'QA_CONFIGURE_LATER=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        jest.spyOn(auth, 'getAuthenticatedRequest').mockImplementation(() => {
+            throw new Error('unexpected auth failure');
+        });
+
+        try {
+            const startServer = () =>
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    close: jest.fn(),
+                    config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+                });
+
+            expect(startServer).toThrow('unexpected auth failure');
+            expect(process.env.QA_CONFIGURE_EARLIER).toBe('from-dotenv');
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_LATER');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_LATER;
+            rmSync(envDir);
+        }
+    });
+
+    // dev-verify sends every execution to the cloud, which never sees local .env values.
+    test('Should not load .env files in dev-verify mode', () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-verify-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_VERIFY_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: { root: envDir, mode: DEV_VERIFY_MODE, envDir, inlineConfig: {} },
+            });
+            const loadedMessage = expect.stringContaining('QA_CONFIGURE_VERIFY_SECRET');
+
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_VERIFY_SECRET');
+            expect(mockLogFn).not.toHaveBeenCalledWith(loadedMessage, 'info');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_VERIFY_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    // Vite 5 keeps envDir set when the inline envFile option is false.
+    test("Should not load .env files when Vite's inline envFile option is false", () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-envfile-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_ENVFILE_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: {
+                    root: envDir,
+                    mode: 'development',
+                    envDir,
+                    inlineConfig: { envFile: false },
+                },
+            });
+
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_ENVFILE_SECRET');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_ENVFILE_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    // Vite 8 restarts with an internal close, so the replaced server's close never runs.
+    test('Should drop the .env values when a restarted server closes, even if its predecessor never closed', async () => {
+        const startedAt = Date.now();
+        const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-replaced-${startedAt}`);
+        const envFilePath = path.join(envDir, '.env');
+        outputFileSync(envFilePath, 'QA_CONFIGURE_REPLACED_SECRET=from-dotenv\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        const createServerObject = (): FakeViteDevServer => ({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            close: jest.fn(async () => {}),
+            config: { root: envDir, mode: 'development', envDir, inlineConfig: {} },
+        });
+        const server = createServerObject();
+        const restartedServer = createServerObject();
+
+        try {
+            configureServer(server);
+            configureServer(restartedServer);
+            Object.assign(server, restartedServer);
+            await server.close();
+
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_REPLACED_SECRET');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_REPLACED_SECRET;
+            restoreEnv();
+            rmSync(envDir);
+        }
+    });
+
+    test("Should drop a replaced server's values when Vite swaps it for a server on another root", async () => {
+        const startedAt = Date.now();
+        const firstRoot = getTempWorkingDir(`dd-apps-configure-dotenv-first-root-${startedAt}`);
+        const secondRoot = getTempWorkingDir(`dd-apps-configure-dotenv-second-root-${startedAt}`);
+        const firstEnvFilePath = path.join(firstRoot, '.env');
+        const secondEnvFilePath = path.join(secondRoot, '.env');
+        outputFileSync(firstEnvFilePath, 'QA_CONFIGURE_FIRST_ROOT_SECRET=first\n');
+        outputFileSync(secondEnvFilePath, 'QA_CONFIGURE_SECOND_ROOT_SECRET=second\n');
+        const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        const createServerObject = (root: string): FakeViteDevServer => ({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            close: jest.fn(async () => {}),
+            config: { root, mode: 'development', envDir: root, inlineConfig: {} },
+        });
+        const server = createServerObject(firstRoot);
+        const restartedServer = createServerObject(secondRoot);
+
+        try {
+            configureServer(server);
+            configureServer(restartedServer);
+            Object.assign(server, restartedServer);
+            await server.close();
+
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_FIRST_ROOT_SECRET');
+            expect(process.env).not.toHaveProperty('QA_CONFIGURE_SECOND_ROOT_SECRET');
+        } finally {
+            dropEnvFileCredentials();
+            delete process.env.QA_CONFIGURE_FIRST_ROOT_SECRET;
+            delete process.env.QA_CONFIGURE_SECOND_ROOT_SECRET;
+            restoreEnv();
+            rmSync(firstRoot);
+            rmSync(secondRoot);
+        }
+    });
+
+    const testRunCases = [
+        { description: "mode 'test'", mode: 'test', vitest: undefined },
+        { description: 'VITEST set', mode: 'development', vitest: 'true' },
+    ];
+    test.each(testRunCases)(
+        'Should neither load nor drop .env values in a test run ($description)',
+        ({ mode, vitest }) => {
+            const startedAt = Date.now();
+            const envDir = getTempWorkingDir(`dd-apps-configure-dotenv-test-run-${startedAt}`);
+            const envFilePath = path.join(envDir, '.env');
+            outputFileSync(envFilePath, 'QA_TEST_RUN_EARLIER=from-dotenv\n');
+            loadEnvFileCredentials(
+                loadEnv,
+                { root: envDir, mode: 'development', envDir },
+                isAlwaysActive,
+            );
+            outputFileSync(envFilePath, 'QA_TEST_RUN_SECRET=from-dotenv\n');
+            const plugin = getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv } });
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = clearDatadogEnv();
+            const previousVitest = process.env.VITEST;
+            if (vitest) {
+                process.env.VITEST = vitest;
+            }
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    close: jest.fn(),
+                    config: { root: envDir, mode, envDir, inlineConfig: {} },
+                });
+                const skippedMessage = expect.stringContaining('Skipping .env file loading');
+
+                expect(process.env).not.toHaveProperty('QA_TEST_RUN_SECRET');
+                expect(process.env.QA_TEST_RUN_EARLIER).toBe('from-dotenv');
+                expect(mockLogFn).toHaveBeenCalledWith(skippedMessage, 'debug');
+            } finally {
+                if (previousVitest === undefined) {
+                    delete process.env.VITEST;
+                } else {
+                    process.env.VITEST = previousVitest;
+                }
+                dropEnvFileCredentials();
+                delete process.env.QA_TEST_RUN_SECRET;
+                restoreEnv();
+                rmSync(envDir);
+            }
+        },
+    );
+
+    describe('.env files on a real Vite dev server', () => {
+        let restoreEnv: () => void;
+
+        beforeEach(() => {
+            restoreEnv = clearDatadogEnv();
+        });
+
+        afterEach(() => {
+            dropEnvFileCredentials();
+            restoreEnv();
+        });
+
+        const createAppsDevServer = (root: string, extraPlugins: VitePlugin[] = []) => {
+            const context = getContextMock({ buildRoot: root });
+            const appsPlugin: VitePlugin = {
+                name: 'dd-apps-test',
+                ...getVitePlugin({ ...defaultOptions, bundler: { ...mockVite, loadEnv }, context }),
+            };
+            return createServer({
+                configFile: false,
+                root,
+                logLevel: 'silent',
+                appType: 'custom',
+                server: { middlewareMode: true, hmr: false, ws: false },
+                optimizeDeps: { noDiscovery: true, include: [] },
+                plugins: [appsPlugin, ...extraPlugins],
+            });
+        };
+
+        test('Should keep the loaded values when a restart fails after the config hooks ran', async () => {
+            const startedAt = Date.now();
+            const root = getTempWorkingDir(`dd-apps-dotenv-failed-restart-${startedAt}`);
+            const envFilePath = path.join(root, '.env');
+            outputFileSync(envFilePath, 'QA_RESTART_SECRET=from-dotenv\n');
+            let shouldFailConfigResolved = false;
+            const failingPlugin: VitePlugin = {
+                name: 'fails-on-restart',
+                configResolved() {
+                    if (shouldFailConfigResolved) {
+                        throw new Error('configResolved failed');
+                    }
+                },
+            };
+            let server: ViteDevServer | undefined;
+
+            try {
+                server = await createAppsDevServer(root, [failingPlugin]);
+                const loadedAtStart = process.env.QA_RESTART_SECRET;
+                outputFileSync(envFilePath, 'QA_RESTART_SECRET=edited\n');
+                shouldFailConfigResolved = true;
+                await server.restart();
+
+                expect(loadedAtStart).toBe('from-dotenv');
+                expect(process.env.QA_RESTART_SECRET).toBe('from-dotenv');
+            } finally {
+                await server?.close();
+                rmSync(root);
+            }
+        });
+
+        test('Should let the next dev server load its own .env value after one closes', async () => {
+            const startedAt = Date.now();
+            const firstRoot = getTempWorkingDir(`dd-apps-dotenv-closed-root-${startedAt}`);
+            const secondRoot = getTempWorkingDir(`dd-apps-dotenv-next-root-${startedAt}`);
+            const firstEnvFilePath = path.join(firstRoot, '.env');
+            const secondEnvFilePath = path.join(secondRoot, '.env');
+            outputFileSync(firstEnvFilePath, 'QA_CLOSED_SERVER_SECRET=first\n');
+            outputFileSync(secondEnvFilePath, 'QA_CLOSED_SERVER_SECRET=second\n');
+            let secondServer: ViteDevServer | undefined;
+
+            try {
+                const firstServer = await createAppsDevServer(firstRoot);
+                const loadedByFirstServer = process.env.QA_CLOSED_SERVER_SECRET;
+                await firstServer.close();
+                const keptAfterClose = process.env.QA_CLOSED_SERVER_SECRET;
+                secondServer = await createAppsDevServer(secondRoot);
+
+                expect(loadedByFirstServer).toBe('first');
+                expect(keptAfterClose).toBeUndefined();
+                expect(process.env.QA_CLOSED_SERVER_SECRET).toBe('second');
+            } finally {
+                await secondServer?.close();
+                delete process.env.QA_CLOSED_SERVER_SECRET;
+                rmSync(firstRoot);
+                rmSync(secondRoot);
+            }
+        });
+
+        test('Should keep unchanged .env values after a restart until the restarted server closes', async () => {
+            const startedAt = Date.now();
+            const root = getTempWorkingDir(`dd-apps-dotenv-restart-unchanged-${startedAt}`);
+            const envFilePath = path.join(root, '.env');
+            outputFileSync(envFilePath, 'QA_RESTART_UNCHANGED_SECRET=unchanged\n');
+            let server: ViteDevServer | undefined;
+
+            try {
+                server = await createAppsDevServer(root);
+                await server.restart();
+                const keptAfterRestart = process.env.QA_RESTART_UNCHANGED_SECRET;
+                await server.close();
+
+                expect(keptAfterRestart).toBe('unchanged');
+                expect(process.env).not.toHaveProperty('QA_RESTART_UNCHANGED_SECRET');
+            } finally {
+                await server?.close();
+                delete process.env.QA_RESTART_UNCHANGED_SECRET;
+                rmSync(root);
+            }
+        });
+
+        test('Should keep the .env values while another dev server for the same root runs', async () => {
+            const startedAt = Date.now();
+            const root = getTempWorkingDir(`dd-apps-dotenv-same-root-${startedAt}`);
+            const envFilePath = path.join(root, '.env');
+            outputFileSync(envFilePath, 'QA_SAME_ROOT_SECRET=from-dotenv\n');
+            const servers: ViteDevServer[] = [];
+
+            try {
+                const mainServer = await createAppsDevServer(root);
+                servers.push(mainServer);
+                const helperServer = await createAppsDevServer(root);
+                servers.push(helperServer);
+                await helperServer.close();
+                const keptAfterHelperClosed = process.env.QA_SAME_ROOT_SECRET;
+                await mainServer.close();
+
+                expect(keptAfterHelperClosed).toBe('from-dotenv');
+                expect(process.env).not.toHaveProperty('QA_SAME_ROOT_SECRET');
+            } finally {
+                const closingServers = servers.map((server) => server.close());
+                await Promise.all(closingServers);
+                delete process.env.QA_SAME_ROOT_SECRET;
+                rmSync(root);
+            }
+        });
+
+        test('Should drop the .env values once every dev server for the root closed, including one that loaded nothing', async () => {
+            const startedAt = Date.now();
+            const root = getTempWorkingDir(`dd-apps-dotenv-empty-load-${startedAt}`);
+            const servers: ViteDevServer[] = [];
+
+            try {
+                const emptyLoadServer = await createAppsDevServer(root);
+                servers.push(emptyLoadServer);
+                const envFilePath = path.join(root, '.env');
+                outputFileSync(envFilePath, 'QA_EMPTY_LOAD_SECRET=from-dotenv\n');
+                const loadingServer = await createAppsDevServer(root);
+                servers.push(loadingServer);
+                await emptyLoadServer.close();
+                await loadingServer.close();
+
+                expect(process.env).not.toHaveProperty('QA_EMPTY_LOAD_SECRET');
+            } finally {
+                const closingServers = servers.map((server) => server.close());
+                await Promise.all(closingServers);
+                delete process.env.QA_EMPTY_LOAD_SECRET;
+                rmSync(root);
+            }
+        });
+
+        test('Should end the load of a restart that a later plugin fails, keeping the old values until the old server closes', async () => {
+            const startedAt = Date.now();
+            const root = getTempWorkingDir(`dd-apps-dotenv-failed-configure-${startedAt}`);
+            const envFilePath = path.join(root, '.env');
+            outputFileSync(envFilePath, 'QA_FAILED_CONFIGURE_SECRET=from-dotenv\n');
+            let shouldFailConfigureServer = false;
+            // Vite never closes the server a failed restart was building.
+            let abandonedServer: ViteDevServer | undefined;
+            const failingPlugin: VitePlugin = {
+                name: 'fails-in-configure-server',
+                configureServer(newServer) {
+                    if (shouldFailConfigureServer) {
+                        abandonedServer = newServer;
+                        throw new Error('configureServer failed');
+                    }
+                },
+            };
+            let server: ViteDevServer | undefined;
+
+            try {
+                server = await createAppsDevServer(root, [failingPlugin]);
+                outputFileSync(envFilePath, 'QA_FAILED_CONFIGURE_SECRET=edited\n');
+                shouldFailConfigureServer = true;
+                await server.restart();
+                const keptAfterFailedRestart = process.env.QA_FAILED_CONFIGURE_SECRET;
+                await server.close();
+
+                expect(keptAfterFailedRestart).toBe('from-dotenv');
+                expect(process.env).not.toHaveProperty('QA_FAILED_CONFIGURE_SECRET');
+            } finally {
+                await server?.close();
+                await abandonedServer?.close();
+                delete process.env.QA_FAILED_CONFIGURE_SECRET;
+                rmSync(root);
+            }
+        });
+
+        test("Should hand a shared .env key to the other root's value once the first root's server closes", async () => {
+            const startedAt = Date.now();
+            const firstRoot = getTempWorkingDir(`dd-apps-dotenv-shared-first-${startedAt}`);
+            const secondRoot = getTempWorkingDir(`dd-apps-dotenv-shared-second-${startedAt}`);
+            const firstEnvFilePath = path.join(firstRoot, '.env');
+            const secondEnvFilePath = path.join(secondRoot, '.env');
+            outputFileSync(firstEnvFilePath, 'QA_SHARED_ROOT_SECRET=first\n');
+            outputFileSync(secondEnvFilePath, 'QA_SHARED_ROOT_SECRET=second\n');
+            const servers: ViteDevServer[] = [];
+
+            try {
+                const firstServer = await createAppsDevServer(firstRoot);
+                servers.push(firstServer);
+                const secondServer = await createAppsDevServer(secondRoot);
+                servers.push(secondServer);
+                const whileBothRun = process.env.QA_SHARED_ROOT_SECRET;
+                await firstServer.close();
+                const afterFirstClosed = process.env.QA_SHARED_ROOT_SECRET;
+                await secondServer.close();
+                const shadowedMessage = expect.stringContaining(
+                    'Ignoring QA_SHARED_ROOT_SECRET from .env files. Another dev server',
+                );
+                const shadowWarnings = mockLogFn.mock.calls.filter(
+                    ([text, level]) =>
+                        level === 'warn' && String(text).includes('QA_SHARED_ROOT_SECRET'),
+                );
+
+                expect(whileBothRun).toBe('first');
+                expect(afterFirstClosed).toBe('second');
+                expect(process.env).not.toHaveProperty('QA_SHARED_ROOT_SECRET');
+                expect(mockLogFn).toHaveBeenCalledWith(shadowedMessage, 'warn');
+                expect(shadowWarnings).toHaveLength(1);
+            } finally {
+                const closingServers = servers.map((server) => server.close());
+                await Promise.all(closingServers);
+                delete process.env.QA_SHARED_ROOT_SECRET;
+                rmSync(firstRoot);
+                rmSync(secondRoot);
+            }
+        });
+
+        test("Should keep another dev server's values when one restarts", async () => {
+            const startedAt = Date.now();
+            const firstRoot = getTempWorkingDir(`dd-apps-dotenv-first-root-${startedAt}`);
+            const secondRoot = getTempWorkingDir(`dd-apps-dotenv-second-root-${startedAt}`);
+            const firstEnvFilePath = path.join(firstRoot, '.env');
+            const secondEnvFilePath = path.join(secondRoot, '.env');
+            outputFileSync(firstEnvFilePath, 'QA_FIRST_ROOT_SECRET=first\n');
+            outputFileSync(secondEnvFilePath, 'QA_SECOND_ROOT_SECRET=second\n');
+            const servers: ViteDevServer[] = [];
+
+            try {
+                const firstServer = await createAppsDevServer(firstRoot);
+                servers.push(firstServer);
+                const secondServer = await createAppsDevServer(secondRoot);
+                servers.push(secondServer);
+                outputFileSync(firstEnvFilePath, 'QA_FIRST_ROOT_SECRET=first-edited\n');
+                await firstServer.restart();
+
+                expect(process.env.QA_FIRST_ROOT_SECRET).toBe('first-edited');
+                expect(process.env.QA_SECOND_ROOT_SECRET).toBe('second');
+            } finally {
+                const closingServers = servers.map((server) => server.close());
+                await Promise.all(closingServers);
+                rmSync(firstRoot);
+                rmSync(secondRoot);
+            }
+        });
     });
 });
