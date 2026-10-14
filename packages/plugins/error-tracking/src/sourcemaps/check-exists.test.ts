@@ -73,6 +73,7 @@ describe('Error Tracking Plugin check-exists', () => {
 
         test('Should post a JSON:API body with the sourcemap origin headers', async () => {
             doRequestMock.mockResolvedValue({ data: { attributes: { results: {} } } });
+            const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
 
             await getExistingDebugIds(['debug-id-1'], contextMock);
 
@@ -81,6 +82,8 @@ describe('Error Tracking Plugin check-exists', () => {
             expect(opts.url).toBe('https://api.datadoghq.com/api/unstable/sourcemaps/check_exists');
             expect(opts.method).toBe('POST');
             expect(opts.retries).toBe(0);
+            expect(timeoutSpy).toHaveBeenCalledWith(1000);
+            expect(opts.signal).toBe(timeoutSpy.mock.results[0].value);
             expect(opts.type).toBe('json');
             expect(opts.auth).toEqual({ apiKey: 'api-key' });
             expect(await getRequestBody(0)).toBe(getExpectedBody(['debug-id-1']));
@@ -93,6 +96,8 @@ describe('Error Tracking Plugin check-exists', () => {
                     'DD-EVP-ORIGIN-VERSION': '1.0.0',
                 }),
             );
+
+            timeoutSpy.mockRestore();
         });
 
         test('Should deduplicate the debug IDs', async () => {

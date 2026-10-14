@@ -7,6 +7,8 @@ import { doRequest, getOriginHeaders } from '@dd/core/helpers/request';
 // The endpoint rejects requests carrying more debug IDs than this.
 export const MAX_DEBUG_IDS_PER_REQUEST = 1000;
 
+const CHECK_EXISTS_TIMEOUT_MS = 1000;
+
 export const CHECK_EXISTS_API_PATH = 'api/unstable/sourcemaps/check_exists';
 
 export const getCheckExistsUrl = (site: string) => `https://api.${site}/${CHECK_EXISTS_API_PATH}`;
@@ -60,14 +62,18 @@ export const getExistingDebugIds = async (
             },
         };
 
+        // One signal per request: its timeout starts counting when it is created.
+        const timeoutSignal = AbortSignal.timeout(CHECK_EXISTS_TIMEOUT_MS);
+
         // The chunks are independent, but sending them one after the other keeps the request
         // count predictable when a build carries a very large number of sourcemaps.
         // eslint-disable-next-line no-await-in-loop
         const response = await doRequest<CheckExistsResponse>({
             auth: { apiKey: context.apiKey },
             method: 'POST',
-            // Best effort: a failed check uploads everything anyway, so fail fast without retries.
+            // Best effort: a failed or slow check uploads everything anyway, so fail fast.
             retries: 0,
+            signal: timeoutSignal,
             type: 'json',
             url: getCheckExistsUrl(context.site),
             getData: () => requestData,
