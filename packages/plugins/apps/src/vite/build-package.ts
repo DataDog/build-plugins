@@ -28,7 +28,11 @@ export interface BuildAppPackageOptions {
     tags: string[];
 }
 
-function buildManifest(backendFunctions: BackendFunction[], tags: string[]): AppsManifest {
+function buildManifest(
+    backendFunctions: BackendFunction[],
+    tags: string[],
+    backendEnvironment: AppsOptionsWithDefaults['backendEnvironment'],
+): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
         functions[encodeQueryName(func)] = {
@@ -36,7 +40,12 @@ function buildManifest(backendFunctions: BackendFunction[], tags: string[]): App
         };
     }
 
-    return { tags, backend: { functions } };
+    // environment is omitted when unset so builds without an override stay
+    // byte-identical, keeping their content-hash version IDs stable.
+    return {
+        tags,
+        backend: { ...(backendEnvironment && { environment: backendEnvironment }), functions },
+    };
 }
 
 async function writeManifestFile(
@@ -112,7 +121,7 @@ export async function buildAppPackage({
         }
         const tagList = tags.length > 0 ? tags.join(', ') : '(none)';
         log.debug(`App tags: ${tagList}.`);
-        const manifestContents = buildManifest(backendFunctions, tags);
+        const manifestContents = buildManifest(backendFunctions, tags, options.backendEnvironment);
         const manifest = await writeManifestFile(manifestContents);
         cleanupManifest = manifest.cleanup;
         packageAssets.push(manifest.manifestAsset);

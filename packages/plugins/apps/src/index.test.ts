@@ -184,6 +184,19 @@ describe('Apps Plugin - package output', () => {
         expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
+    test('writes the backend environment override into manifest.json when set', async () => {
+        await buildAppPackage(packageOptions({ options: { backendEnvironment: 'sandbox' } }));
+
+        const zip = await JSZip.loadAsync(
+            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+        );
+        const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+        expect(manifest).toEqual({
+            tags: [],
+            backend: { environment: 'sandbox', functions: {} },
+        });
+    });
+
     test('includes backend function entries with connection allowlists in manifest.json', async () => {
         const backendPath = path.join(root, 'greet.js');
         await fs.writeFile(backendPath, 'export function greet() {}');

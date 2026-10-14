@@ -2,10 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
-import type { AppsOptions, AppsOptionsWithDefaults } from './types';
+import { BACKEND_ENVIRONMENTS } from './types';
+import type { AppsOptions, AppsOptionsWithDefaults, BackendEnvironment } from './types';
 
 export const resolveLongPolling = (
     longPolling: AppsOptions['longPolling'],
@@ -29,13 +31,32 @@ export const resolveLongPolling = (
     };
 };
 
+// DATADOG_APPS_BACKEND_ENVIRONMENT wins over the config so the CLI can set it per upload.
+export const resolveBackendEnvironment = (
+    configured: AppsOptions['backendEnvironment'],
+): BackendEnvironment | undefined => {
+    const value = getDDEnvValue('APPS_BACKEND_ENVIRONMENT')?.trim() || configured;
+    if (value === undefined) {
+        return undefined;
+    }
+    if (!(BACKEND_ENVIRONMENTS as readonly string[]).includes(value)) {
+        throw new Error(
+            `apps.backendEnvironment must be one of ${BACKEND_ENVIRONMENTS.map((env) => `'${env}'`).join(', ')}; got '${value}'.`,
+        );
+    }
+    return value as BackendEnvironment;
+};
+
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
+
+    const backendEnvironment = resolveBackendEnvironment(resolvedOptions.backendEnvironment);
 
     return {
         include: resolvedOptions.include || [],
         // Passed through as configured; the authored tag source cleans it, best effort.
         tags: resolvedOptions.tags,
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
+        ...(backendEnvironment && { backendEnvironment }),
     };
 };
