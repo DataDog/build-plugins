@@ -65,7 +65,7 @@ The plugin applies the rules of the backend runtime your org's backend functions
 
 Under v2 (Node), backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The `crypto`/`Intl` warning is skipped.
 
-Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) submits `jsFunctionWithActions`, which runs on the org's runtime, and `/__dd/debugBundle` returns a bundle built with that runtime's checks. Cloud execution sends the script inline, so a bundle longer than the action's `script` limit fails with a 413 before it is sent. The plugin reads that limit from Datadog's action manifest. When a read lacks the `jsFunctionWithActions` limit, it warns and reads again later, waiting longer each time, up to three reads per set of credentials before a 15-minute pause; without the limit, Datadog's own error applies.
+Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) submits `jsFunctionWithActions`, which runs on the org's runtime. Its bundle is built with that runtime's checks and minified as uploads are, and `/__dd/debugBundle` returns it. Cloud execution sends the script inline, so a minified bundle longer than the action's `script` limit fails with a 413 before it is sent, and the dev server warns about it once per function per session. The plugin reads that limit from Datadog's action manifest. When a read lacks the `jsFunctionWithActions` limit, it warns and reads again later, waiting longer each time, up to three reads per set of credentials before a 15-minute pause; without the limit, Datadog's own error applies.
 
 ## Package output
 

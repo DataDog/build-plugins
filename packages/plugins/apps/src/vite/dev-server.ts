@@ -284,10 +284,12 @@ function assertWithinScriptLimit(
     if (length <= maxLength) {
         return;
     }
-    throw new HttpError(
-        413,
-        `Backend function "${displayName}"'s unminified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${SCRIPT_ACTION_FQN}.`,
-    );
+    const message = scriptLimitMessage(displayName, length, maxLength);
+    throw new ScriptLimitError(message, displayName);
+}
+
+export function scriptLimitMessage(displayName: string, length: number, maxLength: number): string {
+    return `Backend function "${displayName}" is larger than production accepts: its minified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${SCRIPT_ACTION_FQN}. It may fail after upload too, so shrink the bundle, for example by splitting the function or moving large data out of it.`;
 }
 
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
@@ -563,6 +565,15 @@ class HttpError extends Error {
     }
 }
 
+class ScriptLimitError extends HttpError {
+    constructor(
+        message: string,
+        readonly displayName: string,
+    ) {
+        super(413, message);
+    }
+}
+
 /** Shared by every route, so request validation can't drift between them. */
 async function parseAndLookupFunction(
     req: IncomingMessage,
@@ -670,6 +681,7 @@ async function handleExecuteActionViaCloud(
     longPolling: LongPollingConfig,
     log: Logger,
     getScriptMaxLength: () => Promise<number | undefined>,
+    oversizedFunctionsWarned: Set<string>,
 ): Promise<void> {
     try {
         const { func, args } = await parseAndLookupFunction(req, functionsByName);
@@ -689,6 +701,10 @@ async function handleExecuteActionViaCloud(
 
         sendSuccess(res, result);
     } catch (error: unknown) {
+        if (error instanceof ScriptLimitError && !oversizedFunctionsWarned.has(error.displayName)) {
+            oversizedFunctionsWarned.add(error.displayName);
+            log.warn(error.message);
+        }
         // Labeled by the actual URL hit, not a fixed name, since dev-verify mode also reaches this via /__dd/executeAction.
         handleHttpError(res, error, log, req.url ?? 'executeActionViaCloud');
     }
@@ -705,6 +721,7 @@ function routeToCloudHandler(
     longPolling: LongPollingConfig,
     log: Logger,
     getScriptMaxLength: () => Promise<number | undefined>,
+    oversizedFunctionsWarned: Set<string>,
 ): void {
     guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
         handleExecuteActionViaCloud(
@@ -717,6 +734,7 @@ function routeToCloudHandler(
             longPolling,
             log,
             getScriptMaxLength,
+            oversizedFunctionsWarned,
         ),
     );
 }
@@ -753,6 +771,7 @@ export function createDevServerMiddleware(
         return bundleBackendFunction(viteBuild, func, projectRoot, log, runtime);
     };
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -772,6 +791,7 @@ export function createDevServerMiddleware(
             longPolling,
             log,
             getScriptMaxLength,
+            oversizedFunctionsWarned,
         );
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>

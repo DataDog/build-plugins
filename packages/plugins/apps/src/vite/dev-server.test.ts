@@ -25,6 +25,7 @@ import {
     DEV_SERVER_ROUTES,
     formatRef,
     getRetryDelay,
+    scriptLimitMessage,
 } from '@dd/apps-plugin/vite/dev-server';
 import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
@@ -727,9 +728,13 @@ describe('Dev Server Middleware', () => {
                     configFile: false,
                     root: '/project',
                     logLevel: 'silent',
+                    esbuild: { keepNames: true },
                     build: expect.objectContaining({
                         write: false,
-                        minify: false,
+                        minify: true,
+                        rollupOptions: expect.objectContaining({
+                            output: expect.objectContaining({ keepNames: true }),
+                        }),
                     }),
                 }),
             );
@@ -1263,9 +1268,10 @@ describe('Dev Server Middleware', () => {
         async function callViaCloud(
             middleware: ReturnType<typeof createDevServerMiddleware>,
             url = '/__dd/executeActionViaCloud',
+            func = mockFunctions[0],
         ) {
             const req = createMockRequest(url, {
-                functionName: encodeQueryName(mockFunctions[0]),
+                functionName: encodeQueryName(func),
                 args: ['world'],
             });
             const res = createMockResponse();
@@ -1318,9 +1324,23 @@ describe('Dev Server Middleware', () => {
         });
 
         const overLimit = (length: number) => {
-            const error = `Backend function "${mockFunctions[0].relativePath}/${mockFunctions[0].name}"'s unminified bundle is ${length} characters, over the ${SCRIPT_MAX_LENGTH}-character limit for a script sent inline to ${SCRIPT_ACTION_FQN}.`;
+            const displayName = formatRef(mockFunctions[0]);
+            const error = scriptLimitMessage(displayName, length, SCRIPT_MAX_LENGTH);
             return { statusCode: 413, error };
         };
+        test('Should say a bundle over its limit may fail after upload too', () => {
+            const length = SCRIPT_MAX_LENGTH + 1;
+            const hint = scriptLimitMessage('src/a/run', length, SCRIPT_MAX_LENGTH);
+
+            expect(hint).toContain('larger than production accepts');
+            expect(hint).toContain(
+                `${length} characters, over the ${SCRIPT_MAX_LENGTH}-character limit`,
+            );
+            expect(hint).toContain('It may fail after upload too');
+            expect(hint).toContain('splitting the function or moving large data out of it');
+            expect(hint).not.toMatch(/\bwill\b|npm run|Terrapin/);
+        });
+
         const withinLimit = () => ({ statusCode: 200, error: undefined });
         const limitCases = [
             {
@@ -1498,6 +1518,60 @@ describe('Dev Server Middleware', () => {
                 expect(mockViteBuild).not.toHaveBeenCalled();
             },
         );
+
+        const loggedWarnings = () =>
+            mockLogFn.mock.calls.filter(([, level]) => level === 'warn').map(([text]) => text);
+
+        test('Should warn in the terminal once per function about a bundle over its limit', async () => {
+            mockManifest();
+            const oversizedCode = 'x'.repeat(SCRIPT_MAX_LENGTH + 1);
+            mockBuildWithParsedBackend(oversizedCode);
+            const middleware = createTestMiddleware({
+                getBackendRuntime: async () => V2_RUNTIME,
+            });
+            const [greet, compute] = mockFunctions;
+
+            const first = await callViaCloud(middleware, undefined, greet);
+            const second = await callViaCloud(middleware, undefined, greet);
+            const other = await callViaCloud(middleware, undefined, compute);
+            const warnings = loggedWarnings();
+
+            expect([first.statusCode, second.statusCode, other.statusCode]).toEqual([
+                413, 413, 413,
+            ]);
+            expect(second.body.error).toBe(first.body.error);
+            expect(warnings).toEqual([first.body.error, other.body.error]);
+        });
+
+        test('Should warn again about an oversized bundle in a new dev server session', async () => {
+            mockManifest();
+            const oversizedCode = 'x'.repeat(SCRIPT_MAX_LENGTH + 1);
+            mockBuildWithParsedBackend(oversizedCode);
+            const getBackendRuntime = async () => V2_RUNTIME;
+            const firstSession = createTestMiddleware({ getBackendRuntime });
+            const restartedSession = createTestMiddleware({ getBackendRuntime });
+
+            const first = await callViaCloud(firstSession);
+            const restarted = await callViaCloud(restartedSession);
+            const warnings = loggedWarnings();
+
+            expect(warnings).toEqual([first.body.error, restarted.body.error]);
+        });
+
+        test('Should not warn about a bundle within its limit', async () => {
+            mockManifest();
+            mockCloudRoundTrip('receipt-within');
+            mockBuildWithParsedBackend(BUNDLED_CODE);
+            const middleware = createTestMiddleware({
+                getBackendRuntime: async () => V2_RUNTIME,
+            });
+
+            const { statusCode } = await callViaCloud(middleware);
+            const warnings = loggedWarnings();
+
+            expect(statusCode).toBe(200);
+            expect(warnings).toEqual([]);
+        });
 
         test('Should read the manifest once for every later cloud execution', async () => {
             const manifestScope = mockManifest();

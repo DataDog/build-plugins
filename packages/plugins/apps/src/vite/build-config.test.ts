@@ -58,7 +58,7 @@ describe('getBaseBackendBuildConfig', () => {
             const code = chunk.type === 'chunk' ? chunk.code : '';
 
             // The browser-external stub has no real exports and rewrites away the import specifier.
-            expect(code).toContain("from 'node:crypto'");
+            expect(code).toMatch(/from\s*["']node:crypto["']/);
             expect(code).not.toContain('__vite-browser-external');
         } finally {
             rmSync(workingDir);
@@ -108,6 +108,8 @@ describe('getBaseBackendBuildConfig', () => {
                 ...baseConfig,
                 build: {
                     ...baseConfig.build,
+                    // The minifier's own dead-code removal would otherwise hide a tree-shaking regression.
+                    minify: false,
                     write: false,
                     rollupOptions: { ...baseConfig.build.rollupOptions, input: virtualId },
                 },
