@@ -16,29 +16,61 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import worker_threads from 'worker_threads';
 
-// No OS sandbox here — blocks subprocesses, worker_threads and fs writes at the JS level, scoped
-// per-call via AsyncLocalStorage. Mirrors Terrapin's production sandbox: network is allowed, and
-// writes only under the OS temp dir, which isn't cleaned up per run.
+import type { BackendRuntime } from '../backend-runtime';
+import { isOutsideRoot } from '../backend/ast-parsing/module-graph';
+import { describeRuntime, RUNTIME_FALLBACK_NOTE } from '../runtime-names';
+
+// No OS sandbox: JS-level blocks scoped per call via AsyncLocalStorage, following the org's runtime;
+// each refusal's message constant below says what it blocks and under which runtime.
 
 // Targets accidental dependency behavior, not hostile code, which can read the dev server's
 // credentials in process.env, use the network, reach the `fs` registry. Only runBlocked is guarded.
 
-// Residual gaps: a Unix socket or named pipe listener creates a file outside the temp dir, and
-// writes on an fd or handle opened outside the current run (by module top-level code or an earlier
-// run) are refused even under the temp dir, so such a stream's 'error' can crash the server.
+// Residual gaps: a v2 subprocess or worker isn't guarded, a socket or pipe listener creates its file
+// unguarded, and writes on an fd or handle opened outside the current run are refused even where
+// writes are permitted, so such a stream's 'error' can crash the server.
 
-const SUBPROCESS_BLOCKED_MESSAGE = 'Spawning a subprocess is not allowed in backend functions.';
-const WORKER_THREAD_BLOCKED_MESSAGE =
-    'Spawning a worker thread is not allowed in backend functions.';
-const FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE =
+export const SUBPROCESS_BLOCKED_MESSAGE = `Spawning a subprocess is blocked because the ${describeRuntime('v1')} does not allow it.`;
+export const WORKER_THREAD_BLOCKED_MESSAGE = `Spawning a worker thread is blocked because the ${describeRuntime('v1')} does not allow it.`;
+export const FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE =
     'Local execution could not guard file handles, so it refuses to run.';
-export const FS_WRITE_BLOCKED_MESSAGE =
-    'Writing to the filesystem is not allowed in backend functions outside os.tmpdir() or /tmp.';
+export const FS_WRITE_BLOCKED_MESSAGE = `Writing outside os.tmpdir() or /tmp is blocked because the ${describeRuntime('v1')} does not allow it.`;
+export const LINK_OR_COPY_BLOCKED_MESSAGE =
+    'Creating a symlink or running cp is blocked by a local-only protection, so no link can redirect a later write out of os.tmpdir() or /tmp.';
+export const RECURSIVE_COPY_BLOCKED_MESSAGE =
+    'Copying a directory recursively with cp is blocked by a local-only protection, since a symlink inside its destination could lead the copy into the Vite project root; a copy into a new or empty directory under os.tmpdir() or /tmp is allowed.';
+export const ENDED_RUN_WRITE_BLOCKED_MESSAGE =
+    'Writing from a backend function run that already ended is blocked by a local-only protection.';
+export const UNCHECKABLE_WRITE_BLOCKED_MESSAGE =
+    "Writing through a file descriptor or handle this run doesn't have open for writing is blocked by a local-only protection, since the file it points to cannot be checked.";
+export const UNCHECKABLE_PATH_BLOCKED_MESSAGE =
+    "Writing to a path that cannot be resolved, such as one through a dangling symlink, a Buffer that isn't valid UTF-8, or an object local execution doesn't recognize as a path, is blocked by a local-only protection.";
+export const STDIO_CHANGE_BLOCKED_MESSAGE =
+    'Truncating stdout or stderr, or changing its mode, owner or timestamps, is blocked by a local-only protection, since only writing to it is console output.';
+export const STDIO_REMOVAL_BLOCKED_MESSAGE =
+    'Removing, renaming or replacing stdout or stderr is blocked by a local-only protection, since only writing to it is console output.';
+export const V2_PROJECT_ROOT_MISSING_MESSAGE = `Local execution can't follow the ${describeRuntime('v2')} without the Vite project root, so it refuses to run.`;
+export const PROJECT_WRITE_BLOCKED_MESSAGE =
+    "Writing to the Vite project root (the Vite config's root, or else the working directory), anything inside it, or its parent directories is blocked by a local-only protection.";
+
+export function withRuntimeFallbackNote(message: string): string {
+    return `${message.replace(/\.$/, '')} (${RUNTIME_FALLBACK_NOTE}).`;
+}
+
+type RunPolicy =
+    | {
+          readonly runtime: 'v1';
+          readonly isFallback: boolean;
+          readonly projectRoots: readonly string[];
+      }
+    | { readonly runtime: 'v2'; readonly projectRoots: readonly string[] };
 
 /** One `runBlocked` call's fds and FileHandles opened for writing; `closed` once the run ends. */
 export interface BlockedScope {
     readonly writableFds: Set<number>;
     readonly writableHandles: WeakSet<object>;
+    // Absent on a scope from an older copy of this file, which then keeps v1's blocks.
+    readonly policy?: RunPolicy;
     closed: boolean;
 }
 
@@ -139,8 +171,21 @@ function getOpenScopes(): ScopeRegistry {
     return openScopes;
 }
 
-function isCurrentlyBlocked(): boolean {
-    return getBlockedContext().current() !== undefined;
+function followsV2(scope: BlockedScope): boolean {
+    return scope.policy?.runtime === 'v2';
+}
+
+function v1Message(scope: BlockedScope, message: string): string {
+    return isFallbackRun(scope) ? withRuntimeFallbackNote(message) : message;
+}
+
+function v1OnlyRefusal(message: string): string | undefined {
+    const scope = getBlockedContext().current();
+    return scope === undefined || followsV2(scope) ? undefined : v1Message(scope, message);
+}
+
+function subprocessRefusal(): string | undefined {
+    return v1OnlyRefusal(SUBPROCESS_BLOCKED_MESSAGE);
 }
 
 // `Symbol.for` so re-evaluations recognize an installed guard; unversioned so another release's
@@ -151,9 +196,18 @@ export const ALREADY_GUARDED = Symbol.for('@dd/apps-plugin/network-guard install
 // from another release whose wrappers consult that release's own context, so this copy can't block.
 const GUARD_GENERATION = networkGuardSymbol('installed');
 let foreignGuardFound = false;
+// Marks accessors whose wrappers follow a scope's `policy`; released ones share this generation's
+// context but apply v1's blocks to every run.
+const FOLLOWS_POLICY = Symbol.for('@dd/apps-plugin/network-guard follows policy');
+let olderGuardFound = false;
 
 export const FOREIGN_GUARD_MESSAGE =
     'Local execution is unavailable: another version of the Datadog apps plugin in this process already guards Node built-ins, so this version cannot block filesystem writes or subprocesses. Install a single version of the Datadog build plugins.';
+
+export const OLDER_GUARD_MESSAGE = `Local execution can't follow the ${describeRuntime('v2')}: an older version of the Datadog apps plugin in this process already guards Node built-ins with the v1 rules. Install a single version of the Datadog build plugins.`;
+
+export const OLDER_GUARD_FALLBACK_MESSAGE =
+    "Local execution can't run when the org's backend runtime couldn't be determined and an older version of the Datadog apps plugin in this process already guards Node built-ins, since that version's refusals can't say which come only from the stricter v1 checks. Install a single version of the Datadog build plugins.";
 
 export function assertNoForeignGuard(): void {
     if (foreignGuardFound) {
@@ -181,6 +235,8 @@ export function installGuardedProperty<T>(
     if (existingGetter && Reflect.get(existingGetter, ALREADY_GUARDED) === true) {
         if (Reflect.get(existingGetter, GUARD_GENERATION) !== true) {
             foreignGuardFound = true;
+        } else if (Reflect.get(existingGetter, FOLLOWS_POLICY) !== true) {
+            olderGuardFound = true;
         }
         return;
     }
@@ -221,6 +277,7 @@ export function installGuardedProperty<T>(
     }
     Object.defineProperty(getter, ALREADY_GUARDED, { value: true });
     Object.defineProperty(getter, GUARD_GENERATION, { value: true });
+    Object.defineProperty(getter, FOLLOWS_POLICY, { value: true });
     // A plain `function`, not an arrow, so `this` is the real receiver — needed to tell
     // `ChildProcess.prototype.spawn = mock` (every instance) apart from `oneChild.spawn = mock`
     // (one instance) when `target` is a shared prototype.
@@ -279,37 +336,46 @@ function emitAsyncErrorIfListened(target: EventEmitter, err: Error): void {
     });
 }
 
+type OnBlocked = 'throw' | 'reject' | 'callback';
+
 // 'throw' is for APIs that throw synchronously (spawnSync/execSync); 'reject' for Promise-returning
 // ones; 'callback' for fs's callback APIs, which report failure through their error-first callback.
-// `errorCode`, if given, is set on the blocked error.
+function makeBlockedError(message: string, errorCode?: string): Error {
+    const error = new Error(message);
+    return Object.assign(error, errorCode ? { code: errorCode } : {});
+}
+
+function blockedCall(blockedError: Error, onBlocked: OnBlocked, args: unknown[]): unknown {
+    if (onBlocked === 'reject') {
+        return Promise.reject(blockedError);
+    }
+    if (onBlocked === 'callback') {
+        if (invokeCallbackArg(args, blockedError)) {
+            return undefined;
+        }
+        // Real fs throws this synchronously for a missing callback regardless of block state.
+        const callbackMessage = 'The "cb" argument must be of type function. Received undefined';
+        const missingCallbackError = new TypeError(callbackMessage);
+        throw Object.assign(missingCallbackError, { code: 'ERR_INVALID_ARG_TYPE' });
+    }
+    throw blockedError;
+}
+
+// `refusal` gives the blocked message, or undefined to call through; `errorCode` is set on the error.
 function makeGuardWrapper<F extends (...args: never[]) => unknown>(
     getReal: () => F,
-    blockedMessage: string,
-    onBlocked: 'throw' | 'reject' | 'callback',
+    refusal: () => string | undefined,
+    onBlocked: OnBlocked,
     errorCode?: string,
 ): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
+        const blockedMessage = refusal();
+        if (blockedMessage === undefined) {
             const real = getReal();
             return Reflect.apply(real, this, args);
         }
-        const blockedError = Object.assign(
-            new Error(blockedMessage),
-            errorCode ? { code: errorCode } : {},
-        );
-        if (onBlocked === 'reject') {
-            return Promise.reject(blockedError);
-        }
-        if (onBlocked === 'callback') {
-            if (invokeCallbackArg(args, blockedError)) {
-                return undefined;
-            }
-            // Real fs throws this synchronously for a missing callback regardless of block state.
-            const message = 'The "cb" argument must be of type function. Received undefined';
-            const missingCallbackError = new TypeError(message);
-            throw Object.assign(missingCallbackError, { code: 'ERR_INVALID_ARG_TYPE' });
-        }
-        throw blockedError;
+        const blockedError = makeBlockedError(blockedMessage, errorCode);
+        return blockedCall(blockedError, onBlocked, args);
     };
     const real = getReal();
     copyPromisifyMetadata(real, wrapper);
@@ -342,8 +408,9 @@ export function guardWorker(getReal: () => unknown): unknown {
     }
     return new Proxy(real, {
         construct(target, args, newTarget) {
-            if (isCurrentlyBlocked()) {
-                throw new Error(WORKER_THREAD_BLOCKED_MESSAGE);
+            const refusal = v1OnlyRefusal(WORKER_THREAD_BLOCKED_MESSAGE);
+            if (refusal !== undefined) {
+                throw new Error(refusal);
             }
             return Reflect.construct(target, args, newTarget);
         },
@@ -353,7 +420,7 @@ export function guardWorker(getReal: () => unknown): unknown {
 // execSync/execFileSync genuinely throw synchronously on failure — this guard is for those two
 // only. The rest have their own guards below matching each one's real (never-throws) contract.
 function guardSubprocess<F extends (...args: never[]) => unknown>(getReal: () => F): F {
-    return makeGuardWrapper(getReal, SUBPROCESS_BLOCKED_MESSAGE, 'throw');
+    return makeGuardWrapper(getReal, subprocessRefusal, 'throw');
 }
 
 // spawn()/fork() return a brand-new ChildProcess with no existing `this` to emit 'error' on, so
@@ -399,10 +466,12 @@ function createBlockedChildProcessStub(err: Error): EventEmitter & Record<string
 
 function guardSpawnFactory<F extends (...args: never[]) => unknown>(getReal: () => F): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
+        const refusal = subprocessRefusal();
+        if (refusal === undefined) {
             return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
         }
-        return createBlockedChildProcessStub(new Error(SUBPROCESS_BLOCKED_MESSAGE));
+        const error = new Error(refusal);
+        return createBlockedChildProcessStub(error);
     };
     return wrapper as unknown as F;
 }
@@ -412,10 +481,11 @@ function guardSpawnFactory<F extends (...args: never[]) => unknown>(getReal: () 
 // failure — a caller doing `err.stderr.trim()` would otherwise TypeError.
 function guardExecFactory<F extends (...args: never[]) => unknown>(getReal: () => F): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
+        const refusal = subprocessRefusal();
+        if (refusal === undefined) {
             return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
         }
-        const err = new Error(SUBPROCESS_BLOCKED_MESSAGE);
+        const err = new Error(refusal);
         invokeCallbackArg(args, err, '', '');
         return createBlockedChildProcessStub(err);
     };
@@ -431,10 +501,12 @@ function guardChildProcessSpawnMethod<F extends (...args: never[]) => unknown>(
     getReal: () => F,
 ): F {
     const wrapper = function (this: EventEmitter, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
+        const refusal = subprocessRefusal();
+        if (refusal === undefined) {
             return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
         }
-        emitAsyncErrorIfListened(this, new Error(SUBPROCESS_BLOCKED_MESSAGE));
+        const error = new Error(refusal);
+        emitAsyncErrorIfListened(this, error);
         return -1;
     };
     return wrapper as unknown as F;
@@ -445,7 +517,8 @@ function guardChildProcessSpawnMethod<F extends (...args: never[]) => unknown>(
 // caller doing `result.output[1].toString()` would otherwise TypeError against a naive stub.
 function guardSpawnSyncResult<F extends (...args: never[]) => unknown>(getReal: () => F): F {
     const wrapper = function (this: unknown, ...args: unknown[]): unknown {
-        if (!isCurrentlyBlocked()) {
+        const refusal = subprocessRefusal();
+        if (refusal === undefined) {
             return (getReal() as unknown as (...a: unknown[]) => unknown).apply(this, args);
         }
         return {
@@ -455,7 +528,7 @@ function guardSpawnSyncResult<F extends (...args: never[]) => unknown>(getReal: 
             stderr: undefined,
             status: null,
             signal: null,
-            error: new Error(SUBPROCESS_BLOCKED_MESSAGE),
+            error: new Error(refusal),
         };
     };
     return wrapper as unknown as F;
@@ -546,12 +619,84 @@ function installSubprocessGuards(): void {
 // rename retries EACCES/EPERM for a minute.
 type FsWriteFn = (...args: never[]) => unknown;
 type FsWriteGuard = (getReal: () => FsWriteFn) => FsWriteFn;
-const guardFsSyncWriteMethod: FsWriteGuard = (getReal) =>
-    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'throw', 'EROFS');
-const guardFsCallbackWriteMethod: FsWriteGuard = (getReal) =>
-    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'callback', 'EROFS');
-const guardFsPromiseWriteMethod: FsWriteGuard = (getReal) =>
-    makeGuardWrapper(getReal, FS_WRITE_BLOCKED_MESSAGE, 'reject', 'EROFS');
+type FsWriteForm = 'sync' | 'callback' | 'promise';
+const FS_ON_BLOCKED = { sync: 'throw', callback: 'callback', promise: 'reject' } as const;
+
+// The `EitherWay` refusals are v1 refusals v2 would make too.
+type WriteRefusal =
+    | 'refused'
+    | 'refusedEitherWay'
+    | 'linkOrCopy'
+    | 'linkOrCopyEitherWay'
+    | 'recursiveCopy'
+    | 'endedRun'
+    | 'endedRunEitherWay'
+    | 'uncheckable'
+    | 'uncheckablePath'
+    | 'stdioChange'
+    | 'stdioRemoval';
+type WriteVerdict = 'permitted' | WriteRefusal;
+const V1_WRITE_MESSAGES = {
+    refused: FS_WRITE_BLOCKED_MESSAGE,
+    linkOrCopy: LINK_OR_COPY_BLOCKED_MESSAGE,
+    endedRun: ENDED_RUN_WRITE_BLOCKED_MESSAGE,
+};
+// Path refusals whose message can carry the fallback note.
+const NOTED_PATH_REFUSALS = new Set<WriteVerdict>(['refused', 'endedRun']);
+
+// A refusal without the fallback note outranks one with it, then 'refused' outranks 'endedRun',
+// since it would apply inside the run too.
+function strongestRefusal<Verdict extends WriteVerdict>(verdicts: Verdict[]): Verdict | undefined {
+    const refusals = verdicts.filter((verdict) => verdict !== 'permitted');
+    return (
+        refusals.find((verdict) => !NOTED_PATH_REFUSALS.has(verdict)) ??
+        refusals.find((verdict) => verdict === 'refused') ??
+        refusals[0]
+    );
+}
+
+// Refusals v2 would make too never get the fallback note.
+function writeRefusalMessage(scope: BlockedScope, refusal: WriteRefusal): string {
+    switch (refusal) {
+        case 'uncheckable':
+            return UNCHECKABLE_WRITE_BLOCKED_MESSAGE;
+        case 'uncheckablePath':
+            return UNCHECKABLE_PATH_BLOCKED_MESSAGE;
+        case 'stdioChange':
+            return STDIO_CHANGE_BLOCKED_MESSAGE;
+        case 'stdioRemoval':
+            return STDIO_REMOVAL_BLOCKED_MESSAGE;
+        case 'endedRunEitherWay':
+            return ENDED_RUN_WRITE_BLOCKED_MESSAGE;
+        case 'recursiveCopy':
+            return RECURSIVE_COPY_BLOCKED_MESSAGE;
+        case 'refusedEitherWay':
+            return FS_WRITE_BLOCKED_MESSAGE;
+        case 'linkOrCopyEitherWay':
+            return LINK_OR_COPY_BLOCKED_MESSAGE;
+        case 'refused':
+        case 'linkOrCopy':
+        case 'endedRun':
+            return followsV2(scope)
+                ? PROJECT_WRITE_BLOCKED_MESSAGE
+                : v1Message(scope, V1_WRITE_MESSAGES[refusal]);
+    }
+}
+
+function fsRefusalError(scope: BlockedScope, refusal: WriteRefusal): Error {
+    const message = writeRefusalMessage(scope, refusal);
+    return makeBlockedError(message, 'EROFS');
+}
+
+function refuseFsCall(
+    scope: BlockedScope,
+    refusal: WriteRefusal,
+    form: FsWriteForm,
+    args: unknown[],
+): unknown {
+    const error = fsRefusalError(scope, refusal);
+    return blockedCall(error, FS_ON_BLOCKED[form], args);
+}
 
 const OPEN_WRITE_FLAG_BITS = [
     fs.constants.O_WRONLY,
@@ -577,26 +722,42 @@ function opensForWriting(args: unknown[]): boolean {
     return typeof flags === 'string' && /[wa+]/.test(flags);
 }
 
-// The run's scope while it's still going; undefined outside a run or once it ended.
-function openScope(): BlockedScope | undefined {
-    const scope = getBlockedContext().current();
-    return scope && !scope.closed ? scope : undefined;
-}
-
 function toFilePath(value: unknown): string | undefined {
     if (typeof value === 'string') {
         return value;
     }
-    if (Buffer.isBuffer(value)) {
-        const decoded = value.toString();
+    if (value instanceof Uint8Array) {
+        const decoded = Buffer.from(value).toString();
         // A path that doesn't survive a UTF-8 round trip names a different file than the one checked.
         const roundTripped = Buffer.from(decoded);
         return roundTripped.equals(value) ? decoded : undefined;
     }
     if (value instanceof URL && value.protocol === 'file:') {
-        return fileURLToPath(value);
+        // Throws for a URL no file path matches, such as one with an encoded separator.
+        try {
+            return fileURLToPath(value);
+        } catch {
+            return undefined;
+        }
     }
     return undefined;
+}
+
+// process.cwd() can throw once the working directory is removed.
+function resolveFromCwd(filePath: string): string | undefined {
+    try {
+        return `${process.cwd()}${path.sep}${filePath}`;
+    } catch {
+        return undefined;
+    }
+}
+
+function withoutTrailingSeparators(filePath: string): string {
+    let trimmed = filePath;
+    while (trimmed.length > 1 && trimmed.endsWith(path.sep)) {
+        trimmed = trimmed.slice(0, -1);
+    }
+    return trimmed;
 }
 
 function existsWithoutFollowingLinks(candidate: string): boolean {
@@ -612,12 +773,21 @@ function existsWithoutFollowingLinks(candidate: string): boolean {
 // collapse `link/..` while the kernel follows the link first. A dangling link or a `..` past a
 // missing segment resolves to nothing and is refused.
 function realPathForWrite(filePath: string): string | undefined {
-    const cwd = process.cwd();
-    const target = path.isAbsolute(filePath) ? filePath : `${cwd}${path.sep}${filePath}`;
+    const target = path.isAbsolute(filePath) ? filePath : resolveFromCwd(filePath);
+    if (target === undefined) {
+        return undefined;
+    }
+    // The kernel follows a final link before a trailing separator, so it resolves like `link/.`.
+    const linkPath = withoutTrailingSeparators(target);
+    if (linkPath !== target && isSymlink(linkPath)) {
+        return realPathForWrite(`${linkPath}${path.sep}.`);
+    }
     const missingSegments: string[] = [];
     let current = target;
     while (!existsWithoutFollowingLinks(current)) {
-        const parent = path.dirname(current);
+        // A doubled separator leaves dirname a trailing one, which would follow a dangling link.
+        const dirnamePath = path.dirname(current);
+        const parent = withoutTrailingSeparators(dirnamePath);
         if (parent === current) {
             return undefined;
         }
@@ -650,8 +820,7 @@ function realEntryPath(filePath: string): string | undefined {
 }
 
 // The real OS temp dir, plus /tmp outside Windows, resolved at install. Libraries like tempy and
-// temp-dir save os.tmpdir() when they load, and Terrapin's os.tmpdir() is /tmp, which some
-// dependencies hard-code.
+// temp-dir save os.tmpdir() when they load, and some dependencies hard-code /tmp.
 let realTmpDirs: string[] | undefined;
 
 function captureRealTmpDirs(): string[] | undefined {
@@ -669,46 +838,267 @@ function captureRealTmpDirs(): string[] | undefined {
 interface PathRule {
     readonly operatesOnEntry: boolean;
     readonly allowsRoot: boolean;
+    readonly allowsStdio: boolean;
 }
-const WRITE_THROUGH_PATH: PathRule = { operatesOnEntry: false, allowsRoot: false };
+const WRITE_THROUGH_PATH: PathRule = {
+    operatesOnEntry: false,
+    allowsRoot: false,
+    allowsStdio: false,
+};
+const OPEN_FOR_WRITING: PathRule = { ...WRITE_THROUGH_PATH, allowsStdio: true };
 
-// Strictly under a real temp dir, since removing or renaming a temp root would break $TMPDIR for
-// every process; mkdir may name the root itself, as it only makes sure it exists.
-function isPermittedPath(value: unknown, rule: PathRule): boolean {
-    const filePath = toFilePath(value);
-    if (filePath === undefined || realTmpDirs === undefined) {
+// Strictly under the temp dir, since removing or renaming a temp root would break $TMPDIR for every
+// process; mkdir may name the root itself, as it only makes sure it exists.
+function isInTmpDir(realPath: string, tmpDir: string, rule: PathRule): boolean {
+    return (rule.allowsRoot && realPath === tmpDir) || realPath.startsWith(`${tmpDir}${path.sep}`);
+}
+
+function isWithin(candidate: string, dir: string): boolean {
+    const relative = path.relative(dir, candidate);
+    return !isOutsideRoot(relative);
+}
+
+// Refuses the project's contents, root and ancestors, since changing an ancestor, such as removing
+// it, reaches the project too; a mkdir only finds them there. A temp dir inside it stays writable.
+function isWritableNearRoot(realPath: string, projectRoot: string, rule: PathRule): boolean {
+    const foldsCase = foldsCaseAt(projectRoot);
+    const candidate = comparablePath(realPath, foldsCase);
+    const root = comparablePath(projectRoot, foldsCase);
+    const holdsProject = isWithin(root, candidate);
+    const isInsideProject = !holdsProject && isWithin(candidate, root);
+    if (!isInsideProject && (!holdsProject || rule.allowsRoot)) {
+        return true;
+    }
+    return (realTmpDirs ?? []).some((tmpDir) => {
+        const comparableTmpDir = comparablePath(tmpDir, foldsCase);
+        return (
+            comparableTmpDir !== root &&
+            isWithin(comparableTmpDir, root) &&
+            isInTmpDir(candidate, comparableTmpDir, rule)
+        );
+    });
+}
+
+// macOS and Windows volumes are case-insensitive by default, so a name can reach the project in any
+// case; folding refuses too much on a case-sensitive one rather than too little.
+const FOLDS_CASE = process.platform === 'darwin' || process.platform === 'win32';
+function comparablePath(candidate: string, foldsCase: boolean): string {
+    return foldsCase ? candidate.toLowerCase() : candidate;
+}
+
+// Elsewhere a mount can fold case too (WSL's drvfs, exFAT, an ext4 casefold directory), so the
+// root's own directory is asked whether its name in another case is the same directory.
+const caseFoldingByRoot = new Map<string, boolean>();
+function foldsCaseAt(projectRoot: string): boolean {
+    if (FOLDS_CASE) {
+        return true;
+    }
+    const known = caseFoldingByRoot.get(projectRoot);
+    if (known !== undefined) {
+        return known;
+    }
+    const folds = sameDirectoryInOtherCase(projectRoot);
+    caseFoldingByRoot.set(projectRoot, folds);
+    return folds;
+}
+
+function sameDirectoryInOtherCase(dir: string): boolean {
+    const name = path.basename(dir);
+    const otherCase = name === name.toUpperCase() ? name.toLowerCase() : name.toUpperCase();
+    if (otherCase === name) {
+        const parent = path.dirname(dir);
+        return parent !== dir && sameDirectoryInOtherCase(parent);
+    }
+    try {
+        const stats = fs.statSync(dir);
+        const parent = path.dirname(dir);
+        const otherCasePath = path.join(parent, otherCase);
+        const otherStats = fs.statSync(otherCasePath);
+        return stats.dev === otherStats.dev && stats.ino === otherStats.ino;
+    } catch {
         return false;
+    }
+}
+
+function isWritableUnderV2(realPath: string, projectRoots: readonly string[], rule: PathRule) {
+    return projectRoots.every((projectRoot) => isWritableNearRoot(realPath, projectRoot, rule));
+}
+
+type PathVerdict = Extract<
+    WriteVerdict,
+    | 'permitted'
+    | 'refused'
+    | 'refusedEitherWay'
+    | 'endedRun'
+    | 'endedRunEitherWay'
+    | 'uncheckablePath'
+    | 'stdioChange'
+>;
+
+// Linux can't resolve these when stdio is a pipe or socket, and macOS never says where they point.
+const CONSOLE_STREAM_FDS = new Map([
+    ['/dev/stdout', 1],
+    ['/dev/fd/1', 1],
+    ['/proc/self/fd/1', 1],
+    ['/dev/stderr', 2],
+    ['/dev/fd/2', 2],
+    ['/proc/self/fd/2', 2],
+]);
+
+// A redirect to a regular file isn't console output, so it keeps the refusal its path gets.
+function isConsoleStreamPath(filePath: string): boolean {
+    const fd = CONSOLE_STREAM_FDS.get(filePath);
+    if (fd === undefined) {
+        return false;
+    }
+    try {
+        return !fs.fstatSync(fd).isFile();
+    } catch {
+        return false;
+    }
+}
+
+function isFallbackRun(scope: BlockedScope): boolean {
+    return scope.policy?.runtime === 'v1' && scope.policy.isFallback;
+}
+
+function pathVerdict(scope: BlockedScope, value: unknown, rule: PathRule): PathVerdict {
+    // Such as a URL or Uint8Array from another realm, which Node still accepts as a path.
+    const filePath = toFilePath(value);
+    if (filePath === undefined) {
+        return 'uncheckablePath';
     }
     const realPath = rule.operatesOnEntry ? realEntryPath(filePath) : realPathForWrite(filePath);
-    if (realPath === undefined) {
-        return false;
+    // Checked by name first, since Linux resolves one on a terminal to its /dev/pts/N device.
+    const isConsoleStream = isConsoleStreamPath(filePath);
+    // macOS resolves /dev/fd/N to /dev/fd/<file name>, which doesn't say where the file is.
+    if (isConsoleStream || realPath === undefined || isWithin(realPath, '/dev/fd')) {
+        if (!isConsoleStream) {
+            return 'uncheckablePath';
+        }
+        if (!rule.allowsStdio) {
+            return 'stdioChange';
+        }
+        return followsV2(scope) ? 'permitted' : 'refused';
     }
-    return realTmpDirs.some(
-        (tmpDir) =>
-            (rule.allowsRoot && realPath === tmpDir) || realPath.startsWith(`${tmpDir}${path.sep}`),
-    );
+    const { policy } = scope;
+    if (policy?.runtime === 'v2') {
+        return isWritableUnderV2(realPath, policy.projectRoots, rule) ? 'permitted' : 'refused';
+    }
+    const v2RefusesToo = () =>
+        policy !== undefined &&
+        isFallbackRun(scope) &&
+        !isWritableUnderV2(realPath, policy.projectRoots, rule);
+    if (realTmpDirs?.some((tmpDir) => isInTmpDir(realPath, tmpDir, rule)) !== true) {
+        return v2RefusesToo() ? 'refusedEitherWay' : 'refused';
+    }
+    // A v1 run's detached callbacks stay blocked once it ends; v2's rule doesn't depend on the run.
+    if (!scope.closed) {
+        return 'permitted';
+    }
+    return v2RefusesToo() ? 'endedRunEitherWay' : 'endedRun';
 }
 
 // Which arguments name what a method modifies; every other method modifies its first argument.
 const WRITTEN_ARG_INDEXES: Record<string, number[]> = {
     copyFile: [1],
+    cp: [1],
     rename: [0, 1],
     link: [0, 1],
+    symlink: [1],
 };
 // Arguments naming a directory entry the method acts on itself rather than through a final symlink.
 const ENTRY_ARG_INDEXES: Record<string, number[]> = {
+    cp: [1],
     unlink: [0],
     rm: [0],
     rmdir: [0],
     rename: [0, 1],
     link: [1],
+    symlink: [1],
     lchmod: [0],
     lchown: [0],
     lutimes: [0],
 };
-// Refused everywhere, so no writable directory holds a link that could redirect a write (cp copies
+// Refused under v1, so no writable directory holds a link that could redirect a write (cp copies
 // symlinks as-is).
-const NEVER_PERMITTED_WRITES = new Set(['symlink', 'cp']);
+const V1_REFUSED_WRITES = new Set(['symlink', 'cp']);
+function isDanglingLink(value: unknown): boolean {
+    const filePath = toFilePath(value);
+    if (filePath === undefined) {
+        return false;
+    }
+    const linkPath = withoutTrailingSeparators(filePath);
+    try {
+        return (
+            isSymlink(linkPath) && fs.statSync(linkPath, { throwIfNoEntry: false }) === undefined
+        );
+    } catch {
+        return false;
+    }
+}
+
+function dereferences(options: unknown): boolean {
+    const dereference: unknown = isObjectLike(options)
+        ? Reflect.get(options, 'dereference')
+        : undefined;
+    return Boolean(dereference);
+}
+
+// Only a directory source is walked, and cp copies a symlink as a link unless it dereferences; a
+// path object the guard can't read counts as a directory.
+function isRecursiveCopy(source: unknown, options: unknown): boolean {
+    if (!isObjectLike(options)) {
+        return false;
+    }
+    const recursive: unknown = Reflect.get(options, 'recursive');
+    if (!recursive) {
+        return false;
+    }
+    const dereference = dereferences(options);
+    const sourcePath = toFilePath(source);
+    if (sourcePath === undefined) {
+        return true;
+    }
+    try {
+        const stats = dereference ? fs.statSync(sourcePath) : fs.lstatSync(sourcePath);
+        return stats.isDirectory();
+    } catch {
+        // cp fails on a source it can't stat either, without writing anything.
+        return false;
+    }
+}
+// A destination that doesn't exist yet, or an empty directory, holds no symlink for the copy to
+// follow, so one that resolves into a temp dir and clear of the project is safe to fill.
+function copiesIntoEmptyTmpDir(scope: BlockedScope, destination: unknown): boolean {
+    const destinationPath = toFilePath(destination);
+    if (destinationPath === undefined || !isMissingOrEmptyDirectory(destinationPath)) {
+        return false;
+    }
+    const realPath = realPathForWrite(destinationPath);
+    if (realPath === undefined) {
+        return false;
+    }
+    const isInTempDir = (tmpDir: string) => isInTmpDir(realPath, tmpDir, WRITE_THROUGH_PATH);
+    const inTmpDir = realTmpDirs?.some(isInTempDir) === true;
+    const projectRoots = scope.policy?.projectRoots ?? [];
+    return inTmpDir && isWritableUnderV2(realPath, projectRoots, WRITE_THROUGH_PATH);
+}
+
+function isMissingOrEmptyDirectory(candidate: string): boolean {
+    try {
+        const stats = fs.lstatSync(candidate);
+        if (!stats.isDirectory()) {
+            return false;
+        }
+        const entries = fs.readdirSync(candidate);
+        return entries.length === 0;
+    } catch (error) {
+        const code: unknown = isObjectLike(error) ? Reflect.get(error, 'code') : undefined;
+        return code === 'ENOENT';
+    }
+}
+
 // Create `<prefix>XXXXXX`, so that path, not the prefix, must be in a writable directory.
 const PREFIX_CREATING_WRITES = new Set(['mkdtemp', 'mkdtempDisposable']);
 function pathCreatedFromPrefix(value: unknown): string | undefined {
@@ -718,39 +1108,100 @@ function pathCreatedFromPrefix(value: unknown): string | undefined {
 // Data writes to stdout/stderr are console output (e.g. pino's sonic-boom); truncating or
 // chmod-ing them is not.
 const STDIO_DATA_WRITES = new Set(['write', 'writev', 'writeFile', 'appendFile']);
+const ENTRY_REPLACING_WRITES = new Set([
+    'rm',
+    'unlink',
+    'rmdir',
+    'rename',
+    'link',
+    'symlink',
+    'cp',
+]);
 
 // Allowed when every modified target is console output, a path under a writable directory, or an
 // fd or FileHandle opened there. Worked out once per method, since it runs on every guarded fs call.
-function makeWritePermission(method: string): (scope: BlockedScope, args: unknown[]) => boolean {
+function makeWriteVerdict(method: string): (scope: BlockedScope, args: unknown[]) => WriteVerdict {
     const baseMethod = method.replace(/Sync$/, '');
-    if (NEVER_PERMITTED_WRITES.has(baseMethod)) {
-        return () => false;
-    }
+    const refusedUnderV1 = V1_REFUSED_WRITES.has(baseMethod);
     const writtenIndexes = WRITTEN_ARG_INDEXES[baseMethod] ?? [0];
     const entryIndexes = ENTRY_ARG_INDEXES[baseMethod] ?? [];
     const allowsRoot = baseMethod === 'mkdir';
     const allowsStdio = STDIO_DATA_WRITES.has(baseMethod);
     const createsFromPrefix = PREFIX_CREATING_WRITES.has(baseMethod);
-    return (scope, args) =>
-        writtenIndexes.every((index) => {
-            const target = args[index];
-            if (allowsStdio && (target === 1 || target === 2)) {
-                return true;
+    const copiesTree = baseMethod === 'cp';
+    const replacesEntry = ENTRY_REPLACING_WRITES.has(baseMethod);
+    const targetVerdict = (
+        scope: BlockedScope,
+        target: unknown,
+        index: number,
+        followsLinks: boolean,
+    ): WriteVerdict => {
+        const isStdioFd = target === 1 || target === 2;
+        if (allowsStdio && isStdioFd) {
+            return 'permitted';
+        }
+        // Stay writable after the run ends, so a stream it left writing can finish.
+        if (typeof target === 'number') {
+            if (scope.writableFds.has(target)) {
+                return 'permitted';
             }
-            // Stay writable after the run ends, so a stream it left writing can finish.
-            if (typeof target === 'number') {
-                return scope.writableFds.has(target);
-            }
-            if (isObjectLike(target) && scope.writableHandles.has(target)) {
-                return true;
-            }
-            if (scope.closed) {
+            return isStdioFd ? 'stdioChange' : 'uncheckable';
+        }
+        if (isObjectLike(target) && scope.writableHandles.has(target)) {
+            return 'permitted';
+        }
+        if (isFileHandle(target)) {
+            return 'uncheckable';
+        }
+        const writtenPath = createsFromPrefix ? pathCreatedFromPrefix(target) : target;
+        const namesEntry = entryIndexes.includes(index);
+        const rule = { operatesOnEntry: namesEntry, allowsRoot, allowsStdio };
+        const entryVerdict = pathVerdict(scope, writtenPath, rule);
+        // cp unlinks a destination link it can stat and writes at the entry, but writes through a
+        // dangling one.
+        const writesThroughLink = namesEntry && followsLinks && isDanglingLink(writtenPath);
+        const linkVerdict = writesThroughLink ? 'uncheckablePath' : 'permitted';
+        const verdict = strongestRefusal([entryVerdict, linkVerdict]) ?? 'permitted';
+        return verdict === 'stdioChange' && replacesEntry && namesEntry ? 'stdioRemoval' : verdict;
+    };
+    return (scope, args) => {
+        const followsLinks = copiesTree && dereferences(args[2]);
+        const verdicts = writtenIndexes.map((index) =>
+            targetVerdict(scope, args[index], index, followsLinks),
+        );
+        const refusal = strongestRefusal(verdicts);
+        // A recursive cp writes inside its destination unchecked, so a symlink there can lead it
+        // into the project.
+        const copiesRecursively = () =>
+            copiesTree &&
+            isRecursiveCopy(args[0], args[2]) &&
+            !copiesIntoEmptyTmpDir(scope, args[1]);
+        // What v2 decides for the same paths, which can refuse one v1 permits, such as a project
+        // inside the temp dir.
+        const v2RefusesPaths = () => {
+            const { policy } = scope;
+            if (policy === undefined) {
                 return false;
             }
-            const writtenPath = createsFromPrefix ? pathCreatedFromPrefix(target) : target;
-            const operatesOnEntry = entryIndexes.includes(index);
-            return isPermittedPath(writtenPath, { operatesOnEntry, allowsRoot });
-        });
+            const v2Policy: RunPolicy = { runtime: 'v2', projectRoots: policy.projectRoots };
+            const asV2: BlockedScope = { ...scope, policy: v2Policy };
+            const refusesUnderV2 = (index: number) =>
+                targetVerdict(asV2, args[index], index, followsLinks) === 'refused';
+            return writtenIndexes.some(refusesUnderV2);
+        };
+        if (refusal !== undefined) {
+            const v2RefusesToo = isFallbackRun(scope) && copiesRecursively();
+            if (v2RefusesToo && refusal === 'refused') {
+                return 'refusedEitherWay';
+            }
+            return v2RefusesToo && refusal === 'endedRun' ? 'endedRunEitherWay' : refusal;
+        }
+        if (refusedUnderV1 && !followsV2(scope)) {
+            const v2RefusesToo = isFallbackRun(scope) && (copiesRecursively() || v2RefusesPaths());
+            return v2RefusesToo ? 'linkOrCopyEitherWay' : 'linkOrCopy';
+        }
+        return copiesRecursively() ? 'recursiveCopy' : 'permitted';
+    };
 }
 
 // A run that ended stays registered while it owns fds, so the fs.close guard still revokes them and
@@ -774,25 +1225,19 @@ function forgetWritableFd(fd: number): void {
     });
 }
 
-type FsWriteForm = 'sync' | 'callback' | 'promise';
-const FS_WRITE_REFUSALS: Record<FsWriteForm, FsWriteGuard> = {
-    sync: guardFsSyncWriteMethod,
-    callback: guardFsCallbackWriteMethod,
-    promise: guardFsPromiseWriteMethod,
-};
-
 // Refuses a write outside the writable directories; outside any run, the real function is called
 // directly, skipping argument inspection.
 function guardFsWriteMethod(method: string, form: FsWriteForm): FsWriteGuard {
-    const isPermitted = makeWritePermission(method);
-    const makeRefusal = FS_WRITE_REFUSALS[form];
+    const verdictFor = makeWriteVerdict(method);
     return (getReal) => {
-        const refuse = makeRefusal(getReal);
         const wrapper = function (this: unknown, ...args: unknown[]): unknown {
             const scope = getBlockedContext().current();
-            const callTarget =
-                scope !== undefined && !isPermitted(scope, args) ? refuse : getReal();
-            return Reflect.apply(callTarget, this, args);
+            const verdict = scope === undefined ? 'permitted' : verdictFor(scope, args);
+            if (scope !== undefined && verdict !== 'permitted') {
+                return refuseFsCall(scope, verdict, form, args);
+            }
+            const real = getReal();
+            return Reflect.apply(real, this, args);
         };
         const real = getReal();
         copyPromisifyMetadata(real, wrapper);
@@ -804,15 +1249,15 @@ function guardFsWriteMethod(method: string, form: FsWriteForm): FsWriteGuard {
 // createWriteStream's) are allowed; any other write-mode open is refused before it can truncate.
 function guardFsOpenMethod(mode: 'sync' | 'callback'): FsWriteGuard {
     return (getReal) => {
-        const refuse = FS_WRITE_REFUSALS[mode](getReal);
         return function (this: unknown, ...args: unknown[]): unknown {
             const real = getReal();
-            if (!opensForWriting(args)) {
+            const scope = getBlockedContext().current();
+            if (scope === undefined || !opensForWriting(args)) {
                 return Reflect.apply(real, this, args);
             }
-            const scope = openScope();
-            if (!scope || !isPermittedPath(args[0], WRITE_THROUGH_PATH)) {
-                return Reflect.apply(refuse, this, args);
+            const verdict = pathVerdict(scope, args[0], OPEN_FOR_WRITING);
+            if (verdict !== 'permitted') {
+                return refuseFsCall(scope, verdict, mode, args);
             }
             if (mode === 'sync') {
                 const fd: unknown = Reflect.apply(real, this, args);
@@ -854,21 +1299,24 @@ const guardFsCloseMethod: FsWriteGuard = (getReal) =>
 // truncate or create the file. Node ignores the flag for an fd or FileHandle.
 function readsPathForWriting(args: unknown[]): boolean {
     const [target, options] = args;
-    const isPath = typeof target === 'string' || Buffer.isBuffer(target) || target instanceof URL;
+    const isPath = typeof target !== 'number' && !isFileHandle(target);
     const flag: unknown = isObjectLike(options) ? Reflect.get(options, 'flag') : undefined;
     return isPath && opensForWriting([target, flag]);
 }
 
 function guardFsReadFileMethod(form: FsWriteForm): FsWriteGuard {
     return (getReal) => {
-        const refuse = FS_WRITE_REFUSALS[form](getReal);
         const wrapper = function (this: unknown, ...args: unknown[]): unknown {
             const scope = getBlockedContext().current();
-            const isRefused =
-                scope !== undefined &&
-                readsPathForWriting(args) &&
-                (scope.closed || !isPermittedPath(args[0], WRITE_THROUGH_PATH));
-            return Reflect.apply(isRefused ? refuse : getReal(), this, args);
+            const verdict =
+                scope !== undefined && readsPathForWriting(args)
+                    ? pathVerdict(scope, args[0], WRITE_THROUGH_PATH)
+                    : 'permitted';
+            if (scope !== undefined && verdict !== 'permitted') {
+                return refuseFsCall(scope, verdict, form, args);
+            }
+            const real = getReal();
+            return Reflect.apply(real, this, args);
         };
         const real = getReal();
         copyPromisifyMetadata(real, wrapper);
@@ -914,7 +1362,7 @@ const FS_WRITE_GUARD_INSTALLS: Array<[target: object, methods: string[], form: F
 ];
 type PromisesOpen = typeof fs.promises.open;
 
-// A write-mode open is refused outside the temp dir. Inside it both the handle and its fd are
+// A write-mode open is refused where writes aren't permitted; otherwise the handle and its fd are
 // recorded, and the fd is revoked when the handle closes.
 // A FileHandle's close is an own property of each handle and skips fs.close, so it's wrapped here.
 function revokeFdOnClose(handle: fs.promises.FileHandle): void {
@@ -926,21 +1374,29 @@ function revokeFdOnClose(handle: fs.promises.FileHandle): void {
     };
 }
 
+// A patched open can resolve anything, so only an object can carry the FileHandle prototype.
 function guardReturnedHandle(handle: fs.promises.FileHandle): fs.promises.FileHandle {
-    guardFileHandlePrototype(handle);
+    if (isObjectLike(handle)) {
+        guardFileHandlePrototype(handle);
+    }
     return handle;
 }
 
+function guardingFirstHandle(opening: ReturnType<PromisesOpen>): ReturnType<PromisesOpen> {
+    return fileHandlePrototype === undefined ? opening.then(guardReturnedHandle) : opening;
+}
+
 function guardPromisesOpen(real: PromisesOpen): PromisesOpen {
-    const refuse = guardFsPromiseWriteMethod(() => real);
     function open(this: unknown, ...args: Parameters<PromisesOpen>): ReturnType<PromisesOpen> {
-        if (!opensForWriting(args)) {
-            const reading: ReturnType<PromisesOpen> = Reflect.apply(real, this, args);
-            return fileHandlePrototypeGuarded ? reading : reading.then(guardReturnedHandle);
+        const scope = getBlockedContext().current();
+        if (scope === undefined || !opensForWriting(args)) {
+            const opening: ReturnType<PromisesOpen> = Reflect.apply(real, this, args);
+            return guardingFirstHandle(opening);
         }
-        const scope = openScope();
-        if (!scope || !isPermittedPath(args[0], WRITE_THROUGH_PATH)) {
-            return Reflect.apply(refuse, this, args);
+        const verdict = pathVerdict(scope, args[0], OPEN_FOR_WRITING);
+        if (verdict !== 'permitted') {
+            const refusal = fsRefusalError(scope, verdict);
+            return Promise.reject(refusal);
         }
         const opening: ReturnType<PromisesOpen> = Reflect.apply(real, this, args);
         return opening.then((handle) => {
@@ -967,24 +1423,51 @@ const FILE_HANDLE_WRITE_METHODS = [
     'writev',
 ];
 
-let fileHandlePrototypeGuarded = false;
+let fileHandlePrototype: object | undefined;
+// A patched open answering the null-device probe with a plain object leaves no FileHandle to guard
+// until a real one comes back, so runs proceed.
+let probeFoundNoFileHandle = false;
+function fileHandleGuardReady(): boolean {
+    return fileHandlePrototype !== undefined || probeFoundNoFileHandle;
+}
+
+function isFileHandle(value: unknown): boolean {
+    return (
+        fileHandlePrototype !== undefined &&
+        isObjectLike(value) &&
+        Object.prototype.isPrototypeOf.call(fileHandlePrototype, value)
+    );
+}
+
+// A plain object's prototype would make every object count as a FileHandle.
+function isFileHandlePrototype(prototype: unknown): prototype is object {
+    if (!isObjectLike(prototype) || prototype === Object.prototype) {
+        return false;
+    }
+    return FILE_HANDLE_WRITE_METHODS.every((method) => {
+        const candidate: unknown = Reflect.get(prototype, method);
+        return isFunction(candidate);
+    });
+}
+
 function guardFileHandlePrototype(handle: object): void {
     const prototype: unknown = Object.getPrototypeOf(handle);
-    if (fileHandlePrototypeGuarded || !isObjectLike(prototype)) {
+    if (fileHandlePrototype !== undefined || !isFileHandlePrototype(prototype)) {
         return;
     }
-    fileHandlePrototypeGuarded = true;
+    fileHandlePrototype = prototype;
     for (const method of FILE_HANDLE_WRITE_METHODS) {
         const real: unknown = Reflect.get(prototype, method);
         if (!isFunction(real) || Reflect.get(real, GUARD_GENERATION) === true) {
             continue;
         }
-        const refuse = guardFsPromiseWriteMethod(() => real);
         const guarded = function (this: unknown, ...args: unknown[]): unknown {
             const scope = getBlockedContext().current();
             const writable = isObjectLike(this) && scope?.writableHandles.has(this) === true;
-            const callTarget = scope === undefined || writable ? real : refuse;
-            return Reflect.apply(callTarget, this, args);
+            if (scope === undefined || writable) {
+                return Reflect.apply(real, this, args);
+            }
+            return refuseFsCall(scope, 'uncheckable', 'promise', args);
         };
         Object.defineProperty(guarded, GUARD_GENERATION, { value: true });
         Reflect.set(prototype, method, guarded);
@@ -999,6 +1482,7 @@ function startGuardingFileHandles(): void {
         .open(os.devNull, 'r')
         .then(async (handle) => {
             guardFileHandlePrototype(handle);
+            probeFoundNoFileHandle = fileHandlePrototype === undefined;
             await handle.close();
         })
         .catch(() => {
@@ -1041,7 +1525,7 @@ const GRACEFUL_FS_QUEUE = Symbol.for('graceful-fs.queue');
 let gracefulFsLoadedFirst = false;
 
 export const GRACEFUL_FS_UNGUARDED_WARNING =
-    'fs-extra or graceful-fs was loaded before the dev server installed the backend function sandbox guards, so filesystem writes a backend function makes through it are not blocked.';
+    'fs-extra or graceful-fs was loaded before the dev server installed the local-execution guards, so filesystem writes a backend function makes through it are not blocked.';
 
 export function gracefulFsPredatesGuards(): boolean {
     return gracefulFsLoadedFirst;
@@ -1121,13 +1605,69 @@ function closeScope(scope: BlockedScope): void {
     deregisterIfIdle(scope);
 }
 
-// Runs `fn` with subprocesses, worker_threads and fs writes outside the OS temp dir blocked; wraps
-// the customer's function body in `local-execution.ts`'s `runScriptLocally`.
-// Aborting `signal` closes the scope for a caller that gives up on a `fn` that never settles.
-export async function runBlocked<T>(
-    fn: () => Promise<T>,
-    options: { signal?: AbortSignal } = {},
-): Promise<T> {
+// Compared by real path, as the writes are; a missing directory still names where it would be. The
+// configured path and the real entry of each symlink on it are kept too, so none of those links can
+// be removed or replaced.
+function projectRootsFor(projectRoot: string): string[] {
+    const configuredRoot = path.resolve(projectRoot);
+    const realRoot = realPathForWrite(projectRoot) ?? configuredRoot;
+    const linkEntries = pathAndAncestors(configuredRoot).flatMap((configuredPath) => {
+        const entry = realEntryPath(configuredPath);
+        return entry !== undefined && isSymlink(entry) ? [entry] : [];
+    });
+    return [...new Set([realRoot, configuredRoot, ...linkEntries])];
+}
+
+function pathAndAncestors(start: string): string[] {
+    const paths = [start];
+    let current = start;
+    while (path.dirname(current) !== current) {
+        current = path.dirname(current);
+        paths.push(current);
+    }
+    return paths;
+}
+
+function isSymlink(entry: string): boolean {
+    try {
+        return fs.lstatSync(entry).isSymbolicLink();
+    } catch {
+        return false;
+    }
+}
+
+// v2 needs the project directory it protects, so like a v2 run beside an older guard, one without it
+// refuses to run rather than quietly applying v1's blocks.
+function policyFor(runtime: unknown, projectRoot: unknown, isFallbackRuntime: unknown): RunPolicy {
+    if (runtime === 'v2') {
+        if (typeof projectRoot !== 'string' || projectRoot === '') {
+            throw new Error(V2_PROJECT_ROOT_MISSING_MESSAGE);
+        }
+        return { runtime: 'v2', projectRoots: projectRootsFor(projectRoot) };
+    }
+    // Without the project root, v2's verdict is unknown, so no refusal is blamed on the fallback.
+    const hasRoot = typeof projectRoot === 'string' && projectRoot !== '';
+    const isFallback = runtime === 'v1' && isFallbackRuntime === true && hasRoot;
+    return {
+        runtime: 'v1',
+        isFallback,
+        projectRoots: isFallback ? projectRootsFor(projectRoot) : [],
+    };
+}
+
+interface RunOptions {
+    signal?: AbortSignal;
+    runtime: BackendRuntime;
+    isFallbackRuntime: boolean;
+    projectRoot: string;
+}
+
+// Runs `fn` under its runtime's blocks; wraps the customer's function body in `local-execution.ts`'s
+// `runScriptLocally`. Aborting `signal` closes the scope, which under v1 refuses later writes from a
+// `fn` its caller gave up on.
+export async function runBlocked<T>(fn: () => Promise<T>, runOptions: RunOptions): Promise<T> {
+    // A JavaScript caller can still leave the options out, which gets v1's blocks.
+    const options: Partial<RunOptions> = runOptions ?? {};
     if (options.signal?.aborted) {
         throw new Error('The run was aborted before it started.');
     }
@@ -1135,18 +1675,26 @@ export async function runBlocked<T>(
     assertNoForeignGuard();
     // A FileHandle opened before install stays unguarded until the async prototype guard lands, so
     // only a cold install waits; afterwards fn still starts synchronously.
-    if (!fileHandlePrototypeGuarded) {
+    if (!fileHandleGuardReady()) {
         await fileHandleGuard;
-        if (!fileHandlePrototypeGuarded) {
+        if (!fileHandleGuardReady()) {
             throw new Error(FILE_HANDLE_GUARD_UNAVAILABLE_MESSAGE);
         }
         if (options.signal?.aborted) {
             throw new Error('The run was aborted before it started.');
         }
     }
+    const policy = policyFor(options.runtime, options.projectRoot, options.isFallbackRuntime);
+    if (olderGuardFound && policy.runtime === 'v2') {
+        throw new Error(OLDER_GUARD_MESSAGE);
+    }
+    if (olderGuardFound && policy.runtime === 'v1' && policy.isFallback) {
+        throw new Error(OLDER_GUARD_FALLBACK_MESSAGE);
+    }
     const scope: BlockedScope = {
         writableFds: new Set(),
         writableHandles: new WeakSet(),
+        policy,
         closed: false,
     };
     getOpenScopes().add(scope);

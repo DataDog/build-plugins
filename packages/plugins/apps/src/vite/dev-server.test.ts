@@ -5,8 +5,8 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
-import { V1_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
-import type { BackendRuntime } from '@dd/apps-plugin/backend-runtime';
+import { V1_RUNTIME, V2_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
+import type { BackendRuntime, BackendRuntimeStatus } from '@dd/apps-plugin/backend-runtime';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
@@ -16,6 +16,7 @@ import {
     getRetryDelay,
 } from '@dd/apps-plugin/vite/dev-server';
 import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
+import { rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -25,13 +26,23 @@ import {
     moduleResolverFor,
 } from '@dd/tests/_jest/helpers/mocks';
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
+import child_process from 'child_process';
+import fs from 'fs';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
+import path from 'path';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
+
+import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+import {
+    PROJECT_WRITE_BLOCKED_MESSAGE,
+    SUBPROCESS_BLOCKED_MESSAGE,
+    withRuntimeFallbackNote,
+} from './network-guard';
 
 /** Shape of the `$.Actions` dynamic proxy — a nested property path (e.g. `$.Actions.slack.chat.postMessage`) callable at any depth; types `globalThis.$` in tests without an `any` cast. */
 type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
@@ -1255,6 +1266,172 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: 42 });
             expect(mockViteBuild).not.toHaveBeenCalled();
+        });
+
+        test("Should run the function under the org's backend runtime and project directory", async () => {
+            const projectRoot = makeProbeDirOutsideTmp('dd-dev-server-v2-project-');
+            const getBackendRuntime = jest.fn(
+                async (): Promise<BackendRuntimeStatus> => V2_RUNTIME,
+            );
+            const v2Middleware = createTestMiddleware({
+                projectRoot,
+                getBackendRuntime,
+            });
+            const script = "process.stdout.write('ok')";
+            mockLoadModuleReturning(mockFunctions[0], async () => {
+                const output = child_process.execFileSync(process.execPath, ['-e', script]);
+                const sourceFile = path.join(projectRoot, 'source.ts');
+                const refusal = await fs.promises.writeFile(sourceFile, output).catch((err) => err);
+                return { output: output.toString(), refusal: refusal?.message };
+            });
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            try {
+                v2Middleware(req, res, jest.fn());
+                await res.done;
+
+                const rawBody = res.getBody();
+                const body = JSON.parse(rawBody);
+                const projectEntries = fs.readdirSync(projectRoot);
+                expect(res.statusCode).toBe(200);
+                expect(body.result).toEqual({
+                    data: { output: 'ok', refusal: PROJECT_WRITE_BLOCKED_MESSAGE },
+                });
+                expect(getBackendRuntime).toHaveBeenCalledTimes(1);
+                expect(projectEntries).toEqual([]);
+            } finally {
+                rmSync(projectRoot);
+            }
+        });
+
+        test('Should say v1 rules apply only as the fallback when the runtime lookup failed', async () => {
+            const fallback: BackendRuntimeStatus = { runtime: 'v1', isFallback: true };
+            const fallbackMiddleware = createTestMiddleware({
+                getBackendRuntime: async () => fallback,
+            });
+            const script = "process.stdout.write('ok')";
+            mockLoadModuleReturning(mockFunctions[0], () => {
+                try {
+                    child_process.execFileSync(process.execPath, ['-e', script]);
+                    return 'spawned';
+                } catch (err) {
+                    // An earlier test file's guard on the shared child_process throws its own realm's Error.
+                    const errorObject: object = Object(err);
+                    const message: unknown = Reflect.get(errorObject, 'message');
+                    return typeof message === 'string' ? message : String(err);
+                }
+            });
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            fallbackMiddleware(req, res, jest.fn());
+            await res.done;
+
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
+            const expected = withRuntimeFallbackNote(SUBPROCESS_BLOCKED_MESSAGE);
+            expect(body.result).toEqual({ data: expected });
+        });
+
+        test('Should statically check and run the function under the same runtime lookup', async () => {
+            const getBackendRuntime = jest.fn(
+                async (): Promise<BackendRuntimeStatus> => V2_RUNTIME,
+            );
+            const getAllowedConnectionIds = jest.fn(async () => []);
+            const v2Middleware = createTestMiddleware({
+                getBackendRuntime,
+                getAllowedConnectionIds,
+            });
+            mockLoadModuleReturning(mockFunctions[0], () => 'done');
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            v2Middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(getBackendRuntime).toHaveBeenCalledTimes(1);
+            expect(getAllowedConnectionIds).toHaveBeenCalledWith(
+                mockFunctions[0].absolutePath,
+                V2_RUNTIME,
+            );
+        });
+
+        test('Should not look up the runtime for a run that fails before it starts', async () => {
+            nock.cleanAll();
+            mockRuntimeContextHydration(1, {});
+            const getBackendRuntimeStatus = jest.fn(async () => V1_RUNTIME);
+            const lookupMiddleware = createTestMiddleware({
+                getBackendRuntime: getBackendRuntimeStatus,
+            });
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            lookupMiddleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(500);
+            expect(getBackendRuntimeStatus).not.toHaveBeenCalled();
+        });
+
+        test("Should look up a queued run's runtime only once the run ahead of it finishes", async () => {
+            mockRuntimeContextHydration(2);
+            const getBackendRuntimeStatus = jest.fn(async () => V1_RUNTIME);
+            const lookupMiddleware = createTestMiddleware({
+                getBackendRuntime: getBackendRuntimeStatus,
+            });
+            let releaseFirstPriming: (() => void) | undefined;
+            const firstPrimingGate = new Promise<void>((resolve) => {
+                releaseFirstPriming = resolve;
+            });
+            let firstPrimingStarted: (() => void) | undefined;
+            const firstPrimingStart = new Promise<void>((resolve) => {
+                firstPrimingStarted = resolve;
+            });
+            mockLoadModule.mockImplementation(async (specifier: string) => {
+                if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                    firstPrimingStarted?.();
+                    await firstPrimingGate;
+                    return { [mockFunctions[0].name]: () => 'first' };
+                }
+                return { [mockFunctions[1].name]: () => 'second' };
+            });
+            const firstReq = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const firstRes = createMockResponse();
+            const secondReq = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(mockFunctions[1]),
+                args: [],
+            });
+            const secondRes = createMockResponse();
+
+            lookupMiddleware(firstReq, firstRes, jest.fn());
+            lookupMiddleware(secondReq, secondRes, jest.fn());
+            try {
+                await firstPrimingStart;
+                await new Promise((resolve) => setTimeout(resolve, 20));
+                expect(getBackendRuntimeStatus).toHaveBeenCalledTimes(1);
+            } finally {
+                releaseFirstPriming?.();
+                await Promise.all([firstRes.done, secondRes.done]);
+            }
+
+            expect(getBackendRuntimeStatus).toHaveBeenCalledTimes(2);
         });
 
         test('Should reject a malformed hydrated identity before loading customer code without exposing the response body', async () => {

@@ -29,6 +29,7 @@ import type { AuthOptions, Logger } from '@dd/core/types';
 import { validateOptions } from '@dd/factory/validate';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import crypto from 'crypto';
 import nock from 'nock';
 
 const SITE = 'datad0g.com';
@@ -741,6 +742,36 @@ describe('Apps Plugin - resolveBackendRuntime fallback status', () => {
         const status = await resolveBackendRuntime(auth, log);
 
         expect(status).toEqual(testCase.expected);
+    });
+
+    test('should report the fallback for the credentials the lookup used, even if they change meanwhile', async () => {
+        useApiKeys();
+        nock(API_ORIGIN)
+            .get(ACTIVE_FEATURE_FLAGS_PATH)
+            .delay(50)
+            .reply(500, { errors: ['boom'] });
+
+        const auth = pluginAuth();
+        const pending = resolveBackendRuntime(auth, log);
+        process.env.DD_API_KEY = 'rotated-api-key';
+        const status = await pending;
+
+        expect(status).toEqual(V1_FALLBACK_RUNTIME);
+    });
+
+    test('should hash the credentials once per lookup', async () => {
+        useApiKeys();
+        nock(API_ORIGIN).get(ACTIVE_FEATURE_FLAGS_PATH).reply(200, FLAG_ON_BODY);
+        const createHash = jest.spyOn(crypto, 'createHash');
+
+        try {
+            const auth = pluginAuth();
+            await resolveBackendRuntime(auth, log);
+
+            expect(createHash).toHaveBeenCalledTimes(1);
+        } finally {
+            createHash.mockRestore();
+        }
     });
 
     test('should report the fallback even if its cache entry is replaced while the lookup is pending', async () => {
