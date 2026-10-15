@@ -166,6 +166,9 @@ interface ReturnInfo {
     argStart: number | undefined;
     argEnd: number | undefined;
     hasSequenceExpressionArgument: boolean;
+    // True when the return is the brace-less body of an if, else, loop, label,
+    // or with statement, where inserted statements need braces around them.
+    isStatementBody: boolean;
 }
 
 interface FunctionTarget {
@@ -370,7 +373,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     !babelTypes.isBlockStatement(node.body) ||
                     !alwaysReturns(node.body.body, babelTypes);
                 if (!isExpressionBody && babelTypes.isBlockStatement(node.body)) {
-                    collectReturnStatements(node.body.body, returns, babelTypes);
+                    collectReturnStatements(node.body.body, returns, babelTypes, false);
                 }
 
                 let directivesEnd: number | undefined;
@@ -599,10 +602,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
-                s.appendLeft(
-                    ret.start,
-                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `,
-                );
+                const returnReport = `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `;
+                if (ret.isStatementBody) {
+                    // if (x) return; → if (x) { if (probe) $dd_return(...); return; }
+                    // Without the braces, only the report would stay conditional.
+                    s.appendLeft(ret.start, `{ ${returnReport}`);
+                    s.appendRight(ret.end, ' }');
+                } else {
+                    s.appendLeft(ret.start, returnReport);
+                }
             }
         }
 
@@ -928,6 +936,7 @@ function collectReturnStatements(
     statements: BabelTypes.Statement[],
     returns: ReturnInfo[],
     typesModule: BabelTypesModule,
+    isStatementBody: boolean,
 ): void {
     for (const stmt of statements) {
         if (typesModule.isReturnStatement(stmt)) {
@@ -937,6 +946,7 @@ function collectReturnStatements(
                 argStart: stmt.argument?.start ?? undefined,
                 argEnd: stmt.argument?.end ?? undefined,
                 hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
+                isStatementBody,
             });
             continue;
         }
@@ -946,11 +956,11 @@ function collectReturnStatements(
         }
 
         if (typesModule.isBlockStatement(stmt)) {
-            collectReturnStatements(stmt.body, returns, typesModule);
+            collectReturnStatements(stmt.body, returns, typesModule, false);
         } else if (typesModule.isIfStatement(stmt)) {
-            collectReturnStatements([stmt.consequent], returns, typesModule);
+            collectReturnStatements([stmt.consequent], returns, typesModule, true);
             if (stmt.alternate) {
-                collectReturnStatements([stmt.alternate], returns, typesModule);
+                collectReturnStatements([stmt.alternate], returns, typesModule, true);
             }
         } else if (
             typesModule.isForStatement(stmt) ||
@@ -959,23 +969,23 @@ function collectReturnStatements(
             typesModule.isWhileStatement(stmt) ||
             typesModule.isDoWhileStatement(stmt)
         ) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements([stmt.body], returns, typesModule, true);
         } else if (typesModule.isSwitchStatement(stmt)) {
             for (const caseClause of stmt.cases) {
-                collectReturnStatements(caseClause.consequent, returns, typesModule);
+                collectReturnStatements(caseClause.consequent, returns, typesModule, false);
             }
         } else if (typesModule.isTryStatement(stmt)) {
-            collectReturnStatements(stmt.block.body, returns, typesModule);
+            collectReturnStatements(stmt.block.body, returns, typesModule, false);
             if (stmt.handler) {
-                collectReturnStatements(stmt.handler.body.body, returns, typesModule);
+                collectReturnStatements(stmt.handler.body.body, returns, typesModule, false);
             }
             if (stmt.finalizer) {
-                collectReturnStatements(stmt.finalizer.body, returns, typesModule);
+                collectReturnStatements(stmt.finalizer.body, returns, typesModule, false);
             }
         } else if (typesModule.isLabeledStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements([stmt.body], returns, typesModule, true);
         } else if (typesModule.isWithStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements([stmt.body], returns, typesModule, true);
         }
     }
 }
