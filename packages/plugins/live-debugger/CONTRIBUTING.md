@@ -6,6 +6,7 @@ Developer notes for the Live Debugger plugin.
 
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
+-   [Symbol table](#symbol-table)
 -   [Consumer build canary](#consumer-build-canary)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
@@ -40,6 +41,33 @@ The Babel packages and `magic-string` are optional peer dependencies for consume
 Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts).
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
+
+## Symbol table
+
+The plugin can list the instrumented functions that ship in a build, for upload to Live Debugger's symbol database (SymDB). Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The table lives in [`src/symbol-table`](./src/symbol-table).
+
+For now, the only consumer is an opt-in debug dump. Set `DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH` to a file path to generate the table and write it there:
+
+```bash
+DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH=/tmp/symbol-table.json yarn build
+```
+
+Without that variable, the plugin doesn't add any hook or build time. The dump is never written inside the bundler's output directory, and generation never fails the build: problems are logged as warnings.
+
+How it works:
+
+- After a one-off build (not in watch mode or on a dev server), the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
+- Every instrumented function has exactly one `$dd_probes('<id>')` call at the start of its body and one `$dd_throw(` call at its end. The scan pairs them like brackets, which also gives each function's parent.
+- The transform anchors both calls' source map segments to the original body's opening and closing brace, so looking them up in the chunk's final source map gives the line range.
+- The path and display name come from the function ID. Query strings are removed, Yarn PnP virtual paths and symlinks are resolved, and the path is made relative to the git root. Without a git repository, the table is skipped.
+- Each chunk's debug ID is read from the runtime bootstrap, when debug IDs are enabled, to record which chunks contain each file.
+
+When changing instrumentation output, keep exactly one `$dd_probes` call at the start and one `$dd_throw` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the table on every bundler.
+
+Known limitations:
+
+- esbuild doesn't tell plugins whether it's watching, so its rebuilds always regenerate the table.
+- On webpack and Rspack, files that reach the plugin without a source map from an earlier loader get shifted line numbers ([DEBUG-6343](https://datadoghq.atlassian.net/browse/DEBUG-6343)).
 
 ## Consumer build canary
 

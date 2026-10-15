@@ -1,0 +1,339 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
+import { existsSync, mkdir, outputFile, readFile, readFileSync, rm } from '@dd/core/helpers/fs';
+import type { BundlerName, Options } from '@dd/core/types';
+import { getOutDir, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
+import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
+import { BUNDLERS, getBundlerConfig } from '@dd/tests/_jest/helpers/runBundlers';
+import { buildWithWebpack, configWebpack } from '@dd/tools/bundlers';
+import fsp from 'fs/promises';
+import { glob } from 'glob';
+import path from 'path';
+
+import { SYMBOL_TABLE_PATH_ENV } from './constants';
+import type { SymbolTablePayload, SymDbScope } from './symbol-table/serialize';
+
+type XpackCompiler = { options: { module: { rules: object[] } } };
+
+type TableFunction = {
+    functionId: string;
+    name: string;
+    sourceFile: string;
+    startLine: number | undefined;
+    endLine: number | undefined;
+    parentName: string | undefined;
+};
+
+// The repository root holds the git marker, the build root is its `app` directory.
+const APP_DIR = 'app';
+const VIRTUAL_PEER_PATH = '.yarn/__virtual__/peer-virtual-0123456789/1/packages/peer/index.js';
+const XPACK_BUNDLERS: BundlerName[] = ['webpack', 'rspack'];
+const PROBE_CALL_RX = /\$dd_probes\((['"`])(.*?)\1\)/g;
+
+const PEER_SOURCE = `export function peerHello() {
+    return 'hello from peer';
+}
+`;
+
+const FIXTURE_FILES: Record<string, string> = {
+    'app/src/main.js': `import { libGreet } from '@fixture/lib';
+import { peerHello } from '../../${VIRTUAL_PEER_PATH}';
+import { add } from './math.js';
+
+export const values = [1, 2].map(function (value) {
+    return add(value, 1);
+});
+
+console.log(values, libGreet(), peerHello());
+`,
+    // webpack and rspack also cover a module ID with a query string.
+    'app/src/main-xpack.js': `import { render } from './component.js?query';
+import { values } from './main.js';
+
+console.log(render(values.join(',')));
+`,
+    'app/src/math.js': `export function add(a, b) {
+    const double = (value) => {
+        return value * 2;
+    };
+    return double(a) + b;
+}
+`,
+    'app/src/component.js': `export function render(label) {
+    return '<p>' + label + '</p>';
+}
+`,
+    'packages/lib/package.json': JSON.stringify({
+        name: '@fixture/lib',
+        version: '1.0.0',
+        main: 'index.js',
+    }),
+    'packages/lib/index.js': `export function libGreet() {
+    return 'hello from lib';
+}
+`,
+    'packages/peer/index.js': PEER_SOURCE,
+    // Yarn PnP loads packages with peer dependencies through virtual paths.
+    [VIRTUAL_PEER_PATH]: PEER_SOURCE,
+};
+
+// Real webpack and rspack builds run a loader producing a source map before the Datadog plugins,
+// which unplugin needs to chain their source maps.
+const SOURCE_MAP_LOADER = path.resolve(
+    __dirname,
+    '../../../tests/src/_jest/fixtures/circular_project/identity-source-map-loader.cjs',
+);
+const sourceMapLoaderPlugin = {
+    apply(compiler: XpackCompiler) {
+        compiler.options.module.rules.unshift({ test: /\.js$/, loader: SOURCE_MAP_LOADER });
+    },
+};
+
+const PLUGIN_OVERRIDES: Partial<Options> = {
+    enableGit: false,
+    liveDebugger: {},
+    metadata: { version: '1.0.0' },
+    sourcemaps: { debugId: true },
+};
+
+const createFixture = async (workingDir: string) => {
+    const writes = Object.entries(FIXTURE_FILES).map(([file, content]) => {
+        const filepath = path.resolve(workingDir, file);
+        return outputFile(filepath, content);
+    });
+    await Promise.all(writes);
+
+    // A workspace package linked into node_modules.
+    const linkPath = path.resolve(workingDir, 'app/node_modules/@fixture/lib');
+    const linkTarget = path.resolve(workingDir, 'packages/lib');
+    const linkDir = path.dirname(linkPath);
+    await mkdir(linkDir);
+    await fsp.symlink(linkTarget, linkPath, 'dir');
+
+    // The symbol table only needs the repository root, which the `.git` entry marks.
+    const gitDir = path.resolve(workingDir, '.git');
+    await mkdir(gitDir);
+};
+
+// Build with the symbol table dump enabled, and return the dump.
+const buildWithSymbolTable = async (dumpPath: string, build: () => Promise<string[]>) => {
+    process.env[SYMBOL_TABLE_PATH_ENV] = dumpPath;
+    try {
+        const errors = await build();
+        expect(errors).toEqual([]);
+    } finally {
+        delete process.env[SYMBOL_TABLE_PATH_ENV];
+    }
+
+    const dump = await readFile(dumpPath);
+    const table: SymbolTablePayload = JSON.parse(dump);
+    return table;
+};
+
+const flattenScopes = (
+    scopes: SymDbScope[] = [],
+    parentName: string | undefined = undefined,
+): TableFunction[] =>
+    scopes.flatMap((scope) => {
+        if (scope.scope_type === 'MODULE') {
+            return flattenScopes(scope.scopes);
+        }
+
+        const tableFunction: TableFunction = {
+            functionId: scope.language_specifics?.function_id ?? '',
+            name: scope.name,
+            sourceFile: scope.source_file,
+            startLine: scope.start_line,
+            endLine: scope.end_line,
+            parentName,
+        };
+        const children = flattenScopes(scope.scopes, scope.name);
+        return [tableFunction, ...children];
+    });
+
+const getOutputFunctionIds = async (outDir: string) => {
+    const files = await glob('**/*.{js,mjs}', { cwd: outDir, absolute: true });
+    const contents = files.map((file) => readFileSync(file));
+    const functionIds = contents.flatMap((content) => {
+        const matches = content.matchAll(PROBE_CALL_RX);
+        return [...matches].map(([, , functionId]) => functionId);
+    });
+    return [...new Set(functionIds)].sort();
+};
+
+describe('Live Debugger symbol table', () => {
+    const tables: Partial<Record<BundlerName, SymbolTablePayload>> = {};
+    const outputFunctionIds: Partial<Record<BundlerName, string[]>> = {};
+    const outputContents: Partial<Record<BundlerName, string[]>> = {};
+    let workingDir: string;
+    let appDir: string;
+
+    beforeAll(async () => {
+        const seed = `${Math.abs(jest.getSeed())}.symbol-table`;
+        workingDir = getTempWorkingDir(seed);
+        appDir = path.resolve(workingDir, APP_DIR);
+        await createFixture(workingDir);
+        const buildRoot = appDir;
+
+        // Run the builds sequentially to ease the resources usage.
+        for (const { name: bundlerName, run } of BUNDLERS) {
+            const isXpack = XPACK_BUNDLERS.includes(bundlerName);
+            const entry = { main: isXpack ? './src/main-xpack.js' : './src/main.js' };
+            const plugins = isXpack ? [sourceMapLoaderPlugin] : [];
+            const dumpPath = path.resolve(workingDir, `symbol-table.${bundlerName}.json`);
+            const outDir = getOutDir(appDir, bundlerName);
+
+            // eslint-disable-next-line no-await-in-loop
+            tables[bundlerName] = await buildWithSymbolTable(dumpPath, async () => {
+                const config = getBundlerConfig(bundlerName, buildRoot, PLUGIN_OVERRIDES, {
+                    entry,
+                    plugins,
+                });
+                const { errors } = await run(buildRoot, config);
+                return errors;
+            });
+            // eslint-disable-next-line no-await-in-loop
+            outputFunctionIds[bundlerName] = await getOutputFunctionIds(outDir);
+            // eslint-disable-next-line no-await-in-loop
+            const outputFiles = await glob('**/*', { cwd: outDir, absolute: true, nodir: true });
+            outputContents[bundlerName] = outputFiles.map((file) => readFileSync(file));
+        }
+    }, 200000);
+
+    afterAll(async () => {
+        if (!process.env.NO_CLEANUP) {
+            await rm(workingDir);
+        }
+    });
+
+    describe.each(BUNDLERS)('$name | $version', ({ name: bundlerName }) => {
+        const getTable = () => tables[bundlerName];
+        const getFunctions = () => flattenScopes(getTable()?.scopes);
+        const getFunction = (sourceFile: string, name: string) =>
+            getFunctions().find(
+                (tableFunction) =>
+                    tableFunction.sourceFile === sourceFile && tableFunction.name === name,
+            );
+
+        test('Should list exactly the function IDs present in the output.', () => {
+            const functionIds = getFunctions().map((tableFunction) => tableFunction.functionId);
+            const uniqueFunctionIds = [...new Set(functionIds)].sort();
+
+            expect(outputFunctionIds[bundlerName]?.length).toBeGreaterThan(0);
+            expect(uniqueFunctionIds).toEqual(outputFunctionIds[bundlerName]);
+        });
+
+        test('Should describe the build.', () => {
+            const table = getTable();
+            expect(table?.language).toBe('browser');
+            expect(table?.version).toBe('1.0.0');
+            expect(table?.chunk_debug_ids?.length).toBeGreaterThan(0);
+
+            for (const moduleScope of table?.scopes ?? []) {
+                expect(moduleScope.scope_type).toBe('MODULE');
+                expect(moduleScope.start_line).toBeUndefined();
+                expect(moduleScope.language_specifics?.chunk_debug_ids?.length).toBeGreaterThan(0);
+            }
+        });
+
+        test('Should give paths relative to the repository root, with original line ranges.', () => {
+            expect(getFunction('app/src/math.js', 'add')).toMatchObject({
+                startLine: 1,
+                endLine: 6,
+                parentName: undefined,
+            });
+            expect(getFunction('app/src/math.js', 'double')).toMatchObject({
+                startLine: 2,
+                endLine: 4,
+                parentName: 'add',
+            });
+            expect(getFunction('app/src/main.js', '<anonymous>')).toMatchObject({
+                startLine: 5,
+                endLine: 7,
+            });
+        });
+
+        test('Should resolve symlinked workspace packages to their repository path.', () => {
+            expect(getFunction('packages/lib/index.js', 'libGreet')).toMatchObject({
+                startLine: 1,
+                endLine: 3,
+            });
+        });
+
+        test('Should resolve Yarn PnP virtual paths to their repository path.', () => {
+            expect(getFunction('packages/peer/index.js', 'peerHello')).toMatchObject({
+                startLine: 1,
+                endLine: 3,
+            });
+
+            const sourceFiles = getFunctions().map((tableFunction) => tableFunction.sourceFile);
+            const virtualSourceFiles = sourceFiles.filter((sourceFile) =>
+                sourceFile.includes('__virtual__'),
+            );
+            expect(virtualSourceFiles).toEqual([]);
+        });
+
+        test('Should not write the symbol table to the output directory.', () => {
+            const contents = outputContents[bundlerName] ?? [];
+            expect(contents.length).toBeGreaterThan(0);
+
+            const tableContents = contents.filter((content) => content.includes('"scope_type"'));
+            expect(tableContents).toEqual([]);
+        });
+
+        if (XPACK_BUNDLERS.includes(bundlerName)) {
+            test('Should strip the query string of module IDs.', () => {
+                expect(getFunction('app/src/component.js', 'render')).toMatchObject({
+                    startLine: 1,
+                    endLine: 3,
+                });
+            });
+        }
+    });
+
+    describe('webpack | warm filesystem cache', () => {
+        if (!BUNDLERS.some(({ name }) => name === 'webpack')) {
+            test.skip('webpack is not part of this run.', () => {});
+            return;
+        }
+
+        let coldTable: SymbolTablePayload | undefined;
+        let warmTable: SymbolTablePayload | undefined;
+        let cacheDirectory: string;
+
+        beforeAll(async () => {
+            cacheDirectory = path.resolve(workingDir, 'webpack-cache');
+            const outDir = getOutDir(appDir, 'webpack-cache');
+
+            const build = async () => {
+                const plugin = datadogWebpackPlugin({
+                    ...defaultPluginOptions,
+                    ...PLUGIN_OVERRIDES,
+                });
+                const config = configWebpack({
+                    workingDir: appDir,
+                    outDir,
+                    entry: { main: './src/main-xpack.js' },
+                    plugins: [sourceMapLoaderPlugin, plugin],
+                });
+                config.cache = { type: 'filesystem', cacheDirectory };
+                const { errors } = await buildWithWebpack(config);
+                return errors;
+            };
+
+            const coldDumpPath = path.resolve(workingDir, 'symbol-table.webpack-cold.json');
+            coldTable = await buildWithSymbolTable(coldDumpPath, build);
+            const warmDumpPath = path.resolve(workingDir, 'symbol-table.webpack-warm.json');
+            warmTable = await buildWithSymbolTable(warmDumpPath, build);
+        }, 200000);
+
+        test('Should list the same functions when modules come from the cache.', () => {
+            expect(existsSync(cacheDirectory)).toBe(true);
+            expect(flattenScopes(coldTable?.scopes).length).toBeGreaterThan(0);
+            expect(warmTable).toEqual(coldTable);
+        });
+    });
+});
