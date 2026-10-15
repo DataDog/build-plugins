@@ -35,29 +35,11 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 
 ### Source maps
 
-Enable debug IDs and upload the matching source maps with Git repository/commit metadata so Datadog can resolve the deployed build and its source code. For example, add these options to your Datadog build plugin configuration:
+Datadog resolves the deployed build and its source code through the [debug ID in the build metadata](#build-metadata). Upload the build's source maps by debug ID, with Git metadata, to the same Datadog site and organization that receives the Browser Live Debugger data:
 
-```ts
-{
-    auth: {
-        apiKey: process.env.DATADOG_API_KEY,
-        site: 'datadoghq.com',
-    },
-    liveDebugger: {
-        namedOnly: true,
-    },
-    sourcemaps: {
-        debugId: true,
-        upload: true,
-    },
-}
-```
-
-Generate source maps in your bundler. Keep [`enableGit`](/#enablegit) enabled (the default) and build from a Git checkout with the deployed commit and repository URL available. The build plugin includes that metadata with the uploads. If CI uses a mirror or proxy URL, configure [`gitRepositoryUrl`](/#gitrepositoryurl) to identify the source repository.
-
-Use the same Datadog site for the build plugin's [`auth.site`](/#authsite) and the Browser Debugger SDK's `site`, and use an upload API key and SDK client token from the same organization. `DATADOG_SITE` or `DD_SITE` in the build environment overrides `auth.site`, so it must point to that same site when set. Keep the API key in the build environment; the browser SDK uses the client token.
-
-Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations can also [upload by debug ID](/packages/plugins/error-tracking#sourcemaps-upload). Enable `rum.sourceCodeContext.debugId` and `errorTracking.sourcemaps.debugId`, and remove the service/version matching fields from `errorTracking.sourcemaps`. Do not combine `errorTracking.sourcemaps` with the top-level [`sourcemaps`](/#sourcemaps) option.
+- Generate source maps in your bundler, and set `debugId: true` and `upload: true` in the top-level [`sourcemaps`](/#sourcemaps) option. Existing [`errorTracking.sourcemaps`](/packages/plugins/error-tracking#sourcemaps-upload) configurations must upload by debug ID rather than by service and version.
+- Keep [`enableGit`](/#enablegit) enabled (the default) and build from a Git checkout of the deployed commit. Set [`gitRepositoryUrl`](/#gitrepositoryurl) if CI clones through a mirror or proxy.
+- Set [`auth.site`](/#authsite) to the site that the [Browser Debugger SDK](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#prerequisites) sends data to, and use an API key from the same organization as the SDK's client token.
 
 ### Required peer dependencies
 
