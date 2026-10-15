@@ -61,7 +61,12 @@ function installFakeWindow(
             });
         }
     };
-    const reply = (requestId: string, data: unknown) => {
+    const reply = (
+        requestId: string,
+        data: unknown,
+        source: unknown = fakeWindow.parent,
+        origin = DATADOG_PARENT,
+    ) => {
         for (const listener of [...listeners]) {
             listener({
                 data: {
@@ -70,6 +75,8 @@ function installFakeWindow(
                     success: true,
                     result: { data },
                 },
+                origin,
+                source,
             });
         }
     };
@@ -326,6 +333,23 @@ describe('postMessageTransport', () => {
             reply(secondQuery.requestId, 'second');
             await expect(second).resolves.toBe('second');
         });
+    });
+
+    test('Should ignore a run-query response from any window but the parent', async () => {
+        const { posted, reply } = installFakeWindow();
+        mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'forged', {});
+        const stillPending = new Promise((resolve) => {
+            setImmediate(resolve, 'pending');
+        });
+        const earlyOutcome = await Promise.race([result, stillPending]);
+        expect(earlyOutcome).toBe('pending');
+        reply(message.requestId, 'from-parent');
+
+        await expect(result).resolves.toBe('from-parent');
     });
 
     test('Should not ping a parent that ancestorOrigins already names', async () => {

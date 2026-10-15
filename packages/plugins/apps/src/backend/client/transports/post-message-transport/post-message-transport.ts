@@ -227,7 +227,7 @@ export const postMessageTransport: BackendFunctionTransport = async <TData>(
         }
 
         function handleMessage(event: MessageEvent): void {
-            if (!isQueryResponse(event.data, requestId)) {
+            if (event.source !== window.parent || !isQueryResponse(event.data, requestId)) {
                 return;
             }
 
