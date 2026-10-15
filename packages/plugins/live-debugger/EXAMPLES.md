@@ -11,6 +11,18 @@ A few conventions used throughout:
 -   The captured-arguments object literal (e.g. `{a, b}`) is inlined directly at each probe-guarded call site and is only emitted when the function has parameters. It is built lazily — inside the `if (probe)` / `probe ? ` guards — so dormant calls allocate nothing.
 -   Indentation below is reformatted for readability; the real output preserves the original source layout.
 
+Every module with at least one instrumented function also receives this guard after its
+directive prologue and hashbang, if present. It keeps instrumented code safe to execute
+without the SDK, including in child compilations that do not receive the chunk bootstrap.
+An existing SDK implementation is preserved. The guard is omitted from the examples below
+to focus on the function instrumentation.
+
+```js
+if (globalThis.$dd_probes === void 0) {
+    globalThis.$dd_probes = function () {};
+}
+```
+
 ## Table of content <!-- #omit in toc -->
 
 <!-- #toc -->

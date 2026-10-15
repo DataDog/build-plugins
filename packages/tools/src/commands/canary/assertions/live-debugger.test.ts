@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFile, rm } from '@dd/core/helpers/fs';
+import { runtimeStubs } from '@dd/live-debugger-plugin/runtime-bootstrap';
+import { transformSync } from 'esbuild';
 import os from 'os';
 import path from 'path';
 
@@ -74,6 +76,119 @@ describe('Live Debugger canary assertions', () => {
         );
         await expect(
             assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'instrumented'),
+        ).resolves.toBeUndefined();
+    });
+
+    test.each([true, false])(
+        'should reject an unguarded artifact even when another artifact has a stub (guarded first: %s)',
+        async (guardedFirst) => {
+            const guardedPath = path.resolve(TEST_ROOT, 'guarded.js');
+            const childPath = path.resolve(TEST_ROOT, 'child.js');
+            await outputFile(guardedPath, `${runtimeStubs};$dd_probes("main");`);
+            await outputFile(childPath, 'function child(){return $dd_probes ("child")}');
+            const paths = guardedFirst ? [guardedPath, childPath] : [childPath, guardedPath];
+
+            await expect(assertLiveDebuggerArtifacts(paths, 'instrumented')).rejects.toThrow(
+                `Instrumented build output calls $dd_probes without a runtime stub: ${childPath}`,
+            );
+        },
+    );
+
+    test.each([
+        ['formatted', transformSync(runtimeStubs).code],
+        ['minified', transformSync(runtimeStubs, { minify: true }).code],
+    ])('should accept guarded probe calls in %s output', async (_format, stub) => {
+        const filePath = path.resolve(TEST_ROOT, 'formatted.js');
+        await outputFile(filePath, `${stub}\n$dd_probes("test");`);
+
+        await expect(
+            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+        ).resolves.toBeUndefined();
+    });
+
+    const unguardedChild = 'function child(){return $dd_probes("child")}';
+    const guardedChild = `${runtimeStubs};${unguardedChild}`;
+
+    test.each([
+        ['a string literal', JSON.stringify(unguardedChild)],
+        ['a template literal', `\`${unguardedChild}\``],
+        ['an HTML srcdoc', JSON.stringify(`<script>${unguardedChild}</script>`)],
+        [
+            'a nested string literal',
+            JSON.stringify(`${runtimeStubs};const worker = ${JSON.stringify(unguardedChild)};`),
+        ],
+    ])(
+        'should reject unguarded code inlined as %s in a guarded artifact',
+        async (_kind, payload) => {
+            const filePath = path.resolve(TEST_ROOT, 'inlined.js');
+            await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
+
+            await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+                `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
+            );
+        },
+    );
+
+    test('should reject unguarded code inlined in directive position', async () => {
+        const filePath = path.resolve(TEST_ROOT, 'inlined-directive.js');
+        await outputFile(
+            filePath,
+            `${runtimeStubs};$dd_probes("main");(function(){${JSON.stringify(unguardedChild)};})();`,
+        );
+
+        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
+        );
+    });
+
+    test('should not let a stub inside an inlined string guard the artifact itself', async () => {
+        const filePath = path.resolve(TEST_ROOT, 'masked.js');
+        await outputFile(filePath, `$dd_probes("main");const p=${JSON.stringify(guardedChild)};`);
+
+        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            `Instrumented build output calls $dd_probes without a runtime stub: ${filePath}`,
+        );
+    });
+
+    test.each([
+        ['a comment', '/* call $dd_probes(id) at function entry */ function f() {}'],
+        ['a member call', 'sdk.$dd_probes("x"); window.$dd_probes("y");'],
+    ])('should not count %s as an unguarded probe call', async (_kind, code) => {
+        const filePath = path.resolve(TEST_ROOT, 'not-a-probe-call.js');
+        await outputFile(filePath, code);
+
+        await expect(
+            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+        ).resolves.toBeUndefined();
+    });
+
+    test('should not let a stub inside a comment guard the artifact', async () => {
+        const filePath = path.resolve(TEST_ROOT, 'comment-stub.js');
+        await outputFile(filePath, '/* globalThis.$dd_probes = noop */ $dd_probes("main");');
+
+        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            `Instrumented build output calls $dd_probes without a runtime stub: ${filePath}`,
+        );
+    });
+
+    test('should reject instrumented output it cannot parse', async () => {
+        const filePath = path.resolve(TEST_ROOT, 'unparsable.js');
+        await outputFile(filePath, `${runtimeStubs};$dd_probes("main");}}}`);
+
+        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            `Could not parse instrumented build output to check inlined code: ${filePath}`,
+        );
+    });
+
+    test.each([
+        ['a string literal', JSON.stringify(guardedChild)],
+        ['an HTML srcdoc', JSON.stringify(`<script>${guardedChild}</script>`)],
+    ])('should accept guarded code inlined as %s', async (_kind, payload) => {
+        const filePath = path.resolve(TEST_ROOT, 'inlined-guarded.js');
+        await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
+
+        await expect(
+            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
         ).resolves.toBeUndefined();
     });
 });

@@ -4,8 +4,14 @@
 
 import { parse } from '@babel/parser';
 import type { ParserPlugin } from '@babel/parser';
+import {
+    LIVE_DEBUGGER_PROBES_CALL_PATTERN,
+    LIVE_DEBUGGER_PROBES_STUB_PATTERN,
+} from '@dd/core/constants';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { runInNewContext } from 'vm';
+
+import { runtimeStubs } from '../runtime-bootstrap';
 
 import { transformCode } from './index';
 import type { TransformOptions } from './index';
@@ -20,6 +26,111 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
 };
 
 describe('transformCode', () => {
+    describe('module runtime guard', () => {
+        it('should install the stub once for multiple instrumented functions', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function first() { return 1; } const second = () => 2;',
+            });
+
+            expect(result.instrumentedCount).toBe(2);
+            expect(
+                result.code.match(new RegExp(LIVE_DEBUGGER_PROBES_STUB_PATTERN.source, 'g')),
+            ).toHaveLength(1);
+        });
+
+        it.each([
+            '',
+            '// leading comment\n',
+            '"use strict";\n"use client";\n',
+            '"use strict"\n"use client"\n',
+            '"use strict"; // comment\n"use client"; // final comment\n',
+            '#!/usr/bin/env node\n',
+            '#!/usr/bin/env node\r\n"use strict"\r\n"use client"\r\n',
+        ])('should preserve the directive prologue and hashbang in %j', (prefix) => {
+            const code = `${prefix}function f() { return 1; }`;
+            const result = transformCode({ ...BASE_OPTIONS, code });
+            const original = parse(code, { sourceType: 'unambiguous' }).program;
+            const transformed = parse(result.code, { sourceType: 'unambiguous' }).program;
+
+            expect(transformed.interpreter?.value).toBe(original.interpreter?.value);
+            expect(transformed.directives.map((directive) => directive.value.value)).toEqual(
+                original.directives.map((directive) => directive.value.value),
+            );
+            expect(transformed.body[0].type).toBe('IfStatement');
+            expect(transformed.body[transformed.body.length - 1].type).toBe('FunctionDeclaration');
+        });
+
+        it('should run in a fresh global scope without the runtime bootstrap', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: '"use strict"; function add(a, b) { return a + b; } add(20, 22);',
+            });
+
+            expect(runInNewContext(result.code)).toBe(42);
+        });
+
+        it('should preserve strict mode without a semicolon after the directive', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: '"use strict"\nfunction f() { return this; } f();',
+            });
+
+            expect(runInNewContext(result.code)).toBeUndefined();
+        });
+
+        it('should keep an existing probes implementation', () => {
+            const probes = jest.fn(() => undefined);
+            const sandbox = { $dd_probes: probes };
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { return 42; } f();',
+            });
+
+            expect(runInNewContext(result.code, sandbox)).toBe(42);
+            expect(sandbox.$dd_probes).toBe(probes);
+            expect(probes).toHaveBeenCalledWith('src/utils.ts;f');
+        });
+
+        it.each([
+            'const globalThis = {}; function f() { return 42; } f();',
+            'var globalThis = {}; function f() { return 42; } f();',
+            'let { globalThis } = { globalThis: {} }; function f() { return 42; } f();',
+            'if (true) { var globalThis = {}; } function f() { return 42; } f();',
+            'class globalThis {} function f() { return 42; } f();',
+            'function globalThis() {} function f() { return 42; } f();',
+            'import globalThis from "./global"; export function f() { return 42; }',
+        ])('should leave modules that bind globalThis at the top level unchanged: %s', (code) => {
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.instrumentedCount).toBe(0);
+            expect(result.skippedFileCount).toBe(1);
+            expect(result.code).toBe(code);
+        });
+
+        it('should instrument modules that only shadow globalThis in a nested scope', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f() { const globalThis = 40; return globalThis + 2; } f();',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(runInNewContext(result.code)).toBe(42);
+        });
+
+        it.each([
+            '"use client"; const value = 42;',
+            '"use strict"; function* values() { yield 1; }',
+            '"use strict"; // @dd-no-instrumentation\nfunction f() { return 1; }',
+        ])('should leave modules with no instrumented functions unchanged: %s', (code) => {
+            const result = transformCode({ ...BASE_OPTIONS, code, honorSkipComments: true });
+
+            expect(result.instrumentedCount).toBe(0);
+            expect(result.code).toBe(code);
+            expect(result.map).toBeUndefined();
+        });
+    });
+
     describe('pre-filter', () => {
         it('should skip files with no function syntax', () => {
             const code = 'export const FOO = 42; export type Bar = string;';
@@ -443,7 +554,9 @@ describe('transformCode', () => {
                 });
 
                 const syntaxError = validateSyntax(result.code, '/src/utils.ts');
-                const probeMatches = result.code.match(/\$dd_probes/g);
+                const probeMatches = result.code.match(
+                    new RegExp(LIVE_DEBUGGER_PROBES_CALL_PATTERN.source, 'g'),
+                );
                 expect(syntaxError).toBeNull();
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
@@ -828,6 +941,35 @@ describe('transformCode', () => {
     });
 
     describe('source maps', () => {
+        it.each(['', '"use client";\n', '#!/usr/bin/env node\n"use strict"\n'])(
+            'should preserve original positions after inserting the module guard in %j',
+            (prefix) => {
+                const code = `${prefix}const offset = 1;\nfunction add(value) {\n    return value + offset;\n}`;
+                const result = transformCode({ ...BASE_OPTIONS, code });
+                const traceMap = new TraceMap(JSON.parse(result.map!.toString()));
+
+                for (const token of ['const offset', 'function add', 'value + offset']) {
+                    const originalLines = code.split('\n');
+                    const generatedLines = result.code.split('\n');
+                    const originalLine = originalLines.findIndex((line) => line.includes(token));
+                    const generatedLine = generatedLines.findIndex((line) => line.includes(token));
+
+                    expect(
+                        originalPositionFor(traceMap, {
+                            line: generatedLine + 1,
+                            column: generatedLines[generatedLine].indexOf(token),
+                        }),
+                    ).toEqual(
+                        expect.objectContaining({
+                            source: BASE_OPTIONS.filePath,
+                            line: originalLine + 1,
+                            column: originalLines[originalLine].indexOf(token),
+                        }),
+                    );
+                }
+            },
+        );
+
         it('should generate a source map when code is instrumented', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1200,6 +1342,10 @@ describe('transformCode', () => {
             return lines.map((s) => s.trimStart()).join('\n');
         }
 
+        function expectedModuleCode(...lines: string[]): string {
+            return normalizeCode(`${runtimeStubs};`, ...lines);
+        }
+
         it('should produce the expected output for a function with no arguments', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1207,7 +1353,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function getTime() {let $dd_p0 = $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1225,7 +1371,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function getTime() {let $dd_p0 = $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1243,7 +1389,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function add(a, b) {let $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1261,7 +1407,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function add(a, b) {let $dd_p0 = $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1279,7 +1425,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function f(flag) {let $dd_p0 = $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1297,7 +1443,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function f() {let $dd_p0 = $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1316,7 +1462,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     'const double = (x) => {',
                     "  let $dd_p0 = $dd_probes('src/utils.ts;double');",
                     '  try {',
@@ -1337,7 +1483,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     'const getObj = (x) => {',
                     "  let $dd_p0 = $dd_probes('src/utils.ts;getObj');",
                     '  try {',
@@ -1365,7 +1511,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     'class A {}',
                     'class B extends A {',
                     '  constructor(items) {let $dd_t;',
@@ -1399,7 +1545,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     'class A {}',
                     'class B extends A {',
                     '  constructor(args) {let $dd_t;',
@@ -1426,7 +1572,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function log(msg) {let $dd_p0 = $dd_probes('src/utils.ts;log');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1445,7 +1591,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function abs(x) {let $dd_p0 = $dd_probes('src/utils.ts;abs');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1463,7 +1609,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function earlyExit(x) {let $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
@@ -1490,7 +1636,7 @@ describe('transformCode', () => {
             });
 
             expect(normalizeCode(result.code)).toBe(
-                normalizeCode(
+                expectedModuleCode(
                     "function sign(x) {let $dd_p0 = $dd_probes('src/utils.ts;sign');",
                     '  try {',
                     '    let $dd_rv0;',

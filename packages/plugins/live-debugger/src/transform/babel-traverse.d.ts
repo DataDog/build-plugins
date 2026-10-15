@@ -12,12 +12,13 @@
 declare module '@babel/traverse' {
     import type * as t from '@babel/types';
 
-    import type { BabelPath } from './babel-path.types';
+    import type { BabelPath, BabelProgramPath } from './babel-path.types';
 
     type VisitorHandler<T extends t.Node> = (path: BabelPath<T>) => void;
 
     interface Visitor {
         Function?: VisitorHandler<t.Function>;
+        Program?: (path: BabelProgramPath) => void;
     }
 
     function traverse(ast: object, visitor: Visitor): void;

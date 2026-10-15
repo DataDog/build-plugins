@@ -8,11 +8,12 @@ import type { ChunkInfo } from '@dd/core/types';
 
 import type { LiveDebuggerOptionsWithDefaults } from './types';
 
-// Minimal runtime stub injected into all chunks.
+// Minimal runtime stub injected into all chunks and instrumented modules.
 // `$dd_probes` is called unconditionally by instrumented functions, so it must
 // exist before the Browser Debugger SDK initializes. The SDK's `init()` later
 // replaces the stubbed globals with the real implementations.
-const runtimeStubs = `if(typeof globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}==='undefined'){globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}=function(){}}`;
+// Avoid a string literal that RUM privacy would collect from instrumented modules.
+export const runtimeStubs = `if(globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}===void 0){globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION}=function(){}}`;
 const buildMetadataGlobal = '__DD_LIVE_DEBUGGER_BUILD__' as const;
 
 type BuildMetadata = {

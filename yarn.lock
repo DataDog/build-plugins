@@ -2236,6 +2236,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/tools@workspace:packages/tools"
   dependencies:
+    "@babel/parser": "npm:7.24.5"
+    "@babel/types": "npm:7.24.5"
     "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/rollup-plugin": "workspace:*"
     "@datadog/rspack-plugin": "workspace:*"
@@ -2245,6 +2247,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/factory": "workspace:*"
+    "@dd/live-debugger-plugin": "workspace:*"
     "@dd/metrics-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
     "@dd/tests": "workspace:*"
