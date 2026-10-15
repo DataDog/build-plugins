@@ -33,6 +33,7 @@ import {
     LOCAL_EXECUTION_LOAD_SUFFIX,
     PLUGIN_NAME,
 } from '../constants';
+import { PARAMETERS_MODULE } from '../parameters/extract-parameters';
 import { createTagSources, resolveTags } from '../tags';
 import type { TagSource } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
@@ -49,6 +50,7 @@ import {
     gracefulFsPredatesGuards,
     installGuards,
 } from './network-guard';
+import { createParameterCollector } from './parameter-collector';
 import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
@@ -181,6 +183,13 @@ export const getVitePlugin = ({
     });
 
     const { setBackendFunctions, getBackendFunctions } = createBackendFunctionRegistry();
+    // What `@datadog/apps-frontend/parameters` resolves to in the current build,
+    // so app source importing it through an alias can be caught.
+    let parametersModuleId: string | undefined;
+    const parameterCollector = createParameterCollector(
+        () => context.buildRoot,
+        () => parametersModuleId,
+    );
 
     // Vite 6 invokes closeBundle when a dev server's plugin container closes,
     // not only for production builds. configureServer only runs for dev
@@ -347,9 +356,52 @@ export const getVitePlugin = ({
                 return { code: proxyCode, map: null };
             },
         },
-        buildStart() {
+        async buildStart() {
             // A watch-mode rebuild must not inherit tags derived from the previous build's code.
             buildTagSources = createBuildTagSources();
+            parametersModuleId = undefined;
+            if (options.parameters === undefined) {
+                // Resolved from the root, as app source would. An app without
+                // the SDK, or with a version that predates parameters, doesn't
+                // resolve it, and can't import it through an alias either.
+                try {
+                    const resolved = await this.resolve(
+                        PARAMETERS_MODULE,
+                        path.join(context.buildRoot, 'index.html'),
+                        { skipSelf: true },
+                    );
+                    parametersModuleId = resolved && !resolved.external ? resolved.id : undefined;
+                } catch {
+                    parametersModuleId = undefined;
+                }
+            }
+        },
+        // Reads parameter declarations from compiled app modules before bundling
+        // can inline or tree-shake them. Production builds only, like the
+        // backend module-graph collector.
+        async moduleParsed(moduleInfo) {
+            // An explicit declaration replaces discovery, including for code the
+            // build could not read.
+            if (options.parameters !== undefined) {
+                return;
+            }
+            // Parse rather than read moduleInfo.ast, which Rolldown does not provide.
+            await parameterCollector.readModule(
+                moduleInfo.id,
+                moduleInfo.code,
+                [...moduleInfo.importedIds, ...moduleInfo.dynamicallyImportedIds],
+                (code) => ensureProgram(this.parse(code), moduleInfo.id),
+                async (specifier) => {
+                    const resolved = await this.resolve(specifier, moduleInfo.id, {
+                        skipSelf: true,
+                    });
+                    return resolved?.id;
+                },
+            );
+        },
+        buildEnd() {
+            // A watch rebuild only re-parses changed modules.
+            parameterCollector.retainModules(this.getModuleIds());
         },
         generateBundle: {
             // After other plugins have finished rewriting chunk code.
@@ -369,6 +421,9 @@ export const getVitePlugin = ({
         async closeBundle() {
             // Taken before any await, so the next watch-mode build can't change what this one packages.
             const tags = resolveTags(buildTagSources);
+            // An explicit option overrides discovery. Otherwise the code is the
+            // only definition, so finding nothing clears an earlier declaration.
+            const parameters = options.parameters ?? parameterCollector.resolve();
             if (devServerActive) {
                 log.debug('Skipping app packaging: dev server session.');
                 return;
@@ -394,6 +449,7 @@ export const getVitePlugin = ({
                     context,
                     options,
                     tags,
+                    parameters,
                 });
             } finally {
                 if (backendOutDir) {
