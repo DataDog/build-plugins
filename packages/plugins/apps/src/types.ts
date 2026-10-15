@@ -19,6 +19,16 @@ export type LongPollingOptions = {
     timeoutMs?: number;
 };
 
+/**
+ * The environment backend functions run in. Unset lets Datadog decide; set it only to
+ * move an app between environments during the Terrapin migration.
+ * - `restricted`: the jsFunctionWithActions action.
+ * - `sandbox`: the Terrapin jsSandboxWithActions action.
+ */
+export type BackendEnvironment = 'restricted' | 'sandbox';
+
+export const BACKEND_ENVIRONMENTS: readonly BackendEnvironment[] = ['restricted', 'sandbox'];
+
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
@@ -29,6 +39,11 @@ export type AppsOptions = {
     tags?: string[];
     /** Controls how the dev server retries the Datadog long-poll execution endpoint. */
     longPolling?: LongPollingOptions;
+    /**
+     * Overrides the environment backend functions run in on upload, regardless of the
+     * rollout. Undocumented migration escape hatch; prefer leaving it unset.
+     */
+    backendEnvironment?: BackendEnvironment;
 };
 
 export type AppsManifest = {
@@ -38,6 +53,8 @@ export type AppsManifest = {
      */
     tags: string[];
     backend: {
+        /** Environment override applied on upload; omitted when unset. */
+        environment?: BackendEnvironment;
         /** Mapping of encoded query name to information about that backend function. */
         functions: Record<
             string,

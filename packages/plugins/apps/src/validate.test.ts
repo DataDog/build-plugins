@@ -65,4 +65,40 @@ describe('Apps Plugin - validateOptions', () => {
             );
         });
     });
+
+    describe('backendEnvironment', () => {
+        const envKeys = ['DATADOG_APPS_BACKEND_ENVIRONMENT', 'DD_APPS_BACKEND_ENVIRONMENT'];
+        afterEach(() => {
+            for (const key of envKeys) {
+                delete process.env[key];
+            }
+        });
+
+        test('Should leave backendEnvironment unset by default', () => {
+            expect(validateOptions({ apps: {} })).not.toHaveProperty('backendEnvironment');
+        });
+
+        test('Should accept a configured backendEnvironment', () => {
+            expect(
+                validateOptions({ apps: { backendEnvironment: 'restricted' } }).backendEnvironment,
+            ).toBe('restricted');
+        });
+
+        test('Should let the environment variable override the config', () => {
+            process.env.DATADOG_APPS_BACKEND_ENVIRONMENT = 'sandbox';
+            expect(
+                validateOptions({ apps: { backendEnvironment: 'restricted' } }).backendEnvironment,
+            ).toBe('sandbox');
+        });
+
+        test('Should throw on an unknown value from config or environment', () => {
+            expect(() =>
+                validateOptions({ apps: { backendEnvironment: 'terrapin' as never } }),
+            ).toThrow(
+                "apps.backendEnvironment must be one of 'restricted', 'sandbox'; got 'terrapin'.",
+            );
+            process.env.DD_APPS_BACKEND_ENVIRONMENT = 'v2';
+            expect(() => validateOptions({ apps: {} })).toThrow("got 'v2'");
+        });
+    });
 });
