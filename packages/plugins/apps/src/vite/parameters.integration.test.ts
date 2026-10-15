@@ -18,6 +18,7 @@ import JSZip from 'jszip';
 import os from 'os';
 import path from 'path';
 import { build } from 'vite';
+import type { InlineConfig } from 'vite';
 
 import { ARCHIVE_FILENAME } from '../constants';
 import type { AppsOptions } from '../types';
@@ -41,10 +42,21 @@ const SDK_FILES = {
 const HTML =
     '<!doctype html><html><body><script type="module" src="./main.js"></script></body></html>';
 
-/** Builds `files` (paths relative to the workspace) and returns the packaged manifest. */
-async function buildApp(files: Record<string, string>, apps: AppsOptions = {}) {
+/**
+ * Builds `files` (paths relative to the workspace) and returns the packaged manifest.
+ * `throughSymlink` points the build root at the app through a symlinked directory.
+ */
+async function buildApp(
+    files: Record<string, string>,
+    apps: AppsOptions = {},
+    { vite = {}, throughSymlink = false }: { vite?: InlineConfig; throughSymlink?: boolean } = {},
+) {
     const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-parameters-'));
-    const appRoot = path.join(workspace, 'app');
+    const link = `${workspace}-link`;
+    if (throughSymlink) {
+        await fs.symlink(workspace, link, 'dir');
+    }
+    const appRoot = path.join(throughSymlink ? link : workspace, 'app');
     const quiet = [
         jest.spyOn(console, 'warn').mockImplementation(() => {}),
         jest.spyOn(console, 'error').mockImplementation(() => {}),
@@ -62,8 +74,16 @@ async function buildApp(files: Record<string, string>, apps: AppsOptions = {}) {
             root: appRoot,
             configFile: false,
             logLevel: 'silent',
-            build: { outDir: 'dist' },
+            // Vite's HTML entry doesn't support a symlinked root, so that
+            // build starts from the script, as a library-style app would.
+            build: {
+                outDir: 'dist',
+                ...(throughSymlink && {
+                    rollupOptions: { input: path.join(appRoot, 'main.js') },
+                }),
+            },
             plugins: [datadogVitePlugin({ logLevel: 'error', apps })],
+            ...vite,
         });
         const zip = await JSZip.loadAsync(
             await fs.readFile(path.join(appRoot, 'dist', ARCHIVE_FILENAME)),
@@ -77,6 +97,7 @@ async function buildApp(files: Record<string, string>, apps: AppsOptions = {}) {
         for (const spy of quiet) {
             spy.mockRestore();
         }
+        await fs.rm(link, { force: true });
         await fs.rm(workspace, { recursive: true, force: true });
     }
 }
@@ -185,6 +206,75 @@ describe('Apps Plugin - parameters from a real Vite build', () => {
         });
     });
 
+    test('Should read an app whose build root is reached through a symlink', async () => {
+        const manifest = await buildApp(
+            {
+                'app/main.js': `
+                    import { defineDatadogAppParameters } from '@datadog/apps-frontend/parameters';
+                    document.body.dataset.p = JSON.stringify(defineDatadogAppParameters({ ${ENVIRONMENT} }));`,
+            },
+            {},
+            { throughSymlink: true },
+        );
+
+        expect(manifest.inputSchema.parameters).toEqual([
+            expect.objectContaining({ name: 'environment', defaultValue: 'prod' }),
+        ]);
+    });
+
+    const ALIAS: InlineConfig = {
+        resolve: { alias: { '@params': '@datadog/apps-frontend/parameters' } },
+    };
+
+    test.each([
+        [
+            'an aliased import',
+            `import { defineDatadogAppParameters } from '@params';
+            defineDatadogAppParameters({ limit: { type: 'number', default: 10 } });`,
+        ],
+        [
+            'an aliased import in a shared package outside the app',
+            `import '../shared/parameters.js';`,
+        ],
+        [
+            'an aliased dynamic import with a template string next to a literal import',
+            `import '@datadog/apps-frontend/parameters';
+            import(\`@params\`).then(({ defineDatadogAppParameters: d }) => d({ limit: { type: 'number', default: 10 } }));`,
+        ],
+        [
+            'an aliased import next to a literal one',
+            `import '@datadog/apps-frontend/parameters';
+            import { defineDatadogAppParameters } from '@params';
+            defineDatadogAppParameters({ limit: { type: 'number', default: 10 } });`,
+        ],
+    ])('Should fail the build for %s rather than clear the declaration', async (_, main) => {
+        const files = {
+            'app/main.js': main,
+            'shared/parameters.js': `import { defineDatadogAppParameters } from '@params';
+                defineDatadogAppParameters({ limit: { type: 'number', default: 10 } });`,
+        };
+        await expect(buildApp(files, {}, { vite: ALIAS })).rejects.toThrow(
+            /(main\.js imports @datadog\/apps-frontend\/parameters as '@params', through an alias or path mapping|shared\/parameters\.js imports @datadog\/apps-frontend\/parameters, but the build only reads)/,
+        );
+    });
+
+    test('Should build an app that only aliases modules other than the SDK', async () => {
+        const manifest = await buildApp(
+            {
+                'app/main.js': `
+                    import { defineDatadogAppParameters } from '@datadog/apps-frontend/parameters';
+                    import { label } from '@lib/label';
+                    defineDatadogAppParameters({ ${ENVIRONMENT} });
+                    document.body.textContent = label;`,
+                'app/lib/label.js': `export const label = 'hi';`,
+            },
+            {},
+            { vite: { resolve: { alias: { '@lib': './lib' } } } },
+        );
+
+        expect(manifest.inputSchema.parameters).toHaveLength(1);
+    });
+
     const IMPORT = `import { defineDatadogAppParameters } from '@datadog/apps-frontend/parameters';`;
     const LIMIT = `limit: { type: 'number', default: 10 }`;
     const declare = (body: string) => `${IMPORT}\ndefineDatadogAppParameters({ ${body} });`;
@@ -217,6 +307,14 @@ describe('Apps Plugin - parameters from a real Vite build', () => {
         [
             'a dynamic import',
             { 'app/main.js': `import('@datadog/apps-frontend/parameters');` },
+            /main\.js: importing the module dynamically is not supported/,
+        ],
+        [
+            'a dynamic import with a template string',
+            {
+                'app/main.js': `import '@datadog/apps-frontend/parameters';
+                    import(\`@datadog/apps-frontend/parameters\`).then(({ defineDatadogAppParameters: d }) => d({ ${LIMIT} }));`,
+            },
             /main\.js: importing the module dynamically is not supported/,
         ],
         [

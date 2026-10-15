@@ -147,8 +147,19 @@ function parentsOf(program: Program): Map<Node, Node> {
     return parents;
 }
 
+/** A specifier written as a string or as a template string with no expressions. */
+const staticSpecifier = (source: Node | null | undefined): string | undefined => {
+    if (source?.type === 'Literal' && typeof source.value === 'string') {
+        return source.value;
+    }
+    if (source?.type === 'TemplateLiteral' && source.expressions.length === 0) {
+        return source.quasis[0]?.value.cooked ?? undefined;
+    }
+    return undefined;
+};
+
 const isParametersModule = (source: Node | null | undefined): boolean =>
-    source?.type === 'Literal' && source.value === PARAMETERS_MODULE;
+    staticSpecifier(source) === PARAMETERS_MODULE;
 
 /**
  * Whether a module imports, re-exports, or dynamically imports
@@ -166,6 +177,27 @@ export function importsParametersModule(program: Program): boolean {
         ImportExpression: check,
     });
     return found;
+}
+
+/**
+ * The literal specifiers a module imports, re-exports, or dynamically imports,
+ * so each can be checked against what it resolves to.
+ */
+export function moduleSpecifiers(program: Program): string[] {
+    const specifiers = new Set<string>();
+    const add = (node: { source?: Node | null }) => {
+        const specifier = staticSpecifier(node.source);
+        if (specifier !== undefined) {
+            specifiers.add(specifier);
+        }
+    };
+    walkAst(program as Node, null, {
+        ImportDeclaration: add,
+        ExportNamedDeclaration: add,
+        ExportAllDeclaration: add,
+        ImportExpression: add,
+    });
+    return [...specifiers];
 }
 
 /**
@@ -219,10 +251,7 @@ export function extractParameterDeclarations(
             }
         },
         ImportExpression(expression) {
-            if (
-                expression.source.type === 'Literal' &&
-                expression.source.value === PARAMETERS_MODULE
-            ) {
+            if (isParametersModule(expression.source)) {
                 throw unsupported('importing the module dynamically');
             }
         },
