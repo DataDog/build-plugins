@@ -2,13 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { datadogWebpackPlugin } from '@datadog/webpack-plugin';
 import { existsSync, mkdir, outputFile, readFile, readFileSync, rm } from '@dd/core/helpers/fs';
 import type { BundlerName, Options } from '@dd/core/types';
 import { getOutDir, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, getBundlerConfig } from '@dd/tests/_jest/helpers/runBundlers';
-import { buildWithWebpack, configWebpack } from '@dd/tools/bundlers';
+import { buildWithRspack, buildWithWebpack, configRspack, configWebpack } from '@dd/tools/bundlers';
 import fsp from 'fs/promises';
 import { glob } from 'glob';
 import path from 'path';
@@ -41,13 +42,13 @@ const PEER_SOURCE = `export function peerHello() {
 const FIXTURE_FILES: Record<string, string> = {
     'app/src/main.js': `import { libGreet } from '@fixture/lib';
 import { peerHello } from '../../${VIRTUAL_PEER_PATH}';
-import { add } from './math.js';
+import { add, triple } from './math.js';
 
 export const values = [1, 2].map(function (value) {
     return add(value, 1);
 });
 
-console.log(values, libGreet(), peerHello());
+console.log(values, libGreet(), peerHello(), triple(2));
 `,
     // webpack and rspack also cover a module ID with a query string.
     'app/src/main-xpack.js': `import { render } from './component.js?query';
@@ -61,6 +62,10 @@ console.log(render(values.join(',')));
     };
     return double(a) + b;
 }
+
+export const triple = (value) =>
+    value *
+    3;
 `,
     'app/src/component.js': `export function render(label) {
     return '<p>' + label + '</p>';
@@ -256,6 +261,13 @@ describe('Live Debugger symbol table', () => {
             });
         });
 
+        test('Should give arrow functions with an expression body their line range.', () => {
+            expect(getFunction('app/src/math.js', 'triple')).toMatchObject({
+                startLine: 9,
+                endLine: 10,
+            });
+        });
+
         test('Should resolve symlinked workspace packages to their repository path.', () => {
             expect(getFunction('packages/lib/index.js', 'libGreet')).toMatchObject({
                 startLine: 1,
@@ -334,6 +346,62 @@ describe('Live Debugger symbol table', () => {
             expect(existsSync(cacheDirectory)).toBe(true);
             expect(flattenScopes(coldTable?.scopes).length).toBeGreaterThan(0);
             expect(warmTable).toEqual(coldTable);
+        });
+    });
+    // Minifiers rewrite the injected code and don't map every token, like web-ui's production builds.
+    describe('rspack | minified production build', () => {
+        if (!BUNDLERS.some(({ name }) => name === 'rspack')) {
+            test.skip('rspack is not part of this run.', () => {});
+            return;
+        }
+
+        let minifiedTable: SymbolTablePayload | undefined;
+
+        beforeAll(async () => {
+            const outDir = getOutDir(appDir, 'rspack-production');
+            const dumpPath = path.resolve(workingDir, 'symbol-table.rspack-production.json');
+
+            minifiedTable = await buildWithSymbolTable(dumpPath, async () => {
+                const plugin = datadogRspackPlugin({
+                    ...defaultPluginOptions,
+                    ...PLUGIN_OVERRIDES,
+                    rum: { privacy: {} },
+                });
+                const config = configRspack({
+                    workingDir: appDir,
+                    outDir,
+                    entry: { main: './src/main-xpack.js' },
+                    plugins: [sourceMapLoaderPlugin, plugin],
+                });
+                const { errors } = await buildWithRspack({
+                    ...config,
+                    mode: 'production',
+                    optimization: { ...config.optimization, minimize: true },
+                });
+                return errors;
+            });
+        }, 200000);
+
+        test('Should give every function its original line range.', () => {
+            const functions = flattenScopes(minifiedTable?.scopes);
+            const withoutLines = functions.filter((tableFunction) => !tableFunction.endLine);
+
+            expect(functions.length).toBeGreaterThan(0);
+            expect(withoutLines).toEqual([]);
+            expect(functions).toContainEqual(
+                expect.objectContaining({
+                    sourceFile: 'app/src/math.js',
+                    name: 'add',
+                    startLine: 1,
+                    endLine: 6,
+                }),
+            );
+
+            // The end of an expression body is the last token the minifier keeps mapped.
+            const triple = functions.find((tableFunction) => tableFunction.name === 'triple');
+            expect(triple?.startLine).toBe(9);
+            expect(triple?.endLine).toBeGreaterThanOrEqual(9);
+            expect(triple?.endLine).toBeLessThanOrEqual(10);
         });
     });
 });

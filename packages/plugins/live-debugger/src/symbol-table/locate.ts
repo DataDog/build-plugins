@@ -3,7 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { existsSync, readFile } from '@dd/core/helpers/fs';
-import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
+import { decodedMappings, TraceMap, traceSegment } from '@jridgewell/trace-mapping';
+import type { SourceMapSegment } from '@jridgewell/trace-mapping';
 import path from 'path';
 
 import type { ChunkScan } from './scan';
@@ -78,21 +79,73 @@ const createOffsetConverter = (code: string) => {
     };
 };
 
-const getOriginalPosition = (
+type MappedPosition = SourcePosition & {
+    sourceIndex: number;
+};
+
+// The original position of the closest segment at or before a generated position.
+const getMappedPosition = (
     traceMap: TraceMap,
     generated: SourcePosition,
-): SourcePosition | undefined => {
-    const original = originalPositionFor(traceMap, generated);
-    if (original.line === null || original.column === null) {
+): MappedPosition | undefined => {
+    const segment = traceSegment(traceMap, generated.line - 1, generated.column);
+    if (!segment || segment.length === 1) {
         return undefined;
     }
 
-    return { line: original.line, column: original.column };
+    return { line: segment[2] + 1, column: segment[3], sourceIndex: segment[1] };
+};
+
+// Index of the first segment at or after `column`.
+const findSegmentIndex = (segments: readonly SourceMapSegment[], column: number): number => {
+    let low = 0;
+    let high = segments.length;
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (segments[middle][0] < column) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    return low;
+};
+
+/**
+ * The original position of the last mapped segment of `sourceIndex` between two generated
+ * positions, both included. Some tokens have no mapping: the code the transform appends after
+ * an arrow function's expression body, and tokens that minifiers rewrite. The closest mapped token
+ * before the `$dd_throw` call is then the best estimate of where the function ends.
+ */
+const getLastMappedPosition = (
+    traceMap: TraceMap,
+    from: SourcePosition,
+    to: SourcePosition,
+    sourceIndex: number,
+): SourcePosition | undefined => {
+    const lines = decodedMappings(traceMap);
+
+    for (let line = to.line; line >= from.line; line--) {
+        const segments = lines[line - 1] ?? [];
+        const lastIndex =
+            line === to.line ? findSegmentIndex(segments, to.column + 1) - 1 : segments.length - 1;
+        const firstColumn = line === from.line ? from.column : 0;
+
+        for (let index = lastIndex; index >= 0 && segments[index][0] >= firstColumn; index--) {
+            const segment = segments[index];
+            if (segment.length !== 1 && segment[1] === sourceIndex) {
+                return { line: segment[2] + 1, column: segment[3] };
+            }
+        }
+    }
+
+    return undefined;
 };
 
 /**
  * Map the scanned functions to their original positions. The transform anchors the `$dd_probes`
- * call to the body's opening brace and the `$dd_throw` call to its closing brace.
+ * call to the body's opening brace, and the `$dd_throw` call to its closing brace when the body
+ * is a block.
  */
 export const locateFunctions = (
     code: string,
@@ -111,9 +164,19 @@ export const locateFunctions = (
 
         const generatedStart = toPosition(probeOffset);
         const generatedEnd = toPosition(throwOffset);
-        const start = getOriginalPosition(traceMap, generatedStart);
-        const end = getOriginalPosition(traceMap, generatedEnd);
-        if (!start || !end || end.line < start.line) {
+        const mappedStart = getMappedPosition(traceMap, generatedStart);
+        if (!mappedStart) {
+            return { functionId, parentIndex, start: undefined, end: undefined };
+        }
+
+        const start = { line: mappedStart.line, column: mappedStart.column };
+        const end = getLastMappedPosition(
+            traceMap,
+            generatedStart,
+            generatedEnd,
+            mappedStart.sourceIndex,
+        );
+        if (!end || end.line < start.line) {
             return { functionId, parentIndex, start: undefined, end: undefined };
         }
 
