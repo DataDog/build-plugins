@@ -12,6 +12,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Prerequisites](#prerequisites)
     -   [Source maps](#source-maps)
     -   [Required peer dependencies](#required-peer-dependencies)
+-   [Limitations during Preview](#limitations-during-preview)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
@@ -61,6 +62,15 @@ pnpm add --save-dev @babel/parser @babel/traverse @babel/types magic-string
 
 If any of these packages is missing when the plugin tries to instrument a file,
 the plugin throws an error with the exact install command above.
+
+## Limitations during Preview
+
+Browser Live Debugger is in Preview, with the following limitations:
+
+- Probes can be added only to named functions. Set [`liveDebugger.namedOnly`](#livedebuggernamedonly) to `true` to skip instrumenting anonymous functions, which would only add overhead.
+- All instrumented code on a page must come from a single build of one Git repository and commit. Pages that combine separately built or deployed instrumented code, such as micro-frontends, Module Federation remotes, or embedded widgets, aren't supported yet. Monorepos and code-split bundles are fine.
+- Your bundler's root directory (such as webpack's `context` or Vite's `root`) must be the root of your Git repository. Otherwise, probes are accepted but never fire. For the same reason, functions in Yarn PnP workspace packages that have peer dependencies can't be probed.
+- This plugin and the Browser Debugger SDK may get breaking changes during the Preview. You may need to upgrade, rebuild, and redeploy to keep debugging working, but your application itself should keep working normally.
 
 ## Configuration
 
