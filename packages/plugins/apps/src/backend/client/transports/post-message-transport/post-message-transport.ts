@@ -81,6 +81,7 @@ export const MAX_UNANSWERED_PINGS = 2;
 let learnedParentOrigin: string | undefined;
 let unansweredPings = 0;
 let pendingPing: { answered: Promise<void>; end: () => void } | undefined;
+let warnedUnansweredPing = false;
 
 /** @internal Exposed only for tests to reset what the frame learned about its parent between cases. */
 export const resetParentOrigin = (): void => {
@@ -90,6 +91,7 @@ export const resetParentOrigin = (): void => {
     }
     learnedParentOrigin = undefined;
     unansweredPings = 0;
+    warnedUnansweredPing = false;
 };
 
 // The browser stamps the sender's origin on each message, so a pong or response from the parent reveals it.
@@ -178,6 +180,17 @@ function warnMissingBundle(functionName: string, reason: string): void {
     console.warn(`[dd-apps] Sending "${functionName}" without its dev server bundle: ${reason}`);
 }
 
+function warnUnansweredPingOnce(functionName: string): void {
+    if (warnedUnansweredPing) {
+        return;
+    }
+    warnedUnansweredPing = true;
+    warnMissingBundle(
+        functionName,
+        "the parent page did not answer its ping, so it can't be confirmed as a Datadog page",
+    );
+}
+
 type BundleFetch = { bundle: DebugBundleResponse } | { failure: string };
 
 /** Never rejects: a call without a usable bundle is still sent, so a failure is returned for the caller to report. */
@@ -224,6 +237,9 @@ async function prepareBundle(
     // The build runs while the parent answers its ping, and is dropped if the parent is not a Datadog page.
     const earlyFetch = isPinging ? fetchOwnBundle(functionName) : undefined;
     const recipientOrigin = await getParentOrigin(isPinging);
+    if (recipientOrigin === undefined && isPinging) {
+        warnUnansweredPingOnce(functionName);
+    }
     if (recipientOrigin === undefined || !isDatadogOrigin(recipientOrigin)) {
         return {};
     }

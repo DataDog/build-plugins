@@ -407,6 +407,25 @@ describe('postMessageTransport', () => {
             expect(global.fetch).toHaveBeenCalledTimes(sentPings.length);
         });
 
+        test('Should warn once per page when the parent leaves its pings unanswered', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+            await exhaustPings();
+
+            const later = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [laterQuery] = postMessage.mock.calls.at(-1);
+            reply(laterQuery.requestId, 'later');
+            await expect(later).resolves.toBe('later');
+
+            const namesTheFunction = expect.stringContaining(`"${QUERY_NAME}"`);
+            const namesTheCause = expect.stringContaining('did not answer');
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(namesTheFunction);
+            expect(warn).toHaveBeenCalledWith(namesTheCause);
+        });
+
         test('Should end a pending ping when reset', async () => {
             jest.useFakeTimers();
             const { postMessage, reply } = installFakeWindow({});
@@ -580,6 +599,7 @@ describe('postMessageTransport', () => {
         const sentPings = pings();
         expect(sentPings).toHaveLength(0);
         expect(global.fetch).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
     });
 
     test('Should not fetch a bundle in a deployed app', async () => {
