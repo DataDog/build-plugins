@@ -17,6 +17,7 @@ import {
     RestrictedGlobalError,
 } from './reject-restricted-globals';
 import { warnAboutDivergentGlobals } from './warn-divergent-globals';
+import { warnAboutEnvReads } from './warn-env-reads';
 
 /** Shared by every call site so the checks can't drift. Any runtime other than v2 gets the v1 checks, so an unknown one fails closed. */
 export function runBackendStaticChecks(
@@ -28,6 +29,7 @@ export function runBackendStaticChecks(
 ): void {
     if (runtime === 'v2') {
         rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+        warnAboutEnvReads(ast, filePath, log, scopeAnalysis);
         return;
     }
     try {

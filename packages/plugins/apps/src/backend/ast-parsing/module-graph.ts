@@ -633,7 +633,7 @@ function getMemberExpressionRoot(node: Expression | Super): Identifier | undefin
     return undefined;
 }
 
-function getModuleExportName(node: ModuleExportName): string {
+export function getModuleExportName(node: ModuleExportName): string {
     if (node.type === 'Identifier') {
         return node.name;
     }
@@ -756,7 +756,16 @@ function getLiteralSpecifier(node: unknown, fallback: string): string {
  * Narrows Rollup's dynamic import call-expression representation.
  */
 function isImportCallExpression(node: SimpleCallExpression): node is ImportCallExpression {
-    return (node.callee as { type: string }).type === 'Import';
+    return isImportCallee(node.callee);
+}
+
+export function isImportCallee(callee: unknown): callee is { type: 'Import' } {
+    return (
+        typeof callee === 'object' &&
+        callee !== null &&
+        'type' in callee &&
+        callee.type === 'Import'
+    );
 }
 
 /**

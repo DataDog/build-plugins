@@ -15,7 +15,7 @@ import type {
     VariableDeclarator,
 } from 'estree';
 
-import { resolveIdentifier } from './module-scope';
+import { hasSingleValue, resolveIdentifier } from './module-scope';
 import type { ModuleScopeAnalysis } from './module-scope';
 import { isVariableDeclaratorNode, staticStringValue } from './type-guards';
 import { walkAst } from './walk-ast';
@@ -31,19 +31,33 @@ function isAmbientGlobalReceiverName(name: string): boolean {
 // Tracks a for-of loop's ambient-global binding (see the ForOfStatement visitor below) — a loop variable has no `.init` for resolvesToAmbientGlobal's normal alias-chain check to inspect. Reset per forEachAmbientGlobalAccess call.
 let forOfAmbientAliases = new Set<eslintScope.Variable>();
 
-// Only an unresolved `globalThis`/`global` identifier or a chain of single-`const` aliases counts — a `let`, parameter, or other ambiguous binding is treated as opaque.
+// Only an unresolved `globalThis`/`global` identifier or a chain of aliases never reassigned after their declaration counts — a parameter or other ambiguous binding is treated as opaque.
+// Followed in a loop, since an alias chain can be longer than the call stack is deep.
 function resolvesToAmbientGlobal(
+    start: Expression | Super,
+    scopeAnalysis: ModuleScopeAnalysis,
+): boolean {
+    const visited = new Set<eslintScope.Variable>();
+    let node: Expression | Super = start;
+    for (;;) {
+        const next = ambientGlobalSource(node, scopeAnalysis, visited);
+        if (typeof next === 'boolean') {
+            return next;
+        }
+        node = next;
+    }
+}
+
+// One step along the chain: the expression `node` takes its value from, or whether it is the global.
+function ambientGlobalSource(
     node: Expression | Super,
     scopeAnalysis: ModuleScopeAnalysis,
-    visited: Set<eslintScope.Variable> = new Set(),
-): boolean {
-    // `globalThis.globalThis`/`global.global` is a real self-reference — recurse through it before treating other receiver shapes as opaque.
+    visited: Set<eslintScope.Variable>,
+): Expression | Super | boolean {
+    // `globalThis.globalThis`/`global.global` is a real self-reference — follow it before treating other receiver shapes as opaque.
     if (node.type === 'MemberExpression') {
         const propertyName = staticMemberName(node, scopeAnalysis);
-        if (!propertyName || !isAmbientGlobalReceiverName(propertyName)) {
-            return false;
-        }
-        return resolvesToAmbientGlobal(node.object, scopeAnalysis, visited);
+        return !!propertyName && isAmbientGlobalReceiverName(propertyName) && node.object;
     }
 
     if (node.type !== 'Identifier') {
@@ -59,13 +73,13 @@ function resolvesToAmbientGlobal(
         return true;
     }
 
-    if (visited.has(variable) || variable.defs.length !== 1) {
+    if (visited.has(variable) || !hasSingleValue(variable)) {
         return false;
     }
     visited.add(variable);
 
     const [definition] = variable.defs;
-    if (definition.type !== 'Variable' || definition.parent.kind !== 'const') {
+    if (definition.type !== 'Variable') {
         return false;
     }
 
@@ -79,7 +93,7 @@ function resolvesToAmbientGlobal(
     }
 
     if (id.type === 'Identifier') {
-        return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
+        return init;
     }
     // A destructure normally names a property of `y`, not `y` itself — unless every key on the
     // path down to this binding is a `globalThis`/`global` self-reference (`const { globalThis:
@@ -102,14 +116,14 @@ function resolvesToAmbientGlobal(
                 );
             });
         if (reachesSelfReference(id)) {
-            return resolvesToAmbientGlobal(init, scopeAnalysis, visited);
+            return init;
         }
     }
 
     return false;
 }
 
-function staticMemberName(
+export function staticMemberName(
     node: MemberExpression,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
@@ -120,11 +134,11 @@ function staticMemberName(
 }
 
 // A defaulted property value (`{ x = fallback }`) is an AssignmentPattern wrapping the real binding — unwrap it so a defaulted alias is treated the same as a bare one.
-function unwrapDefaultValue(value: Property['value']): Property['value'] {
+export function unwrapDefaultValue(value: Property['value']): Property['value'] {
     return value.type === 'AssignmentPattern' ? value.left : value;
 }
 
-function staticPropertyName(
+export function staticPropertyName(
     property: Property,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
@@ -135,44 +149,39 @@ function staticPropertyName(
     return resolveStaticPropertyName(property.key, scopeAnalysis);
 }
 
-// A computed key (`globalThis[f]`, `const { [key]: r } = globalThis`) is just as knowable as a
-// literal when it traces back to one through a chain of `const` aliases — the same reasoning
-// resolvesToAmbientGlobal applies to the object side of a member expression applies here to the
-// property side, since neither shape evaluates anything dynamic. `visited` is independent of
-// resolvesToAmbientGlobal's own set: it walks a different alias chain (the key's value, not the
-// receiver object), and guards the same way against a self-referential `const` cycle hanging the
-// linter instead of just failing to resolve.
-function resolveStaticPropertyName(
-    node: Expression | PrivateIdentifier,
+// A computed key (`globalThis[f]`, `const { [key]: r } = globalThis`) is as knowable as a literal
+// when it traces back to one through unreassigned aliases; `visited` stops an alias cycle looping.
+export function resolveStaticPropertyName(
+    start: Expression | PrivateIdentifier,
     scopeAnalysis: ModuleScopeAnalysis,
-    visited: Set<eslintScope.Variable> = new Set(),
 ): string | undefined {
-    const direct = staticStringValue(node);
-    if (direct !== undefined) {
-        return direct;
-    }
-    if (node.type !== 'Identifier') {
-        return undefined;
-    }
+    const visited = new Set<eslintScope.Variable>();
+    let node: Expression | PrivateIdentifier = start;
+    for (;;) {
+        const direct = staticStringValue(node);
+        if (direct !== undefined) {
+            return direct;
+        }
+        if (node.type !== 'Identifier') {
+            return undefined;
+        }
 
-    const variable = resolveIdentifier(node, scopeAnalysis);
-    if (!variable || visited.has(variable) || variable.defs.length !== 1) {
-        return undefined;
-    }
-    visited.add(variable);
+        const variable = resolveIdentifier(node, scopeAnalysis);
+        if (!variable || visited.has(variable) || !hasSingleValue(variable)) {
+            return undefined;
+        }
+        visited.add(variable);
 
-    const [definition] = variable.defs;
-    if (definition.type !== 'Variable' || definition.parent.kind !== 'const') {
-        return undefined;
+        const [definition] = variable.defs;
+        if (definition.type !== 'Variable' || !isVariableDeclaratorNode(definition.node)) {
+            return undefined;
+        }
+        const { id, init } = definition.node;
+        if (id.type !== 'Identifier' || !init) {
+            return undefined;
+        }
+        node = init;
     }
-    if (!isVariableDeclaratorNode(definition.node)) {
-        return undefined;
-    }
-    const { id, init } = definition.node;
-    if (id.type !== 'Identifier' || !init) {
-        return undefined;
-    }
-    return resolveStaticPropertyName(init, scopeAnalysis, visited);
 }
 
 // A for-of binding identifier is a declaration site, not a reference, so `resolveIdentifier` (which only resolves references) can't find it — look it up via eslint-scope's declarator-to-Variable index instead.
@@ -307,12 +316,13 @@ export function forEachAmbientGlobalAccess(
                 const [declarator] = node.left.declarations;
                 if (declarator.id.type === 'ObjectPattern') {
                     bindingPattern = declarator.id;
-                } else if (declarator.id.type === 'Identifier' && node.left.kind === 'const') {
+                } else if (declarator.id.type === 'Identifier' && node.left.kind !== 'var') {
                     bindingIdentifierVariable = findDeclaredVariable(declarator, scopeAnalysis);
+                    // A `let` reassigned in the body isn't provably still the ambient global; a `var` outlives the loop holding the last element.
+                    if (!bindingIdentifierVariable || !hasSingleValue(bindingIdentifierVariable)) {
+                        return;
+                    }
                 } else {
-                    // A `let` binding can be reassigned in the loop body, so unlike the ObjectPattern
-                    // case above it isn't provably still the ambient global — same opacity rule as a
-                    // `let` alias chain.
                     return;
                 }
             } else if (node.left.type === 'ObjectPattern') {

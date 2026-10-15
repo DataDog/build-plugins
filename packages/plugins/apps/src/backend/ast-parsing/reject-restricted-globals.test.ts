@@ -230,6 +230,26 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
                 'reject fetch reached through a chain of const aliases resolving a computed property name',
             code: "export function run() { const f1 = 'fetch'; const f2 = f1; return globalThis[f2]('https://example.com'); }",
         },
+        {
+            description:
+                'reject fetch reached through a let alias of globalThis that is never reassigned',
+            code: 'export function run() { let g = globalThis; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a var alias of globalThis that is never reassigned',
+            code: 'export function run() { var g = globalThis; return g.fetch("https://example.com"); }',
+        },
+        {
+            description:
+                'reject fetch reached through a let for-of loop variable bound to globalThis that is never reassigned',
+            code: 'export function run() { for (let g of [globalThis]) { return g.fetch("https://example.com"); } }',
+        },
+        {
+            description:
+                'reject globalThis[k](...) where k is a let alias of a string-literal property name that is never reassigned',
+            code: "export function run() { let k = 'fetch'; return globalThis[k]('https://example.com'); }",
+        },
     ];
 
     test.each(rejectedCases)('Should $description', ({ code }) => {
@@ -297,8 +317,8 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
         },
         {
             description:
-                'allow a "let" alias of globalThis, since it could be reassigned to something else',
-            code: 'export function run() { let g = globalThis; return g.fetch(); }',
+                'allow a "let" alias of globalThis that is reassigned, since it may no longer be the ambient global',
+            code: 'export function run() { let g = globalThis; g = safeObj; return g.fetch(); }',
         },
         {
             description:
@@ -309,6 +329,16 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
             description:
                 'allow a "let"-declared for-of loop variable bound to globalThis via an inline array literal, since it could be reassigned to something else before use, same opacity as a "let" alias',
             code: 'export function run() { for (let g of [globalThis]) { g = safeObj; return g.fetch(); } }',
+        },
+        {
+            description:
+                'allow a var for-of loop variable read after the loop, where it holds the last element',
+            code: 'export function run() { for (var g of [globalThis, { fetch() { return 1; } }]) {} return g.fetch(); }',
+        },
+        {
+            description:
+                'allow a var for-of loop variable bound to globalThis that is redeclared with a local object',
+            code: 'for (var g of [globalThis]) {}\nvar g = { fetch() { return 1; } };\nexport function run() { return g.fetch(); }',
         },
         {
             description: 'allow a computed member access with a template literal that interpolates',
@@ -347,8 +377,8 @@ describe('Backend Functions - rejectRestrictedGlobals', () => {
         },
         {
             description:
-                'allow a computed property access whose key is a "let" alias of a string literal, same opacity as a "let" alias of globalThis itself',
-            code: "export function run() { let f = 'fetch'; return globalThis[f](); }",
+                'allow a computed property access whose key is a "let" alias of a string literal that is reassigned, same opacity as a reassigned "let" alias of globalThis itself',
+            code: "export function run(other) { let f = 'fetch'; f = other; return globalThis[f](); }",
         },
         {
             description:
@@ -409,6 +439,12 @@ describe('Backend Functions - rejectGlobalsMissingFromNode', () => {
             name: 'Deno',
             code: 'export function run() { const { env } = Deno; return env.get("TOKEN"); }',
         },
+        {
+            description:
+                'reject XMLHttpRequest reached through a let alias of globalThis that is never reassigned',
+            name: 'XMLHttpRequest',
+            code: 'export function run() { let g = globalThis; return new g.XMLHttpRequest(); }',
+        },
     ];
 
     test.each(rejectedCases)('Should $description', ({ name, code }) => {
@@ -452,6 +488,11 @@ describe('Backend Functions - rejectGlobalsMissingFromNode', () => {
         {
             description: 'allow a local binding named Deno',
             code: 'const Deno = { cwd: () => "/" };\nexport function run() { return Deno.cwd(); }',
+        },
+        {
+            description:
+                'allow a let alias of globalThis that is reassigned, since it may no longer be the ambient global',
+            code: 'export function run() { let g = globalThis; g = safeObj; return new g.XMLHttpRequest(); }',
         },
         {
             description:
