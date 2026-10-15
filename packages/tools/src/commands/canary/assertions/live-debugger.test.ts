@@ -151,8 +151,43 @@ describe('Live Debugger canary assertions', () => {
     });
 
     test.each([
+        [
+            'a stub hidden in a comment',
+            JSON.stringify(`<script>/* globalThis.$dd_probes = noop */ ${unguardedChild}</script>`),
+        ],
+        ['a script that does not parse', JSON.stringify(`<script>${unguardedChild} }}}</script>`)],
+        ['a template with a literal substitution', `\`\${"x"};${unguardedChild}\``],
+    ])('should reject an inlined payload with %s', async (_kind, payload) => {
+        const filePath = path.resolve(TEST_ROOT, 'inlined-unsafe.js');
+        await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
+
+        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
+        );
+    });
+
+    test.each([
+        ['a literal substitution', `\`\${${JSON.stringify(runtimeStubs)}};${unguardedChild}\``],
+        ['an unresolvable substitution', `\`\${bootstrap};${unguardedChild}\``],
+    ])('should accept a template payload whose stub comes from %s', async (_kind, payload) => {
+        const filePath = path.resolve(TEST_ROOT, 'inlined-template.js');
+        await outputFile(
+            filePath,
+            `${runtimeStubs};$dd_probes("main");const bootstrap=${JSON.stringify(runtimeStubs)};const p=${payload};`,
+        );
+
+        await expect(
+            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+        ).resolves.toBeUndefined();
+    });
+
+    test.each([
         ['a comment', '/* call $dd_probes(id) at function entry */ function f() {}'],
         ['a member call', 'sdk.$dd_probes("x"); window.$dd_probes("y");'],
+        [
+            'a member call split by whitespace or comments',
+            'sdk. $dd_probes("x"); sdk.\n$dd_probes("y"); sdk./* c */$dd_probes("z");',
+        ],
     ])('should not count %s as an unguarded probe call', async (_kind, code) => {
         const filePath = path.resolve(TEST_ROOT, 'not-a-probe-call.js');
         await outputFile(filePath, code);

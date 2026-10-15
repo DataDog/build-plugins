@@ -16,26 +16,49 @@ import { CanaryCommandError } from '../runner';
 import type { CanaryVariant, CommandResult } from '../types';
 
 const MAX_INLINED_SOURCE_DEPTH = 3;
+const HTML_SCRIPT_PATTERN = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
 
 type ParsedSource = {
-    // Strings and comments blanked, so a stub inside them can't guard the outer code.
-    outerCode: string;
+    callsProbes: boolean;
+    assignsStub: boolean;
     inlinedSources: string[];
 };
 
 const isUnguarded = (code: string): boolean =>
     LIVE_DEBUGGER_PROBES_CALL_PATTERN.test(code) && !LIVE_DEBUGGER_PROBES_STUB_PATTERN.test(code);
 
-const getStringValue = (node: Node): string | undefined => {
-    switch (node.type) {
-        case 'StringLiteral':
-        case 'DirectiveLiteral':
-            return node.value;
-        case 'TemplateElement':
-            return node.value.cooked ?? node.value.raw;
-        default:
-            return undefined;
+const isProbesIdentifier = (node: Node): boolean =>
+    node.type === 'Identifier' && node.name === LIVE_DEBUGGER_PROBES_FUNCTION;
+
+const isStubAssignment = (node: Node): boolean => {
+    if (node.type !== 'AssignmentExpression' || node.left.type !== 'MemberExpression') {
+        return false;
     }
+    const { object, property, computed } = node.left;
+    const isProbesProperty = computed
+        ? property.type === 'StringLiteral' && property.value === LIVE_DEBUGGER_PROBES_FUNCTION
+        : isProbesIdentifier(property);
+    return object.type === 'Identifier' && object.name === 'globalThis' && isProbesProperty;
+};
+
+// Templates with non-literal substitutions can't be resolved, so they aren't checked.
+const getInlinedSource = (node: Node): string | undefined => {
+    if (node.type === 'StringLiteral' || node.type === 'DirectiveLiteral') {
+        return node.value;
+    }
+    if (node.type !== 'TemplateLiteral') {
+        return undefined;
+    }
+    let source = '';
+    for (const [index, quasi] of node.quasis.entries()) {
+        source += quasi.value.cooked ?? '';
+        const expression = node.expressions[index];
+        if (expression && expression.type !== 'StringLiteral') {
+            return undefined;
+        }
+        source += expression?.value ?? '';
+    }
+    return source;
 };
 
 // Bundles inlined as strings (iframe `srcdoc`, worker sources) share their parent chunk's
@@ -48,55 +71,48 @@ const parseSource = (code: string): ParsedSource | undefined => {
         return undefined;
     }
 
-    const blankedRanges: [number, number][] = [];
-    const blank = ({ start, end }: { start?: number | null; end?: number | null }): void => {
-        if (typeof start === 'number' && typeof end === 'number') {
-            blankedRanges.push([start, end]);
-        }
-    };
-    file.comments?.forEach(blank);
-
-    const inlinedSources: string[] = [];
+    const parsed: ParsedSource = { callsProbes: false, assignsStub: false, inlinedSources: [] };
     traverseFast(file as unknown as Node, (node) => {
-        if (node.type === 'TemplateLiteral') {
-            const source = node.quasis.map((quasi) => quasi.value.cooked ?? '').join('');
-            if (LIVE_DEBUGGER_PROBES_CALL_PATTERN.test(source)) {
-                inlinedSources.push(source);
-            }
-            return;
+        if (
+            (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') &&
+            isProbesIdentifier(node.callee)
+        ) {
+            parsed.callsProbes = true;
+        } else if (isStubAssignment(node)) {
+            parsed.assignsStub = true;
         }
-        const value = getStringValue(node);
-        if (value === undefined) {
-            return;
-        }
-        blank(node);
-        if (node.type !== 'TemplateElement' && LIVE_DEBUGGER_PROBES_CALL_PATTERN.test(value)) {
-            inlinedSources.push(value);
+
+        const source = getInlinedSource(node);
+        if (source !== undefined && LIVE_DEBUGGER_PROBES_CALL_PATTERN.test(source)) {
+            parsed.inlinedSources.push(source);
         }
     });
-
-    let outerCode = '';
-    let cursor = 0;
-    for (const [start, end] of blankedRanges.sort(([a], [b]) => a - b)) {
-        outerCode += `${code.slice(cursor, start)}""`;
-        cursor = end;
-    }
-    outerCode += code.slice(cursor);
-    return { outerCode, inlinedSources };
+    return parsed;
 };
 
-const hasUnguardedInlinedSource = (sources: string[], depth: number): boolean =>
-    sources.some((source) => {
-        // Sources that don't parse as JS (an HTML `srcdoc`) are checked as plain text.
-        const parsed = depth < MAX_INLINED_SOURCE_DEPTH ? parseSource(source) : undefined;
-        if (!parsed) {
-            return isUnguarded(source);
-        }
-        return (
-            isUnguarded(parsed.outerCode) ||
-            hasUnguardedInlinedSource(parsed.inlinedSources, depth + 1)
-        );
+const isUnguardedParsed = (parsed: ParsedSource, depth: number): boolean =>
+    (parsed.callsProbes && !parsed.assignsStub) ||
+    (depth < MAX_INLINED_SOURCE_DEPTH &&
+        parsed.inlinedSources.some((source) => isUnguardedSource(source, depth + 1)));
+
+const isUnguardedSource = (source: string, depth: number): boolean => {
+    const parsed = parseSource(source);
+    if (parsed) {
+        return isUnguardedParsed(parsed, depth);
+    }
+
+    const scripts = Array.from(source.matchAll(HTML_SCRIPT_PATTERN), ([, script]) => script);
+    if (scripts.length === 0) {
+        return isUnguarded(source);
+    }
+    // A script that doesn't parse can't be shown to install the stub, so it fails closed.
+    return scripts.some((script) => {
+        const parsedScript = parseSource(script);
+        return parsedScript
+            ? isUnguardedParsed(parsedScript, depth)
+            : LIVE_DEBUGGER_PROBES_CALL_PATTERN.test(script);
     });
+};
 
 const ERROR_MARKERS = [
     'Instrumentation Error in ',
@@ -165,12 +181,12 @@ export const assertLiveDebuggerArtifacts = async (
                 `Could not parse instrumented build output to check inlined code: ${filePath}`,
             );
         }
-        if (isUnguarded(parsed.outerCode)) {
+        if (parsed.callsProbes && !parsed.assignsStub) {
             throw new CanaryCommandError(
                 `Instrumented build output calls ${LIVE_DEBUGGER_PROBES_FUNCTION} without a runtime stub: ${filePath}`,
             );
         }
-        if (hasUnguardedInlinedSource(parsed.inlinedSources, 1)) {
+        if (parsed.inlinedSources.some((source) => isUnguardedSource(source, 1))) {
             throw new CanaryCommandError(
                 `Instrumented build output inlines code that calls ${LIVE_DEBUGGER_PROBES_FUNCTION} without a runtime stub: ${filePath}`,
             );
