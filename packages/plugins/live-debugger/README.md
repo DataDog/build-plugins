@@ -254,7 +254,7 @@ The following function types are always skipped regardless of configuration:
 
 ## Bundle size impact
 
-Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. In our testing, the added code compresses well, so the gzipped size grows far less than the uncompressed size.
+Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. The added code compresses well, so the gzipped size grows far less than the uncompressed size.
 
 Check the size limits your build enforces before enabling Live Debugger, especially limits on uncompressed file size:
 
