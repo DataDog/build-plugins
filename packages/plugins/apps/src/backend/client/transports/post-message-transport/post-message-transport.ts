@@ -149,27 +149,15 @@ function needsParentPing(): boolean {
     );
 }
 
-async function getParentOrigin(): Promise<string | undefined> {
+async function getParentOrigin(shouldPing: boolean): Promise<string | undefined> {
     const ancestorOrigins = window.location.ancestorOrigins;
     if (ancestorOrigins) {
         return ancestorOrigins[0];
     }
-    if (needsParentPing()) {
+    if (shouldPing) {
         await pingParent();
     }
     return learnedParentOrigin;
-}
-
-/** The parent's origin when it is a Datadog page and this app runs on its dev server, else `undefined`. */
-async function getBundleRecipientOrigin(): Promise<string | undefined> {
-    if (Reflect.get(globalThis, DEV_SERVER_MARKER) !== true) {
-        return undefined;
-    }
-    const parentOrigin = await getParentOrigin();
-    if (parentOrigin === undefined || !isDatadogOrigin(parentOrigin)) {
-        return undefined;
-    }
-    return parentOrigin;
 }
 
 async function describeErrorResponse(response: Response): Promise<string> {
@@ -190,8 +178,10 @@ function warnMissingBundle(functionName: string, reason: string): void {
     console.warn(`[dd-apps] Sending "${functionName}" without its dev server bundle: ${reason}`);
 }
 
-/** Resolves `undefined` rather than throwing when the dev server returns no usable bundle, so the call is still sent. */
-async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse | undefined> {
+type BundleFetch = { bundle: DebugBundleResponse } | { failure: string };
+
+/** Never rejects: a call without a usable bundle is still sent, so a failure is returned for the caller to report. */
+async function fetchOwnBundle(functionName: string): Promise<BundleFetch> {
     const request: Pick<ExecuteActionRequest, 'functionName'> = { functionName };
     const requestBody = JSON.stringify(request);
     const controller = new AbortController();
@@ -208,22 +198,41 @@ async function fetchOwnBundle(functionName: string): Promise<DebugBundleResponse
         });
         if (!response.ok) {
             const errorDescription = await describeErrorResponse(response);
-            warnMissingBundle(functionName, errorDescription);
-            return undefined;
+            return { failure: errorDescription };
         }
         const body: unknown = await response.json();
         if (!isDebugBundle(body)) {
-            warnMissingBundle(functionName, 'the dev server response is not a bundle');
-            return undefined;
+            return { failure: 'the dev server response is not a bundle' };
         }
-        return { code: body.code, allowedConnectionIds: body.allowedConnectionIds };
+        return { bundle: { code: body.code, allowedConnectionIds: body.allowedConnectionIds } };
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        warnMissingBundle(functionName, errorMessage);
-        return undefined;
+        return { failure: errorMessage };
     } finally {
         clearTimeout(timeoutId);
     }
+}
+
+/** The function's bundle and the exact origin to post it to, when this dev page is framed by a Datadog page. */
+async function prepareBundle(
+    functionName: string,
+): Promise<{ recipientOrigin?: string; bundle?: DebugBundleResponse }> {
+    if (Reflect.get(globalThis, DEV_SERVER_MARKER) !== true) {
+        return {};
+    }
+    const isPinging = needsParentPing();
+    // The build runs while the parent answers its ping, and is dropped if the parent is not a Datadog page.
+    const earlyFetch = isPinging ? fetchOwnBundle(functionName) : undefined;
+    const recipientOrigin = await getParentOrigin(isPinging);
+    if (recipientOrigin === undefined || !isDatadogOrigin(recipientOrigin)) {
+        return {};
+    }
+    const result = await (earlyFetch ?? fetchOwnBundle(functionName));
+    if ('failure' in result) {
+        warnMissingBundle(functionName, result.failure);
+        return { recipientOrigin };
+    }
+    return { recipientOrigin, bundle: result.bundle };
 }
 
 /**
@@ -239,8 +248,7 @@ export const postMessageTransport: BackendFunctionTransport = async <TData>(
     args: unknown[],
 ): Promise<TData> => {
     const requestId = generateRequestId();
-    const recipientOrigin = await getBundleRecipientOrigin();
-    const bundle = recipientOrigin === undefined ? undefined : await fetchOwnBundle(functionName);
+    const { recipientOrigin, bundle } = await prepareBundle(functionName);
 
     return new Promise<TData>((resolve, reject) => {
         let timeoutId: ReturnType<typeof setTimeout>;

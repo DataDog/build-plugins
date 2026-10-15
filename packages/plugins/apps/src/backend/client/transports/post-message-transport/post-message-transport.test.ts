@@ -209,6 +209,7 @@ describe('postMessageTransport', () => {
             const [ping, ...otherPings] = pings();
             expect(otherPings).toHaveLength(0);
             expect(postMessage).toHaveBeenCalledWith(ping, '*');
+            expect(global.fetch).toHaveBeenCalledTimes(1);
             pong(DATADOG_PARENT);
             const message = await posted;
             reply(message.requestId, 'ok');
@@ -229,8 +230,24 @@ describe('postMessageTransport', () => {
             reply(message.requestId, 'ok');
 
             await expect(result).resolves.toBe('ok');
-            expect(global.fetch).not.toHaveBeenCalled();
+            expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
             expect(postMessage).toHaveBeenCalledWith(message, '*');
+        });
+
+        test('Should not warn about the bundle fetch when the parent is not a Datadog page', async () => {
+            const { posted, reply, pong } = installFakeWindow({});
+            const networkError = new Error('Failed to fetch');
+            global.fetch = jest.fn().mockRejectedValue(networkError);
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong('https://example.com');
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
+            expect(warn).not.toHaveBeenCalled();
         });
 
         test('Should ignore a pong from any window but the parent', async () => {
@@ -246,7 +263,7 @@ describe('postMessageTransport', () => {
             reply(message.requestId, 'ok');
 
             await expect(result).resolves.toBe('ok');
-            expect(global.fetch).not.toHaveBeenCalled();
+            expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
             expect(postMessage).toHaveBeenCalledWith(message, '*');
         });
 
@@ -262,7 +279,7 @@ describe('postMessageTransport', () => {
             reply(message.requestId, 'ok');
 
             await expect(result).resolves.toBe('ok');
-            expect(global.fetch).not.toHaveBeenCalled();
+            expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
             expect(postMessage).toHaveBeenCalledWith(message, '*');
             const remainingListeners = listenerCount();
             expect(remainingListeners).toBe(0);
@@ -387,7 +404,7 @@ describe('postMessageTransport', () => {
             const sentPings = pings();
             expect(sentPings).toHaveLength(MAX_UNANSWERED_PINGS);
             expect(postMessage).toHaveBeenCalledWith(thirdQuery, '*');
-            expect(global.fetch).not.toHaveBeenCalled();
+            expect(global.fetch).toHaveBeenCalledTimes(sentPings.length);
         });
 
         test('Should end a pending ping when reset', async () => {
