@@ -198,6 +198,17 @@ function earlyExit(x) {
 }
 ```
 
+When the bare `return;` is the brace-less body of an `if`, `else`, or loop, the report and the
+`return` are wrapped in braces, so the return stays conditional:
+
+```js
+// Before
+if (!x) return;
+
+// After
+if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; }
+```
+
 ## Multiple returns
 
 Every `return` statement is wrapped independently.

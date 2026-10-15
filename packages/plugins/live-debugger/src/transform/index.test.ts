@@ -825,6 +825,58 @@ describe('transformCode', () => {
             const returnMatches = result.code.match(/\$dd_rv\d+ =/g);
             expect(returnMatches?.length).toBe(1);
         });
+
+        // Each `run` exits early when `skip` is true, so `f` logs `ran` only for the
+        // second call. An unconditional return would leave the log empty.
+        const braceLessReturnCases = [
+            {
+                description: 'an if statement',
+                body: "if (skip) return; log.push('ran');",
+            },
+            {
+                description: 'an else branch',
+                body: "if (!skip) log.push('ran'); else return; log.push('after');",
+                expected: 'ran,after',
+            },
+            {
+                description: 'a nested if statement',
+                body: "if (log) if (skip) return; log.push('ran');",
+            },
+            {
+                description: 'a while loop',
+                body: "while (skip) return; log.push('ran');",
+            },
+            {
+                description: 'a for loop',
+                body: "for (; skip; ) return; log.push('ran');",
+            },
+            {
+                description: 'an if statement without a semicolon before the closing brace',
+                body: "log.push(skip ? 'skip' : 'ran'); if (skip) return",
+                expected: 'skip,ran',
+            },
+        ];
+
+        test.each(braceLessReturnCases)(
+            'should keep a bare return conditional in $description',
+            ({ body, expected = 'ran' }) => {
+                const code = [
+                    'function f() {',
+                    '  const log = [];',
+                    '  run(true);',
+                    '  run(false);',
+                    "  return log.join(',');",
+                    `  function run(skip) {${body}}`,
+                    '}',
+                ].join('\n');
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(result.instrumentedCount).toBe(2);
+                expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+                expect(runTransformedFunction(code)).toBe(expected);
+                expect(runTransformedFunction(result.code)).toBe(expected);
+            },
+        );
     });
 
     describe('source maps', () => {
@@ -1475,6 +1527,25 @@ describe('transformCode', () => {
             );
         });
 
+        it('should produce the expected output for a brace-less bare return', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function earlyExit(x) { if (!x) return; console.log(x); }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function earlyExit(x) {let $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
         it('should omit the trailing return for a function with exhaustive if/else returns', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1526,7 +1597,8 @@ function runTransformedFunction(code: string): unknown {
         globalThis: runtimeGlobal,
     };
     const executableCode = `${code}\nglobalThis.result = f();`;
-    runInNewContext(executableCode, sandbox);
+    // A transform regression can turn a loop into an infinite one; fail instead of hanging.
+    runInNewContext(executableCode, sandbox, { timeout: 1_000 });
     return runtimeGlobal.result;
 }
 
