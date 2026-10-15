@@ -33,10 +33,13 @@ function generateRequestId(): string {
     return `req-${Date.now()}-${requestCounter}`;
 }
 
+function isRecord(data: unknown): data is object {
+    return data !== null && typeof data === 'object';
+}
+
 function isQueryResponse(data: unknown, requestId: string): data is IframeQueryResponse {
     return (
-        data !== null &&
-        typeof data === 'object' &&
+        isRecord(data) &&
         'type' in data &&
         data.type === 'app-builder:run-query:response' &&
         'requestId' in data &&
@@ -44,21 +47,14 @@ function isQueryResponse(data: unknown, requestId: string): data is IframeQueryR
     );
 }
 
-function isPong(data: unknown, requestId: string): data is IframeQueryPong {
-    return (
-        data !== null &&
-        typeof data === 'object' &&
-        'type' in data &&
-        data.type === 'app-builder:pong' &&
-        'requestId' in data &&
-        data.requestId === requestId
-    );
+// The bridge requires a ping's requestId, but any pong will do: the frame only needs its origin.
+function isPong(data: unknown): data is IframeQueryPong {
+    return isRecord(data) && 'type' in data && data.type === 'app-builder:pong';
 }
 
 function isDebugBundle(data: unknown): data is DebugBundleResponse {
     return (
-        data !== null &&
-        typeof data === 'object' &&
+        isRecord(data) &&
         'code' in data &&
         typeof data.code === 'string' &&
         data.code.length > 0 &&
@@ -80,55 +76,88 @@ function isDatadogOrigin(origin: string): boolean {
     return url.protocol === 'https:' && url.port === '' && parseSite(hostname) !== undefined;
 }
 
-/** Resolves the origin the browser stamps on the parent's pong, or `undefined` if it doesn't answer in time. */
-function pingParentOrigin(): Promise<string | undefined> {
-    const requestId = generateRequestId();
-    return new Promise((resolve) => {
-        function finish(origin: string | undefined): void {
-            window.removeEventListener('message', handleMessage);
-            clearTimeout(timeoutId);
-            resolve(origin);
-        }
+export const MAX_UNANSWERED_PINGS = 2;
 
-        function handleMessage(event: MessageEvent): void {
-            if (event.source === window.parent && isPong(event.data, requestId)) {
-                finish(event.origin);
-            }
-        }
+let learnedParentOrigin: string | undefined;
+let unansweredPings = 0;
+let pendingPing: { answered: Promise<void>; end: () => void } | undefined;
 
-        window.addEventListener('message', handleMessage);
-        const timeoutId = setTimeout(() => finish(undefined), PARENT_PING_TIMEOUT_MS);
-        const ping: IframeQueryPing = { type: 'app-builder:ping', requestId };
-        try {
-            window.parent.postMessage(ping, '*');
-        } catch {
-            finish(undefined);
-        }
-    });
+/** @internal Exposed only for tests to reset what the frame learned about its parent between cases. */
+export const resetParentOrigin = (): void => {
+    pendingPing?.end();
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('message', handlePong);
+    }
+    learnedParentOrigin = undefined;
+    unansweredPings = 0;
+};
+
+// The browser stamps the sender's origin on each message, so a pong or response from the parent reveals it.
+function learnParentOrigin(event: MessageEvent): void {
+    learnedParentOrigin = event.origin;
+    window.removeEventListener('message', handlePong);
+    pendingPing?.end();
 }
 
-const parentOriginPings = new WeakMap<object, Promise<string | undefined>>();
+function handlePong(event: MessageEvent): void {
+    if (event.source === window.parent && isPong(event.data)) {
+        learnParentOrigin(event);
+    }
+}
+
+/** Shares one ping between calls; resolves on an answer or a timeout, while the pong listener stays. */
+function pingParent(): Promise<void> {
+    if (pendingPing !== undefined) {
+        return pendingPing.answered;
+    }
+    window.addEventListener('message', handlePong);
+    let resolveAnswered = (): void => {};
+    const answered = new Promise<void>((resolve) => {
+        resolveAnswered = resolve;
+    });
+    const timeoutId = setTimeout(miss, PARENT_PING_TIMEOUT_MS);
+
+    function end(): void {
+        clearTimeout(timeoutId);
+        pendingPing = undefined;
+        resolveAnswered();
+    }
+
+    function miss(): void {
+        unansweredPings += 1;
+        end();
+    }
+
+    pendingPing = { answered, end };
+    const ping: IframeQueryPing = { type: 'app-builder:ping', requestId: generateRequestId() };
+    try {
+        window.parent.postMessage(ping, '*');
+    } catch {
+        miss();
+    }
+    return answered;
+}
+
+// Firefox has no ancestorOrigins; App Builder's bridge answers a ping from its frame.
+// After MAX_UNANSWERED_PINGS misses, calls stop pinging until a pong or response from the parent arrives.
+function needsParentPing(): boolean {
+    return (
+        window.location.ancestorOrigins === undefined &&
+        window.parent !== window &&
+        learnedParentOrigin === undefined &&
+        unansweredPings < MAX_UNANSWERED_PINGS
+    );
+}
 
 async function getParentOrigin(): Promise<string | undefined> {
     const ancestorOrigins = window.location.ancestorOrigins;
     if (ancestorOrigins) {
         return ancestorOrigins[0];
     }
-    if (window.parent === window) {
-        return undefined;
+    if (needsParentPing()) {
+        await pingParent();
     }
-    // Firefox has no ancestorOrigins; App Builder's bridge answers a ping from its frame.
-    // Calls share one ping; an unanswered one is dropped so a later call asks again.
-    let ping = parentOriginPings.get(window);
-    if (ping === undefined) {
-        ping = pingParentOrigin();
-        parentOriginPings.set(window, ping);
-    }
-    const origin = await ping;
-    if (origin === undefined && parentOriginPings.get(window) === ping) {
-        parentOriginPings.delete(window);
-    }
-    return origin;
+    return learnedParentOrigin;
 }
 
 /** The parent's origin when it is a Datadog page and this app runs on its dev server, else `undefined`. */
@@ -147,12 +176,7 @@ async function describeErrorResponse(response: Response): Promise<string> {
     const status = `HTTP ${response.status}`;
     try {
         const body: unknown = await response.json();
-        if (
-            body !== null &&
-            typeof body === 'object' &&
-            'error' in body &&
-            typeof body.error === 'string'
-        ) {
+        if (isRecord(body) && 'error' in body && typeof body.error === 'string') {
             return `${status}: ${body.error}`;
         }
         return status;
@@ -230,6 +254,7 @@ export const postMessageTransport: BackendFunctionTransport = async <TData>(
             if (event.source !== window.parent || !isQueryResponse(event.data, requestId)) {
                 return;
             }
+            learnParentOrigin(event);
 
             cleanup();
 

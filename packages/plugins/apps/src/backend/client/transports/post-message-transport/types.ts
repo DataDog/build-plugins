@@ -21,8 +21,6 @@ export type IframeQueryPing = {
 
 export type IframeQueryPong = {
     type: 'app-builder:pong';
-    requestId: string;
-    availableQueries: string[];
 };
 
 // Response: parent → iframe, for the `app-builder:run-query` messages the

@@ -8,9 +8,11 @@ import { DEBUG_BUNDLE_PATH, DEV_SERVER_MARKER } from '../../../protocol';
 
 import {
     BUNDLE_FETCH_TIMEOUT_MS,
+    MAX_UNANSWERED_PINGS,
     PARENT_PING_TIMEOUT_MS,
     POSTMESSAGE_TIMEOUT_MS,
     postMessageTransport,
+    resetParentOrigin,
 } from './post-message-transport';
 
 type MessageListener = (event: { data: unknown; origin?: string; source?: unknown }) => void;
@@ -52,10 +54,10 @@ function installFakeWindow(
             .map(([message]: [PostedMessage]) => message)
             .filter((message) => message.type === 'app-builder:ping');
     const pong = (origin: string, source: unknown = fakeWindow.parent) => {
-        const [ping] = pings();
+        const ping = pings().at(-1);
         for (const listener of [...listeners]) {
             listener({
-                data: { type: 'app-builder:pong', requestId: ping.requestId, availableQueries: [] },
+                data: { type: 'app-builder:pong', requestId: ping?.requestId },
                 origin,
                 source,
             });
@@ -103,6 +105,7 @@ describe('postMessageTransport', () => {
 
     beforeEach(() => {
         originalFetch = global.fetch;
+        resetParentOrigin();
         Reflect.set(globalThis, DEV_SERVER_MARKER, true);
         warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
     });
@@ -313,7 +316,7 @@ describe('postMessageTransport', () => {
             await expect(second).resolves.toBe('ok');
         });
 
-        test('Should ping again on a later call after the parent did not answer', async () => {
+        test('Should learn the parent origin from its response when the ping goes unanswered', async () => {
             jest.useFakeTimers();
             const { postMessage, reply, pings } = installFakeWindow({});
             mockFetchResponse({ ok: true, json: async () => BUNDLE });
@@ -321,17 +324,198 @@ describe('postMessageTransport', () => {
             const first = postMessageTransport(QUERY_NAME, ARGS);
             await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
             const [firstQuery] = postMessage.mock.calls.at(-1);
+            expect(firstQuery).toEqual(MESSAGE_WITHOUT_BUNDLE);
             reply(firstQuery.requestId, 'first');
             await expect(first).resolves.toBe('first');
 
             const second = postMessageTransport(QUERY_NAME, ARGS);
             await jest.advanceTimersByTimeAsync(0);
+            const [secondQuery] = postMessage.mock.calls.at(-1);
+            expect(secondQuery).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+            reply(secondQuery.requestId, 'second');
+
+            await expect(second).resolves.toBe('second');
+            expect(postMessage).toHaveBeenCalledWith(secondQuery, DATADOG_PARENT);
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+        });
+
+        const timedOut = { message: expect.stringContaining('timed out') };
+        const settle = (call: Promise<unknown>) => call.catch((error: unknown) => error);
+
+        const callUnanswered = async () => {
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const outcome = settle(result);
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS + POSTMESSAGE_TIMEOUT_MS);
+            const error = await outcome;
+            expect(error).toMatchObject(timedOut);
+        };
+
+        const exhaustPings = async (remaining = MAX_UNANSWERED_PINGS): Promise<void> => {
+            if (remaining === 0) {
+                return;
+            }
+            await callUnanswered();
+            await exhaustPings(remaining - 1);
+        };
+
+        test('Should ping again on a later call after the parent answered nothing', async () => {
+            jest.useFakeTimers();
+            const { pings } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            await callUnanswered();
+            await callUnanswered();
+
             const sentPings = pings();
             expect(sentPings).toHaveLength(2);
+        });
+
+        test('Should stop pinging and send at once after its last unanswered ping', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply, pings } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+            await exhaustPings();
+
+            const third = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [thirdQuery] = postMessage.mock.calls.at(-1);
+            expect(thirdQuery).toEqual(MESSAGE_WITHOUT_BUNDLE);
+            reply(thirdQuery.requestId, 'third');
+
+            await expect(third).resolves.toBe('third');
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(MAX_UNANSWERED_PINGS);
+            expect(postMessage).toHaveBeenCalledWith(thirdQuery, '*');
+            expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        test('Should end a pending ping when reset', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            resetParentOrigin();
+            await jest.advanceTimersByTimeAsync(0);
+            const [query] = postMessage.mock.calls.at(-1);
+            expect(query).toEqual(MESSAGE_WITHOUT_BUNDLE);
+            reply(query.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            const remainingTimers = jest.getTimerCount();
+            expect(remainingTimers).toBe(0);
+        });
+
+        test('Should stop listening for a pong once reset', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply, pings, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            resetParentOrigin();
+            pong(DATADOG_PARENT);
+            const second = postMessageTransport(QUERY_NAME, ARGS);
             await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(2);
+            const queries = postMessage.mock.calls
+                .map(([message]: [PostedMessage]) => message)
+                .filter((message) => message.type === 'app-builder:run-query');
+            for (const query of queries) {
+                reply(query.requestId, 'ok');
+            }
+            await expect(first).resolves.toBe('ok');
+            await expect(second).resolves.toBe('ok');
+        });
+
+        const lateAnswers = [
+            {
+                description: 'attach the bundle once a Datadog parent answers after giving up',
+                origin: DATADOG_PARENT,
+                expected: {
+                    message: { ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE },
+                    target: DATADOG_PARENT,
+                },
+            },
+            {
+                description:
+                    'still send without a bundle when a non-Datadog parent answers after giving up',
+                origin: 'https://example.com',
+                expected: { message: MESSAGE_WITHOUT_BUNDLE, target: '*' },
+            },
+        ];
+
+        test.each(lateAnswers)('Should $description', async ({ origin, expected }) => {
+            jest.useFakeTimers();
+            const { postMessage, reply, pings, pong, listenerCount } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+            await exhaustPings();
+            pong(origin);
+
+            const later = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [laterQuery] = postMessage.mock.calls.at(-1);
+            expect(laterQuery).toEqual(expected.message);
+            reply(laterQuery.requestId, 'later', undefined, origin);
+
+            await expect(later).resolves.toBe('later');
+            expect(postMessage).toHaveBeenCalledWith(laterQuery, expected.target);
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(MAX_UNANSWERED_PINGS);
+            const remainingListeners = listenerCount();
+            expect(remainingListeners).toBe(0);
+        });
+
+        test('Should use a late answer to an earlier ping', async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply, pings, pong } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            const firstOutcome = settle(first);
+            await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+            pong(DATADOG_PARENT);
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS);
+            const firstError = await firstOutcome;
+            expect(firstError).toMatchObject(timedOut);
+
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
             const [secondQuery] = postMessage.mock.calls.at(-1);
+            expect(secondQuery).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
             reply(secondQuery.requestId, 'second');
+
             await expect(second).resolves.toBe('second');
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+        });
+
+        test('Should count a ping that cannot be posted as unanswered', async () => {
+            jest.useFakeTimers();
+            const { postMessage, pings } = installFakeWindow({});
+            postMessage.mockImplementation((message: PostedMessage) => {
+                if (message.type === 'app-builder:ping') {
+                    throw new Error('could not be posted');
+                }
+            });
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [firstQuery] = postMessage.mock.calls.at(-1);
+            expect(firstQuery).toEqual(MESSAGE_WITHOUT_BUNDLE);
+            const firstOutcome = settle(first);
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS);
+            const firstError = await firstOutcome;
+            expect(firstError).toMatchObject(timedOut);
+            await exhaustPings();
+
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(MAX_UNANSWERED_PINGS);
         });
     });
 
@@ -406,12 +590,14 @@ describe('postMessageTransport', () => {
         reply(message.requestId, 'ok');
         await result;
 
+        const expectedBody = JSON.stringify({ functionName: QUERY_NAME });
+        const anySignal = expect.any(AbortSignal);
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(DEBUG_BUNDLE_PATH, {
             method: 'POST',
             headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ functionName: QUERY_NAME }),
-            signal: expect.any(AbortSignal),
+            body: expectedBody,
+            signal: anySignal,
         });
     });
 
@@ -431,7 +617,8 @@ describe('postMessageTransport', () => {
         {
             description: 'the fetch rejects',
             setup: () => {
-                global.fetch = jest.fn().mockRejectedValue(new Error('Failed to fetch'));
+                const networkError = new Error('Failed to fetch');
+                global.fetch = jest.fn().mockRejectedValue(networkError);
             },
         },
         {
@@ -530,7 +717,8 @@ describe('postMessageTransport', () => {
 
     test('Should warn with the network error when the bundle request fails', async () => {
         const { postMessage, posted, reply } = installFakeWindow();
-        global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+        const networkError = new TypeError('Failed to fetch');
+        global.fetch = jest.fn().mockRejectedValue(networkError);
 
         const result = postMessageTransport(QUERY_NAME, ARGS);
         const message = await posted;
