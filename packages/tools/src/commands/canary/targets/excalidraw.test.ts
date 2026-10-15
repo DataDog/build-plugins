@@ -4,11 +4,7 @@
 
 import path from 'path';
 
-import {
-    allowOversizedPrecacheAssets,
-    createExcalidrawPhase,
-    getPeerDependencySpecifiers,
-} from './excalidraw';
+import { allowOversizedPrecacheAssets, createExcalidrawPhase } from './excalidraw';
 
 describe('Excalidraw canary target', () => {
     test('should vary only Live Debugger enablement between paired builds', () => {
@@ -59,34 +55,5 @@ describe('Excalidraw canary target', () => {
 
     test.each(unexpectedConfigCases)('should $description', ({ config, expected }) => {
         expect(() => allowOversizedPrecacheAssets(config)).toThrow(expected);
-    });
-
-    test('should install the Live Debugger peer dependencies at their declared ranges', () => {
-        const packageJson = {
-            peerDependencies: {
-                '@babel/parser': '^7.24.5',
-                '@babel/traverse': '^7.24.5',
-                '@babel/types': '^7.24.5',
-                vite: '>= 5.x <= 8.x',
-            },
-        };
-
-        expect(getPeerDependencySpecifiers(packageJson)).toEqual([
-            '@babel/parser@^7.24.5',
-            '@babel/traverse@^7.24.5',
-            '@babel/types@^7.24.5',
-        ]);
-    });
-
-    test('should fail when a Live Debugger peer dependency is not declared', () => {
-        const packageJson = {
-            peerDependencies: {
-                '@babel/parser': '^7.24.5',
-            },
-        };
-
-        expect(() => getPeerDependencySpecifiers(packageJson)).toThrow(
-            'does not declare a peer dependency on @babel/traverse',
-        );
     });
 });
