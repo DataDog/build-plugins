@@ -254,9 +254,9 @@ The following function types are always skipped regardless of configuration:
 
 ## Bundle size impact
 
-Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. In one large Vite app, the emitted JavaScript grew by 21% in total (9% gzipped), while the main chunk, which held most of the app's own code, grew by 77% (34% gzipped).
+Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. In our testing, the added code compresses well, so the gzipped size grows far less than the uncompressed size.
 
-Check the size limits your build enforces before enabling Live Debugger:
+Check the size limits your build enforces before enabling Live Debugger, especially limits on uncompressed file size:
 
 - **Service-worker precache limits**, such as `maximumFileSizeToCacheInBytes` in `vite-plugin-pwa` or Workbox. Depending on the tool, a file over the limit either fails the build or is left out of the precache, so it is no longer available offline.
 - **Bundle budgets and size checks**, such as Angular CLI `budgets` with an error threshold, webpack's `performance.hints: 'error'`, or CI tools like `size-limit`.
