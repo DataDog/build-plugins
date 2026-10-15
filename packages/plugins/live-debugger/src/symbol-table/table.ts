@@ -32,6 +32,37 @@ const getEntryKey = (chunkFunction: ChunkFunction, sourceFile: string) => {
     return [chunkFunction.functionId, sourceFile, start, end].join('\0');
 };
 
+// In some chunks a copy of a function can't be mapped, while other copies can. A copy without a
+// line range then adds nothing, so drop it and attach its children to its own parent.
+const removeUnlocatedCopies = (entries: SymbolTableEntry[]): SymbolTableEntry[] => {
+    const getFunctionKey = (entry: SymbolTableEntry) => `${entry.functionId}\0${entry.sourceFile}`;
+    const locatedEntries = entries.filter((entry) => entry.start);
+    const locatedFunctionKeys = new Set(locatedEntries.map(getFunctionKey));
+    const removedParentKeys = new Map<string, string | undefined>();
+
+    const keptEntries = entries.filter((entry) => {
+        const functionKey = getFunctionKey(entry);
+        if (entry.start || !locatedFunctionKeys.has(functionKey)) {
+            return true;
+        }
+        removedParentKeys.set(entry.key, entry.parentKey);
+        return false;
+    });
+
+    const getKeptParentKey = (parentKey: string | undefined) => {
+        let keptParentKey = parentKey;
+        while (keptParentKey !== undefined && removedParentKeys.has(keptParentKey)) {
+            keptParentKey = removedParentKeys.get(keptParentKey);
+        }
+        return keptParentKey;
+    };
+
+    return keptEntries.map((entry) => {
+        const parentKey = getKeptParentKey(entry.parentKey);
+        return { ...entry, parentKey };
+    });
+};
+
 // Map the output's chunks to one entry per function, deduplicated across chunks.
 export const buildSymbolTable = (
     chunks: ChunkFunctions[],
@@ -117,8 +148,9 @@ export const buildSymbolTable = (
     const sortedFileChunkDebugIds = new Map(sortedFileEntries);
 
     // Never publish incomplete chunk membership.
+    const allEntries = [...entries.values()];
     const table: SymbolTable = {
-        entries: [...entries.values()],
+        entries: removeUnlocatedCopies(allEntries),
         chunkDebugIds: hasCompleteDebugIds ? sortedChunkDebugIds : undefined,
         fileChunkDebugIds: hasCompleteDebugIds ? sortedFileChunkDebugIds : undefined,
     };

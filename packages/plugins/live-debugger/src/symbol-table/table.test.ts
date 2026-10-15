@@ -78,6 +78,31 @@ describe('buildSymbolTable', () => {
         expect(invalidFunctionIds).toEqual(expected.invalidFunctionIds ?? []);
     });
 
+    test('Should drop copies without a line range when another copy has one.', () => {
+        const chunks = [
+            getChunk(DEBUG_ID_A, [
+                getFunction('src/a.js;outer', undefined),
+                getFunction('src/a.js;inner', [2, 4], 0),
+            ]),
+            getChunk(DEBUG_ID_B, [
+                getFunction('src/a.js;outer', [1, 9]),
+                getFunction('src/a.js;unmapped', undefined),
+            ]),
+        ];
+        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const entries = table.entries.map(({ functionId, start, parentKey }) => ({
+            functionId,
+            located: Boolean(start),
+            hasParent: Boolean(parentKey),
+        }));
+
+        expect(entries).toEqual([
+            { functionId: 'src/a.js;inner', located: true, hasParent: false },
+            { functionId: 'src/a.js;outer', located: true, hasParent: false },
+            { functionId: 'src/a.js;unmapped', located: false, hasParent: false },
+        ]);
+    });
+
     test('Should record which chunks contain each file.', () => {
         const chunks = [
             getChunk(DEBUG_ID_B, [getFunction('src/a.js;add', [1, 3])]),

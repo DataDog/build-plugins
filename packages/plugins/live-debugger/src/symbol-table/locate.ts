@@ -83,7 +83,7 @@ type MappedPosition = SourcePosition & {
     sourceIndex: number;
 };
 
-// The original position of the closest segment at or before a generated position.
+// The original position of the closest segment at or before a generated position, if it's mapped.
 const getMappedPosition = (
     traceMap: TraceMap,
     generated: SourcePosition,
@@ -109,6 +109,34 @@ const findSegmentIndex = (segments: readonly SourceMapSegment[], column: number)
         }
     }
     return low;
+};
+
+// The original position of the first mapped segment between two generated positions, both included.
+const getFirstMappedPosition = (
+    traceMap: TraceMap,
+    from: SourcePosition,
+    to: SourcePosition,
+): MappedPosition | undefined => {
+    const lines = decodedMappings(traceMap);
+
+    for (let line = from.line; line <= to.line; line++) {
+        const segments = lines[line - 1] ?? [];
+        const firstIndex = line === from.line ? findSegmentIndex(segments, from.column) : 0;
+        const lastColumn = line === to.line ? to.column : Infinity;
+
+        for (
+            let index = firstIndex;
+            index < segments.length && segments[index][0] <= lastColumn;
+            index++
+        ) {
+            const segment = segments[index];
+            if (segment.length !== 1) {
+                return { line: segment[2] + 1, column: segment[3], sourceIndex: segment[1] };
+            }
+        }
+    }
+
+    return undefined;
 };
 
 /**
@@ -145,7 +173,7 @@ const getLastMappedPosition = (
 /**
  * Map the scanned functions to their original positions. The transform anchors the `$dd_probes`
  * call to the body's opening brace, and the `$dd_throw` call to its closing brace when the body
- * is a block.
+ * is a block. When a marker isn't mapped, the closest mapped token inside the function is used.
  */
 export const locateFunctions = (
     code: string,
@@ -164,7 +192,9 @@ export const locateFunctions = (
 
         const generatedStart = toPosition(probeOffset);
         const generatedEnd = toPosition(throwOffset);
-        const mappedStart = getMappedPosition(traceMap, generatedStart);
+        const mappedStart =
+            getMappedPosition(traceMap, generatedStart) ??
+            getFirstMappedPosition(traceMap, generatedStart, generatedEnd);
         if (!mappedStart) {
             return { functionId, parentIndex, start: undefined, end: undefined };
         }
