@@ -314,7 +314,7 @@ describe('Dev Server Middleware', () => {
         const middleware = createTestMiddleware();
 
         test('Should call next() for non-POST requests', () => {
-            const req = { method: 'GET', url: '/__dd/debugBundle' } as unknown as IncomingMessage;
+            const req = { method: 'GET', url: DEBUG_BUNDLE_PATH } as unknown as IncomingMessage;
             const res = createMockResponse();
             const next = jest.fn();
 
@@ -339,7 +339,7 @@ describe('Dev Server Middleware', () => {
         test('Should handle /__dd/debugBundle POST', async () => {
             mockBuildWithParsedBackend();
 
-            const req = createMockRequest('/__dd/debugBundle', {
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodeQueryName(mockFunctions[0]),
             });
             const res = createMockResponse();
@@ -455,7 +455,7 @@ describe('Dev Server Middleware', () => {
         const middleware = createTestMiddleware();
 
         test('Should return 400 for missing functionRef', async () => {
-            const req = createMockRequest('/__dd/debugBundle', {});
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {});
             const res = createMockResponse();
 
             middleware(req, res, jest.fn());
@@ -466,7 +466,7 @@ describe('Dev Server Middleware', () => {
         });
 
         test('Should return 404 for unknown function', async () => {
-            const req = createMockRequest('/__dd/debugBundle', {
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: 'nonexistent.nonexistent',
             });
             const res = createMockResponse();
@@ -481,7 +481,7 @@ describe('Dev Server Middleware', () => {
         test('Should return bundled code as text/plain', async () => {
             mockBuildWithParsedBackend('export function main($) {}');
 
-            const req = createMockRequest('/__dd/debugBundle', {
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodeQueryName(mockFunctions[0]),
             });
             const res = createMockResponse();
@@ -641,7 +641,7 @@ describe('Dev Server Middleware', () => {
             });
 
             const encodedFunctionName = encodeQueryName(mockFunctions[0]);
-            const req = createMockRequest('/__dd/debugBundle', {
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodedFunctionName,
             });
             const res = createMockResponse();
@@ -661,7 +661,7 @@ describe('Dev Server Middleware', () => {
         test('Should call vite.build with configFile: false and write: false', async () => {
             mockBuildWithParsedBackend();
 
-            const req = createMockRequest('/__dd/debugBundle', {
+            const req = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [1, 2],
             });
@@ -1864,7 +1864,7 @@ describe('Dev Server Middleware', () => {
             ];
 
             // Old name should 404.
-            const oldReq = createMockRequest('/__dd/debugBundle', {
+            const oldReq = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greet' }),
             });
             const oldRes = createMockResponse();
@@ -1877,7 +1877,7 @@ describe('Dev Server Middleware', () => {
             // New name should resolve.
             mockBuildWithParsedBackend('// greetV2 code');
 
-            const newReq = createMockRequest('/__dd/debugBundle', {
+            const newReq = createMockRequest(DEBUG_BUNDLE_PATH, {
                 functionName: encodeQueryName({ relativePath: 'backend/greet', name: 'greetV2' }),
             });
             const newRes = createMockResponse();

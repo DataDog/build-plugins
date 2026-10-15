@@ -20,13 +20,31 @@ export interface ExecuteActionRequest {
 
 export const DEBUG_BUNDLE_PATH = '/__dd/debugBundle';
 
-// Set on `globalThis` only by pages the dev server serves, so deployed apps never request a bundle.
-export const DEV_SERVER_MARKER = 'DD_APPS_DEV_SERVER';
+// Message types of the frame ↔ parent postMessage protocol.
+export const RUN_QUERY = 'app-builder:run-query';
+export const RUN_QUERY_RESPONSE = 'app-builder:run-query:response';
+export const PING = 'app-builder:ping';
+export const PONG = 'app-builder:pong';
+
+// The `globalThis` key where the dev client the dev server injects installs its call hook.
+export const DEV_CLIENT_HOOK = 'DD_APPS_PREPARE_CALL';
 
 export interface DebugBundleResponse {
     code: string;
     allowedConnectionIds: string[];
 }
+
+// Asks the parent to identify itself: its pong's `event.origin` is set by the browser.
+export type IframeQueryPing = {
+    type: typeof PING;
+    requestId: string;
+};
+
+// What the dev client adds to a call before the transport posts it.
+export type PreparedCall = { targetOrigin?: string; bundle?: DebugBundleResponse };
+
+// The hook the dev client installs under DEV_CLIENT_HOOK.
+export type PrepareCall = (functionName: string) => Promise<PreparedCall>;
 
 /**
  * Response from executing a backend function.

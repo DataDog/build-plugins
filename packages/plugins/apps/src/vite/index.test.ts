@@ -2,9 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import {
+    APPS_DEV_CLIENT_PATH,
+    DEV_CLIENT_MODULE_ID,
+    DEV_CLIENT_RESOLVED_ID,
+    DEV_CLIENT_RESOLVED_RE,
+    DEV_CLIENT_SRC,
+    getVitePlugin,
+    SSR_WARMUP_SETTING,
+} from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
+import * as fsHelpers from '@dd/core/helpers/fs';
 import { rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
@@ -34,7 +43,6 @@ import {
 
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
-import { DEV_SERVER_MARKER } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_WITH_QUERY_RE,
@@ -111,16 +119,46 @@ function getConfigureServer(
     };
 }
 
-// Narrows `plugin.transformIndexHtml` to its plain-function hook form, like `getConfigureServer` above.
+// Narrows `plugin.transformIndexHtml` to its object-hook form, which must run before Vite rewrites
+// script srcs for the configured `base`.
 function getTransformIndexHtml(
     plugin: ReturnType<typeof getVitePlugin>,
 ): (ctx: { server?: object }) => unknown {
     const { transformIndexHtml } = plugin ?? {};
-    if (typeof transformIndexHtml !== 'function') {
-        throw new Error('Expected plugin.transformIndexHtml to be the plain function-hook form');
+    if (
+        typeof transformIndexHtml !== 'object' ||
+        transformIndexHtml === null ||
+        !('handler' in transformIndexHtml) ||
+        typeof transformIndexHtml.handler !== 'function' ||
+        !('order' in transformIndexHtml) ||
+        transformIndexHtml.order !== 'pre'
+    ) {
+        throw new Error("Expected plugin.transformIndexHtml to be an object hook with order 'pre'");
     }
+    const { handler } = transformIndexHtml;
     return function callTransformIndexHtml(ctx: { server?: object }): unknown {
-        return Reflect.apply(transformIndexHtml, undefined, ['<html></html>', ctx]);
+        return Reflect.apply(handler, undefined, ['<html></html>', ctx]);
+    };
+}
+
+// Narrows `plugin.load` to its object-hook form, filtered to the dev client module.
+function getLoad(
+    plugin: ReturnType<typeof getVitePlugin>,
+    pluginContext: object,
+): (id: string) => Promise<unknown> {
+    const { load } = plugin ?? {};
+    if (
+        typeof load !== 'object' ||
+        load === null ||
+        !('handler' in load) ||
+        typeof load.handler !== 'function' ||
+        !('filter' in load)
+    ) {
+        throw new Error('Expected plugin.load to be a filtered object hook');
+    }
+    const { handler } = load;
+    return async function callLoad(id: string): Promise<unknown> {
+        return Reflect.apply(handler, pluginContext, [id]);
     };
 }
 
@@ -276,7 +314,7 @@ describe('Backend Functions - getVitePlugin', () => {
         nock.cleanAll();
     });
 
-    test('Should mark pages served by the dev server so the iframe client can tell it is in dev', () => {
+    test('Should load the dev client as a module on pages the dev server serves', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformIndexHtml = getTransformIndexHtml(plugin);
 
@@ -285,19 +323,102 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(tags).toEqual([
             {
                 tag: 'script',
-                children: `globalThis.${DEV_SERVER_MARKER} = true;`,
+                attrs: { type: 'module', src: DEV_CLIENT_SRC },
                 injectTo: 'head-prepend',
             },
         ]);
     });
 
-    test('Should not mark pages in a production build', () => {
+    test('Should not load the dev client in a production build', () => {
         const plugin = getVitePlugin(defaultOptions);
         const transformIndexHtml = getTransformIndexHtml(plugin);
 
         const tags = transformIndexHtml({});
 
         expect(tags).toEqual([]);
+    });
+
+    const serveFakeDevServer = (plugin: ReturnType<typeof getVitePlugin>) => {
+        const configureServer = getConfigureServer(plugin);
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: { mode: 'development' },
+        });
+    };
+
+    const devClientResolutions = [
+        {
+            description: 'resolve in the browser graph of a dev server',
+            serve: true,
+            ssr: false,
+            expected: DEV_CLIENT_RESOLVED_ID,
+        },
+        { description: 'not resolve in the SSR graph', serve: true, ssr: true, expected: null },
+        {
+            description: 'not resolve outside a dev server',
+            serve: false,
+            ssr: false,
+            expected: null,
+        },
+    ];
+
+    test.each(devClientResolutions)(
+        'Should $description for the dev client module',
+        async ({ serve, ssr, expected }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            if (serve) {
+                serveFakeDevServer(plugin);
+            }
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            const resolved = await resolveIdHandler.call({}, DEV_CLIENT_MODULE_ID, undefined, {
+                ssr,
+            });
+
+            expect(resolved).toBe(expected);
+        },
+    );
+
+    test('Should filter the load hook to the dev client module id', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const load = plugin?.load;
+        const filter =
+            typeof load === 'object' && load !== null && 'filter' in load ? load.filter : undefined;
+        const matchesResolvedId = DEV_CLIENT_RESOLVED_RE.test(DEV_CLIENT_RESOLVED_ID);
+
+        expect(filter).toEqual({ id: DEV_CLIENT_RESOLVED_RE });
+        expect(matchesResolvedId).toBe(true);
+    });
+
+    test('Should serve the built dev client as that module', async () => {
+        const readFile = jest
+            .spyOn(fsHelpers, 'readFile')
+            .mockResolvedValue('globalThis.devClientLoaded = true;');
+        const plugin = getVitePlugin(defaultOptions);
+        serveFakeDevServer(plugin);
+        const load = getLoad(plugin, {});
+
+        const code = await load(DEV_CLIENT_RESOLVED_ID);
+        const otherModule = await load('/src/main.ts');
+        const unresolvedId = await load(DEV_CLIENT_MODULE_ID);
+
+        expect(code).toBe('globalThis.devClientLoaded = true;');
+        expect(readFile).toHaveBeenCalledWith(APPS_DEV_CLIENT_PATH);
+        expect(otherModule).toBeNull();
+        expect(unresolvedId).toBeNull();
+    });
+
+    test('Should fail the dev client module with its cause when the built file is missing', async () => {
+        const missingFile = new Error('ENOENT: no such file or directory');
+        jest.spyOn(fsHelpers, 'readFile').mockRejectedValue(missingFile);
+        const plugin = getVitePlugin(defaultOptions);
+        serveFakeDevServer(plugin);
+        const load = getLoad(plugin, {});
+
+        const loading = load(DEV_CLIENT_RESOLVED_ID);
+
+        await expect(loading).rejects.toThrow('ENOENT');
     });
 
     test('Should return a vite plugin object with closeBundle', () => {

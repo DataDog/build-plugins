@@ -453,22 +453,27 @@ async function pollQueryExecution(
     throw new Error('Query execution timed out');
 }
 
+function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
+    const serializedBody = JSON.stringify(body);
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(serializedBody);
+}
+
 /**
  * Send a JSON error response.
  */
 function sendError(res: ServerResponse, statusCode: number, message: string): void {
-    res.statusCode = statusCode;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: false, error: message } satisfies ExecuteActionResponse));
+    const body = { success: false, error: message } satisfies ExecuteActionResponse;
+    sendJson(res, statusCode, body);
 }
 
 /**
  * Send a JSON success response.
  */
 function sendSuccess(res: ServerResponse, result: { data: unknown }): void {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+    const body = { success: true, result } satisfies ExecuteActionResponse;
+    sendJson(res, 200, body);
 }
 
 /**
@@ -568,17 +573,15 @@ async function handleDebugBundle(
     try {
         const { func, code } = await validateAndBundle(req, functionsByName, bundle);
 
-        res.statusCode = 200;
         if (acceptsJson(req)) {
             const body: DebugBundleResponse = {
                 code,
                 allowedConnectionIds: func.allowedConnectionIds,
             };
-            const serializedBody = JSON.stringify(body);
-            res.setHeader('Content-Type', 'application/json');
-            res.end(serializedBody);
+            sendJson(res, 200, body);
             return;
         }
+        res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
     } catch (error: unknown) {
