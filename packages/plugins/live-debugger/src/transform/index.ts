@@ -163,6 +163,7 @@ const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 interface ReturnInfo {
     start: number;
     end: number;
+    // Includes comments directly in front of the argument; see getStartWithLeadingComments.
     argStart: number | undefined;
     argEnd: number | undefined;
     hasSequenceExpressionArgument: boolean;
@@ -173,6 +174,8 @@ interface ReturnInfo {
 
 interface FunctionTarget {
     bodyStart: number;
+    // Where an expression body's block prefix goes; see getStartWithLeadingComments.
+    bodyPrefixStart: number;
     bodyEnd: number;
     functionEnd: number;
     isExpressionBody: boolean;
@@ -373,7 +376,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     !babelTypes.isBlockStatement(node.body) ||
                     !alwaysReturns(node.body.body, babelTypes);
                 if (!isExpressionBody && babelTypes.isBlockStatement(node.body)) {
-                    collectReturnStatements(node.body.body, returns, babelTypes, false);
+                    collectReturnStatements(code, node.body.body, returns, babelTypes, false);
                 }
 
                 let directivesEnd: number | undefined;
@@ -388,6 +391,7 @@ export function transformCode(options: TransformOptions): TransformResult {
 
                 targets.push({
                     bodyStart: node.body.start!,
+                    bodyPrefixStart: getStartWithLeadingComments(code, node.body),
                     bodyEnd: node.body.end!,
                     functionEnd: node.end!,
                     isExpressionBody,
@@ -473,6 +477,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         localVars,
         returns,
         bodyStart,
+        bodyPrefixStart,
         bodyEnd,
         functionEnd,
         isExpressionBody,
@@ -561,11 +566,14 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // arrow's expression body ends at the inner function's closing brace.
         // For a single-char body (e.g. `() => 1`) the two ranges would
         // collide, so we fall back to one update covering the whole body.
-        if (bodyEnd - bodyStart >= 2) {
+        // The prefix goes in front of comments directly before the body, so the
+        // `const $dd_rvN = ` assignment keeps annotations like `/* @__PURE__ */`
+        // next to the expression they mark.
+        if (bodyEnd - bodyPrefixStart >= 2) {
             const bodyPrefix = hasSequenceExpressionBody
-                ? `${prefix}(${code[bodyStart]}`
-                : prefix + code[bodyStart];
-            s.update(bodyStart, bodyStart + 1, bodyPrefix);
+                ? `${prefix}(${code[bodyPrefixStart]}`
+                : prefix + code[bodyPrefixStart];
+            s.update(bodyPrefixStart, bodyPrefixStart + 1, bodyPrefix);
             s.appendRight(bodyEnd, suffix);
         } else {
             s.update(bodyStart, bodyEnd, prefix + code.slice(bodyStart, bodyEnd) + suffix);
@@ -933,6 +941,7 @@ function isInTemporalDeadZone(
  * skipping nested function/class bodies.
  */
 function collectReturnStatements(
+    code: string,
     statements: BabelTypes.Statement[],
     returns: ReturnInfo[],
     typesModule: BabelTypesModule,
@@ -943,7 +952,9 @@ function collectReturnStatements(
             returns.push({
                 start: stmt.start!,
                 end: stmt.end!,
-                argStart: stmt.argument?.start ?? undefined,
+                argStart: stmt.argument
+                    ? getStartWithLeadingComments(code, stmt.argument)
+                    : undefined,
                 argEnd: stmt.argument?.end ?? undefined,
                 hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
                 isStatementBody,
@@ -956,11 +967,11 @@ function collectReturnStatements(
         }
 
         if (typesModule.isBlockStatement(stmt)) {
-            collectReturnStatements(stmt.body, returns, typesModule, false);
+            collectReturnStatements(code, stmt.body, returns, typesModule, false);
         } else if (typesModule.isIfStatement(stmt)) {
-            collectReturnStatements([stmt.consequent], returns, typesModule, true);
+            collectReturnStatements(code, [stmt.consequent], returns, typesModule, true);
             if (stmt.alternate) {
-                collectReturnStatements([stmt.alternate], returns, typesModule, true);
+                collectReturnStatements(code, [stmt.alternate], returns, typesModule, true);
             }
         } else if (
             typesModule.isForStatement(stmt) ||
@@ -969,25 +980,49 @@ function collectReturnStatements(
             typesModule.isWhileStatement(stmt) ||
             typesModule.isDoWhileStatement(stmt)
         ) {
-            collectReturnStatements([stmt.body], returns, typesModule, true);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         } else if (typesModule.isSwitchStatement(stmt)) {
             for (const caseClause of stmt.cases) {
-                collectReturnStatements(caseClause.consequent, returns, typesModule, false);
+                collectReturnStatements(code, caseClause.consequent, returns, typesModule, false);
             }
         } else if (typesModule.isTryStatement(stmt)) {
-            collectReturnStatements(stmt.block.body, returns, typesModule, false);
+            collectReturnStatements(code, stmt.block.body, returns, typesModule, false);
             if (stmt.handler) {
-                collectReturnStatements(stmt.handler.body.body, returns, typesModule, false);
+                collectReturnStatements(code, stmt.handler.body.body, returns, typesModule, false);
             }
             if (stmt.finalizer) {
-                collectReturnStatements(stmt.finalizer.body, returns, typesModule, false);
+                collectReturnStatements(code, stmt.finalizer.body, returns, typesModule, false);
             }
         } else if (typesModule.isLabeledStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule, true);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         } else if (typesModule.isWithStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule, true);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         }
     }
+}
+
+/**
+ * Start of a node, extended over the comments directly in front of it (separated
+ * only by whitespace). Inserting code there instead of at the node keeps
+ * annotations like `/* @__PURE__ *\/` directly in front of the call they mark;
+ * bundlers ignore them anywhere else. Comments outside a paren around the node
+ * are not adjacent and stay where they are.
+ */
+function getStartWithLeadingComments(code: string, node: BabelTypes.Node): number {
+    let start = node.start!;
+    const comments = node.leadingComments ?? [];
+    for (let i = comments.length - 1; i >= 0; i--) {
+        const { start: commentStart, end: commentEnd } = comments[i];
+        if (commentStart == null || commentEnd == null) {
+            break;
+        }
+        const gap = code.slice(commentEnd, start);
+        if (gap.trim() !== '') {
+            break;
+        }
+        start = commentStart;
+    }
+    return start;
 }
 
 /**
