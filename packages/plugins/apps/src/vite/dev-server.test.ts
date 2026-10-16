@@ -5,8 +5,11 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
+    DEBUG_BUNDLE_ROUTE,
+    DEV_SERVER_ROUTES,
     formatRef,
     getRetryDelay,
 } from '@dd/apps-plugin/vite/dev-server';
@@ -43,6 +46,8 @@ const mockViteBuild = jest.fn();
 const mockLoadModule = jest.fn();
 
 const DD_API_ORIGIN = 'https://api.datadoghq.com';
+
+const localOnlyHostCheck = createViteHostCheck({ server: { allowedHosts: [] }, preview: {} });
 
 const mockFunctions: BackendFunction[] = [
     {
@@ -281,6 +286,7 @@ function createTestMiddleware(
         projectRoot?: CreateDevServerMiddlewareArgs[7];
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
+        isHostAllowed?: CreateDevServerMiddlewareArgs[10];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -296,6 +302,7 @@ function createTestMiddleware(
         overrides.projectRoot ?? '/project',
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
+        overrides.isHostAllowed ?? localOnlyHostCheck,
     );
 }
 
@@ -448,6 +455,100 @@ describe('Dev Server Middleware', () => {
             expect(body.result).toEqual({ data: { result: 'via cloud' } });
             expect(apiScope.isDone()).toBe(true);
             expect(mockLoadModule).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('createDevServerMiddleware request guard', () => {
+        const routes = [...DEV_SERVER_ROUTES];
+        const rejections = [
+            {
+                description: 'a cross-site Origin',
+                headers: { origin: 'https://attacker.example' },
+                expectedStatus: 403,
+            },
+            {
+                description: 'a host Vite would not serve',
+                headers: {
+                    host: 'attacker.example:5173',
+                    origin: 'http://attacker.example:5173',
+                },
+                expectedStatus: 403,
+            },
+            {
+                description: 'a text/plain body',
+                headers: { 'content-type': 'text/plain' },
+                expectedStatus: 415,
+            },
+        ];
+        const cases = routes.flatMap((route) =>
+            rejections.map((rejection) => ({ route, ...rejection })),
+        );
+
+        test.each(cases)(
+            'Should reject $route with $expectedStatus for $description before handling it',
+            async ({ route, headers, expectedStatus }) => {
+                const middleware = createTestMiddleware();
+                const functionName = encodeQueryName(mockFunctions[0]);
+                const req = createMockRequest(route, { functionName, args: [] }, headers);
+                const res = createMockResponse();
+                const next = jest.fn();
+
+                middleware(req, res, next);
+                await res.done;
+
+                const rawBody = res.getBody();
+                const body = JSON.parse(rawBody);
+
+                expect(res.statusCode).toBe(expectedStatus);
+                expect(body.success).toBe(false);
+                expect(next).not.toHaveBeenCalled();
+                expect(mockViteBuild).not.toHaveBeenCalled();
+                expect(mockLoadModule).not.toHaveBeenCalled();
+                const routeMessage = expect.stringContaining(route);
+                expect(mockLogFn).toHaveBeenCalledWith(routeMessage, 'debug');
+            },
+        );
+
+        test('Should leave other /__dd paths to the next middleware', () => {
+            const middleware = createTestMiddleware();
+            const req = createMockRequest(
+                '/__dd/sw.js',
+                {},
+                { origin: 'https://attacker.example' },
+            );
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+
+            expect(next).toHaveBeenCalled();
+            expect(res.end).not.toHaveBeenCalled();
+        });
+
+        test('Should serve a request proxied under an allowed preview proxy host', async () => {
+            mockBuildWithParsedBackend();
+            const previewHost = 'app-5173.preview.example';
+            const previewHostCheck = createViteHostCheck({
+                server: { allowedHosts: ['.preview.example'] },
+                preview: {},
+            });
+            const middleware = createTestMiddleware({
+                isHostAllowed: previewHostCheck,
+            });
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                DEBUG_BUNDLE_ROUTE,
+                { functionName },
+                { host: previewHost, origin: `https://${previewHost}` },
+            );
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(next).not.toHaveBeenCalled();
         });
     });
 
@@ -1303,6 +1404,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    localOnlyHostCheck,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1335,6 +1437,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    localOnlyHostCheck,
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1635,6 +1738,7 @@ describe('Dev Server Middleware', () => {
                     '/project',
                     mockLog,
                     'development',
+                    localOnlyHostCheck,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {

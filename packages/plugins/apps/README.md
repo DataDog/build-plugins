@@ -10,6 +10,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
+-   [Development server requests](#development-server-requests)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -46,6 +47,16 @@ Backend function execution authenticates in this order:
 passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
+
+## Development server requests
+
+The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/executeActionViaCloud` and `/__dd/debugBundle`) accept a `POST` only when:
+
+-   its `Host` passes Vite's [`server.allowedHosts`](https://vite.dev/config/server-options#server-allowedhosts) check, which Vite skips when `server.https` is set or `server.allowedHosts` is `true`;
+-   its `Origin`, when sent, names the same host and port as its `Host`;
+-   its body is sent with `Content-Type: application/json`.
+
+To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
 ## Package output
 

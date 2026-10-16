@@ -148,7 +148,7 @@ export const moduleResolverFor = (
 };
 
 /**
- * Create a mock IncomingMessage with a JSON body.
+ * Create a mock same-origin JSON POST from the dev server's own page.
  */
 export function createMockRequest(
     url: string,
@@ -158,7 +158,12 @@ export function createMockRequest(
     const req = new EventEmitter() as unknown as IncomingMessage;
     req.method = 'POST';
     req.url = url;
-    req.headers = headers;
+    req.headers = {
+        host: 'localhost:5173',
+        origin: 'http://localhost:5173',
+        'content-type': 'application/json',
+        ...headers,
+    };
 
     // Simulate body stream in next tick.
     process.nextTick(() => {

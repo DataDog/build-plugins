@@ -50,3 +50,4 @@ packages/plugins/apps                                                 @DataDog/a
 # Live Debugger
 packages/plugins/live-debugger/                                       @DataDog/debugger-nodejs
 packages/tests/src/e2e/liveDebugger/                                  @DataDog/debugger-nodejs
+packages/tools/src/commands/canary/                                   @DataDog/debugger-nodejs
