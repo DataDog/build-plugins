@@ -51,14 +51,21 @@ const parseCode = (code: string) => {
     return parse(code, { sourceType: 'unambiguous', plugins: ['jsx'] });
 };
 
-const getCallStarts = (ast: ReturnType<typeof parseCode>): Set<number> => {
-    const starts = new Set<number>();
+// Positions where bundlers honor a PURE annotation: the start of a call or `new`
+// expression, and the outermost paren around one, as in `/* @__PURE__ */ (make())`.
+const getAnnotationTargets = (ast: ReturnType<typeof parseCode>): Set<number> => {
+    const targets = new Set<number>();
     traverseFast(ast, (node) => {
-        if ((isCallExpression(node) || isNewExpression(node)) && node.start != null) {
-            starts.add(node.start);
+        if ((!isCallExpression(node) && !isNewExpression(node)) || node.start == null) {
+            return;
+        }
+        targets.add(node.start);
+        const parenStart = node.extra?.parenStart;
+        if (typeof parenStart === 'number') {
+            targets.add(parenStart);
         }
     });
-    return starts;
+    return targets;
 };
 
 const skipWhitespace = (code: string, position: number): number => {
@@ -69,30 +76,30 @@ const skipWhitespace = (code: string, position: number): number => {
     return next;
 };
 
-// Counts PURE annotations directly in front of a call or `new` expression, the only
-// position where bundlers honor them. Babel attaches a comment at the start of a
-// statement to the statement, so the position decides, not the comment's owner.
+// Counts PURE annotations in a position where bundlers honor them. Babel attaches a
+// comment at the start of a statement to the statement, so the position decides,
+// not the comment's owner.
 export const countAnnotatedCalls = (code: string): number => {
     const ast = parseCode(code);
-    const callStarts = getCallStarts(ast);
+    const targets = getAnnotationTargets(ast);
     const comments = ast.comments ?? [];
     return comments.filter((comment) => {
         if (!PURE_ANNOTATION.test(comment.value) || comment.end == null) {
             return false;
         }
         const next = skipWhitespace(code, comment.end);
-        return callStarts.has(next);
+        return targets.has(next);
     }).length;
 };
 
-// Puts a PURE annotation in front of every call and `new` expression, so that real
+// Puts a PURE annotation in every position where bundlers honor one, so that real
 // code exercises each place where a transform inserts code next to an expression.
 export const annotateCalls = (code: string): string => {
     const ast = parseCode(code);
-    const callStarts = getCallStarts(ast);
-    const descendingStarts = [...callStarts].sort((a, b) => b - a);
+    const targets = getAnnotationTargets(ast);
+    const descendingTargets = [...targets].sort((a, b) => b - a);
     let annotated = code;
-    for (const start of descendingStarts) {
+    for (const start of descendingTargets) {
         annotated = `${annotated.slice(0, start)}/* @__PURE__ */ ${annotated.slice(start)}`;
     }
     return annotated;

@@ -56,7 +56,12 @@ describe('Transform invariants', () => {
             expected: 1,
         },
         {
-            description: 'ignore an annotation in front of a parenthesized expression',
+            description: 'count an annotation in front of the parens around a call',
+            code: 'const a = /* @__PURE__ */ ((make()));',
+            expected: 1,
+        },
+        {
+            description: 'ignore an annotation in front of other parenthesized code',
             code: 'const a = /* @__PURE__ */ (b = make(), b);',
             expected: 0,
         },
@@ -78,5 +83,12 @@ describe('Transform invariants', () => {
             'const a = /* @__PURE__ */ make(/* @__PURE__ */ new Make(), /* @__PURE__ */ other()); /* @__PURE__ */ a.run();',
         );
         expect(countAnnotatedCalls(annotated)).toBe(4);
+    });
+
+    test('should also annotate the parens around a call', () => {
+        const annotated = annotateCalls('const a = ((make()));');
+
+        expect(annotated).toBe('const a = /* @__PURE__ */ ((/* @__PURE__ */ make()));');
+        expect(countAnnotatedCalls(annotated)).toBe(2);
     });
 });
