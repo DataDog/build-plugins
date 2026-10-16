@@ -5,7 +5,12 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
-import { createDevServerMiddleware, getRetryDelay } from '@dd/apps-plugin/vite/dev-server';
+import {
+    createDevServerMiddleware,
+    formatRef,
+    getRetryDelay,
+} from '@dd/apps-plugin/vite/dev-server';
+import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -184,6 +189,14 @@ describe('getRetryDelay', () => {
 function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) => unknown) {
     const resolveModule = moduleResolverFor(func, { [func.name]: fn });
     mockLoadModule.mockImplementation(resolveModule);
+}
+
+function createDeferred() {
+    let resolve: () => void = () => {};
+    const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
 }
 
 const previewRuntimeContext = {
@@ -1517,67 +1530,125 @@ describe('Dev Server Middleware', () => {
             }
         });
 
+        // The race test's timeout leaves both deadlines room to fail with their own message.
+        const RACE_SIGNAL_DEADLINE_MS = 5000;
+        const RACE_RESPONSE_DEADLINE_MS = 4000;
         // Priming evaluates real top-level customer code — if it ran outside executeColdActionLocally's
         // enqueue() call, two concurrent requests for two different cold functions could evaluate
         // their top-level code in genuine parallel instead of one fully finishing before the other starts.
-        test('Should never let two concurrent requests for different cold functions race their priming loads', async () => {
-            mockRuntimeContextHydration();
-            const order: string[] = [];
-            let releaseGreetPriming: (() => void) | undefined;
-            const greetPrimingGate = new Promise<void>((resolve) => {
-                releaseGreetPriming = resolve;
-            });
+        test(
+            'Should never let two concurrent requests for different cold functions race their priming loads',
+            async () => {
+                // The describe's beforeEach registers greet's hydration; this one serves compute's.
+                const apiScope = mockRuntimeContextHydration();
+                const order: string[] = [];
+                const greetPrimingGate = createDeferred();
+                const greetPrimingStarted = createDeferred();
+                const computeQueued = createDeferred();
+                // handleExecuteAction logs this and reaches enqueue() with no await in between.
+                const computeQueuedMessage = `Executing action locally: ${formatRef(mockFunctions[1])}`;
+                const queueAwareLog = getMockLogger({
+                    debug: (text: string) => {
+                        if (text.startsWith(computeQueuedMessage)) {
+                            computeQueued.resolve();
+                        }
+                    },
+                });
+                // A cold execution submits its runtime-context query as soon as its queued turn starts,
+                // so a second submission means compute's turn began while greet still held the queue.
+                let submittedQueryCount = 0;
+                const countingRequest = <T>(opts: Omit<RequestOpts, 'auth'>) => {
+                    if (opts.method === 'POST') {
+                        submittedQueryCount += 1;
+                    }
+                    return testAuthenticatedRequest<T>(opts);
+                };
+                const queueAwareMiddleware = createTestMiddleware({
+                    log: queueAwareLog,
+                    doAuthenticatedRequest: countingRequest,
+                });
 
-            mockLoadModule.mockImplementation(async (specifier: string) => {
-                if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    order.push('greet-priming-start');
-                    await greetPrimingGate;
-                    order.push('greet-priming-end');
-                    return { [mockFunctions[0].name]: () => 'greet-done' };
+                mockLoadModule.mockImplementation(async (specifier: string) => {
+                    if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        order.push('greet-priming-start');
+                        greetPrimingStarted.resolve();
+                        await greetPrimingGate.promise;
+                        order.push('greet-priming-end');
+                        return { [mockFunctions[0].name]: () => 'greet-done' };
+                    }
+                    if (specifier === mockFunctions[1].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
+                        order.push('compute-priming-start');
+                        order.push('compute-priming-end');
+                        return { [mockFunctions[1].name]: () => 'compute-done' };
+                    }
+                    throw new Error(`Cannot find module '${specifier}'`);
+                });
+
+                const reqGreet = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const resGreet = createMockResponse();
+                const reqCompute = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[1]),
+                    args: [],
+                });
+                const resCompute = createMockResponse();
+
+                // Fired back-to-back, before either request's own body has even finished parsing.
+                const nextGreet = jest.fn();
+                const nextCompute = jest.fn();
+                queueAwareMiddleware(reqGreet, resGreet, nextGreet);
+                queueAwareMiddleware(reqCompute, resCompute, nextCompute);
+
+                // The finally releases greet so queued work can drain before the next test. Its deadline
+                // doesn't throw, so a stuck response can't hide an earlier failure.
+                let responsesOutcome = '';
+                try {
+                    const bothSignals = Promise.all([
+                        greetPrimingStarted.promise,
+                        computeQueued.promise,
+                    ]);
+                    await withTimeout(
+                        bothSignals,
+                        RACE_SIGNAL_DEADLINE_MS,
+                        'Waiting for greet to prime and compute to queue',
+                    );
+                    // Compute starting its turn early or priming outside the queue has no event to wait
+                    // for, so this delay only bounds how long either regression gets to show up; correct
+                    // code passes for any delay well under the priming and test timeouts.
+                    await new Promise((resolve) => setTimeout(resolve, 20));
+                    expect(submittedQueryCount).toBe(1);
+                    expect(order).toEqual(['greet-priming-start']);
+                } finally {
+                    greetPrimingGate.resolve();
+                    const bothResponses = Promise.all([resGreet.done, resCompute.done]);
+                    responsesOutcome = await withTimeout(
+                        bothResponses,
+                        RACE_RESPONSE_DEADLINE_MS,
+                        'Waiting for responses',
+                    ).then(
+                        () => 'ended',
+                        (error: unknown) => String(error),
+                    );
                 }
-                if (specifier === mockFunctions[1].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    order.push('compute-priming-start');
-                    order.push('compute-priming-end');
-                    return { [mockFunctions[1].name]: () => 'compute-done' };
-                }
-                throw new Error(`Cannot find module '${specifier}'`);
-            });
 
-            const reqGreet = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0]),
-                args: [],
-            });
-            const resGreet = createMockResponse();
-            const reqCompute = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[1]),
-                args: [],
-            });
-            const resCompute = createMockResponse();
-
-            // Fired back-to-back, before either request's own body has even finished parsing.
-            middleware(reqGreet, resGreet, jest.fn());
-            middleware(reqCompute, resCompute, jest.fn());
-
-            // Give compute's request every chance to race ahead while greet's priming is gated —
-            // if it weren't serialized behind greet's still-pending turn, compute's ungated
-            // priming would already show up here, before greet's gate is ever released.
-            // Always release and drain both requests so a failed assertion cannot leak queued
-            // work into the next test.
-            try {
-                await new Promise((resolve) => setTimeout(resolve, 20));
-                expect(order).toEqual(['greet-priming-start']);
-            } finally {
-                releaseGreetPriming?.();
-                await Promise.all([resGreet.done, resCompute.done]);
-            }
-
-            expect(order).toEqual([
-                'greet-priming-start',
-                'greet-priming-end',
-                'compute-priming-start',
-                'compute-priming-end',
-            ]);
-        });
+                expect(responsesOutcome).toBe('ended');
+                expect(resGreet.statusCode).toBe(200);
+                expect(resCompute.statusCode).toBe(200);
+                expect(nextGreet).not.toHaveBeenCalled();
+                expect(nextCompute).not.toHaveBeenCalled();
+                const isComputeHydrated = apiScope.isDone();
+                expect(isComputeHydrated).toBe(true);
+                expect(order).toEqual([
+                    'greet-priming-start',
+                    'greet-priming-end',
+                    'compute-priming-start',
+                    'compute-priming-end',
+                ]);
+            },
+            RACE_SIGNAL_DEADLINE_MS + RACE_RESPONSE_DEADLINE_MS + 5000,
+        );
 
         // Regression test: getAllowedConnectionIds (which only resolves/transforms modules, never
         // executes them) must run and reject before the priming load ever evaluates the entry's

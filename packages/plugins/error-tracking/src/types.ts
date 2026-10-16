@@ -12,6 +12,7 @@ type SourcemapsUploadOptions = {
 
 type DebugIdSourcemapsOptions = SourcemapsUploadOptions & {
     debugId: true;
+    experimentalDuplicateCheck?: boolean;
     minifiedPathPrefix?: never;
     releaseVersion?: never;
     service?: never;
@@ -43,6 +44,7 @@ export type ServiceVersionSourcemapsOptionsWithDefaults = SourcemapsUploadOption
 
 export type DebugIdSourcemapsOptionsWithDefaults = SourcemapsUploadOptionsWithDefaults & {
     debugId: true;
+    experimentalDuplicateCheck: boolean;
 };
 
 export type SourcemapsOptionsWithDefaults =

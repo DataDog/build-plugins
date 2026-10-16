@@ -81,7 +81,7 @@ export function getRetryDelay(attempt: number, config: LongPollingConfig): numbe
 /**
  * Format a BackendFunction for display in log/error messages.
  */
-function formatRef(func: BackendFunction): string {
+export function formatRef(func: BackendFunction): string {
     return `${func.relativePath}/${func.name}`;
 }
 

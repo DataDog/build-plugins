@@ -102,6 +102,8 @@ describe('Apps Plugin', () => {
         const greetName = greetFile!.replace(/^backend\//, '').replace(/\.js$/, '');
         expect(manifest).toEqual({
             tags: [],
+            // The fixture declares no parameters, so the upload clears any stored ones.
+            inputSchema: { parameters: [] },
             backend: {
                 functions: {
                     [greetName]: {
