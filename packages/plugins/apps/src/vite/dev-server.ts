@@ -22,6 +22,8 @@ import type { LongPollingOptions } from '../types';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
+import type { HostCheck } from './dev-server-request-guard';
+import { checkDevServerRequest } from './dev-server-request-guard';
 import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
 import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
@@ -34,6 +36,28 @@ interface BundleResult {
 type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
+
+export const DEBUG_BUNDLE_ROUTE = '/__dd/debugBundle';
+export const EXECUTE_ACTION_ROUTE = '/__dd/executeAction';
+export const EXECUTE_ACTION_VIA_CLOUD_ROUTE = '/__dd/executeActionViaCloud';
+
+export const DEV_SERVER_ROUTES = [
+    DEBUG_BUNDLE_ROUTE,
+    EXECUTE_ACTION_ROUTE,
+    EXECUTE_ACTION_VIA_CLOUD_ROUTE,
+] as const;
+
+type DevServerRoute = (typeof DEV_SERVER_ROUTES)[number];
+
+type RouteHandler = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    functionsByName: Map<string, BackendFunction>,
+) => void;
+
+function isDevServerRoute(url: string | undefined): url is DevServerRoute {
+    return DEV_SERVER_ROUTES.some((route) => route === url);
+}
 
 type AuthConfig = AuthOptionsWithDefaults;
 type LongPollingConfig = Required<LongPollingOptions>;
@@ -697,6 +721,7 @@ export function createDevServerMiddleware(
     projectRoot: string,
     log: Logger,
     mode: string,
+    isHostAllowed: HostCheck,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, func, projectRoot, log);
@@ -709,50 +734,59 @@ export function createDevServerMiddleware(
         );
     }
 
+    const runViaCloud: RouteHandler = (req, res, functionsByName) =>
+        routeToCloudHandler(
+            req,
+            res,
+            functionsByName,
+            bundle,
+            auth,
+            doAuthenticatedRequest,
+            longPolling,
+            log,
+        );
+    const runLocally: RouteHandler = (req, res, functionsByName) =>
+        guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
+            handleExecuteAction(
+                req,
+                res,
+                functionsByName,
+                auth,
+                authedRequest,
+                longPolling,
+                loadModule,
+                getAllowedConnectionIds,
+                projectRoot,
+                log,
+            ),
+        );
+    const routeHandlers: Record<DevServerRoute, RouteHandler> = {
+        [DEBUG_BUNDLE_ROUTE]: (req, res, functionsByName) => {
+            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
+                sendError(res, 500, 'Unexpected error');
+            });
+        },
+        // The client always POSTs to /__dd/executeAction regardless of mode, so dev-verify is routed to the cloud server-side instead.
+        [EXECUTE_ACTION_ROUTE]: isDevVerifyMode ? runViaCloud : runLocally,
+        [EXECUTE_ACTION_VIA_CLOUD_ROUTE]: runViaCloud,
+    };
+
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
-        if (req.method !== 'POST') {
+        const { url } = req;
+        if (req.method !== 'POST' || !isDevServerRoute(url)) {
             next();
             return;
         }
 
-        const functionsByName = buildFunctionMap(getBackendFunctions());
-
-        if (req.url === '/__dd/debugBundle') {
-            handleDebugBundle(req, res, functionsByName, bundle).catch(() => {
-                sendError(res, 500, 'Unexpected error');
-            });
-        } else if (
-            req.url === '/__dd/executeActionViaCloud' ||
-            (req.url === '/__dd/executeAction' && isDevVerifyMode)
-        ) {
-            // The client always POSTs to /__dd/executeAction regardless of mode, so dev-verify is routed here server-side instead.
-            routeToCloudHandler(
-                req,
-                res,
-                functionsByName,
-                bundle,
-                auth,
-                doAuthenticatedRequest,
-                longPolling,
-                log,
-            );
-        } else if (req.url === '/__dd/executeAction') {
-            guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
-                handleExecuteAction(
-                    req,
-                    res,
-                    functionsByName,
-                    auth,
-                    authedRequest,
-                    longPolling,
-                    loadModule,
-                    getAllowedConnectionIds,
-                    projectRoot,
-                    log,
-                ),
-            );
-        } else {
-            next();
+        const rejection = checkDevServerRequest(req.headers, isHostAllowed);
+        if (rejection) {
+            log.debug(`Rejected POST ${url}: ${rejection.message}`);
+            sendError(res, rejection.statusCode, rejection.message);
+            return;
         }
+
+        const backendFunctions = getBackendFunctions();
+        const functionsByName = buildFunctionMap(backendFunctions);
+        routeHandlers[url](req, res, functionsByName);
     };
 }

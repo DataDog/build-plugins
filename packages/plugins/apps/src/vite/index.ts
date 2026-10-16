@@ -41,6 +41,7 @@ import type { AppsOptionsWithDefaults } from '../types';
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
+import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
 import { localExecutionResolutionContext } from './local-execution';
 import {
@@ -520,6 +521,7 @@ export const getVitePlugin = ({
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
+            const isHostAllowed = createViteHostCheck(server.config);
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 loadModule,
@@ -531,6 +533,7 @@ export const getVitePlugin = ({
                 context.buildRoot,
                 log,
                 server.config.mode,
+                isHostAllowed,
             );
             server.middlewares.use(middleware);
         },

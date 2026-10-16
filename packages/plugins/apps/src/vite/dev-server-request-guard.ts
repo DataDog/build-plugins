@@ -1,0 +1,150 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import type { IncomingHttpHeaders } from 'http';
+import { isIP } from 'net';
+import type { ResolvedPreviewOptions, ResolvedServerOptions } from 'vite';
+
+export type HostCheck = (hostHeader: string) => boolean;
+
+export interface HostCheckConfig {
+    server: Pick<ResolvedServerOptions, 'allowedHosts' | 'https' | 'host' | 'hmr' | 'origin'>;
+    preview: Pick<ResolvedPreviewOptions, 'host'>;
+}
+
+export const MISSING_HOST_MESSAGE = 'Blocked request with no Host header.';
+
+export interface RequestRejection {
+    statusCode: 403 | 415;
+    message: string;
+}
+
+// Matched exactly, as Vite 5 and 6 do; Vite 7+ folds them into `server.allowedHosts`.
+function getConfiguredHosts({ server, preview }: HostCheckConfig): string[] {
+    const hosts: string[] = [];
+    if (typeof server.host === 'string' && server.host) {
+        hosts.push(server.host);
+    }
+    if (typeof server.hmr === 'object' && server.hmr?.host) {
+        hosts.push(server.hmr.host);
+    }
+    if (typeof preview.host === 'string' && preview.host) {
+        hosts.push(preview.host);
+    }
+    if (server.origin) {
+        try {
+            const originUrl = new URL(server.origin);
+            hosts.push(originUrl.hostname);
+        } catch {
+            // Vite ignores an unparseable origin too.
+        }
+    }
+    return hosts;
+}
+
+function getHostname(hostHeader: string): string {
+    const trimmedHost = hostHeader.trim();
+    if (trimmedHost.startsWith('[')) {
+        const ipv6End = trimmedHost.indexOf(']');
+        return ipv6End < 0 ? trimmedHost : trimmedHost.slice(0, ipv6End + 1);
+    }
+    const colonIndex = trimmedHost.indexOf(':');
+    return colonIndex === -1 ? trimmedHost : trimmedHost.slice(0, colonIndex);
+}
+
+function matchesAllowedHosts(
+    hostHeader: string,
+    allowedHosts: readonly unknown[],
+    configuredHosts: readonly string[],
+): boolean {
+    const hostname = getHostname(hostHeader);
+    if (hostname.startsWith('[')) {
+        const ipv6Address = hostname.slice(1, -1);
+        return hostname.endsWith(']') && isIP(ipv6Address) === 6;
+    }
+    if (isIP(hostname) === 4 || hostname === 'localhost' || hostname.endsWith('.localhost')) {
+        return true;
+    }
+    if (configuredHosts.includes(hostname)) {
+        return true;
+    }
+    return allowedHosts.some(
+        (allowedHost) =>
+            typeof allowedHost === 'string' &&
+            (allowedHost === hostname ||
+                (allowedHost.startsWith('.') &&
+                    (allowedHost.slice(1) === hostname || hostname.endsWith(allowedHost)))),
+    );
+}
+
+/**
+ * Vite's dev-server host check, which Vite doesn't export and Vite 5 and 6 run after plugin middleware.
+ * Unlike Vite, it drops the `file:`/`-extension:` allowance.
+ */
+export function createViteHostCheck(config: HostCheckConfig): HostCheck {
+    if (config.server.https) {
+        return () => true;
+    }
+    const configuredHosts = getConfiguredHosts(config);
+    return (hostHeader) => {
+        // Only `allowedHosts` is read per request, as Vite 6 does; it isn't an array on Vite
+        // versions that predate it or in an untyped config.
+        const { allowedHosts } = config.server;
+        if (allowedHosts === true) {
+            return true;
+        }
+        const allowedHostList = Array.isArray(allowedHosts) ? allowedHosts : [];
+        return matchesAllowedHosts(hostHeader, allowedHostList, configuredHosts);
+    };
+}
+
+const NON_AUTHORITY_CHARACTERS_RE = /[@/?#%\\]/;
+
+// The scheme isn't compared: behind a TLS-terminating proxy the Origin is https while the dev server is not.
+function isSameOriginAsHost(origin: string, hostHeader: string): boolean {
+    if (NON_AUTHORITY_CHARACTERS_RE.test(hostHeader)) {
+        return false;
+    }
+    try {
+        const originUrl = new URL(origin);
+        return originUrl.host === new URL(`${originUrl.protocol}//${hostHeader}`).host;
+    } catch {
+        return false;
+    }
+}
+
+function isJsonContentType(contentType: string | undefined): boolean {
+    return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
+}
+
+export function checkDevServerRequest(
+    headers: IncomingHttpHeaders,
+    isHostAllowed: HostCheck,
+): RequestRejection | undefined {
+    const { origin } = headers;
+    // HTTP/2 requests carry :authority and no Host.
+    const authority = headers[':authority'];
+    const host = headers.host ?? (typeof authority === 'string' ? authority : undefined);
+    if (!host) {
+        return { statusCode: 403, message: MISSING_HOST_MESSAGE };
+    }
+    if (!isHostAllowed(host)) {
+        const hostname = getHostname(host);
+        const quotedHostname = JSON.stringify(hostname);
+        return {
+            statusCode: 403,
+            message: `Blocked request. This host (${quotedHostname}) is not allowed. To allow it, add it to \`server.allowedHosts\` in vite.config.js.`,
+        };
+    }
+    if (origin !== undefined && !isSameOriginAsHost(origin, host)) {
+        return {
+            statusCode: 403,
+            message: "Blocked request. Only the dev server's own origin can call this endpoint.",
+        };
+    }
+    if (!isJsonContentType(headers['content-type'])) {
+        return { statusCode: 415, message: 'Requests must use Content-Type: application/json.' };
+    }
+    return undefined;
+}
