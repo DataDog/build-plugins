@@ -199,9 +199,11 @@ describe('canary runner', () => {
 
     test('should skip the validation command when a phase validates its artifacts itself', async () => {
         const controlPath = path.resolve(TEST_ROOT, 'control/app.js');
-        const instrumentedPath = path.resolve(TEST_ROOT, 'instrumented/app.js');
+        const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
+        const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
         await outputFile(controlPath, 'function app() { return 1; }');
-        await outputFile(instrumentedPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
 
         const commands: string[] = [];
         const runCommand: RunCommand = async (spec) => {
@@ -231,8 +233,12 @@ describe('canary runner', () => {
         });
 
         expect(report.status).toBe('passed');
-        expect(commands.sort()).toEqual(['build:control', 'build:instrumented']);
-        expect(assertedVariants.sort()).toEqual(['control', 'instrumented']);
+        expect(commands.sort()).toEqual([
+            'build:all-functions',
+            'build:control',
+            'build:named-only',
+        ]);
+        expect(assertedVariants.sort()).toEqual(['all-functions', 'control', 'named-only']);
     });
 
     test('should write failure details and run cleanup in reverse order', async () => {

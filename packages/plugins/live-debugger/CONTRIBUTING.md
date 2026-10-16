@@ -124,7 +124,7 @@ Babel peer dependencies into the checkout, and generates
 `excalidraw-app/vite.config.live-debugger-canary.mjs`, which wraps the app's
 Vite config. Instrumentation pushes the app's main chunk past its service-worker
 precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
-warning in both variants. Cleanup restores `package.json`, `yarn.lock`, and the
+warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
 Vite config, then reinstalls the checkout's dependencies. Builds are written to
 `excalidraw-app/build/live-debugger-canary/`.
 

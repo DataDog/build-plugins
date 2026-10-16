@@ -39,6 +39,7 @@ const CANARY_CONFIG = 'vite.config.live-debugger-canary.mjs';
 const CANARY_OUTPUT_DIRECTORY = 'build/live-debugger-canary';
 const JAVASCRIPT_PATTERNS = ['**/*.js'];
 const LIVE_DEBUGGER_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER';
+const NAMED_ONLY_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY';
 const PHASE_ID = 'app';
 
 // Live Debugger instrumentation pushes the main chunk past the app's service-worker
@@ -66,6 +67,7 @@ const CANARY_CONFIG_SOURCE = outdent`
                     logLevel: 'info',
                     liveDebugger: {
                         enable: process.env.${LIVE_DEBUGGER_ENV} === 'true',
+                        namedOnly: process.env.${NAMED_ONLY_ENV} === 'true',
                     },
                 }),
             ],
@@ -128,7 +130,8 @@ const getBuildCommand = (root: string, variant: CanaryVariant): CommandSpec => {
         cwd: path.resolve(root, APP_DIRECTORY),
         env: {
             ...targetEnvironment,
-            [LIVE_DEBUGGER_ENV]: variant === 'instrumented' ? 'true' : 'false',
+            [LIVE_DEBUGGER_ENV]: variant === 'control' ? 'false' : 'true',
+            [NAMED_ONLY_ENV]: variant === 'named-only' ? 'true' : 'false',
         },
         label: `${PHASE_ID} ${variant} build`,
     };
