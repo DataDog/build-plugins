@@ -2,20 +2,13 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { existsSync, mkdir, outputFile, readFile, rm } from '@dd/core/helpers/fs';
+import { existsSync, outputFile, readFile, rm } from '@dd/core/helpers/fs';
 import { ROOT } from '@dd/tools/constants';
-import os from 'os';
-import { outdent } from 'outdent';
 import path from 'path';
 
-import { assertJavaScriptSyntax } from '../assertions/javascript';
-import {
-    assertLiveDebuggerArtifacts,
-    assertLiveDebuggerBuildOutput,
-} from '../assertions/live-debugger';
+import { assertLiveDebuggerBuildOutput } from '../assertions/live-debugger';
 import { getTargetCommandEnvironment } from '../environment';
-import type { JsonObject } from '../files';
-import { isJsonObject, readFiles, readJsonObject, restoreSnapshots } from '../files';
+import { readFiles, readJsonObject, restoreSnapshots } from '../files';
 import { CanaryCommandError, runCheckedCommand } from '../runner';
 import type {
     ArtifactSpec,
@@ -25,10 +18,16 @@ import type {
     CommandSpec,
     TargetSetupContext,
 } from '../types';
+import {
+    assertViteArtifacts,
+    getCanaryViteConfig,
+    getViteBuildEnvironment,
+    hasDependency,
+    packVitePlugin,
+    VITE_PACKAGE,
+} from '../vite-plugin';
 
-const VITE_PACKAGE = '@datadog/vite-plugin';
-const VITE_PACKAGE_JSON = 'packages/published/vite-plugin/package.json';
-const LIVE_DEBUGGER_PEER_DEPENDENCIES = ['@babel/parser', '@babel/traverse', '@babel/types'];
+const TARGET_ID = 'excalidraw';
 const EXCALIDRAW_PACKAGE_NAME = 'excalidraw-monorepo';
 const EXCALIDRAW_PACKAGE_JSON = 'package.json';
 const EXCALIDRAW_LOCKFILE = 'yarn.lock';
@@ -38,8 +37,6 @@ const APP_CONFIG = 'vite.config.mts';
 const CANARY_CONFIG = 'vite.config.live-debugger-canary.mjs';
 const CANARY_OUTPUT_DIRECTORY = 'build/live-debugger-canary';
 const JAVASCRIPT_PATTERNS = ['**/*.js'];
-const LIVE_DEBUGGER_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER';
-const NAMED_ONLY_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY';
 const PHASE_ID = 'app';
 
 // Live Debugger instrumentation pushes the main chunk past the app's service-worker
@@ -53,27 +50,7 @@ const PWA_PLUGIN_CALL_WITH_SIZE_WARNING =
 // The base config is imported through its .mjs specifier: Vite's config bundler and
 // TypeScript both resolve it to vite.config.mts, while a literal .mts specifier fails
 // the type check that Excalidraw runs during its build.
-const CANARY_CONFIG_SOURCE = outdent`
-    import { datadogVitePlugin } from '${VITE_PACKAGE}';
-    import { defineConfig, mergeConfig } from 'vite';
-
-    import baseConfig from './vite.config.mjs';
-
-    export default defineConfig(async (env) => {
-        const config = typeof baseConfig === 'function' ? await baseConfig(env) : await baseConfig;
-        return mergeConfig(config, {
-            plugins: [
-                datadogVitePlugin({
-                    logLevel: 'info',
-                    liveDebugger: {
-                        enable: process.env.${LIVE_DEBUGGER_ENV} === 'true',
-                        namedOnly: process.env.${NAMED_ONLY_ENV} === 'true',
-                    },
-                }),
-            ],
-        });
-    });
-`;
+const BASE_CONFIG_SPECIFIER = './vite.config.mjs';
 
 export const allowOversizedPrecacheAssets = (config: string): string => {
     const occurrences = config.split(PWA_PLUGIN_CALL).length - 1;
@@ -83,23 +60,6 @@ export const allowOversizedPrecacheAssets = (config: string): string => {
         );
     }
     return config.replace(PWA_PLUGIN_CALL, PWA_PLUGIN_CALL_WITH_SIZE_WARNING);
-};
-
-export const getPeerDependencySpecifiers = (packageJson: JsonObject): string[] => {
-    const peerDependencies = packageJson.peerDependencies;
-    if (!isJsonObject(peerDependencies)) {
-        throw new CanaryCommandError(`${VITE_PACKAGE} does not declare peer dependencies.`);
-    }
-
-    return LIVE_DEBUGGER_PEER_DEPENDENCIES.map((name) => {
-        const range = peerDependencies[name];
-        if (typeof range !== 'string') {
-            throw new CanaryCommandError(
-                `${VITE_PACKAGE} does not declare a peer dependency on ${name}.`,
-            );
-        }
-        return `${name}@${range}`;
-    });
 };
 
 const getOutputDirectory = (variant: CanaryVariant): string => {
@@ -116,7 +76,6 @@ const getArtifactSpec = (root: string, variant: CanaryVariant): ArtifactSpec => 
 
 const getBuildCommand = (root: string, variant: CanaryVariant): CommandSpec => {
     const outputDirectory = getOutputDirectory(variant);
-    const targetEnvironment = getTargetCommandEnvironment(process.env);
     return {
         command: 'yarn',
         args: [
@@ -128,18 +87,9 @@ const getBuildCommand = (root: string, variant: CanaryVariant): CommandSpec => {
             '--emptyOutDir',
         ],
         cwd: path.resolve(root, APP_DIRECTORY),
-        env: {
-            ...targetEnvironment,
-            [LIVE_DEBUGGER_ENV]: variant === 'control' ? 'false' : 'true',
-            [NAMED_ONLY_ENV]: variant === 'named-only' ? 'true' : 'false',
-        },
+        env: getViteBuildEnvironment(variant),
         label: `${PHASE_ID} ${variant} build`,
     };
-};
-
-const assertArtifacts = async (filePaths: string[], variant: CanaryVariant): Promise<void> => {
-    await assertJavaScriptSyntax(filePaths);
-    await assertLiveDebuggerArtifacts(filePaths, variant);
 };
 
 export const createExcalidrawPhase = (): CanaryPhase => {
@@ -150,15 +100,8 @@ export const createExcalidrawPhase = (): CanaryPhase => {
         getArtifactSpec,
         getBuildCommand,
         assertBuildOutput: assertLiveDebuggerBuildOutput,
-        assertArtifacts,
+        assertArtifacts: assertViteArtifacts,
     };
-};
-
-const hasDependency = (packageJson: JsonObject, name: string): boolean => {
-    return ['dependencies', 'devDependencies'].some((field) => {
-        const dependencies = packageJson[field];
-        return isJsonObject(dependencies) && name in dependencies;
-    });
 };
 
 const preflightExcalidraw = async ({ root }: TargetSetupContext): Promise<void> => {
@@ -198,40 +141,13 @@ const preflightExcalidraw = async ({ root }: TargetSetupContext): Promise<void> 
     allowOversizedPrecacheAssets(appConfig);
 };
 
-const setupExcalidraw = async ({
-    buildPluginsRoot,
-    registerCleanup,
-    root,
-    runCommand,
-}: TargetSetupContext): Promise<void> => {
+const setupExcalidraw = async (context: TargetSetupContext): Promise<void> => {
+    const { registerCleanup, root, runCommand } = context;
     const packageJsonPath = path.resolve(root, EXCALIDRAW_PACKAGE_JSON);
     const lockfilePath = path.resolve(root, EXCALIDRAW_LOCKFILE);
     const dependencySnapshots = await readFiles([packageJsonPath, lockfilePath]);
     const targetEnvironment = getTargetCommandEnvironment(process.env);
-    const packDirectory = path.resolve(
-        os.tmpdir(),
-        `build-plugins-canary-excalidraw-${process.pid}-${Date.now()}`,
-    );
-    // A unique tarball path keeps Yarn from reusing a cached copy from a previous run.
-    const tarballPath = path.resolve(packDirectory, 'datadog-vite-plugin.tgz');
-
-    registerCleanup({
-        name: 'vite-plugin-tarball',
-        run: async () => {
-            await rm(packDirectory);
-        },
-    });
-    await mkdir(packDirectory);
-
-    // Packing applies publishConfig, so Excalidraw resolves the built files without
-    // modifying the build-plugins checkout.
-    const packSpec: CommandSpec = {
-        command: 'yarn',
-        args: ['workspace', VITE_PACKAGE, 'pack', '--out', tarballPath],
-        cwd: buildPluginsRoot,
-        label: `pack ${VITE_PACKAGE}`,
-    };
-    await runCheckedCommand(runCommand, packSpec);
+    const packageSpecifiers = await packVitePlugin(context, TARGET_ID);
 
     registerCleanup({
         name: 'excalidraw-dependencies',
@@ -248,18 +164,9 @@ const setupExcalidraw = async ({
         },
     });
 
-    const vitePackageJsonPath = path.resolve(buildPluginsRoot, VITE_PACKAGE_JSON);
-    const vitePackageJson = await readJsonObject(vitePackageJsonPath);
-    const peerDependencies = getPeerDependencySpecifiers(vitePackageJson);
     const addSpec: CommandSpec = {
         command: 'yarn',
-        args: [
-            'add',
-            '--dev',
-            '--ignore-workspace-root-check',
-            `file:${tarballPath}`,
-            ...peerDependencies,
-        ],
+        args: ['add', '--dev', '--ignore-workspace-root-check', ...packageSpecifiers],
         cwd: root,
         env: targetEnvironment,
         label: `install local ${VITE_PACKAGE} into Excalidraw`,
@@ -279,12 +186,13 @@ const setupExcalidraw = async ({
     });
 
     const patchedConfig = allowOversizedPrecacheAssets(appConfig);
+    const canaryConfig = getCanaryViteConfig(BASE_CONFIG_SPECIFIER);
     await outputFile(appConfigPath, patchedConfig);
-    await outputFile(canaryConfigPath, `${CANARY_CONFIG_SOURCE}\n`);
+    await outputFile(canaryConfigPath, `${canaryConfig}\n`);
 };
 
 export const excalidrawTarget: CanaryTarget = {
-    id: 'excalidraw',
+    id: TARGET_ID,
     getDefaultRoot: () => path.resolve(ROOT, '../excalidraw'),
     getPhases: () => [createExcalidrawPhase()],
     preflight: preflightExcalidraw,
