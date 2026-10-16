@@ -9,6 +9,7 @@
 import type { Logger } from '@dd/core/types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { BackendRuntimeStatus } from '../backend-runtime';
 import { isActionCatalogInstalled, isDatadogAppsBackendInstalled } from '../backend/shared';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
@@ -645,6 +646,7 @@ export async function executeScriptLocally(
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
     primedEntry?: Record<string, unknown>,
     longPolling: LongPollingConfig = DEFAULT_LONG_POLLING_CONFIG,
+    runtime: BackendRuntimeStatus = { runtime: 'v1', isFallback: false },
 ): Promise<BackendOutputs> {
     return enqueue(async () => {
         const runtimeContext = await getRuntimeContext();
@@ -660,9 +662,15 @@ export async function executeScriptLocally(
             timeoutMs,
             primedEntry,
             longPolling,
+            runtime,
         );
     });
 }
+
+export type GetAllowedConnectionIds = (
+    entryId: string,
+    runtime: BackendRuntimeStatus,
+) => Promise<string[]>;
 
 /**
  * Cold-function entry point: collects `allowedConnectionIds`, then primes and runs the entry in
@@ -677,20 +685,27 @@ export async function executeColdActionLocally(
     executeAction: ExecuteAction,
     getRuntimeContext: GetRuntimeContext,
     loadModule: LoadModule,
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    getAllowedConnectionIds: GetAllowedConnectionIds,
     log: Logger,
-    timeoutMs: number = DEFAULT_TIMEOUT_MS,
-    longPolling: LongPollingConfig = DEFAULT_LONG_POLLING_CONFIG,
+    timeoutMs: number,
+    longPolling: LongPollingConfig,
+    getRuntimeStatus: () => Promise<BackendRuntimeStatus>,
 ): Promise<BackendOutputs> {
     const displayName = `${func.relativePath}/${func.name}`;
     return enqueue(async () => {
         const runtimeContext = await getRuntimeContext();
         assertValidRuntimeContext(runtimeContext);
-        // Each step needs its own timeout bound independent of runScriptLocally's, which only
-        // starts once its body begins.
-        const connectionIdsPromise = getAllowedConnectionIds(func.absolutePath);
+        // Each step gets its own timeout, since runScriptLocally's starts only with its body; the
+        // runtime is looked up once this run starts, for both its module-graph checks and the run.
+        const runtimeLookup = getRuntimeStatus();
+        const runtime = await withTimeout(
+            runtimeLookup,
+            timeoutMs,
+            `Determining the org's backend runtime for "${displayName}"`,
+        );
+        const connectionIdsLookup = getAllowedConnectionIds(func.absolutePath, runtime);
         const allowedConnectionIds = await withTimeout(
-            connectionIdsPromise,
+            connectionIdsLookup,
             timeoutMs,
             `Resolving allowed connections for "${displayName}"`,
         );
@@ -713,6 +728,7 @@ export async function executeColdActionLocally(
             timeoutMs,
             primedEntry,
             longPolling,
+            runtime,
         );
     });
 }
@@ -728,6 +744,7 @@ async function runScriptLocally(
     timeoutMs: number,
     primedEntry: Record<string, unknown> | undefined,
     longPolling: LongPollingConfig,
+    runtime: BackendRuntimeStatus,
 ): Promise<BackendOutputs> {
     // Never log the args themselves — they may carry secrets/PII, matching dev-server.ts's cloud path.
     log.debug(`Executing "${func.name}" in-process with args`);
@@ -875,7 +892,12 @@ async function runScriptLocally(
                             const result = await fn(...args);
                             return assertJsonSerializable(result, func);
                         },
-                        { signal: blockedScopeController.signal },
+                        {
+                            signal: blockedScopeController.signal,
+                            runtime: runtime.runtime,
+                            isFallbackRuntime: runtime.isFallback,
+                            projectRoot,
+                        },
                     );
                     return { data };
                 }),

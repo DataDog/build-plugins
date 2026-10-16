@@ -477,6 +477,8 @@ export const getVitePlugin = ({
             }
         },
         configureServer(server) {
+            // Resolved now, so a backend function's process.chdir can't move the root the guards protect.
+            const projectRoot = path.resolve(context.buildRoot);
             devServerActive = true;
             // Started now to overlap the server's startup, and caught so it can never go unhandled.
             getBackendRuntime().catch(() => {});
@@ -504,9 +506,7 @@ export const getVitePlugin = ({
                     installGuards();
                 } catch (error) {
                     const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(
-                        `Could not install the backend function sandbox guards yet: ${reason}`,
-                    );
+                    log.warn(`Could not install the local-execution guards yet: ${reason}`);
                 }
                 if (gracefulFsPredatesGuards()) {
                     log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
@@ -530,10 +530,11 @@ export const getVitePlugin = ({
             // Safe to call before `loadModule` runs anything: collectModuleGraphFromServer primes
             // each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
-            const getAllowedConnectionIds = async (entryId: string) => {
-                const parseAstLoad = loadViteParseAst();
-                const runtimeLookup = getBackendRuntime();
-                const [parseAst, runtime] = await Promise.all([parseAstLoad, runtimeLookup]);
+            const getAllowedConnectionIds = async (
+                entryId: string,
+                runtime: BackendRuntimeStatus,
+            ) => {
+                const parseAst = await loadViteParseAst();
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
                     entryId,
@@ -553,7 +554,7 @@ export const getVitePlugin = ({
                 auth,
                 doAuthenticatedRequest,
                 options.longPolling,
-                context.buildRoot,
+                projectRoot,
                 log,
                 server.config.mode,
                 isHostAllowed,

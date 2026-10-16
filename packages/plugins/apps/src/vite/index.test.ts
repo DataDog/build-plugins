@@ -424,10 +424,10 @@ describe('Backend Functions - getVitePlugin', () => {
         }
     });
 
-    test('Should start resolving the backend runtime when the dev server starts, and use it for local execution checks', async () => {
+    test('Should start resolving the backend runtime when the dev server starts, and check local execution under the runtime it is given', async () => {
         const resolveSpy = jest
             .spyOn(backendRuntime, 'resolveBackendRuntime')
-            .mockResolvedValue(V2_RUNTIME);
+            .mockResolvedValue(V1_RUNTIME);
         const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
         jest.spyOn(viteParseAstModule, 'loadViteParseAst').mockResolvedValue(parseAst);
         const collectSpy = jest
@@ -445,7 +445,7 @@ describe('Backend Functions - getVitePlugin', () => {
 
         expect(resolveSpy).toHaveBeenCalledWith(defaultOptions.context.auth, expect.anything());
         const getAllowedConnectionIds = middlewareSpy.mock.calls[0][3];
-        await getAllowedConnectionIds(BACKEND_FILE_ID);
+        await getAllowedConnectionIds(BACKEND_FILE_ID, V2_RUNTIME);
         expect(collectSpy).toHaveBeenCalledWith(
             expect.anything(),
             BACKEND_FILE_ID,
@@ -454,6 +454,47 @@ describe('Backend Functions - getVitePlugin', () => {
             parseAst,
             V2_RUNTIME,
         );
+    });
+
+    test("Should give local execution the org's backend runtime, whether it is only the fallback, and the build root", async () => {
+        const statusSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValue(V1_FALLBACK_RUNTIME);
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig('development'),
+        });
+
+        const middlewareArgs = middlewareSpy.mock.calls[0];
+        const getBackendRuntime = middlewareArgs[11];
+        const runtime = await getBackendRuntime();
+        expect(runtime).toEqual(V1_FALLBACK_RUNTIME);
+        expect(middlewareArgs).toHaveLength(12);
+        expect(statusSpy).toHaveBeenCalledWith(defaultOptions.context.auth, expect.anything());
+        expect(middlewareArgs[7]).toBe(defaultOptions.context.buildRoot);
+    });
+
+    test('Should give local execution the project root resolved when the dev server starts', () => {
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const relativeRoot = 'relative-app-root';
+        const context = { ...defaultOptions.context, buildRoot: relativeRoot };
+        const plugin = getVitePlugin({ ...defaultOptions, context });
+        const configureServer = getConfigureServer(plugin);
+        const rootAtStart = path.resolve(relativeRoot);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig('development'),
+        });
+
+        const projectRoot = middlewareSpy.mock.calls[0][7];
+        expect(projectRoot).toBe(rootAtStart);
     });
 
     test('skips packaging in closeBundle after a dev server session started', async () => {
@@ -1750,16 +1791,27 @@ describe('Backend Functions - getVitePlugin', () => {
                 pluginContainer,
             });
             const inRunPath = path.join(cacheDir, 'in-run.txt');
-            const results = await networkGuard.runBlocked(async () => {
-                const ssr = { ssr: true };
-                const resolved = await pluginContainer.resolveId('/src/lazy.ts', undefined, ssr);
-                const loaded = await pluginContainer.load('/src/lazy.ts', ssr);
-                const transformed = await pluginContainer.transform('code', '/src/lazy.ts', ssr);
-                expect(() => fs.writeFileSync(inRunPath, 'data')).toThrow(
-                    networkGuard.FS_WRITE_BLOCKED_MESSAGE,
-                );
-                return [resolved, loaded, transformed];
-            });
+            const results = await networkGuard.runBlocked(
+                async () => {
+                    const ssr = { ssr: true };
+                    const resolved = await pluginContainer.resolveId(
+                        '/src/lazy.ts',
+                        undefined,
+                        ssr,
+                    );
+                    const loaded = await pluginContainer.load('/src/lazy.ts', ssr);
+                    const transformed = await pluginContainer.transform(
+                        'code',
+                        '/src/lazy.ts',
+                        ssr,
+                    );
+                    expect(() => fs.writeFileSync(inRunPath, 'data')).toThrow(
+                        networkGuard.FS_WRITE_BLOCKED_MESSAGE,
+                    );
+                    return [resolved, loaded, transformed];
+                },
+                { runtime: 'v1', isFallbackRuntime: false, projectRoot: cacheDir },
+            );
             const cacheFiles = fs.readdirSync(cacheDir).sort();
 
             expect(results).toEqual(['resolveId', 'load', 'transform']);
