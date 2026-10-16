@@ -220,6 +220,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -266,6 +267,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -306,6 +308,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -386,6 +389,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -440,6 +444,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -503,6 +508,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const apiScope = nock('https://api.datadoghq.com')

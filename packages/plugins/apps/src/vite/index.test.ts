@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+/* global globalThis */
+
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
@@ -34,6 +36,7 @@ import {
     type ViteDevServer,
 } from 'vite';
 
+import * as actionScriptLimits from '../action-script-limits';
 import * as auth from '../auth';
 import { V1_FALLBACK_RUNTIME, V1_RUNTIME, V2_RUNTIME } from '../backend-runtime.fixtures';
 import * as backendRuntime from '../backend-runtime';
@@ -311,6 +314,7 @@ describe('Backend Functions - getVitePlugin', () => {
         jest.clearAllMocks();
         // A real lookup would outlive the test that started it and log into the next one.
         jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue(V1_RUNTIME);
+        jest.spyOn(actionScriptLimits, 'resolveScriptMaxLength').mockResolvedValue(undefined);
         mockBuildWithParsedBackend();
         jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
@@ -1646,6 +1650,115 @@ describe('Backend Functions - getVitePlugin', () => {
             }
         },
     );
+
+    test('Should not leave the dev:verify start-up script-limit read as an unhandled rejection', async () => {
+        jest.spyOn(actionScriptLimits, 'resolveScriptMaxLength').mockRejectedValue(
+            new Error('read'),
+        );
+        jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => undefined);
+        const unhandled = jest.fn();
+        process.on('unhandledRejection', unhandled);
+        const restoreEnv = clearDatadogEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+        try {
+            const plugin = getVitePlugin(defaultOptions);
+            const configureServer = getConfigureServer(plugin);
+
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig(DEV_VERIFY_MODE),
+            });
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(unhandled).not.toHaveBeenCalled();
+        } finally {
+            process.off('unhandledRejection', unhandled);
+            restoreEnv();
+        }
+    });
+
+    test.each([
+        { scenario: 'a dev:verify session', mode: DEV_VERIFY_MODE, withAuth: true, lookups: 1 },
+        { scenario: 'local execution', mode: 'development', withAuth: true, lookups: 0 },
+        { scenario: 'no authentication', mode: DEV_VERIFY_MODE, withAuth: false, lookups: 0 },
+    ])(
+        'Should start reading the script limit at server start only for $scenario',
+        ({ mode, withAuth, lookups }) => {
+            const limitSpy = jest
+                .spyOn(actionScriptLimits, 'resolveScriptMaxLength')
+                .mockResolvedValue(undefined);
+            jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => undefined);
+            const plugin = getVitePlugin(defaultOptions);
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = clearDatadogEnv();
+            if (withAuth) {
+                process.env.DD_API_KEY = 'test-api-key';
+                process.env.DD_APP_KEY = 'test-app-key';
+            }
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    config: fakeServerConfig(mode),
+                });
+
+                expect(limitSpy).toHaveBeenCalledTimes(lookups);
+            } finally {
+                restoreEnv();
+            }
+        },
+    );
+
+    test("Should warm the script-limit cache under the auth site and credentials' key, which cloud execution reads", async () => {
+        jest.mocked(actionScriptLimits.resolveScriptMaxLength).mockRestore();
+        const limitSpy = jest.spyOn(actionScriptLimits, 'resolveScriptMaxLength');
+        actionScriptLimits.resetScriptLimitCache();
+        jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => undefined);
+        const { site } = defaultOptions.context.auth;
+        const scope = nock(`https://api.${site}`)
+            .get(actionScriptLimits.DATATRANSFORMATION_MANIFEST_PATH)
+            .reply(200, {});
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+
+        try {
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig(DEV_VERIFY_MODE),
+            });
+            const cache: unknown = Reflect.get(
+                globalThis,
+                actionScriptLimits.SCRIPT_LIMIT_CACHE_KEY,
+            );
+            const credentials = { apiKey: 'test-api-key', appKey: 'test-app-key' };
+            const cacheKey = backendRuntime.getCacheKey(site, credentials);
+            const warmed = cache instanceof Map ? cache.get(cacheKey) : undefined;
+            await actionScriptLimits.getProperty(warmed, 'limit');
+
+            const isDone = scope.isDone();
+            const unusedRead = nock(`https://api.${site}`)
+                .get(actionScriptLimits.DATATRANSFORMATION_MANIFEST_PATH)
+                .reply(200, {});
+            const getCloudScriptLimit = middlewareSpy.mock.calls[0][12];
+            await getCloudScriptLimit();
+            const readAgain = unusedRead.isDone();
+            expect(limitSpy).toHaveBeenCalledWith(site, credentials, expect.anything());
+            expect(warmed).toBeDefined();
+            expect(isDone).toBe(true);
+            expect(readAgain).toBe(false);
+        } finally {
+            restoreEnv();
+            actionScriptLimits.resetScriptLimitCache();
+        }
+    });
 
     test.each([
         { predates: true, warns: true },
