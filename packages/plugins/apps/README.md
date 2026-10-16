@@ -17,6 +17,7 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Development server requests](#development-server-requests)
 -   [Cloud execution](#cloud-execution)
 -   [Local execution](#local-execution)
+-   [Backend function runtime](#backend-function-runtime)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -44,7 +45,7 @@ apps?: {
 
 ## Backend functions
 
-Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject Node built-in imports and network globals such as `fetch` in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
+Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject globals the [Node backend runtime](#backend-function-runtime) lacks in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
 
 ### Backend functions from packages
 
@@ -109,6 +110,10 @@ When Datadog rejects a bundle as longer than the `jsFunctionWithActions` `script
 -   **Older Node**: on a Node without the permission model, or without `--allow-inspector` while debugging, a call's process runs under in-process guards instead. They refuse writes outside the temp dirs, subprocesses and worker threads, from the module's top-level code on.
 
 Local execution doesn't support Yarn Plug'n'Play, whose packages load through hooks a call's process doesn't get: each call fails with a hint to set `nodeLinker: node-modules` or use `dev:verify`.
+
+## Backend function runtime
+
+Backend functions run on the Node backend runtime, and the plugin's build-time and dev-server checks follow its rules: backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The checks fail only where the missing global would throw: any bare use but `typeof Deno`, or using `globalThis.Deno` as an object, function or class, even after a feature check or a polyfill install, so use an imported polyfill by its name. Feature checks such as `if (globalThis.EventSource)` and destructuring defaults pass. The checks follow a binding the global is declared or destructured into, but not a plain assignment such as `d = globalThis.Deno`, a `let` or parameter alias of `globalThis`, a bulk copy such as `{ ...globalThis }`, or a value that is stored in an object, array or class field, exported, returned or passed on. Local execution runs on your own Node, while the Node backend runtime runs Node 24, so the dev server warns once at start on another major version, and on one before Node 22, which lacks the global `WebSocket`.
 
 ## Package output
 

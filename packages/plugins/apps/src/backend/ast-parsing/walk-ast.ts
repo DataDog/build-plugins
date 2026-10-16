@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Node as EstreeNode } from 'estree';
+import type { BaseNode, Node as EstreeNode, Program } from 'estree';
 
 /**
  * Object passed to every visitor.
@@ -109,4 +109,20 @@ function getSpecializedVisitor<Node extends BaseNode, State>(
     visitors: WalkAstVisitors<Node, State>,
 ): WalkAstVisitor<BaseNode, State> | undefined {
     return (visitors as Record<string, WalkAstVisitor<BaseNode, State> | undefined>)[node.type];
+}
+
+export function parentsOf(program: Program): Map<BaseNode, EstreeNode> {
+    const parents = new Map<BaseNode, EstreeNode>();
+    walkAst<EstreeNode, null>(program, null, {
+        _(node) {
+            for (const value of Object.values(node)) {
+                for (const child of Array.isArray(value) ? value : [value]) {
+                    if (isAstNode(child)) {
+                        parents.set(child, node);
+                    }
+                }
+            }
+        },
+    });
+    return parents;
 }

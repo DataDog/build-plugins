@@ -17,7 +17,7 @@ import { isViteVirtualModuleId, normalizeViteModuleId } from './backend-module-g
 // Distinct from module-graph.ts's `unsupportedModuleGraphDependency` — that message is specific to connection-ID collection, unrelated to this plugin's fallback parse.
 function unsupportedStaticChecksSource(filePath: string, unsupported: string): Error {
     return new Error(
-        `Unsupported module source for ${filePath}: ${unsupported} could hide a Node-builtin import or restricted-global access.`,
+        `Unsupported module source for ${filePath}: ${unsupported} could hide a restricted-global access.`,
     );
 }
 
@@ -55,7 +55,6 @@ export function createBackendStaticChecksPlugin(
                         `unparseable module source (${reason})`,
                     );
                 }
-                // Shared so the checks below don't each independently re-walk this fallback-parsed AST to build the same scope graph.
                 const program = ensureProgram(ast, moduleId);
                 scopeAnalysis = analyzeModuleScope(program);
             }
