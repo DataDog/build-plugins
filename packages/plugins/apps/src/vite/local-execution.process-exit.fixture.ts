@@ -11,7 +11,12 @@
 import { mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs';
 
-import { func, stubExecuteAction, stubGetRuntimeContext } from './local-execution.fixtures';
+import {
+    func,
+    PROCESS_EXIT_FIXTURE_CODE,
+    stubExecuteAction,
+    stubGetRuntimeContext,
+} from './local-execution.fixtures';
 import { executeScriptLocally } from './local-execution';
 
 // eslint-disable-next-line no-undef -- Jest injects `test` at runtime
@@ -23,7 +28,7 @@ test('process.exit fixture', async () => {
     fs.writeSync(1, 'FIXTURE_STARTED\n');
     const resolveModule = moduleResolverFor(func, {
         example: () => {
-            process.exit(7);
+            process.exit(PROCESS_EXIT_FIXTURE_CODE);
         },
     });
     await executeScriptLocally(

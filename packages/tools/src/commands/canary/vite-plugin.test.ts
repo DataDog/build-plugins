@@ -61,16 +61,27 @@ describe('Vite plugin canary helpers', () => {
         expect(hasDependency(packageJson, '@datadog/vite-plugin')).toBe(expected);
     });
 
-    test('should toggle Live Debugger with the variable the instrumented build sets', () => {
+    const getChangedVariables = (
+        from: Record<string, string | undefined>,
+        to: Record<string, string | undefined>,
+    ): string[] => {
+        return Object.keys(to).filter((name) => to[name] !== from[name]);
+    };
+
+    test('should read the variables that switch Live Debugger settings between variants', () => {
         const config = getCanaryViteConfig('./vite.config.mts');
         const control = getViteBuildEnvironment('control');
-        const instrumented = getViteBuildEnvironment('instrumented');
-        const toggles = Object.keys(instrumented).filter(
-            (name) => instrumented[name] !== control[name],
-        );
+        const allFunctions = getViteBuildEnvironment('all-functions');
+        const namedOnly = getViteBuildEnvironment('named-only');
 
-        expect(toggles).toEqual(['BUILD_PLUGIN_LIVE_DEBUGGER']);
+        expect(getChangedVariables(control, allFunctions)).toEqual(['BUILD_PLUGIN_LIVE_DEBUGGER']);
+        expect(getChangedVariables(allFunctions, namedOnly)).toEqual([
+            'BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY',
+        ]);
         expect(config).toContain("enable: process.env.BUILD_PLUGIN_LIVE_DEBUGGER === 'true'");
+        expect(config).toContain(
+            "namedOnly: process.env.BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY === 'true'",
+        );
         expect(config).toContain("import baseConfig from './vite.config.mts';");
     });
 });

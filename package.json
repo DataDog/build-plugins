@@ -40,6 +40,7 @@
         }
     },
     "devDependencies": {
+        "@dd/eslint-plugin": "workspace:*",
         "@types/node": "^20",
         "@typescript-eslint/eslint-plugin": "7.5.0",
         "@typescript-eslint/parser": "7.5.0",

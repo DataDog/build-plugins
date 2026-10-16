@@ -7,29 +7,35 @@ import path from 'path';
 import { allowOversizedPrecacheAssets, createExcalidrawPhase } from './excalidraw';
 
 describe('Excalidraw canary target', () => {
-    test('should vary only Live Debugger enablement between paired builds', () => {
+    test('should vary only Live Debugger settings between builds', () => {
         const phase = createExcalidrawPhase();
         const control = phase.getBuildCommand('/excalidraw', 'control');
-        const instrumented = phase.getBuildCommand('/excalidraw', 'instrumented');
+        const allFunctions = phase.getBuildCommand('/excalidraw', 'all-functions');
+        const namedOnly = phase.getBuildCommand('/excalidraw', 'named-only');
 
         expect(control.env).toEqual({
-            ...instrumented.env,
+            ...allFunctions.env,
             BUILD_PLUGIN_LIVE_DEBUGGER: 'false',
         });
-        expect(instrumented.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
+        expect(namedOnly.env).toEqual({
+            ...allFunctions.env,
+            BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'true',
+        });
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY).toBe('false');
     });
 
     test('should measure the same directory each variant builds into', () => {
         const phase = createExcalidrawPhase();
-        const build = phase.getBuildCommand('/excalidraw', 'instrumented');
-        const artifacts = phase.getArtifactSpec('/excalidraw', 'instrumented');
+        const build = phase.getBuildCommand('/excalidraw', 'named-only');
+        const artifacts = phase.getArtifactSpec('/excalidraw', 'named-only');
         const outDirIndex = build.args.indexOf('--outDir');
         const outDir = build.args[outDirIndex + 1] ?? '';
         const expectedRoot = path.resolve(build.cwd, outDir);
 
         expect(outDirIndex).toBeGreaterThan(-1);
         expect(artifacts.roots).toEqual([expectedRoot]);
-        expect(outDir).toContain('instrumented');
+        expect(outDir).toContain('named-only');
     });
 
     test('should downgrade the PWA precache size error to a warning', () => {

@@ -19,6 +19,7 @@ export const VITE_PACKAGE = '@datadog/vite-plugin';
 const VITE_PACKAGE_JSON = 'packages/published/vite-plugin/package.json';
 const LIVE_DEBUGGER_PEER_DEPENDENCIES = ['@babel/parser', '@babel/traverse', '@babel/types'];
 const LIVE_DEBUGGER_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER';
+const NAMED_ONLY_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY';
 
 // Wraps a target's own Vite config and adds the Datadog plugin, so the target's
 // config file stays untouched.
@@ -37,6 +38,7 @@ export const getCanaryViteConfig = (baseConfigSpecifier: string): string => {
                         logLevel: 'info',
                         liveDebugger: {
                             enable: process.env.${LIVE_DEBUGGER_ENV} === 'true',
+                            namedOnly: process.env.${NAMED_ONLY_ENV} === 'true',
                         },
                     }),
                 ],
@@ -69,14 +71,15 @@ export const hasDependency = (packageJson: JsonObject, name: string): boolean =>
     });
 };
 
-// Only Live Debugger enablement differs between a target's paired builds.
+// Only Live Debugger settings differ between a target's builds.
 export const getViteBuildEnvironment = (
     variant: CanaryVariant,
 ): Record<string, string | undefined> => {
     const targetEnvironment = getTargetCommandEnvironment(process.env);
     return {
         ...targetEnvironment,
-        [LIVE_DEBUGGER_ENV]: variant === 'instrumented' ? 'true' : 'false',
+        [LIVE_DEBUGGER_ENV]: variant === 'control' ? 'false' : 'true',
+        [NAMED_ONLY_ENV]: variant === 'named-only' ? 'true' : 'false',
     };
 };
 

@@ -65,8 +65,16 @@ Install the dependencies of both repositories first. A target may refuse to run
 when either checkout already has a local package-link setup, so it cannot
 overwrite an existing development environment.
 
-The default run compares control and Live Debugger-instrumented variants. Only
-Live Debugger is toggled between a target's paired builds. To select one
+Each phase builds three variants:
+
+- `control`: Live Debugger disabled;
+- `all-functions`: Live Debugger with its default options, which instrument
+  anonymous functions such as inline callbacks too;
+- `named-only`: Live Debugger with
+  [`namedOnly: true`](./README.md#livedebuggernamedonly), which skips anonymous
+  functions.
+
+Only Live Debugger settings change between a target's builds. To select one
 target-defined phase or use a non-default checkout, run:
 
 ```bash
@@ -78,9 +86,10 @@ For each phase, the result reports:
 - wall-clock build duration, excluding the separate syntax-validation pass;
 - total raw bytes across all emitted JavaScript files;
 - total gzip bytes when each emitted JavaScript file is compressed separately;
-- absolute and percentage differences between control and instrumented builds.
+- absolute and percentage differences between control and each instrumented
+  variant.
 
-Build order alternates across runs to reduce systematic warm-cache bias. A
+Build order is permuted across runs to reduce systematic warm-cache bias. A
 single duration difference is still noisy and should be interpreted as part of
 a trend, not as a hard regression threshold.
 
@@ -116,7 +125,7 @@ Babel peer dependencies into the checkout, and generates
 `excalidraw-app/vite.config.live-debugger-canary.mjs`, which wraps the app's
 Vite config. Instrumentation pushes the app's main chunk past its service-worker
 precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
-warning in both variants. Cleanup restores `package.json`, `yarn.lock`, and the
+warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
 Vite config, then reinstalls the checkout's dependencies. Builds are written to
 `excalidraw-app/build/live-debugger-canary/`.
 
@@ -139,7 +148,7 @@ Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
 Babel peer dependencies into the checkout, and generates
 `vite.config.live-debugger-canary.mjs`, which wraps Mastodon's unmodified Vite
 config. Cleanup restores `package.json` and `yarn.lock`, then reinstalls the
-checkout's dependencies. Both variants are production builds, written to
+checkout's dependencies. Every variant is a production build, written to
 `build/live-debugger-canary/`.
 
 ## Runtime benchmark

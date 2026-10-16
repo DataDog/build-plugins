@@ -7,22 +7,28 @@ import path from 'path';
 import { createMastodonPhase } from './mastodon';
 
 describe('Mastodon canary target', () => {
-    test('should vary only Live Debugger enablement between paired builds', () => {
+    test('should vary only Live Debugger settings between builds', () => {
         const phase = createMastodonPhase();
         const control = phase.getBuildCommand('/mastodon', 'control');
-        const instrumented = phase.getBuildCommand('/mastodon', 'instrumented');
+        const allFunctions = phase.getBuildCommand('/mastodon', 'all-functions');
+        const namedOnly = phase.getBuildCommand('/mastodon', 'named-only');
 
         expect(control.env).toEqual({
-            ...instrumented.env,
+            ...allFunctions.env,
             BUILD_PLUGIN_LIVE_DEBUGGER: 'false',
         });
-        expect(instrumented.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
+        expect(namedOnly.env).toEqual({
+            ...allFunctions.env,
+            BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'true',
+        });
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY).toBe('false');
     });
 
     test('should measure the same directory each variant builds into', () => {
         const phase = createMastodonPhase();
-        const build = phase.getBuildCommand('/mastodon', 'instrumented');
-        const artifacts = phase.getArtifactSpec('/mastodon', 'instrumented');
+        const build = phase.getBuildCommand('/mastodon', 'named-only');
+        const artifacts = phase.getArtifactSpec('/mastodon', 'named-only');
         const outDirIndex = build.args.indexOf('--outDir');
         const outDir = build.args[outDirIndex + 1] ?? '';
 
@@ -30,6 +36,6 @@ describe('Mastodon canary target', () => {
         // Mastodon's config sets its own Vite root, which a relative --outDir would follow.
         expect(path.isAbsolute(outDir)).toBe(true);
         expect(artifacts.roots).toEqual([outDir]);
-        expect(outDir).toContain('instrumented');
+        expect(outDir).toContain('named-only');
     });
 });

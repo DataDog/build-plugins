@@ -471,11 +471,15 @@ export const getSourcemapsConfiguration = (
     };
 };
 
-export const getDebugIdSourcemapsConfiguration = (): DebugIdSourcemapsOptionsWithDefaults => ({
+export const getDebugIdSourcemapsConfiguration = (
+    options: Partial<DebugIdSourcemapsOptionsWithDefaults> = {},
+): DebugIdSourcemapsOptionsWithDefaults => ({
     bailOnError: false,
     debugId: true,
     dryRun: false,
+    experimentalDuplicateCheck: false,
     maxConcurrency: 10,
+    ...options,
 });
 
 export const getSourcemapMock = (options: Partial<Sourcemap> = {}): Sourcemap => {
