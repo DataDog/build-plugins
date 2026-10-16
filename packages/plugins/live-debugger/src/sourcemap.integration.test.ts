@@ -72,6 +72,7 @@ describe('Live Debugger sourcemaps', () => {
     });
 
     const ENTRY_SOURCE = [
+        '"use strict";',
         'function helper() {',
         "    return 'helper';",
         '}',
@@ -172,21 +173,21 @@ describe('Live Debugger sourcemaps', () => {
                 line: located.probeDeclLine + 1,
                 column: located.probeDeclColumn,
             }),
-        ).toEqual(expect.objectContaining({ line: 5 }));
+        ).toEqual(expect.objectContaining({ line: 6 }));
 
         expect(
             originalPositionFor(located.traceMap, {
                 line: located.entryCallLine + 1,
                 column: located.entryCallColumn,
             }),
-        ).toEqual(expect.objectContaining({ line: 5 }));
+        ).toEqual(expect.objectContaining({ line: 6 }));
 
         expect(
             originalPositionFor(located.traceMap, {
                 line: located.functionDeclLine + 1,
                 column: located.functionDeclColumn,
             }),
-        ).toEqual(expect.objectContaining({ line: 5, column: 0 }));
+        ).toEqual(expect.objectContaining({ line: 6, column: 0 }));
     });
 
     it('composes its source map with the previous loader so injected positions are reported in original-source coordinates', async () => {
@@ -208,18 +209,18 @@ describe('Live Debugger sourcemaps', () => {
             column: located.functionDeclColumn,
         });
 
-        // Every position we care about must point at line 5 of the original
-        // source, NOT line 5 + BANNER_LINES of the post-loader buffer.
-        expect(probeDeclResolved).toEqual(expect.objectContaining({ line: 5 }));
-        expect(entryCallResolved).toEqual(expect.objectContaining({ line: 5 }));
-        expect(functionDeclResolved).toEqual(expect.objectContaining({ line: 5, column: 0 }));
+        // Every position we care about must point at line 6 of the original
+        // source, NOT line 6 + BANNER_LINES of the post-loader buffer.
+        expect(probeDeclResolved).toEqual(expect.objectContaining({ line: 6 }));
+        expect(entryCallResolved).toEqual(expect.objectContaining({ line: 6 }));
+        expect(functionDeclResolved).toEqual(expect.objectContaining({ line: 6, column: 0 }));
 
         // Defensive: explicitly assert that none of the resolved positions
         // are pointing at the banner area. Without composition the injected
-        // probe positions would land on lines 5..(5 + BANNER_LINES) of what
+        // probe positions would land on lines 6..(6 + BANNER_LINES) of what
         // the bundler thinks is the original source.
         for (const resolved of [probeDeclResolved, entryCallResolved, functionDeclResolved]) {
-            expect(resolved.line).not.toBeGreaterThan(5);
+            expect(resolved.line).not.toBeGreaterThan(6);
         }
     });
 });

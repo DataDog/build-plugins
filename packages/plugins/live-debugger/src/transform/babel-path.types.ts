@@ -16,6 +16,11 @@ export interface BabelPath<T extends t.Node = t.Node> {
     parentPath: BabelPath | null;
 }
 
+export interface BabelProgramPath extends BabelPath<t.Program> {
+    scope: { hasOwnBinding(name: string): boolean };
+    stop(): void;
+}
+
 /**
  * Runtime `@babel/types` namespace passed as an argument everywhere a
  * helper needs `t.isXXX` guards. Threading the module through (instead

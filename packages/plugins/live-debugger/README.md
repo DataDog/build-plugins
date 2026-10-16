@@ -257,11 +257,13 @@ The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd
 
 ### Safe fallback when the SDK is absent
 
-The plugin automatically injects a minimal no-op stub into every output chunk:
+The plugin injects a minimal no-op stub into every output chunk, and into every module it instruments so that modules bundled by a child compilation (workers, code inlined as strings) are covered too:
 
 ```javascript
-if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = function() {} }
+if (globalThis.$dd_probes === void 0) { globalThis.$dd_probes = function() {} }
 ```
+
+Modules that declare their own top-level `globalThis` binding would shadow the stub's reference, so they are left uninstrumented.
 
 This ensures that instrumented code never crashes, even if the SDK has not been loaded. The stub makes `$dd_probes` return `undefined`, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
 

@@ -10,9 +10,10 @@ import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
 import { SKIP_INSTRUMENTATION_COMMENT } from '../constants';
+import { runtimeStubs } from '../runtime-bootstrap';
 import type { DecoratorSyntax, FunctionKind } from '../types';
 
-import type { BabelPath, BabelTypesModule } from './babel-path.types';
+import type { BabelPath, BabelProgramPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
 import { generateFunctionId, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
@@ -290,11 +291,19 @@ export function transformCode(options: TransformOptions): TransformResult {
     const superCallsByConstructorNode = new Map<BabelTypes.Node, SuperCallTarget[]>();
     const anonymousCountByParent = new Map<BabelTypes.Node, number>();
     let probeVarCounter = 0;
+    let bindsGlobalThis = false;
 
     // @babel/parser and @babel/traverse bundle separate copies of @babel/types,
     // causing a structural type mismatch. The cast is safe: parse() returns a
     // valid AST that traverse() accepts at runtime.
     traverse(ast as unknown as BabelTypes.Node, {
+        Program(path: BabelProgramPath) {
+            // The module guard reads `globalThis`, which a top-level binding would shadow.
+            if (path.scope.hasOwnBinding('globalThis')) {
+                bindsGlobalThis = true;
+                path.stop();
+            }
+        },
         Function(path: BabelPath<BabelTypes.Function>) {
             totalFunctions++;
 
@@ -422,19 +431,27 @@ export function transformCode(options: TransformOptions): TransformResult {
         },
     });
 
-    if (instrumentedCount === 0) {
+    if (bindsGlobalThis || instrumentedCount === 0) {
         return {
             code,
             failedCount,
             instrumentedCount,
             skippedByCommentCount,
-            skippedFileCount: 0,
+            skippedFileCount: bindsGlobalThis ? 1 : 0,
             skippedUnsupportedCount,
             totalFunctions,
         };
     }
 
     const s = new MagicString(code);
+    // Child compilations can instrument modules without receiving the chunk bootstrap.
+    const stubPosition =
+        ast.program.directives[ast.program.directives.length - 1]?.end ??
+        ast.program.interpreter?.end ??
+        0;
+    // Newlines terminate a hashbang or semicolonless directive before the guard.
+    s.appendLeft(stubPosition, `\n${runtimeStubs};\n`);
+
     const superCallRangesHandledByExpressionBodies =
         getSuperCallRangesHandledByExpressionBodies(targets);
     const constructorThisAliasTargets = getConstructorThisAliasTargets(

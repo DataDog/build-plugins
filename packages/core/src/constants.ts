@@ -32,3 +32,11 @@ export const HOST_NAME = 'datadog-build-plugins';
 // Global function that Live Debugger instrumentation calls at the start of
 // every instrumented function, with the function's ID as its only argument.
 export const LIVE_DEBUGGER_PROBES_FUNCTION = '$dd_probes';
+
+const escapedProbesFunction = LIVE_DEBUGGER_PROBES_FUNCTION.replace(/\$/g, '\\$');
+export const LIVE_DEBUGGER_PROBES_CALL_PATTERN = new RegExp(
+    `(?<![\\w$.])${escapedProbesFunction}\\s*\\(`,
+);
+export const LIVE_DEBUGGER_PROBES_STUB_PATTERN = new RegExp(
+    `globalThis\\.${escapedProbesFunction}\\s*=(?!=)`,
+);
