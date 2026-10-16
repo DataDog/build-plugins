@@ -24,7 +24,7 @@ packages/plugins/injection                                            @DataDog/b
 packages/plugins/metrics                                              @DataDog/frontend-devx
 
 # Error Tracking
-packages/plugins/error-tracking                                       @DataDog/build-plugins
+packages/plugins/error-tracking                                       @DataDog/rum-backend @DataDog/error-tracking
 
 # Rum
 packages/plugins/rum                                                  @DataDog/rum-browser
