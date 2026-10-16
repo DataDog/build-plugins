@@ -7,7 +7,7 @@ import type { SourcePosition, SymbolTable, SymbolTableEntry } from './types';
 // SymDB language of browser symbol tables.
 export const SYMBOL_TABLE_LANGUAGE = 'browser';
 
-// A SymDB scope, in the format the backend SDKs upload.
+// A SymDB scope.
 export type SymDbScope = {
     scope_type: 'MODULE' | 'FUNCTION';
     name: string;
