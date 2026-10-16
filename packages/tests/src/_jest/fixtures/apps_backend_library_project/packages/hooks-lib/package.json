@@ -1,0 +1,13 @@
+{
+    "name": "@fixtures/hooks-lib",
+    "version": "0.0.1",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./hooks": "./hooks/index.js"
+    },
+    "datadogApps": {
+        "backendFunctions": true
+    }
+}
