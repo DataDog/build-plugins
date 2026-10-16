@@ -60,6 +60,32 @@ export function resolvesTo(
     return !!variable && variables.has(variable);
 }
 
+const reassignmentsByVariable = new WeakMap<eslintScope.Variable, eslintScope.Reference[]>();
+
+// Writes other than the binding's own declaration. Cached, since every read of an alias asks again.
+export function reassignments(variable: eslintScope.Variable): eslintScope.Reference[] {
+    let writes = reassignmentsByVariable.get(variable);
+    if (!writes) {
+        writes = variable.references.filter((reference) => reference.isWrite() && !reference.init);
+        reassignmentsByVariable.set(variable, writes);
+    }
+    return writes;
+}
+
+function isReassigned(variable: eslintScope.Variable): boolean {
+    return reassignments(variable).length > 0;
+}
+
+// Declared once and never written after its declaration (a `const` can't be), so the declaration says what it holds.
+export function hasSingleValue(variable: eslintScope.Variable): boolean {
+    if (variable.defs.length !== 1) {
+        return false;
+    }
+    const [definition] = variable.defs;
+    const isConst = definition.type === 'Variable' && definition.parent.kind === 'const';
+    return isConst || !isReassigned(variable);
+}
+
 export function isImportVariable(variable: eslintScope.Variable): boolean {
     return variable.defs.some((definition) => definition.type === 'ImportBinding');
 }

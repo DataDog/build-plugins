@@ -107,6 +107,12 @@ describe('Backend Functions - warnAboutDivergentGlobals', () => {
             code: "export function run() { const key = 'crypto'; return globalThis[key].randomUUID(); }",
             global: 'crypto',
         },
+        {
+            description:
+                'warn on crypto reached through a let alias of globalThis that is never reassigned',
+            code: 'export function run() { let g = globalThis; return g.crypto.randomUUID(); }',
+            global: 'crypto',
+        },
     ];
 
     test.each(warnedCases)('Should $description', ({ code, global }) => {
@@ -227,6 +233,10 @@ describe('Backend Functions - warnAboutDivergentGlobals', () => {
             description:
                 'not warn on a nested destructure named crypto whose outer key is not itself a globalThis/global self-reference',
             code: 'export function run() { const { myApi: { crypto } } = globalThis; return crypto; }',
+        },
+        {
+            description: 'not warn on a let alias of globalThis that is reassigned',
+            code: 'export function run(other) { let g = globalThis; g = other; return g.crypto; }',
         },
     ];
 

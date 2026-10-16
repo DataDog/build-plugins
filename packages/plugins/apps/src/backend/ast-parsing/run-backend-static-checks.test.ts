@@ -7,6 +7,7 @@ import { analyzeModuleScope } from '@dd/apps-plugin/backend/ast-parsing/module-s
 import { runBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '@dd/apps-plugin/backend/ast-parsing/type-guards';
 import { resetDivergentGlobalWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-divergent-globals';
+import { resetEnvReadWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-env-reads';
 import { RUNTIME_FALLBACK_NOTE } from '@dd/apps-plugin/runtime-names';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -16,6 +17,7 @@ const FILE_PATH = '/project/src/handler.backend.ts';
 const NODE_BUILTIN_IMPORT = "import os from 'os';\nexport function run() { return os.hostname(); }";
 const NETWORK_GLOBAL = 'export function run() { return fetch("https://example.com"); }';
 const DIVERGENT_GLOBAL = 'export function run() { return crypto.randomUUID(); }';
+const ENV_READ = 'export function run() { return process.env.STRIPE_KEY; }';
 
 function check(code: string, runtime: BackendRuntime, isFallback = false): void {
     const ast = parseAst(code);
@@ -29,6 +31,7 @@ describe('Backend Functions - runBackendStaticChecks', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         resetDivergentGlobalWarnings();
+        resetEnvReadWarnings();
     });
 
     test.each([
@@ -144,4 +147,45 @@ describe('Backend Functions - runBackendStaticChecks', () => {
             expect(warnings.length > 0).toBe(warns);
         },
     );
+
+    const envReadCases: Array<{ runtime: BackendRuntime; warnings: string[] }> = [
+        { runtime: 'v1', warnings: [] },
+        { runtime: 'v2', warnings: [expect.stringContaining('process.env.STRIPE_KEY')] },
+    ];
+    test.each(envReadCases)(
+        'should warn about process.env reads only under v2 ($runtime)',
+        ({ runtime, warnings }) => {
+            check(ENV_READ, runtime);
+
+            const logged = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
+            const messages = logged.map(([message]) => message);
+            expect(messages).toEqual(warnings);
+        },
+    );
+
+    const aliasChain = (kind: string, depth: number, source: string) => {
+        const links = Array.from({ length: depth }, (_, i) => `${kind} a${i} = a${i + 1};`);
+        return `${links.join('\n')}\n${kind} a${depth} = ${source};`;
+    };
+    const DEEP_ALIAS_DEPTH = 10_000;
+
+    test.each(['var', 'let', 'const'])(
+        'should follow a %s alias chain too deep to recurse through, without failing',
+        (kind) => {
+            const chain = aliasChain(kind, DEEP_ALIAS_DEPTH, 'globalThis');
+            const code = `${chain}\nexport function run() { return new a0.XMLHttpRequest(); }`;
+
+            expect(() => check(code, 'v2')).toThrow('"XMLHttpRequest" is not available');
+        },
+    );
+
+    test('should warn, not fail, when a process alias chain is too deep for the env-read check', () => {
+        const chain = aliasChain('var', DEEP_ALIAS_DEPTH, 'process');
+        const code = `${chain}\nexport function run() { return a0.env.STRIPE_KEY; }`;
+
+        check(code, 'v2');
+
+        const warnings = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
+        expect(warnings).toHaveLength(1);
+    });
 });
