@@ -11,6 +11,7 @@ import { performance } from 'perf_hooks';
 import type { Readable, Writable } from 'stream';
 import { gzipSync } from 'zlib';
 
+import { CANARY_VARIANTS } from './types';
 import type {
     ArtifactMeasurement,
     ArtifactSpec,
@@ -186,9 +187,26 @@ const hash = (value: string): number => {
     return result;
 };
 
+const getPermutations = <T>(values: readonly T[]): T[][] => {
+    if (values.length <= 1) {
+        return [[...values]];
+    }
+
+    return values.flatMap((value, index) => {
+        const remaining = values.filter((_, remainingIndex) => remainingIndex !== index);
+        const permutations = getPermutations(remaining);
+        return permutations.map((permutation) => [value, ...permutation]);
+    });
+};
+
+// Every permutation is equally likely, so each pair of variants runs in
+// either order equally often across runs.
+const VARIANT_ORDERS = getPermutations(CANARY_VARIANTS);
+
 export const getVariantOrder = (runId: string, phaseId: string): CanaryVariant[] => {
     const key = `${runId}:${phaseId}`;
-    return hash(key) % 2 === 0 ? ['control', 'instrumented'] : ['instrumented', 'control'];
+    const index = hash(key) % VARIANT_ORDERS.length;
+    return VARIANT_ORDERS[index] ?? [...CANARY_VARIANTS];
 };
 
 const measureVariant = async ({
@@ -241,26 +259,23 @@ const runPhase = async ({
     runId: string;
 }): Promise<PhaseReport> => {
     const variantOrder = getVariantOrder(runId, phase.id);
-    let control: VariantReport | undefined;
-    let instrumented: VariantReport | undefined;
+    const results: Partial<Record<CanaryVariant, VariantReport>> = {};
 
     for (const variant of variantOrder) {
         console.log(`\n[Canary] Running ${phase.id} ${variant} build.`);
-        const result = await measureVariant({
+        results[variant] = await measureVariant({
             phase,
             root,
             runCommand,
             variant,
         });
-        if (variant === 'control') {
-            control = result;
-        } else {
-            instrumented = result;
-        }
     }
 
-    if (!control || !instrumented) {
-        throw new CanaryCommandError(`${phase.id} did not produce both canary variants.`);
+    const control = results.control;
+    const allFunctions = results['all-functions'];
+    const namedOnly = results['named-only'];
+    if (!control || !allFunctions || !namedOnly) {
+        throw new CanaryCommandError(`${phase.id} did not produce every canary variant.`);
     }
 
     return {
@@ -270,9 +285,13 @@ const runPhase = async ({
         variantOrder,
         variants: {
             control,
-            instrumented,
+            'all-functions': allFunctions,
+            'named-only': namedOnly,
         },
-        comparison: createPhaseComparison(control, instrumented),
+        comparisons: {
+            'all-functions': createPhaseComparison(control, allFunctions),
+            'named-only': createPhaseComparison(control, namedOnly),
+        },
     };
 };
 
@@ -344,7 +363,7 @@ export const runCanary = async ({
     const buildPluginsGit = await getGitState(buildPluginsRoot);
     const targetGit = await getGitState(root);
     const report: CanaryReport = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: 'passed',
         target: target.id,
         phaseSelection,

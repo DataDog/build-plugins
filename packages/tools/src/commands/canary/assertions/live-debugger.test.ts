@@ -35,13 +35,13 @@ describe('Live Debugger canary assertions', () => {
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Live Debugger: 25/30 functions instrumented across 5/6 files'),
-                'instrumented',
+                'all-functions',
             );
         }).not.toThrow();
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Live Debugger: 0/30 functions instrumented across 0/6 files'),
-                'instrumented',
+                'all-functions',
             );
         }).toThrow('did not report any Live Debugger instrumentation');
         expect(() => {
@@ -56,7 +56,7 @@ describe('Live Debugger canary assertions', () => {
         expect(() => {
             assertLiveDebuggerBuildOutput(
                 resultWithOutput('Instrumentation Error in /consumer/app.ts: parse failed'),
-                'instrumented',
+                'all-functions',
             );
         }).toThrow('reported a Live Debugger error');
     });
@@ -71,11 +71,11 @@ describe('Live Debugger canary assertions', () => {
             'globalThis.$dd_probes = globalThis.$dd_probes || (() => []);',
         );
 
-        await expect(assertLiveDebuggerArtifacts([plainPath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([plainPath], 'named-only')).rejects.toThrow(
             'does not contain the Live Debugger runtime marker',
         );
         await expect(
-            assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'instrumented'),
+            assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'named-only'),
         ).resolves.toBeUndefined();
     });
 
@@ -88,7 +88,7 @@ describe('Live Debugger canary assertions', () => {
             await outputFile(childPath, 'function child(){return $dd_probes ("child")}');
             const paths = guardedFirst ? [guardedPath, childPath] : [childPath, guardedPath];
 
-            await expect(assertLiveDebuggerArtifacts(paths, 'instrumented')).rejects.toThrow(
+            await expect(assertLiveDebuggerArtifacts(paths, 'all-functions')).rejects.toThrow(
                 `Instrumented build output calls $dd_probes without a runtime stub: ${childPath}`,
             );
         },
@@ -102,7 +102,7 @@ describe('Live Debugger canary assertions', () => {
         await outputFile(filePath, `${stub}\n$dd_probes("test");`);
 
         await expect(
-            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+            assertLiveDebuggerArtifacts([filePath], 'all-functions'),
         ).resolves.toBeUndefined();
     });
 
@@ -123,7 +123,7 @@ describe('Live Debugger canary assertions', () => {
             const filePath = path.resolve(TEST_ROOT, 'inlined.js');
             await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
 
-            await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+            await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
                 `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
             );
         },
@@ -136,7 +136,7 @@ describe('Live Debugger canary assertions', () => {
             `${runtimeStubs};$dd_probes("main");(function(){${JSON.stringify(unguardedChild)};})();`,
         );
 
-        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
             `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
         );
     });
@@ -145,7 +145,7 @@ describe('Live Debugger canary assertions', () => {
         const filePath = path.resolve(TEST_ROOT, 'masked.js');
         await outputFile(filePath, `$dd_probes("main");const p=${JSON.stringify(guardedChild)};`);
 
-        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
             `Instrumented build output calls $dd_probes without a runtime stub: ${filePath}`,
         );
     });
@@ -161,7 +161,7 @@ describe('Live Debugger canary assertions', () => {
         const filePath = path.resolve(TEST_ROOT, 'inlined-unsafe.js');
         await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
 
-        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
             `Instrumented build output inlines code that calls $dd_probes without a runtime stub: ${filePath}`,
         );
     });
@@ -177,7 +177,7 @@ describe('Live Debugger canary assertions', () => {
         );
 
         await expect(
-            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+            assertLiveDebuggerArtifacts([filePath], 'all-functions'),
         ).resolves.toBeUndefined();
     });
 
@@ -193,7 +193,7 @@ describe('Live Debugger canary assertions', () => {
         await outputFile(filePath, code);
 
         await expect(
-            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+            assertLiveDebuggerArtifacts([filePath], 'all-functions'),
         ).resolves.toBeUndefined();
     });
 
@@ -201,7 +201,7 @@ describe('Live Debugger canary assertions', () => {
         const filePath = path.resolve(TEST_ROOT, 'comment-stub.js');
         await outputFile(filePath, '/* globalThis.$dd_probes = noop */ $dd_probes("main");');
 
-        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
             `Instrumented build output calls $dd_probes without a runtime stub: ${filePath}`,
         );
     });
@@ -210,7 +210,7 @@ describe('Live Debugger canary assertions', () => {
         const filePath = path.resolve(TEST_ROOT, 'unparsable.js');
         await outputFile(filePath, `${runtimeStubs};$dd_probes("main");}}}`);
 
-        await expect(assertLiveDebuggerArtifacts([filePath], 'instrumented')).rejects.toThrow(
+        await expect(assertLiveDebuggerArtifacts([filePath], 'all-functions')).rejects.toThrow(
             `Could not parse instrumented build output to check inlined code: ${filePath}`,
         );
     });
@@ -223,7 +223,7 @@ describe('Live Debugger canary assertions', () => {
         await outputFile(filePath, `${runtimeStubs};$dd_probes("main");const p=${payload};`);
 
         await expect(
-            assertLiveDebuggerArtifacts([filePath], 'instrumented'),
+            assertLiveDebuggerArtifacts([filePath], 'all-functions'),
         ).resolves.toBeUndefined();
     });
 });

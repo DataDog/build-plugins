@@ -4,6 +4,7 @@
 
 import { parse } from '@babel/parser';
 import type { ParserPlugin } from '@babel/parser';
+import { isCallExpression, isNewExpression, traverseFast } from '@babel/types';
 import {
     LIVE_DEBUGGER_PROBES_CALL_PATTERN,
     LIVE_DEBUGGER_PROBES_STUB_PATTERN,
@@ -597,6 +598,59 @@ describe('transformCode', () => {
         );
     });
 
+    describe('annotation comments', () => {
+        // Bundlers only honor a PURE annotation directly in front of a call or `new`,
+        // or in front of the parens around one.
+        const annotationCases = [
+            {
+                description: 'a returned call',
+                code: 'function f() { return /* @__PURE__ */ make(1); }',
+            },
+            {
+                description: 'a returned call on its own line',
+                code: 'function f() {\n  return (\n    /* @__PURE__ */ make(1)\n  );\n}',
+            },
+            {
+                description: 'an arrow expression body',
+                code: 'const f = () => /* @__PURE__ */ make(1);',
+            },
+            {
+                description: 'a parenthesized arrow expression body',
+                code: 'const f = () => (/* @__PURE__ */ make(1));',
+            },
+            {
+                description: 'a new expression annotated with #__PURE__',
+                code: 'const f = () => /*#__PURE__*/ new Make(1);',
+            },
+            {
+                description: 'a returned call annotated in front of its parens',
+                code: 'function f() { return /* @__PURE__ */ (make(1)); }',
+            },
+            {
+                description: 'an arrow expression body annotated in front of its parens',
+                code: 'const f = () => /* @__PURE__ */ ((make(1)));',
+            },
+        ];
+
+        test.each(annotationCases)('should keep the annotation on $description', ({ code }) => {
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(countAnnotatedCalls(code)).toBe(1);
+            expect(countAnnotatedCalls(result.code)).toBe(1);
+        });
+
+        // The parens move into the assignment with the comment, so it still holds the
+        // value of the whole sequence instead of its first element.
+        it('should wrap a comment in front of returned parens together with them', () => {
+            const code = 'function f() { const x = 1; return /* note */ (x + 1, x + 2); }';
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.code).toContain('return ($dd_rv0 = (/* note */ (x + 1, x + 2)),');
+            expect(runTransformedFunction(result.code)).toBe(3);
+        });
+    });
+
     describe('async functions', () => {
         const asyncCases = [
             {
@@ -938,6 +992,58 @@ describe('transformCode', () => {
             const returnMatches = result.code.match(/\$dd_rv\d+ =/g);
             expect(returnMatches?.length).toBe(1);
         });
+
+        // Each `run` exits early when `skip` is true, so `f` logs `ran` only for the
+        // second call. An unconditional return would leave the log empty.
+        const braceLessReturnCases = [
+            {
+                description: 'an if statement',
+                body: "if (skip) return; log.push('ran');",
+            },
+            {
+                description: 'an else branch',
+                body: "if (!skip) log.push('ran'); else return; log.push('after');",
+                expected: 'ran,after',
+            },
+            {
+                description: 'a nested if statement',
+                body: "if (log) if (skip) return; log.push('ran');",
+            },
+            {
+                description: 'a while loop',
+                body: "while (skip) return; log.push('ran');",
+            },
+            {
+                description: 'a for loop',
+                body: "for (; skip; ) return; log.push('ran');",
+            },
+            {
+                description: 'an if statement without a semicolon before the closing brace',
+                body: "log.push(skip ? 'skip' : 'ran'); if (skip) return",
+                expected: 'skip,ran',
+            },
+        ];
+
+        test.each(braceLessReturnCases)(
+            'should keep a bare return conditional in $description',
+            ({ body, expected = 'ran' }) => {
+                const code = [
+                    'function f() {',
+                    '  const log = [];',
+                    '  run(true);',
+                    '  run(false);',
+                    "  return log.join(',');",
+                    `  function run(skip) {${body}}`,
+                    '}',
+                ].join('\n');
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(result.instrumentedCount).toBe(2);
+                expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+                expect(runTransformedFunction(code)).toBe(expected);
+                expect(runTransformedFunction(result.code)).toBe(expected);
+            },
+        );
     });
 
     describe('source maps', () => {
@@ -1621,6 +1727,25 @@ describe('transformCode', () => {
             );
         });
 
+        it('should produce the expected output for a brace-less bare return', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function earlyExit(x) { if (!x) return; console.log(x); }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                expectedModuleCode(
+                    "function earlyExit(x) {let $dd_p0 = $dd_probes('src/utils.ts;earlyExit');",
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
+                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '}',
+                ),
+            );
+        });
+
         it('should omit the trailing return for a function with exhaustive if/else returns', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1672,8 +1797,26 @@ function runTransformedFunction(code: string): unknown {
         globalThis: runtimeGlobal,
     };
     const executableCode = `${code}\nglobalThis.result = f();`;
-    runInNewContext(executableCode, sandbox);
+    // A transform regression can turn a loop into an infinite one; fail instead of hanging.
+    runInNewContext(executableCode, sandbox, { timeout: 1_000 });
     return runtimeGlobal.result;
+}
+
+const PURE_ANNOTATION = /^\s*[#@]__PURE__\s*$/;
+
+// Counts calls and `new` expressions with a PURE annotation directly in front of them.
+function countAnnotatedCalls(code: string): number {
+    const ast = parse(code, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
+    let count = 0;
+    traverseFast(ast, (node) => {
+        const isCall = isCallExpression(node) || isNewExpression(node);
+        const comments = node.leadingComments ?? [];
+        const isAnnotated = comments.some((comment) => PURE_ANNOTATION.test(comment.value));
+        if (isCall && isAnnotated) {
+            count++;
+        }
+    });
+    return count;
 }
 
 function validateSyntax(code: string, filePath: string): string | null {
