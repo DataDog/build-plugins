@@ -16,6 +16,8 @@ const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
     version: '1.0.0',
+    service: undefined,
+    enableGit: false,
     debugId: false,
     include: [],
     exclude: [/\/node_modules\//],
@@ -496,22 +498,22 @@ describe('getPlugins', () => {
     const cases: {
         description: string;
         options: Partial<OptionsWithDefaults>;
-        expected: Pick<LiveDebuggerOptionsWithDefaults, 'version' | 'debugId'>;
+        expected: Pick<LiveDebuggerOptionsWithDefaults, 'version' | 'service' | 'debugId'>;
     }[] = [
         {
             description: 'inject the runtime bootstrap when an empty config is provided',
             options: { liveDebugger: {} },
-            expected: { version: undefined, debugId: false },
+            expected: { version: undefined, service: undefined, debugId: false },
         },
         {
             description: 'inject the version when metadata.version is provided',
             options: { liveDebugger: {}, metadata: { version: '1.0.0' } },
-            expected: { version: '1.0.0', debugId: false },
+            expected: { version: '1.0.0', service: undefined, debugId: false },
         },
         {
             description: 'not inject a version when only metadata.name is provided',
             options: { liveDebugger: {}, metadata: { name: 'my-build' } },
-            expected: { version: undefined, debugId: false },
+            expected: { version: undefined, service: undefined, debugId: false },
         },
         {
             description: 'inject the chunk debug ID when RUM debug IDs are enabled',
@@ -519,7 +521,7 @@ describe('getPlugins', () => {
                 liveDebugger: {},
                 rum: { sourceCodeContext: { debugId: true } },
             },
-            expected: { version: undefined, debugId: true },
+            expected: { version: undefined, service: undefined, debugId: true },
         },
         {
             description: 'inject the version and the chunk debug ID',
@@ -528,7 +530,7 @@ describe('getPlugins', () => {
                 metadata: { version: '1.0.0' },
                 rum: { sourceCodeContext: { debugId: true } },
             },
-            expected: { version: '1.0.0', debugId: true },
+            expected: { version: '1.0.0', service: undefined, debugId: true },
         },
         {
             description: 'not inject the chunk debug ID when RUM uses service and version',
@@ -536,7 +538,12 @@ describe('getPlugins', () => {
                 liveDebugger: {},
                 rum: { sourceCodeContext: { service: 'checkout' } },
             },
-            expected: { version: undefined, debugId: false },
+            expected: { version: undefined, service: undefined, debugId: false },
+        },
+        {
+            description: 'inject the service when metadata.service is provided',
+            options: { liveDebugger: {}, metadata: { service: 'cart' } },
+            expected: { version: undefined, service: 'cart', debugId: false },
         },
     ];
 

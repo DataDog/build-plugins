@@ -132,9 +132,11 @@ If omitted, the plugin falls back to the shared top-level `metadata.version`. At
 
 ### errorTracking.sourcemaps.service
 
-> required
+> required (or set via [`metadata.service`](/README.md#metadataservice))
 
 Should be set as the name of the service you're uploading sourcemaps for, and Datadog will use this service name to find the corresponding sourcemaps based on the `service` tag set on the RUM SDK.
+
+If omitted, the plugin falls back to the shared top-level `metadata.service`. At least one of the two must be set.
 
 > [!NOTE]
 >
