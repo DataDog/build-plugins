@@ -158,8 +158,7 @@ export const getUploadSetup = (
     }
     if (!service) {
         return {
-            skipReason:
-                'no service is configured. Set "liveDebugger.service" or "rum.sourceCodeContext.service"',
+            skipReason: 'no service is configured. Set "metadata.service"',
         };
     }
     if (!version) {

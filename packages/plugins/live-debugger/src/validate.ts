@@ -75,14 +75,6 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         }
     }
 
-    // Validate service option
-    if (
-        pluginConfig.service !== undefined &&
-        (typeof pluginConfig.service !== 'string' || pluginConfig.service.trim() === '')
-    ) {
-        errors.push(`${red('service')} must be a non-empty string`);
-    }
-
     // Validate honorSkipComments option
     if (
         pluginConfig.honorSkipComments !== undefined &&
@@ -135,7 +127,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         version: metadataVersion,
-        service: pluginConfig.service ?? config.rum?.sourceCodeContext?.service,
+        service: config.metadata?.service || undefined,
         enableGit: shouldGetGitInfo(config),
         debugId: areDebugIdsEnabled(config, log),
         include: pluginConfig.include ?? [],

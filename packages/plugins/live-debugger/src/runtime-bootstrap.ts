@@ -24,9 +24,8 @@ type BuildMetadata = {
 // Return the per-chunk runtime bootstrap. Besides the stubs, it exposes build
 // metadata to the Browser Debugger SDK:
 //   - `version` (from `metadata.version`) defaults the SDK's runtime version.
-//   - `service` (from `liveDebugger.service` or `rum.sourceCodeContext.service`)
-//     defaults the SDK's service, so it matches the service the symbol table is
-//     uploaded with.
+//   - `service` (from `metadata.service`) defaults the SDK's service, so it
+//     matches the service the symbol table is uploaded with.
 //   - `debugId` is the chunk's debug ID, the same one its sourcemap is uploaded
 //     with. Every sourcemap of a build is uploaded with the same git metadata,
 //     so any chunk's debug ID identifies the build's repository and commit.

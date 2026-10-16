@@ -93,7 +93,7 @@ describe('getUploadSetup', () => {
             description: 'skip without a service',
             options: { ...options, service: undefined },
             apiKey: 'api-key',
-            expected: { skipReason: expect.stringContaining('liveDebugger.service') },
+            expected: { skipReason: expect.stringContaining('metadata.service') },
         },
         {
             description: 'skip without a version',

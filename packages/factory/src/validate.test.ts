@@ -35,6 +35,11 @@ describe('factory validateOptions', () => {
             expect(result.metadata).toEqual({ version: '1.0.0' });
         });
 
+        it('should accept metadata with a service', () => {
+            const result = validateOptions({ metadata: { service: 'checkout' } });
+            expect(result.metadata).toEqual({ service: 'checkout' });
+        });
+
         it('should accept an empty metadata block', () => {
             const result = validateOptions({ metadata: {} });
             expect(result.metadata).toEqual({});
@@ -82,6 +87,11 @@ describe('factory validateOptions', () => {
                 description: 'reject metadata.version when null',
                 input: { metadata: { version: null } },
                 errorPattern: /metadata\.version.*must be a string/,
+            },
+            {
+                description: 'reject metadata.service when not a string',
+                input: { metadata: { service: 123 } },
+                errorPattern: /metadata\.service.*must be a string/,
             },
         ];
 

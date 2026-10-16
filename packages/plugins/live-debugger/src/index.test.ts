@@ -538,14 +538,11 @@ describe('getPlugins', () => {
                 liveDebugger: {},
                 rum: { sourceCodeContext: { service: 'checkout' } },
             },
-            expected: { version: undefined, service: 'checkout', debugId: false },
+            expected: { version: undefined, service: undefined, debugId: false },
         },
         {
-            description: 'inject the Live Debugger service over the RUM one',
-            options: {
-                liveDebugger: { service: 'cart' },
-                rum: { sourceCodeContext: { service: 'checkout' } },
-            },
+            description: 'inject the service when metadata.service is provided',
+            options: { liveDebugger: {}, metadata: { service: 'cart' } },
             expected: { version: undefined, service: 'cart', debugId: false },
         },
     ];

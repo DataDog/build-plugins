@@ -468,7 +468,7 @@ describe('Live Debugger symbol table', () => {
                     {
                         ...PLUGIN_OVERRIDES,
                         enableGit: true,
-                        liveDebugger: { service: 'fixture-service' },
+                        metadata: { version: '1.0.0', service: 'fixture-service' },
                     },
                     { entry, plugins },
                 );

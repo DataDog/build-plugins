@@ -122,25 +122,17 @@ describe('validateOptions', () => {
 
         const serviceCases = [
             {
-                description: 'use liveDebugger.service',
-                input: makeConfig({ service: 'cart' }),
+                description: 'use metadata.service',
+                input: makeConfig({}, { service: 'cart' }),
                 expected: 'cart',
             },
             {
-                description: 'fall back to rum.sourceCodeContext.service',
+                description: 'not use rum.sourceCodeContext.service',
                 input: {
                     ...makeConfig({}),
                     rum: { sourceCodeContext: { service: 'checkout' } },
                 } satisfies Options,
-                expected: 'checkout',
-            },
-            {
-                description: 'prefer liveDebugger.service over rum.sourceCodeContext.service',
-                input: {
-                    ...makeConfig({ service: 'cart' }),
-                    rum: { sourceCodeContext: { debugId: true, service: 'checkout' } },
-                } satisfies Options,
-                expected: 'cart',
+                expected: undefined,
             },
         ];
 
@@ -392,28 +384,6 @@ describe('validateOptions', () => {
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
             expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
-        });
-    });
-
-    describe('invalid service', () => {
-        const cases = [
-            {
-                description: 'reject service when not a string',
-                input: makeInvalidConfig({ service: 1 }),
-            },
-            {
-                description: 'reject an empty service',
-                input: makeInvalidConfig({ service: ' ' }),
-            },
-        ];
-
-        test.each(cases)('should $description', ({ input }) => {
-            expect(() => validateOptions(input, mockLogger)).toThrow(
-                `Invalid configuration for ${PLUGIN_NAME}.`,
-            );
-            expect(mockError).toHaveBeenCalledWith(
-                expect.stringMatching(/service.*must be a non-empty string/),
-            );
         });
     });
 
