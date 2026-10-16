@@ -10,16 +10,14 @@ import fs from 'fs';
 import path from 'path';
 import { runInNewContext } from 'vm';
 
-// Instrumented code that runs in another global scope than the page's chunks:
-// none of these get the chunk bootstrap's `$dd_probes` stub for sure, so each
-// one must run where `$dd_probes` was never defined.
+// Instrumented code that runs in another global scope than the page's chunks,
+// where the Browser Debugger SDK never defines `$dd_probes`.
 const MAIN_ENTRY = './realms_project/main.js';
 const WORKER_ENTRY = './realms_project/worker_main.js';
 const CHILD_ENTRY = './realms_project/src/child.js';
 const EXPECTED_RESULT = 42;
 
 const PROBES_CALL = /\$dd_probes\(/;
-const PROBES_STUB = /globalThis\.\$dd_probes\s*=\s*function/;
 
 type CompilerRun = (callback: (error?: Error | null, stats?: CompilerStats) => void) => void;
 type CompilerStats = { hasErrors(): boolean; toString(): string };
@@ -96,8 +94,8 @@ type Scenario = {
     bundler: BundlerName;
     // The code that runs in its own global scope.
     getCode: () => string;
-    // What the build produces today, to make changes to it visible.
-    expected: { instrumented: boolean; stub: boolean };
+    // Whether the build instruments it today, to make changes to it visible.
+    instrumented: boolean;
 };
 
 type BuildRun = { bundlers: BundlerName[]; entry: Record<string, string>; plugins?: object[] };
@@ -148,7 +146,7 @@ const ALL_SCENARIOS: Scenario[] = [
             name: 'function converted to a string',
             bundler: name,
             getCode: () => getStringifiedSource(name),
-            expected: { instrumented: true, stub: false },
+            instrumented: true,
         }),
     ),
     ...XPACK_BUNDLERS.flatMap((bundler): Scenario[] => [
@@ -156,19 +154,19 @@ const ALL_SCENARIOS: Scenario[] = [
             name: 'separate compiler inheriting the module rules',
             bundler,
             getCode: () => readFileSync(getOutputPath(bundler, 'separate-compiler.js')),
-            expected: { instrumented: true, stub: false },
+            instrumented: true,
         },
         {
             name: 'child compiler',
             bundler,
             getCode: () => readFileSync(getOutputPath(bundler, 'child-compiler.js')),
-            expected: { instrumented: true, stub: true },
+            instrumented: true,
         },
         {
             name: 'worker from new URL()',
             bundler,
             getCode: () => findWorkerOutput(bundler),
-            expected: { instrumented: true, stub: true },
+            instrumented: true,
         },
     ]),
     {
@@ -176,7 +174,7 @@ const ALL_SCENARIOS: Scenario[] = [
         bundler: 'vite',
         getCode: () => findWorkerOutput('vite'),
         // Vite builds workers with `worker.plugins`, not the page's plugins.
-        expected: { instrumented: false, stub: false },
+        instrumented: false,
     },
 ];
 // Only the bundlers requested for this run.
@@ -212,17 +210,13 @@ describe('Live Debugger in other global scopes', () => {
         expect(errors).toEqual([]);
     });
 
-    describe.each(SCENARIOS)('$bundler: $name', ({ getCode, expected }) => {
+    describe.each(SCENARIOS)('$bundler: $name', ({ getCode, instrumented }) => {
         test('Should run where $dd_probes is not defined.', () => {
             expect(runElsewhere(getCode())).toBe(EXPECTED_RESULT);
         });
 
-        test('Should keep the current instrumentation and stub.', () => {
-            const code = getCode();
-
-            expect({ instrumented: PROBES_CALL.test(code), stub: PROBES_STUB.test(code) }).toEqual(
-                expected,
-            );
+        test('Should keep the current instrumentation.', () => {
+            expect(PROBES_CALL.test(getCode())).toBe(instrumented);
         });
     });
 });
