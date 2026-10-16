@@ -4,6 +4,7 @@
 
 import { parse } from '@babel/parser';
 import type { ParserPlugin } from '@babel/parser';
+import { isCallExpression, isNewExpression, traverseFast } from '@babel/types';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { runInNewContext } from 'vm';
 
@@ -482,6 +483,59 @@ describe('transformCode', () => {
                 expect(result.code).toContain('catch(e)');
             },
         );
+    });
+
+    describe('annotation comments', () => {
+        // Bundlers only honor a PURE annotation directly in front of a call or `new`,
+        // or in front of the parens around one.
+        const annotationCases = [
+            {
+                description: 'a returned call',
+                code: 'function f() { return /* @__PURE__ */ make(1); }',
+            },
+            {
+                description: 'a returned call on its own line',
+                code: 'function f() {\n  return (\n    /* @__PURE__ */ make(1)\n  );\n}',
+            },
+            {
+                description: 'an arrow expression body',
+                code: 'const f = () => /* @__PURE__ */ make(1);',
+            },
+            {
+                description: 'a parenthesized arrow expression body',
+                code: 'const f = () => (/* @__PURE__ */ make(1));',
+            },
+            {
+                description: 'a new expression annotated with #__PURE__',
+                code: 'const f = () => /*#__PURE__*/ new Make(1);',
+            },
+            {
+                description: 'a returned call annotated in front of its parens',
+                code: 'function f() { return /* @__PURE__ */ (make(1)); }',
+            },
+            {
+                description: 'an arrow expression body annotated in front of its parens',
+                code: 'const f = () => /* @__PURE__ */ ((make(1)));',
+            },
+        ];
+
+        test.each(annotationCases)('should keep the annotation on $description', ({ code }) => {
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(countAnnotatedCalls(code)).toBe(1);
+            expect(countAnnotatedCalls(result.code)).toBe(1);
+        });
+
+        // The parens move into the assignment with the comment, so it still holds the
+        // value of the whole sequence instead of its first element.
+        it('should wrap a comment in front of returned parens together with them', () => {
+            const code = 'function f() { const x = 1; return /* note */ (x + 1, x + 2); }';
+            const result = transformCode({ ...BASE_OPTIONS, code });
+
+            expect(result.code).toContain('return ($dd_rv0 = (/* note */ (x + 1, x + 2)),');
+            expect(runTransformedFunction(result.code)).toBe(3);
+        });
     });
 
     describe('async functions', () => {
@@ -1600,6 +1654,23 @@ function runTransformedFunction(code: string): unknown {
     // A transform regression can turn a loop into an infinite one; fail instead of hanging.
     runInNewContext(executableCode, sandbox, { timeout: 1_000 });
     return runtimeGlobal.result;
+}
+
+const PURE_ANNOTATION = /^\s*[#@]__PURE__\s*$/;
+
+// Counts calls and `new` expressions with a PURE annotation directly in front of them.
+function countAnnotatedCalls(code: string): number {
+    const ast = parse(code, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
+    let count = 0;
+    traverseFast(ast, (node) => {
+        const isCall = isCallExpression(node) || isNewExpression(node);
+        const comments = node.leadingComments ?? [];
+        const isAnnotated = comments.some((comment) => PURE_ANNOTATION.test(comment.value));
+        if (isCall && isAnnotated) {
+            count++;
+        }
+    });
+    return count;
 }
 
 function validateSyntax(code: string, filePath: string): string | null {
