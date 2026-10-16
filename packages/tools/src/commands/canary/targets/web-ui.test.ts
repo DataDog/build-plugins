@@ -27,18 +27,24 @@ describe('web-ui canary target', () => {
         ).toBe(false);
     });
 
-    test('should vary only Live Debugger enablement between paired builds', () => {
+    test('should vary only Live Debugger settings between builds', () => {
         const phase = createWebUiPhase('main');
         const control = phase.getBuildCommand('/web-ui', 'control');
-        const instrumented = phase.getBuildCommand('/web-ui', 'instrumented');
+        const allFunctions = phase.getBuildCommand('/web-ui', 'all-functions');
+        const namedOnly = phase.getBuildCommand('/web-ui', 'named-only');
 
         expect(control.env).toEqual({
-            ...instrumented.env,
+            ...allFunctions.env,
             BUILD_PLUGIN_LIVE_DEBUGGER: 'false',
         });
-        expect(instrumented.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
-        expect(instrumented.env).not.toHaveProperty('BUILD_PLUGIN_LIVE_DEBUGGER_INCLUDE');
-        expect(instrumented.env).not.toHaveProperty('BUILD_PLUGIN_LIVE_DEBUGGER_EXCLUDE');
+        expect(namedOnly.env).toEqual({
+            ...allFunctions.env,
+            BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'true',
+        });
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER).toBe('true');
+        expect(allFunctions.env?.BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY).toBe('false');
+        expect(allFunctions.env).not.toHaveProperty('BUILD_PLUGIN_LIVE_DEBUGGER_INCLUDE');
+        expect(allFunctions.env).not.toHaveProperty('BUILD_PLUGIN_LIVE_DEBUGGER_EXCLUDE');
     });
 
     test('should keep validation outside the timed build', () => {
@@ -52,7 +58,7 @@ describe('web-ui canary target', () => {
 
     test('should use the dynamic split-deploys preset for the federated phase', () => {
         const phase = createWebUiPhase('federated');
-        const build = phase.getBuildCommand('/web-ui', 'instrumented');
+        const build = phase.getBuildCommand('/web-ui', 'all-functions');
 
         expect(build.args).toEqual(
             expect.arrayContaining(['--split-deploys', '--entry-preset=split-deploys']),
