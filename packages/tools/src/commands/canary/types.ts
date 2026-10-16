@@ -59,7 +59,8 @@ export type CanaryPhase = {
     localPackages: string[];
     getArtifactSpec: (root: string, variant: CanaryVariant) => ArtifactSpec;
     getBuildCommand: (root: string, variant: CanaryVariant) => CommandSpec;
-    getValidationCommand: (root: string, variant: CanaryVariant) => CommandSpec;
+    // Targets without their own output validator can check syntax in assertArtifacts instead.
+    getValidationCommand?: (root: string, variant: CanaryVariant) => CommandSpec;
     assertBuildOutput: (result: CommandResult, variant: CanaryVariant) => void;
     assertArtifacts?: (filePaths: string[], variant: CanaryVariant) => Promise<void>;
 };

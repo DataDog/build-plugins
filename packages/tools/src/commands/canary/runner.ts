@@ -235,8 +235,10 @@ const measureVariant = async ({
         await phase.assertArtifacts(artifacts.filePaths, variant);
     }
 
-    const validationCommand = phase.getValidationCommand(root, variant);
-    await runCheckedCommand(runCommand, validationCommand);
+    if (phase.getValidationCommand) {
+        const validationCommand = phase.getValidationCommand(root, variant);
+        await runCheckedCommand(runCommand, validationCommand);
+    }
 
     return {
         durationMs: buildResult.durationMs,

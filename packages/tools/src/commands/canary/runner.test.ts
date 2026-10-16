@@ -197,6 +197,50 @@ describe('canary runner', () => {
         expect(serialized).toContain('"dirty": true');
     });
 
+    test('should skip the validation command when a phase validates its artifacts itself', async () => {
+        const controlPath = path.resolve(TEST_ROOT, 'control/app.js');
+        const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
+        const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
+        await outputFile(controlPath, 'function app() { return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
+
+        const commands: string[] = [];
+        const runCommand: RunCommand = async (spec) => {
+            commands.push(spec.label);
+            return successfulResult(1);
+        };
+        const assertedVariants: string[] = [];
+        const phase: CanaryPhase = {
+            ...createSyntheticPhase(TEST_ROOT),
+            getValidationCommand: undefined,
+            assertArtifacts: async (_filePaths, variant) => {
+                assertedVariants.push(variant);
+            },
+        };
+        const target: CanaryTarget = {
+            ...createSyntheticTarget(TEST_ROOT, []),
+            getPhases: () => [phase],
+        };
+        const report = await runCanary({
+            buildPluginsRoot: process.cwd(),
+            phaseSelection: 'all',
+            reportPath: path.resolve(TEST_ROOT, 'self-validated-report.json'),
+            root: TEST_ROOT,
+            runCommand,
+            runId: 'self-validated-run',
+            target,
+        });
+
+        expect(report.status).toBe('passed');
+        expect(commands.sort()).toEqual([
+            'build:all-functions',
+            'build:control',
+            'build:named-only',
+        ]);
+        expect(assertedVariants.sort()).toEqual(['all-functions', 'control', 'named-only']);
+    });
+
     test('should write failure details and run cleanup in reverse order', async () => {
         const controlPath = path.resolve(TEST_ROOT, 'control/app.js');
         const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
