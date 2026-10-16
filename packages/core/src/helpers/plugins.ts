@@ -181,11 +181,15 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 };
 
 // Verify that we should get the git information based on the options.
-// Only get git information if sourcemaps are enabled and git is enabled.
+// Only get git information if something uploads it and git is enabled.
 export const shouldGetGitInfo = (options: Options): boolean => {
-    // If we don't have sourcemaps enabled, we don't need git.
+    // Source map uploads need git.
     const gitEnabledFromSourcemaps = !!options.errorTracking?.sourcemaps;
+    // Live Debugger symbol table uploads need git, and only happen with an API key.
+    const liveDebuggerConfig = options.liveDebugger;
+    const isLiveDebuggerEnabled = !!liveDebuggerConfig && !!(liveDebuggerConfig.enable ?? true);
+    const gitEnabledFromLiveDebugger = isLiveDebuggerEnabled && !!options.auth?.apiKey;
     // If we have the 'enableGit' configuration at the root, use it and default to `true`.
     const gitEnabledFromRoot = options.enableGit ?? true;
-    return gitEnabledFromSourcemaps && gitEnabledFromRoot;
+    return (gitEnabledFromSourcemaps || gitEnabledFromLiveDebugger) && gitEnabledFromRoot;
 };

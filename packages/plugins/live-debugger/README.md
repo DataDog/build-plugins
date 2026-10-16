@@ -13,6 +13,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
+    -   [liveDebugger.service](#livedebuggerservice)
     -   [metadata.version](#metadataversion)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
@@ -21,6 +22,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
+-   [Symbol table upload](#symbol-table-upload)
 -   [Skipped function types](#skipped-function-types)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
@@ -55,6 +57,7 @@ the plugin throws an error with the exact install command above.
 ```ts
 liveDebugger?: {
     enable?: boolean;
+    service?: string;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
     fileExtensions?: string[] | 'all';
@@ -66,6 +69,8 @@ liveDebugger?: {
 ```
 
 Live Debugger also reads the build version from the top-level [`metadata.version`](#metadataversion) option.
+
+After each build, the plugin uploads a [symbol table](#symbol-table-upload) to Datadog. Live Debugger needs it to create probes in the browser.
 
 ## How it works
 
@@ -114,6 +119,14 @@ Enable or disable the plugin without removing its configuration.
 
 Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
+### liveDebugger.service
+
+> default: the value of [`rum.sourceCodeContext.service`](/packages/plugins/rum#source-code-context), if set
+
+The service of the browser application, as reported by the Browser Debugger SDK. The [symbol table](#symbol-table-upload) is uploaded for this service, and Live Debugger looks it up by the service the SDK reports, so they must match.
+
+The plugin also injects the value into the runtime-visible [build metadata](#build-metadata), so the Browser Debugger SDK uses it as the default `service` during `init()`.
+
 ### metadata.version
 
 > default: `undefined`
@@ -129,7 +142,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
+If omitted, Live Debugger instrumentation still works, but the [symbol table](#symbol-table-upload) isn't uploaded, and browser build lookup and source-code-aware resolution will gracefully degrade.
 
 ### liveDebugger.include
 
@@ -245,6 +258,20 @@ liveDebugger: {
 }
 ```
 
+## Symbol table upload
+
+The UI and MCP create probes from a symbol table: the list of the instrumented functions that ship in a build, with their path relative to the git repository root and their original line range. After each production build, the plugin generates the table from the build output and uploads it to Datadog. It needs:
+
+- an API key (`auth.apiKey`);
+- a service ([`liveDebugger.service`](#livedebuggerservice), or `rum.sourceCodeContext.service`);
+- a version ([`metadata.version`](#metadataversion));
+- a git repository with a remote, and git enabled (the top-level `enableGit` option);
+- source maps, for the line ranges.
+
+When one of them is missing, the plugin logs a warning and skips the upload. Watch mode and dev servers skip it silently. The upload never fails the build, and the table is never written to the output directory.
+
+Each build's upload replaces the previous table of the same service and version.
+
 ## Skipped function types
 
 The following function types are always skipped regardless of configuration:
@@ -271,14 +298,19 @@ The same injected code defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the 
 
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
-    globalThis.__DD_LIVE_DEBUGGER_BUILD__ = { version: '1.0.0', debugId: '<debug ID of the chunk>' };
+    globalThis.__DD_LIVE_DEBUGGER_BUILD__ = {
+        version: '1.0.0',
+        service: 'my-app',
+        debugId: '<debug ID of the chunk>',
+    };
 }
 ```
 
 - `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
+- `service` is the [`liveDebugger.service`](#livedebuggerservice) value. It is omitted when no service is set.
 - `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
 
-The global is defined even when both fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
+The global is defined even when all the fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
 
 ### Invocation handles
 

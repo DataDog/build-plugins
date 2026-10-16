@@ -44,15 +44,17 @@ When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./
 
 ## Symbol table
 
-The plugin can list the instrumented functions that ship in a build, for upload to Live Debugger's symbol database (SymDB). Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The table lives in [`src/symbol-table`](./src/symbol-table).
+The plugin lists the instrumented functions that ship in a build and uploads them to Live Debugger's symbol database (SymDB). Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The code lives in [`src/symbol-table`](./src/symbol-table).
 
-For now, the only consumer is an opt-in debug dump. Set `DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH` to a file path to generate the table and write it there:
+The upload is on by default, and the README lists [what it needs](./README.md#symbol-table-upload). When it can't happen, the table isn't generated either, so the build does no extra work. To inspect the table, set `DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH` to a file path: the plugin then also writes the table there, in the format of the upload's file part.
 
 ```bash
 DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH=/tmp/symbol-table.json yarn build
 ```
 
-Without that variable, the plugin doesn't add any hook or build time. The dump is never written inside the bundler's output directory, and generation never fails the build: problems are logged as warnings.
+The dump is never written inside the bundler's output directory, and neither generation nor upload ever fails the build: problems are logged as warnings.
+
+The upload follows the backend SDKs' SymDB format (DEBUG-6322): a multipart request to `https://debugger-intake.<site>/api/v2/debugger` with an `event` part and a gzipped `file` part, tagged with the git repository URL and commit. Tables bigger than the intake's limit are split by file into numbered parts. Each build uses a new upload ID, which SymDB also uses as the runtime ID, so the newest upload for a service and version wins. The upload waits for the git plugin through `context.gitReady`.
 
 How it works:
 

@@ -32,37 +32,43 @@ describe('getRuntimeBootstrap', () => {
     const cases = [
         {
             description: 'expose the version and the chunk debug ID',
-            options: { version: '1.0.0', debugId: true },
+            options: { version: '1.0.0', service: undefined, debugId: true },
             chunk,
             expected: { version: '1.0.0', debugId: chunkDebugId },
         },
         {
             description: 'expose the chunk debug ID without a version',
-            options: { version: undefined, debugId: true },
+            options: { version: undefined, service: undefined, debugId: true },
             chunk,
             expected: { debugId: chunkDebugId },
         },
         {
             description: 'expose the version only when debug IDs are disabled',
-            options: { version: '1.0.0', debugId: false },
+            options: { version: '1.0.0', service: undefined, debugId: false },
             chunk,
             expected: { version: '1.0.0' },
         },
         {
+            description: 'expose the service',
+            options: { version: '1.0.0', service: 'checkout', debugId: false },
+            chunk,
+            expected: { version: '1.0.0', service: 'checkout' },
+        },
+        {
             description: 'expose empty build metadata without a version or debug IDs',
-            options: { version: undefined, debugId: false },
+            options: { version: undefined, service: undefined, debugId: false },
             chunk,
             expected: {},
         },
         {
             description: 'not expose a debug ID without chunk information',
-            options: { version: '1.0.0', debugId: true },
+            options: { version: '1.0.0', service: undefined, debugId: true },
             chunk: undefined,
             expected: { version: '1.0.0' },
         },
         {
             description: 'safely serialize the version',
-            options: { version: `1.0.0"'\\</script>\u2028`, debugId: false },
+            options: { version: `1.0.0"'\\</script>\u2028`, service: undefined, debugId: false },
             chunk,
             expected: { version: `1.0.0"'\\</script>\u2028` },
         },
@@ -80,14 +86,22 @@ describe('getRuntimeBootstrap', () => {
     });
 
     test('should be a per-chunk injected value', () => {
-        const bootstrap = getRuntimeBootstrap({ version: undefined, debugId: true });
+        const bootstrap = getRuntimeBootstrap({
+            version: undefined,
+            service: undefined,
+            debugId: true,
+        });
 
         // The injection plugin only passes chunk info to functions with a single parameter.
         expect(bootstrap).toHaveLength(1);
     });
 
     test('should keep the build metadata of the first chunk to execute', () => {
-        const bootstrap = getRuntimeBootstrap({ version: '1.0.0', debugId: true });
+        const bootstrap = getRuntimeBootstrap({
+            version: '1.0.0',
+            service: undefined,
+            debugId: true,
+        });
         const firstChunk = getChunk('first chunk');
         const secondChunk = getChunk('second chunk');
         const firstChunkCode = bootstrap(firstChunk);
@@ -100,7 +114,11 @@ describe('getRuntimeBootstrap', () => {
     });
 
     test('should not override an existing probes implementation', () => {
-        const code = getRuntimeBootstrap({ version: undefined, debugId: false })();
+        const code = getRuntimeBootstrap({
+            version: undefined,
+            service: undefined,
+            debugId: false,
+        })();
         const globalScope = vm.createContext({ $dd_probes: 'sdk' });
 
         vm.runInContext(code, globalScope);

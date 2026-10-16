@@ -198,10 +198,15 @@ export type GlobalContext = {
     env: GlobalData['env'];
     getLogger: GetLogger;
     git?: RepositoryData;
+    // Pending while the git plugin collects git data. Resolved once it's done, with or without data.
+    gitPending: boolean;
+    gitReady: Promise<void>;
     hook: TriggerHook<void>;
     inject: (item: ToInjectItem) => void;
     markArtifactsPending: () => void;
     markArtifactsReady: (error?: unknown) => void;
+    markGitPending: () => void;
+    markGitReady: () => void;
     pluginNames: string[];
     plugins: (PluginOptions | CustomPluginOptions)[];
     queue: (promise: Promise<any>) => void;

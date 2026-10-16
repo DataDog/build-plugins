@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { areDebugIdsEnabled } from '@dd/core/helpers/debugId';
+import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
@@ -74,6 +75,14 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         }
     }
 
+    // Validate service option
+    if (
+        pluginConfig.service !== undefined &&
+        (typeof pluginConfig.service !== 'string' || pluginConfig.service.trim() === '')
+    ) {
+        errors.push(`${red('service')} must be a non-empty string`);
+    }
+
     // Validate honorSkipComments option
     if (
         pluginConfig.honorSkipComments !== undefined &&
@@ -126,6 +135,8 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         version: metadataVersion,
+        service: pluginConfig.service ?? config.rum?.sourceCodeContext?.service,
+        enableGit: shouldGetGitInfo(config),
         debugId: areDebugIdsEnabled(config, log),
         include: pluginConfig.include ?? [],
         exclude: pluginConfig.exclude || [

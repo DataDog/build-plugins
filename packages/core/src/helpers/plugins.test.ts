@@ -106,6 +106,26 @@ describe('plugins', () => {
                 result: false,
             },
             {
+                description: 'true with Live Debugger and an API key',
+                input: { ...pluginOptions, liveDebugger: {} },
+                result: true,
+            },
+            {
+                description: 'false with Live Debugger and no API key',
+                input: { ...pluginOptions, auth: { site: 'datadoghq.com' }, liveDebugger: {} },
+                result: false,
+            },
+            {
+                description: 'false with Live Debugger disabled',
+                input: { ...pluginOptions, liveDebugger: { enable: false } },
+                result: false,
+            },
+            {
+                description: 'false if disabled globaly with Live Debugger',
+                input: { ...pluginOptions, enableGit: false, liveDebugger: {} },
+                result: false,
+            },
+            {
                 description: 'false if disabled globaly with sourcemaps',
                 input: {
                     ...pluginOptions,

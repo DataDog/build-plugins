@@ -34,6 +34,8 @@ describe('validateOptions', () => {
                 input: makeConfig(undefined),
                 expected: {
                     version: undefined,
+                    service: undefined,
+                    enableGit: false,
                     debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -49,6 +51,8 @@ describe('validateOptions', () => {
                 input: makeConfig({}),
                 expected: {
                     version: undefined,
+                    service: undefined,
+                    enableGit: false,
                     debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -64,6 +68,8 @@ describe('validateOptions', () => {
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
                     version: '1.0.0',
+                    service: undefined,
+                    enableGit: false,
                     debugId: false,
                     include: [],
                     exclude: expect.arrayContaining([/\/node_modules\//]),
@@ -112,6 +118,60 @@ describe('validateOptions', () => {
 
         test.each(cases)('should $description', ({ input, expected }) => {
             expect(validateOptions(input, mockLogger)).toEqual(expected);
+        });
+
+        const serviceCases = [
+            {
+                description: 'use liveDebugger.service',
+                input: makeConfig({ service: 'cart' }),
+                expected: 'cart',
+            },
+            {
+                description: 'fall back to rum.sourceCodeContext.service',
+                input: {
+                    ...makeConfig({}),
+                    rum: { sourceCodeContext: { service: 'checkout' } },
+                } satisfies Options,
+                expected: 'checkout',
+            },
+            {
+                description: 'prefer liveDebugger.service over rum.sourceCodeContext.service',
+                input: {
+                    ...makeConfig({ service: 'cart' }),
+                    rum: { sourceCodeContext: { debugId: true, service: 'checkout' } },
+                } satisfies Options,
+                expected: 'cart',
+            },
+        ];
+
+        test.each(serviceCases)('should $description', ({ input, expected }) => {
+            expect(validateOptions(input, mockLogger).service).toBe(expected);
+        });
+
+        const gitCases = [
+            {
+                description: 'collect git data with an API key',
+                input: { ...makeConfig({}), auth: { apiKey: 'api-key' } } satisfies Options,
+                expected: true,
+            },
+            {
+                description: 'not collect git data without an API key',
+                input: makeConfig({}),
+                expected: false,
+            },
+            {
+                description: 'not collect git data when git is disabled',
+                input: {
+                    ...makeConfig({}),
+                    auth: { apiKey: 'api-key' },
+                    enableGit: false,
+                } satisfies Options,
+                expected: false,
+            },
+        ];
+
+        test.each(gitCases)('should $description', ({ input, expected }) => {
+            expect(validateOptions(input, mockLogger).enableGit).toBe(expected);
         });
 
         it('should apply all default exclude patterns', () => {
@@ -332,6 +392,28 @@ describe('validateOptions', () => {
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
             expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+        });
+    });
+
+    describe('invalid service', () => {
+        const cases = [
+            {
+                description: 'reject service when not a string',
+                input: makeInvalidConfig({ service: 1 }),
+            },
+            {
+                description: 'reject an empty service',
+                input: makeInvalidConfig({ service: ' ' }),
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockError).toHaveBeenCalledWith(
+                expect.stringMatching(/service.*must be a non-empty string/),
+            );
         });
     });
 

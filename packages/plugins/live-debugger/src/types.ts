@@ -24,6 +24,7 @@ export type DecoratorSyntax = (typeof VALID_DECORATOR_SYNTAXES)[number];
 
 export type LiveDebuggerOptions = {
     enable?: boolean;
+    service?: string;
     include?: (string | RegExp)[];
     exclude?: (string | RegExp)[];
     fileExtensions?: FileExtensions;
@@ -35,6 +36,10 @@ export type LiveDebuggerOptions = {
 
 export type LiveDebuggerOptionsWithDefaults = {
     version: string | undefined;
+    // From `liveDebugger.service`, or else `rum.sourceCodeContext.service`.
+    service: string | undefined;
+    // Whether git data is collected (see the top-level `enableGit` option).
+    enableGit: boolean;
     // Whether output chunks get a debug ID (see `rum.sourceCodeContext.debugId`).
     debugId: boolean;
     include: (string | RegExp)[];
