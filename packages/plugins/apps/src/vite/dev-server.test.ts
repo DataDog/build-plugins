@@ -5,13 +5,20 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
-import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
+import {
+    ALLOWED_HOSTS_HINT,
+    createViteHostCheck,
+    VITE_UPGRADE_HINT,
+} from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
     DEBUG_BUNDLE_ROUTE,
     DEV_SERVER_ROUTES,
+    EXECUTE_ACTION_ROUTE,
     formatRef,
     getRetryDelay,
+    MAX_WARNED_REJECTIONS,
+    REJECTION_WARNINGS_CAPPED_MESSAGE,
 } from '@dd/apps-plugin/vite/dev-server';
 import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
@@ -23,7 +30,7 @@ import {
     moduleResolverFor,
 } from '@dd/tests/_jest/helpers/mocks';
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
-import type { IncomingMessage } from 'http';
+import type { IncomingHttpHeaders, IncomingMessage } from 'http';
 import nock from 'nock';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
@@ -504,7 +511,7 @@ describe('Dev Server Middleware', () => {
                 expect(mockViteBuild).not.toHaveBeenCalled();
                 expect(mockLoadModule).not.toHaveBeenCalled();
                 const routeMessage = expect.stringContaining(route);
-                expect(mockLogFn).toHaveBeenCalledWith(routeMessage, 'debug');
+                expect(mockLogFn).toHaveBeenCalledWith(routeMessage, 'warn');
             },
         );
 
@@ -548,6 +555,139 @@ describe('Dev Server Middleware', () => {
 
             expect(res.statusCode).toBe(200);
             expect(next).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('createDevServerMiddleware refusal logging', () => {
+        async function sendRequest(
+            middleware: ReturnType<typeof createDevServerMiddleware>,
+            headers: IncomingHttpHeaders,
+        ): Promise<void> {
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                EXECUTE_ACTION_ROUTE,
+                { functionName, args: [] },
+                headers,
+            );
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            await res.done;
+        }
+
+        function refusalLogLevels(): string[] {
+            return mockLogFn.mock.calls
+                .filter(([text]) => String(text).includes(EXECUTE_ACTION_ROUTE))
+                .map(([, level]) => level);
+        }
+
+        const tunnelHost = { host: 'tunnel.example:5173' };
+        const lanHost = { host: 'lan-box:5173' };
+        const crossOrigin = { origin: 'https://attacker.example' };
+        const cases = [
+            {
+                description: 'warn the first time a host is refused and log repeats at debug',
+                requests: [tunnelHost, tunnelHost, tunnelHost],
+                expectedLevels: ['warn', 'debug', 'debug'],
+            },
+            {
+                description: 'warn once for each distinct refused host and port',
+                requests: [
+                    tunnelHost,
+                    lanHost,
+                    tunnelHost,
+                    lanHost,
+                    { host: 'tunnel.example:5174' },
+                ],
+                expectedLevels: ['warn', 'warn', 'debug', 'debug', 'warn'],
+            },
+            {
+                description: 'warn once for each distinct HTTP/2 :authority',
+                requests: [
+                    { host: undefined, ':authority': 'tunnel.example:5173' },
+                    { host: undefined, ':authority': 'lan-box:5173' },
+                    { host: undefined, ':authority': 'tunnel.example:5173' },
+                ],
+                expectedLevels: ['warn', 'warn', 'debug'],
+            },
+            {
+                description: 'warn once for a missing Host, whether absent or empty',
+                requests: [{ host: undefined }, { host: '' }],
+                expectedLevels: ['warn', 'debug'],
+            },
+            {
+                description: 'warn again when the same host is refused for a different reason',
+                requests: [crossOrigin, { 'content-type': 'text/plain' }, crossOrigin],
+                expectedLevels: ['warn', 'warn', 'debug'],
+            },
+        ];
+
+        test.each(cases)('Should $description', async ({ requests, expectedLevels }) => {
+            const middleware = createTestMiddleware();
+
+            for (const headers of requests) {
+                // eslint-disable-next-line no-await-in-loop
+                await sendRequest(middleware, headers);
+            }
+
+            const levels = refusalLogLevels();
+            expect(levels).toEqual(expectedLevels);
+        });
+
+        test('Should say once that warnings stop after the maximum number of warned rejections', async () => {
+            const middleware = createTestMiddleware();
+            const hostCount = MAX_WARNED_REJECTIONS + 2;
+
+            for (let index = 0; index < hostCount; index++) {
+                // eslint-disable-next-line no-await-in-loop
+                await sendRequest(middleware, { host: `tunnel-${index}.example:5173` });
+            }
+            await sendRequest(middleware, { host: 'tunnel-0.example:5173' });
+
+            const expectedLevels = [
+                ...Array(MAX_WARNED_REJECTIONS + 1).fill('warn'),
+                'debug',
+                'debug',
+            ];
+            const levels = refusalLogLevels();
+            expect(levels).toEqual(expectedLevels);
+            const capNotices = mockLogFn.mock.calls.filter(([text]) =>
+                String(text).endsWith(REJECTION_WARNINGS_CAPPED_MESSAGE),
+            );
+            const firstUnwarnedHost = expect.stringContaining(
+                `tunnel-${MAX_WARNED_REJECTIONS}.example`,
+            );
+            expect(capNotices).toEqual([[firstUnwarnedHost, 'warn']]);
+        });
+
+        test('Should track warned hosts per middleware instance', async () => {
+            const firstMiddleware = createTestMiddleware();
+            const secondMiddleware = createTestMiddleware();
+
+            await sendRequest(firstMiddleware, tunnelHost);
+            await sendRequest(secondMiddleware, tunnelHost);
+
+            const levels = refusalLogLevels();
+            expect(levels).toEqual(['warn', 'warn']);
+        });
+
+        test('Should warn with the actionable message and without request credentials', async () => {
+            const credential = 'do-not-log-credential';
+            const middleware = createTestMiddleware();
+
+            await sendRequest(middleware, {
+                ...tunnelHost,
+                cookie: `session=${credential}`,
+                authorization: `Bearer ${credential}`,
+            });
+
+            const loggedText = mockLogFn.mock.calls.map(([text]) => String(text)).join('\n');
+            const hostMessage = expect.stringContaining('"tunnel.example"');
+            expect(mockLogFn).toHaveBeenCalledWith(hostMessage, 'warn');
+            expect(loggedText).toContain(ALLOWED_HOSTS_HINT);
+            expect(loggedText).toContain(VITE_UPGRADE_HINT);
+            expect(loggedText).not.toContain(credential);
         });
     });
 

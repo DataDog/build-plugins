@@ -22,8 +22,8 @@ import type { LongPollingOptions } from '../types';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig } from './build-config';
-import type { HostCheck } from './dev-server-request-guard';
-import { checkDevServerRequest } from './dev-server-request-guard';
+import type { HostCheck, RequestRejection } from './dev-server-request-guard';
+import { checkDevServerRequest, getRequestHost } from './dev-server-request-guard';
 import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
 import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
@@ -40,6 +40,11 @@ const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 export const DEBUG_BUNDLE_ROUTE = '/__dd/debugBundle';
 export const EXECUTE_ACTION_ROUTE = '/__dd/executeAction';
 export const EXECUTE_ACTION_VIA_CLOUD_ROUTE = '/__dd/executeActionViaCloud';
+
+// Caps the warned set so requests cycling through Host values can't grow it without bound.
+export const MAX_WARNED_REJECTIONS = 32;
+export const REJECTION_WARNINGS_CAPPED_MESSAGE =
+    "Further rejections are only logged with the Datadog plugin's `logLevel: 'debug'`.";
 
 export const DEV_SERVER_ROUTES = [
     DEBUG_BUNDLE_ROUTE,
@@ -771,6 +776,29 @@ export function createDevServerMiddleware(
         [EXECUTE_ACTION_VIA_CLOUD_ROUTE]: runViaCloud,
     };
 
+    const warnedRejections = new Set<string>();
+    let hasLoggedWarningCap = false;
+    const logRejection = (req: IncomingMessage, rejection: RequestRejection): void => {
+        const rejectionMessage = `Rejected POST ${req.url}: ${rejection.message}`;
+        const requestHost = getRequestHost(req.headers) ?? '';
+        const rejectionKey = JSON.stringify([requestHost, rejection.reason]);
+        if (warnedRejections.has(rejectionKey)) {
+            log.debug(rejectionMessage);
+            return;
+        }
+        if (warnedRejections.size < MAX_WARNED_REJECTIONS) {
+            warnedRejections.add(rejectionKey);
+            log.warn(rejectionMessage);
+            return;
+        }
+        if (!hasLoggedWarningCap) {
+            hasLoggedWarningCap = true;
+            log.warn(`${rejectionMessage} ${REJECTION_WARNINGS_CAPPED_MESSAGE}`);
+            return;
+        }
+        log.debug(rejectionMessage);
+    };
+
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const { url } = req;
         if (req.method !== 'POST' || !isDevServerRoute(url)) {
@@ -780,7 +808,7 @@ export function createDevServerMiddleware(
 
         const rejection = checkDevServerRequest(req.headers, isHostAllowed);
         if (rejection) {
-            log.debug(`Rejected POST ${url}: ${rejection.message}`);
+            logRejection(req, rejection);
             sendError(res, rejection.statusCode, rejection.message);
             return;
         }
