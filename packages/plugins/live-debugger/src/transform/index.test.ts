@@ -4,7 +4,7 @@
 
 import { parse } from '@babel/parser';
 import type { ParserPlugin } from '@babel/parser';
-import { isCallExpression, isNewExpression, traverseFast } from '@babel/types';
+import { countAnnotatedCalls } from '@dd/tests/_jest/helpers/transformInvariants';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import { runInNewContext } from 'vm';
 
@@ -1654,23 +1654,6 @@ function runTransformedFunction(code: string): unknown {
     // A transform regression can turn a loop into an infinite one; fail instead of hanging.
     runInNewContext(executableCode, sandbox, { timeout: 1_000 });
     return runtimeGlobal.result;
-}
-
-const PURE_ANNOTATION = /^\s*[#@]__PURE__\s*$/;
-
-// Counts calls and `new` expressions with a PURE annotation directly in front of them.
-function countAnnotatedCalls(code: string): number {
-    const ast = parse(code, { sourceType: 'unambiguous', plugins: ['jsx', 'typescript'] });
-    let count = 0;
-    traverseFast(ast, (node) => {
-        const isCall = isCallExpression(node) || isNewExpression(node);
-        const comments = node.leadingComments ?? [];
-        const isAnnotated = comments.some((comment) => PURE_ANNOTATION.test(comment.value));
-        if (isCall && isAnnotated) {
-            count++;
-        }
-    });
-    return count;
 }
 
 function validateSyntax(code: string, filePath: string): string | null {
