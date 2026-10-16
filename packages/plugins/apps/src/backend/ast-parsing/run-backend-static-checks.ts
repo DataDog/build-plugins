@@ -5,19 +5,41 @@
 import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 
+import type { BackendRuntimeStatus } from '../../backend-runtime';
+import { RUNTIME_FALLBACK_NOTE } from '../../runtime-names';
+
 import type { ModuleScopeAnalysis } from './module-scope';
 import { rejectNodeBuiltinImports } from './reject-node-builtin-imports';
-import { rejectRestrictedGlobals } from './reject-restricted-globals';
+import {
+    isMissingFromNode,
+    rejectGlobalsMissingFromNode,
+    rejectRestrictedGlobals,
+    RestrictedGlobalError,
+} from './reject-restricted-globals';
 import { warnAboutDivergentGlobals } from './warn-divergent-globals';
 
-/** Runs every static check (banned Node built-ins, restricted globals, divergent-global warnings) against a single module; shared by index.ts and backend-static-checks-plugin.ts so the two call sites can't drift. */
+/** Shared by every call site so the checks can't drift. Any runtime other than v2 gets the v1 checks, so an unknown one fails closed. */
 export function runBackendStaticChecks(
     ast: BaseNode,
     filePath: string,
     log: Logger,
     scopeAnalysis: ModuleScopeAnalysis,
+    { runtime, isFallback }: BackendRuntimeStatus,
 ): void {
-    rejectNodeBuiltinImports(ast, filePath);
-    rejectRestrictedGlobals(ast, filePath, scopeAnalysis);
+    if (runtime === 'v2') {
+        rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+        return;
+    }
+    try {
+        rejectNodeBuiltinImports(ast, filePath);
+        rejectRestrictedGlobals(ast, filePath, scopeAnalysis);
+    } catch (error) {
+        const v2RejectsToo =
+            error instanceof RestrictedGlobalError && isMissingFromNode(error.globalName);
+        if (!isFallback || !(error instanceof Error) || v2RejectsToo) {
+            throw error;
+        }
+        throw new Error(`${error.message} (${RUNTIME_FALLBACK_NOTE}).`, { cause: error });
+    }
     warnAboutDivergentGlobals(ast, filePath, log, scopeAnalysis);
 }

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { V1_RUNTIME, V2_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
 import { createParsedModuleRecord } from '@dd/apps-plugin/backend/ast-parsing/module-graph';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -34,6 +35,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -49,6 +51,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -64,6 +67,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         callModuleParsed(plugin, {
@@ -74,11 +78,34 @@ describe('Backend Functions - backend static checks plugin', () => {
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
     });
 
+    test.each([
+        {
+            description: 'a Node built-in import',
+            code: "import os from 'os';\nexport function host() { return os.hostname(); }",
+        },
+        {
+            description: 'a restricted global',
+            code: 'export function callIt() { return fetch("https://example.com"); }',
+        },
+    ])('Should allow $description under the v2 runtime', ({ code }) => {
+        const plugin = createBackendStaticChecksPlugin(
+            '/project',
+            getMockLogger(),
+            () => new Map(),
+            V2_RUNTIME,
+        );
+
+        expect(() =>
+            callModuleParsed(plugin, { id: '/project/src/backend/helpers/http.js', code }),
+        ).not.toThrow();
+    });
+
     test('Should allow a module with no restricted imports or globals', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -94,6 +121,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -109,6 +137,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -130,6 +159,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -151,6 +181,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map([[moduleId, record]]),
+            V1_RUNTIME,
         );
         const throwIfParsed: typeof parseAst = () => {
             throw new Error('Should not re-parse a module that already has a record.');
@@ -170,6 +201,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -185,6 +217,7 @@ describe('Backend Functions - backend static checks plugin', () => {
             '/project',
             getMockLogger(),
             () => new Map(),
+            V1_RUNTIME,
         );
 
         expect(() =>
@@ -193,7 +226,7 @@ describe('Backend Functions - backend static checks plugin', () => {
                 code: 'export function callIt( {',
             }),
         ).toThrow(
-            /Unsupported module source .*: unparseable module source .* could hide a Node-builtin import or restricted-global access/,
+            /Unsupported module source .*: unparseable module source .* could hide code the static checks reject/,
         );
     });
 });

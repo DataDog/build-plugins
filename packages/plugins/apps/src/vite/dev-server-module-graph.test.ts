@@ -9,6 +9,8 @@ import path from 'node:path';
 import { parseAst } from 'rollup/parseAst';
 import type { ViteDevServer } from 'vite';
 
+import { V1_RUNTIME } from '../backend-runtime.fixtures';
+import type { BackendRuntime } from '../backend-runtime';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
@@ -104,7 +106,14 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         const resolveToDependency = async () => ({ id: DEPENDENCY_ID });
         const collect = (server: ViteDevServer) => {
             const log = getMockLogger();
-            return collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, log, parseAst);
+            return collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                log,
+                parseAst,
+                V1_RUNTIME,
+            );
         };
         const entryImporting = (...dependencyIds: string[]): FakeModuleNode => {
             const dependencies = dependencyIds.map((id) => ({
@@ -176,7 +185,14 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             withSsrEnvironmentGraph(server, [entry]);
             const log = getMockLogger();
 
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
+            await collectModuleGraphFromServer(
+                server,
+                nestedEntryId,
+                nestedRoot,
+                log,
+                parseAst,
+                V1_RUNTIME,
+            );
 
             expect(entry.transformResult).toBeNull();
         });
@@ -199,6 +215,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
                 nestedRoot,
                 log,
                 parseAst,
+                V1_RUNTIME,
             );
 
             expect(entry.transformResult).toBeNull();
@@ -233,7 +250,14 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             ]);
             const log = getMockLogger();
 
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
+            await collectModuleGraphFromServer(
+                server,
+                nestedEntryId,
+                nestedRoot,
+                log,
+                parseAst,
+                V1_RUNTIME,
+            );
 
             expect(updateModuleTransformResult).not.toHaveBeenCalled();
         });
@@ -398,6 +422,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         await expect(collecting).rejects.toThrow(
@@ -417,6 +442,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         expect(records.has(ENTRY_ID)).toBe(true);
@@ -439,6 +465,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         await expect(collecting).rejects.toThrow(/unreadable module source/);
@@ -474,6 +501,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
                 FIXTURE_ROOT,
                 log,
                 parseAst,
+                V1_RUNTIME,
             );
 
             await expect(collecting).rejects.toThrow(/unparseable module source/);
@@ -502,6 +530,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         await expect(collecting).rejects.toThrow(/Vite resource query on module id/);
@@ -537,6 +566,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         await expect(collecting).rejects.toThrow(/Vite resource query on module id/);
@@ -563,6 +593,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             FIXTURE_ROOT,
             log,
             parseAst,
+            V1_RUNTIME,
         );
 
         expect(records.size).toBe(1);
@@ -571,33 +602,45 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
 
     // The production build path checks every app-local module transitively, not just the
     // .backend.ts entry — local execution must reject the same banned helper the same way.
-    test('Should reject a helper module transitively imported by a backend entry when it imports a banned Node builtin', async () => {
-        const entryPath = path.join(FIXTURE_ROOT, 'viaBannedHelper.backend.ts');
-        const bannedHelperPath = path.join(FIXTURE_ROOT, 'helperWithBannedImport.ts');
-        const bannedHelperNode: FakeModuleNode = {
-            id: bannedHelperPath,
-            file: bannedHelperPath,
-            importedModules: new Set(),
-        };
-        const entryNode: FakeModuleNode = {
-            id: SUFFIXED_ENTRY_ID,
-            file: entryPath,
-            importedModules: new Set([bannedHelperNode]),
-        };
-        const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
+    const bannedHelperCases: Array<{ runtime: BackendRuntime; expected: unknown }> = [
+        {
+            runtime: 'v1',
+            expected: expect.stringMatching(/Importing Node built-in module "fs" is not supported/),
+        },
+        { runtime: 'v2', expected: 'collected' },
+    ];
+    test.each(bannedHelperCases)(
+        'Should apply the $runtime checks to a helper module transitively imported by a backend entry',
+        async ({ runtime, expected }) => {
+            const entryPath = path.join(FIXTURE_ROOT, 'viaBannedHelper.backend.ts');
+            const bannedHelperPath = path.join(FIXTURE_ROOT, 'helperWithBannedImport.ts');
+            const bannedHelperNode: FakeModuleNode = {
+                id: bannedHelperPath,
+                file: bannedHelperPath,
+                importedModules: new Set(),
+            };
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: entryPath,
+                importedModules: new Set([bannedHelperNode]),
+            };
+            const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
 
-        const log = getMockLogger();
+            const log = getMockLogger();
 
-        const collecting = collectModuleGraphFromServer(
-            server,
-            ENTRY_ID,
-            FIXTURE_ROOT,
-            log,
-            parseAst,
-        );
+            const outcome = await collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                log,
+                parseAst,
+                { runtime, isFallback: false },
+            ).then(
+                () => 'collected',
+                (error: unknown) => (error instanceof Error ? error.message : String(error)),
+            );
 
-        await expect(collecting).rejects.toThrow(
-            /Importing Node built-in module "fs" is not supported/,
-        );
-    });
+            expect(outcome).toEqual(expected);
+        },
+    );
 });

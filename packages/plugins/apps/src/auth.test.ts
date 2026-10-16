@@ -4,7 +4,12 @@
 
 /* global globalThis */
 
-import { getAuthenticatedRequest, MissingAuthenticationError } from '@dd/apps-plugin/auth';
+import {
+    createAuthenticatedRequest,
+    getAuthCredentials,
+    getAuthenticatedRequest,
+    MissingAuthenticationError,
+} from '@dd/apps-plugin/auth';
 import { doRequest } from '@dd/core/helpers/request';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 
@@ -59,6 +64,41 @@ describe('Apps Plugin - auth', () => {
             },
             fetchImpl: globalThis.fetch,
         });
+    });
+
+    test('Should send the credentials it is given instead of re-reading the env', async () => {
+        process.env.DD_API_KEY = 'env-api-key';
+        process.env.DD_APP_KEY = 'env-app-key';
+        doRequestMock.mockResolvedValue('ok');
+        const doAuthenticatedRequest = createAuthenticatedRequest({ accessToken: 'given-token' });
+
+        await doAuthenticatedRequest({ url: 'https://api.datadoghq.com/test' });
+        expect(doRequestMock).toHaveBeenCalledWith({
+            url: 'https://api.datadoghq.com/test',
+            auth: { accessToken: 'given-token' },
+            fetchImpl: globalThis.fetch,
+        });
+    });
+
+    test.each([
+        {
+            description: 'the keys it is given over the env keys',
+            keys: { apiKey: 'given-api-key', appKey: 'given-app-key' },
+            expected: { apiKey: 'given-api-key', appKey: 'given-app-key' },
+        },
+        {
+            description: 'the OAuth token, not the env keys, when given only an API key',
+            keys: { apiKey: 'given-api-key' },
+            expected: { accessToken: 'oauth-token' },
+        },
+    ])('Should resolve $description', ({ keys, expected }) => {
+        process.env.DD_API_KEY = 'env-api-key';
+        process.env.DD_APP_KEY = 'env-app-key';
+        process.env.DD_OAUTH_ACCESS_TOKEN = 'oauth-token';
+
+        const credentials = getAuthCredentials(keys);
+
+        expect(credentials).toEqual(expected);
     });
 
     test('Should not use API-key auth when only one key is set', async () => {

@@ -5,6 +5,8 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { V1_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
+import type { BackendRuntime } from '@dd/apps-plugin/backend-runtime';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
@@ -286,6 +288,7 @@ function createTestMiddleware(
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
         isHostAllowed?: CreateDevServerMiddlewareArgs[10];
+        getBackendRuntime?: CreateDevServerMiddlewareArgs[11];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -302,6 +305,7 @@ function createTestMiddleware(
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
+        overrides.getBackendRuntime ?? (async () => V1_RUNTIME),
     );
 }
 
@@ -627,6 +631,63 @@ describe('Dev Server Middleware', () => {
                 'Importing Node built-in module "fs" is not supported in backend function code',
             );
         });
+
+        test.each([
+            { runtime: 'v1', route: '/__dd/debugBundle', expectedStatus: 500, rejected: true },
+            { runtime: 'v2', route: '/__dd/debugBundle', expectedStatus: 200, rejected: false },
+            {
+                runtime: 'v1',
+                route: '/__dd/executeActionViaCloud',
+                expectedStatus: 500,
+                rejected: true,
+            },
+            {
+                runtime: 'v2',
+                route: '/__dd/executeActionViaCloud',
+                expectedStatus: 200,
+                rejected: false,
+            },
+        ] satisfies Array<{
+            runtime: BackendRuntime;
+            route: string;
+            expectedStatus: number;
+            rejected: boolean;
+        }>)(
+            'Should bundle for $route with the $runtime static checks',
+            async ({ runtime, route, expectedStatus, rejected }) => {
+                nock(DD_API_ORIGIN)
+                    .post('/api/v2/app-builder/queries/preview-async')
+                    .reply(200, { data: { id: 'receipt-runtime' } })
+                    .get('/api/v2/app-builder/queries/execution-long-polling/receipt-runtime')
+                    .reply(200, { data: { attributes: { done: true, outputs: { data: 1 } } } });
+                mockViteBuild.mockImplementation(async (config) => {
+                    await emitModuleParsed(
+                        config,
+                        mockFunctions[0].absolutePath,
+                        "export function greet() { return fetch('https://example.com'); }",
+                    );
+                    return mockBuildResult('// code');
+                });
+                const runtimeMiddleware = createTestMiddleware({
+                    getBackendRuntime: async () => ({ runtime, isFallback: false }),
+                });
+                const req = createMockRequest(route, {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+
+                runtimeMiddleware(req, res, jest.fn());
+                await res.done;
+
+                const responseText = res.getBody();
+                const isRejected = responseText.includes(
+                    'is not supported in backend function code',
+                );
+                expect(res.statusCode).toBe(expectedStatus);
+                expect(isRejected).toBe(rejected);
+            },
+        );
 
         test('Should call vite.build with configFile: false and write: false', async () => {
             mockBuildWithParsedBackend();
@@ -1274,6 +1335,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    async () => V1_RUNTIME,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1307,6 +1369,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    async () => V1_RUNTIME,
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1608,6 +1671,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    async () => V1_RUNTIME,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {

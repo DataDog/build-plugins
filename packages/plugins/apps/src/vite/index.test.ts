@@ -8,6 +8,7 @@ import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
+import { validateOptions } from '@dd/factory/validate';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
     createMockRequest,
@@ -34,6 +35,10 @@ import {
 } from 'vite';
 
 import * as auth from '../auth';
+import { V1_FALLBACK_RUNTIME, V1_RUNTIME, V2_RUNTIME } from '../backend-runtime.fixtures';
+import * as backendRuntime from '../backend-runtime';
+import type { BackendRuntime, BackendRuntimeStatus } from '../backend-runtime';
+import * as connectionIds from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import {
@@ -41,10 +46,15 @@ import {
     DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
 } from '../constants';
+import { RUNTIME_FALLBACK_NOTE } from '../runtime-names';
 
+import * as buildBackendFunctionsModule from './build-backend-functions';
 import * as buildPackage from './build-package';
+import * as devServerModuleGraph from './dev-server-module-graph';
+import * as devServer from './dev-server';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
+import * as viteParseAstModule from './vite-parse-ast';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -86,6 +96,9 @@ function extractTransformedCode(result: unknown): string | undefined {
         : undefined;
 }
 
+const toErrorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
 type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => void;
 
 // The subset of Vite's real `ViteDevServer` this test's fake server object provides.
@@ -113,6 +126,43 @@ function getConfigureServer(
     return function callConfigureServer(server: FakeViteDevServer): void {
         Reflect.apply(configureServer, undefined, [server]);
     };
+}
+
+function getCloseBundle(plugin: ReturnType<typeof getVitePlugin>): () => Promise<unknown> {
+    const { closeBundle } = plugin ?? {};
+    if (typeof closeBundle !== 'function') {
+        throw new Error('Expected plugin.closeBundle to be the plain function-hook form');
+    }
+    return async function callCloseBundle(): Promise<unknown> {
+        return Reflect.apply(closeBundle, undefined, []);
+    };
+}
+
+function getBuildStart(plugin: ReturnType<typeof getVitePlugin>): () => Promise<unknown> {
+    const { buildStart } = plugin ?? {};
+    if (typeof buildStart !== 'function') {
+        throw new Error('Expected plugin.buildStart to be the plain function-hook form');
+    }
+    const buildContext = { resolve: jest.fn(async () => null) };
+    return async function callBuildStart(): Promise<unknown> {
+        return Reflect.apply(buildStart, buildContext, []);
+    };
+}
+
+const BACKEND_FILE_ID = '/build/src/backend/myHandler.backend.ts';
+
+async function transformBackendFile(
+    plugin: ReturnType<typeof getVitePlugin>,
+    code: string,
+): Promise<unknown> {
+    const handler = getTransformHandler(plugin);
+    const transformContext = {
+        parse: parseAst,
+        resolve: jest.fn(async () => null),
+        load: jest.fn(async () => null),
+        addWatchFile: jest.fn(),
+    };
+    return handler.call(transformContext, code, BACKEND_FILE_ID);
 }
 
 function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
@@ -259,6 +309,8 @@ describe('Backend Functions - getVitePlugin', () => {
     beforeEach(() => {
         jest.restoreAllMocks();
         jest.clearAllMocks();
+        // A real lookup would outlive the test that started it and log into the next one.
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue(V1_RUNTIME);
         mockBuildWithParsedBackend();
         jest.spyOn(buildPackage, 'buildAppPackage').mockResolvedValue(undefined);
     });
@@ -301,6 +353,106 @@ describe('Backend Functions - getVitePlugin', () => {
                 backendOutputs: expect.any(Map),
                 backendFunctions: expect.any(Array),
             }),
+        );
+    });
+
+    const closeBundleRuntimeCases: Array<{
+        runtime: BackendRuntime;
+        expected: unknown;
+        packagings: number;
+    }> = [
+        {
+            runtime: 'v1',
+            expected: expect.stringContaining('Using "fetch" is not supported'),
+            packagings: 0,
+        },
+        { runtime: 'v2', expected: 'packaged', packagings: 1 },
+    ];
+    test.each(closeBundleRuntimeCases)(
+        'Should build backend functions with the $runtime checks in closeBundle',
+        async ({ runtime, expected, packagings }) => {
+            jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue({
+                runtime,
+                isFallback: false,
+            });
+            const buildSpy = jest.spyOn(buildBackendFunctionsModule, 'buildBackendFunctions');
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(
+                    config,
+                    BACKEND_FILE_ID,
+                    "export function myHandler() { return fetch('https://example.com'); }",
+                );
+                return mockBuildResult();
+            });
+            const plugin = getVitePlugin(defaultOptions);
+            await transformBackendFile(plugin, 'export function myHandler() {}');
+            const closeBundle = getCloseBundle(plugin);
+
+            const packaging = closeBundle();
+            const outcome = await packaging.then(() => 'packaged', toErrorMessage);
+
+            expect(outcome).toEqual(expected);
+            expect(buildPackage.buildAppPackage).toHaveBeenCalledTimes(packagings);
+            expect(buildSpy).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.any(Array),
+                defaultOptions.context.buildRoot,
+                expect.anything(),
+                { runtime, isFallback: false },
+            );
+        },
+    );
+
+    test('Should not leave the dev server start-up lookup as an unhandled rejection', async () => {
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockRejectedValue(new Error('lookup'));
+        const unhandled = jest.fn();
+        process.on('unhandledRejection', unhandled);
+        try {
+            const plugin = getVitePlugin(defaultOptions);
+            const configureServer = getConfigureServer(plugin);
+
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig('development'),
+            });
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(unhandled).not.toHaveBeenCalled();
+        } finally {
+            process.off('unhandledRejection', unhandled);
+        }
+    });
+
+    test('Should start resolving the backend runtime when the dev server starts, and use it for local execution checks', async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValue(V2_RUNTIME);
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        jest.spyOn(viteParseAstModule, 'loadViteParseAst').mockResolvedValue(parseAst);
+        const collectSpy = jest
+            .spyOn(devServerModuleGraph, 'collectModuleGraphFromServer')
+            .mockResolvedValue(new Map());
+        jest.spyOn(connectionIds, 'extractConnectionIdsFromModuleGraph').mockReturnValue([]);
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig('development'),
+        });
+
+        expect(resolveSpy).toHaveBeenCalledWith(defaultOptions.context.auth, expect.anything());
+        const getAllowedConnectionIds = middlewareSpy.mock.calls[0][3];
+        await getAllowedConnectionIds(BACKEND_FILE_ID);
+        expect(collectSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            BACKEND_FILE_ID,
+            defaultOptions.context.buildRoot,
+            expect.anything(),
+            parseAst,
+            V2_RUNTIME,
         );
     });
 
@@ -389,67 +541,337 @@ describe('Backend Functions - getVitePlugin', () => {
         );
     });
 
-    test('does not resolve authentication during production packaging', async () => {
+    test('Should not resolve authentication or the backend runtime when packaging an app without backend functions', async () => {
+        jest.mocked(backendRuntime.resolveBackendRuntime).mockRestore();
         const authSpy = jest.spyOn(auth, 'getAuthenticatedRequest');
+        const credentialsSpy = jest.spyOn(auth, 'getAuthCredentials');
+        const runtimeSpy = jest.spyOn(backendRuntime, 'resolveBackendRuntime');
         const plugin = getVitePlugin(defaultOptions);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (plugin as any).closeBundle();
 
         expect(authSpy).not.toHaveBeenCalled();
+        expect(credentialsSpy).not.toHaveBeenCalled();
+        expect(runtimeSpy).not.toHaveBeenCalled();
     });
 
-    test('Should reject a backend file importing a Node built-in module', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const handler = getTransformHandler(plugin);
-        const resolveMock = jest.fn(async () => null);
-        const loadMock = jest.fn(async () => null);
-        const addWatchFileMock = jest.fn();
-
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    import fs from 'node:fs';
-                    export function myHandler() {
-                        return fs.readFileSync('/etc/passwd', 'utf8');
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
+    const nodeBuiltinCode =
+        "import fs from 'node:fs';\nexport function myHandler() { return fs.readFileSync('/etc/passwd', 'utf8'); }";
+    const networkGlobalCode =
+        "export function myHandler() { return fetch('https://example.com'); }";
+    const restrictedCodeCases: Array<{
+        description: string;
+        code: string;
+        runtime: BackendRuntime;
+        expected: unknown;
+    }> = [
+        {
+            description: 'a Node built-in import',
+            code: nodeBuiltinCode,
+            runtime: 'v1',
+            expected: expect.stringContaining(
+                'Importing Node built-in module "node:fs" is not supported in backend function code',
             ),
-        ).toThrow(
-            'Importing Node built-in module "node:fs" is not supported in backend function code',
+        },
+        {
+            description: 'a network global',
+            code: networkGlobalCode,
+            runtime: 'v1',
+            expected: expect.stringContaining(
+                'Using "fetch" is not supported in backend function code',
+            ),
+        },
+        {
+            description: 'a Node built-in import',
+            code: nodeBuiltinCode,
+            runtime: 'v2',
+            expected: 'proxied',
+        },
+        {
+            description: 'a network global',
+            code: networkGlobalCode,
+            runtime: 'v2',
+            expected: 'proxied',
+        },
+    ];
+    test.each(restrictedCodeCases)(
+        'Should apply the $runtime checks to a backend file with $description',
+        async ({ code, runtime, expected }) => {
+            const resolveSpy = jest
+                .spyOn(backendRuntime, 'resolveBackendRuntime')
+                .mockResolvedValue({ runtime, isFallback: false });
+            const plugin = getVitePlugin(defaultOptions);
+
+            const transforming = transformBackendFile(plugin, code);
+            const outcome = await transforming.then(
+                (result) =>
+                    extractTransformedCode(result)?.includes('executeBackendFunction')
+                        ? 'proxied'
+                        : 'unexpected',
+                toErrorMessage,
+            );
+
+            expect(outcome).toEqual(expected);
+            expect(resolveSpy).toHaveBeenCalledWith(defaultOptions.context.auth, expect.anything());
+        },
+    );
+
+    test("Should follow the org's backend runtime in a dev:verify session, for transforms and cloud bundles", async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValue(V2_RUNTIME);
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig(DEV_VERIFY_MODE),
+        });
+        const transformed = await transformBackendFile(plugin, networkGlobalCode);
+        const getCloudRuntime = middlewareSpy.mock.calls[0][11];
+
+        const transformedCode = extractTransformedCode(transformed);
+        const cloudRuntime = await getCloudRuntime();
+        expect(transformedCode).toContain('executeBackendFunction');
+        expect(cloudRuntime).toEqual(V2_RUNTIME);
+        expect(resolveSpy).toHaveBeenCalledWith(defaultOptions.context.auth, expect.anything());
+    });
+
+    test("Should follow the org's v2 with the auth option's keys and no credentials in the env", async () => {
+        jest.mocked(backendRuntime.resolveBackendRuntime).mockRestore();
+        backendRuntime.resetBackendRuntimeCache();
+        const restoreEnv = clearDatadogEnv();
+        const optionAuth = validateOptions({
+            auth: { apiKey: 'option-api-key', appKey: 'option-app-key' },
+        }).auth;
+        const scope = nock(DD_API_ORIGIN)
+            .matchHeader('DD-API-KEY', 'option-api-key')
+            .matchHeader('DD-APPLICATION-KEY', 'option-app-key')
+            .get(backendRuntime.ACTIVE_FEATURE_FLAGS_PATH)
+            .reply(200, {
+                user_status: 'logged-in',
+                active_feature_flags: [backendRuntime.TERRAPIN_CUTOVER_FLAG],
+            });
+        const plugin = getVitePlugin({
+            ...defaultOptions,
+            context: { ...defaultOptions.context, auth: optionAuth },
+        });
+
+        try {
+            const transformed = await transformBackendFile(plugin, networkGlobalCode);
+
+            const transformedCode = extractTransformedCode(transformed);
+            const isDone = scope.isDone();
+            expect(transformedCode).toContain('executeBackendFunction');
+            expect(isDone).toBe(true);
+        } finally {
+            restoreEnv();
+            backendRuntime.resetBackendRuntimeCache();
+        }
+    });
+
+    test("Should say a transform's v1 rejection comes only from a failed runtime lookup", async () => {
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue(V1_FALLBACK_RUNTIME);
+        const plugin = getVitePlugin(defaultOptions);
+
+        const transforming = transformBackendFile(plugin, networkGlobalCode);
+
+        await expect(transforming).rejects.toThrow(`(${RUNTIME_FALLBACK_NOTE}).`);
+    });
+
+    test('Should say a closeBundle v1 rejection comes only from a failed runtime lookup', async () => {
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockResolvedValue(V1_FALLBACK_RUNTIME);
+        mockViteBuild.mockImplementation(async (config) => {
+            await emitModuleParsed(config, BACKEND_FILE_ID, networkGlobalCode);
+            return mockBuildResult();
+        });
+        const plugin = getVitePlugin(defaultOptions);
+        await transformBackendFile(plugin, 'export function myHandler() {}');
+        const closeBundle = getCloseBundle(plugin);
+
+        const packaging = closeBundle();
+
+        await expect(packaging).rejects.toThrow(RUNTIME_FALLBACK_NOTE);
+    });
+
+    test('Should hold the transform until the backend runtime resolves', async () => {
+        let resolveRuntime: (runtime: BackendRuntimeStatus) => void = () => {};
+        const pendingRuntime = new Promise<BackendRuntimeStatus>((resolve) => {
+            resolveRuntime = resolve;
+        });
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime').mockReturnValue(pendingRuntime);
+        const plugin = getVitePlugin(defaultOptions);
+        let settled = false;
+
+        const transforming = transformBackendFile(plugin, networkGlobalCode).finally(() => {
+            settled = true;
+        });
+        // Lets every already-queued microtask run, so only the pending runtime holds the transform.
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(settled).toBe(false);
+        resolveRuntime(V1_RUNTIME);
+        await expect(transforming).rejects.toThrow('Using "fetch" is not supported');
+    });
+
+    test("Should apply one runtime lookup to a build's transforms and its closeBundle", async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValueOnce(V1_RUNTIME)
+            .mockResolvedValue(V2_RUNTIME);
+        const buildSpy = jest.spyOn(buildBackendFunctionsModule, 'buildBackendFunctions');
+        const plugin = getVitePlugin(defaultOptions);
+        await getBuildStart(plugin)();
+
+        await transformBackendFile(plugin, 'export function myHandler() {}');
+        await transformBackendFile(plugin, 'export function myHandler() {}');
+        await getCloseBundle(plugin)();
+
+        expect(resolveSpy).toHaveBeenCalledTimes(1);
+        expect(buildSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.any(Array),
+            defaultOptions.context.buildRoot,
+            expect.anything(),
+            V1_RUNTIME,
         );
     });
 
-    test('Should warn, but not reject, a backend file referencing crypto or Intl', () => {
+    test('Should look the runtime up again for the next watch-mode build', async () => {
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValueOnce(V1_FALLBACK_RUNTIME)
+            .mockResolvedValue(V2_RUNTIME);
+        const plugin = getVitePlugin(defaultOptions);
+        const buildStart = getBuildStart(plugin);
+        const outcomeOf = (transforming: Promise<unknown>) =>
+            transforming.then(() => 'proxied', toErrorMessage);
+
+        await buildStart();
+        const firstTransform = transformBackendFile(plugin, networkGlobalCode);
+        const firstBuild = await outcomeOf(firstTransform);
+        await buildStart();
+        const secondTransform = transformBackendFile(plugin, networkGlobalCode);
+        const secondBuild = await outcomeOf(secondTransform);
+
+        expect(firstBuild).toContain('Using "fetch" is not supported');
+        expect(secondBuild).toBe('proxied');
+        expect(resolveSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test('Should resolve the runtime for each dev-server transform, so a retried lookup applies', async () => {
+        jest.spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockResolvedValueOnce(V1_FALLBACK_RUNTIME)
+            .mockResolvedValueOnce(V1_FALLBACK_RUNTIME)
+            .mockResolvedValue(V2_RUNTIME);
+        const plugin = getVitePlugin(defaultOptions);
+        getConfigureServer(plugin)({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig('development'),
+        });
+
+        const first = transformBackendFile(plugin, networkGlobalCode);
+        await expect(first).rejects.toThrow('Using "fetch" is not supported');
+        const retried = await transformBackendFile(plugin, networkGlobalCode);
+
+        const retriedCode = extractTransformedCode(retried);
+        expect(retriedCode).toContain('executeBackendFunction');
+    });
+
+    test('Should register the later of two concurrent build transforms of the same backend file', async () => {
+        let resolveRuntime: (runtime: BackendRuntimeStatus) => void = () => {};
+        const pendingRuntime = new Promise<BackendRuntimeStatus>((resolve) => {
+            resolveRuntime = resolve;
+        });
+        const resolveSpy = jest
+            .spyOn(backendRuntime, 'resolveBackendRuntime')
+            .mockReturnValue(pendingRuntime);
+        const noOutputs = new Map<string, string>();
+        const buildSpy = jest
+            .spyOn(buildBackendFunctionsModule, 'buildBackendFunctions')
+            .mockResolvedValue({ outDir: '', outputs: noOutputs, functions: [] });
+        const plugin = getVitePlugin(defaultOptions);
+        await getBuildStart(plugin)();
+
+        const earlier = transformBackendFile(plugin, 'export function earlier() {}');
+        const later = transformBackendFile(plugin, 'export function later() {}');
+        resolveRuntime(V2_RUNTIME);
+        await Promise.all([earlier, later]);
+        await getCloseBundle(plugin)();
+
+        const registered = buildSpy.mock.calls[0][1].map(({ name }) => name);
+        expect(registered).toEqual(['later']);
+        expect(resolveSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test('Should register the later of two dev-server transforms of the same backend file sharing a pending lookup', async () => {
+        jest.mocked(backendRuntime.resolveBackendRuntime).mockRestore();
+        backendRuntime.resetBackendRuntimeCache();
+        const restoreEnv = clearDatadogEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+        jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => undefined);
+        const scope = nock(DD_API_ORIGIN)
+            .get(backendRuntime.ACTIVE_FEATURE_FLAGS_PATH)
+            .delay(50)
+            .once()
+            .reply(200, {
+                user_status: 'logged-in',
+                active_feature_flags: [backendRuntime.TERRAPIN_CUTOVER_FLAG],
+            });
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const plugin = getVitePlugin(defaultOptions);
+
+        try {
+            getConfigureServer(plugin)({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig('development'),
+            });
+            const earlier = transformBackendFile(plugin, networkGlobalCode);
+            const later = transformBackendFile(plugin, 'export function later() {}');
+            const outcomes = await Promise.all([earlier, later]);
+
+            const getRegistered = middlewareSpy.mock.calls[0][2];
+            const registered = getRegistered().map(({ name }) => name);
+            const proxied = outcomes.map((outcome) =>
+                extractTransformedCode(outcome)?.includes('executeBackendFunction'),
+            );
+            const isDone = scope.isDone();
+            expect(proxied).toEqual([true, true]);
+            expect(registered).toEqual(['later']);
+            expect(isDone).toBe(true);
+        } finally {
+            restoreEnv();
+            backendRuntime.resetBackendRuntimeCache();
+        }
+    });
+
+    test('Should warn, but not reject, a backend file referencing crypto or Intl', async () => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
         const resolveMock = jest.fn(async () => null);
         const loadMock = jest.fn(async () => null);
         const addWatchFileMock = jest.fn();
 
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    export function myHandler() {
-                        return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).not.toThrow();
+        await handler.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            `
+                export function myHandler() {
+                    return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
+                }
+            `,
+            BACKEND_FILE_ID,
+        );
 
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
         expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
@@ -821,7 +1243,7 @@ describe('Backend Functions - getVitePlugin', () => {
 
         test.each(transformCases)(
             'Should leave the handler result $expected for $description',
-            (transformCase) => {
+            async (transformCase) => {
                 const originalCwd = process.cwd();
                 const plugin = getPluginForCase(transformCase);
                 const handler = getTransformHandler(plugin);
@@ -829,7 +1251,7 @@ describe('Backend Functions - getVitePlugin', () => {
                 let result: unknown;
                 try {
                     process.chdir(transformCase.cwd ?? originalCwd);
-                    result = handler.call(
+                    result = await handler.call(
                         transformContext,
                         transformCase.code ?? backendCode,
                         transformCase.id,
@@ -844,13 +1266,18 @@ describe('Backend Functions - getVitePlugin', () => {
             },
         );
 
-        test('Should register a #fragment backend import under the file itself, as a plain import does', () => {
+        test('Should register a #fragment backend import under the file itself, as a plain import does', async () => {
             const plugin = getVitePlugin(defaultOptions);
             const handler = getTransformHandler(plugin);
 
-            const plainResult = handler.call(transformContext, backendCode, backendId, {});
+            const plainResult = await handler.call(transformContext, backendCode, backendId, {});
             const fragmentId = `${backendId}#fragment`;
-            const fragmentResult = handler.call(transformContext, backendCode, fragmentId, {});
+            const fragmentResult = await handler.call(
+                transformContext,
+                backendCode,
+                fragmentId,
+                {},
+            );
             const plainCode = extractTransformedCode(plainResult);
             const fragmentCode = extractTransformedCode(fragmentResult);
 
@@ -858,7 +1285,7 @@ describe('Backend Functions - getVitePlugin', () => {
         });
 
         // unplugin copies raw `vite` hooks onto the plugin, so nothing re-applies `filter` for Vite < 6.3.
-        test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', () => {
+        test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', async () => {
             const appsVitePlugin = getVitePlugin(defaultOptions);
             const unpluginOutput = createUnplugin(() => ({
                 name: 'apps-under-test',
@@ -869,7 +1296,7 @@ describe('Backend Functions - getVitePlugin', () => {
             const composedTransform = getTransformObject(composedPlugin);
             const composedHandler = getTransformHandler(composedPlugin);
 
-            const result = composedHandler.call(
+            const result = await composedHandler.call(
                 transformContext,
                 'export const helper = 1;',
                 '/build/src/util.ts',
