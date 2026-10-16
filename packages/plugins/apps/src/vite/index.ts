@@ -119,7 +119,7 @@ export const DEV_CLIENT_MODULE_ID = 'virtual:dd-apps-dev-client';
 // The `\0` prefix is Vite's virtual-module convention, which most plugins' id filters skip.
 export const DEV_CLIENT_RESOLVED_ID = `\0${DEV_CLIENT_MODULE_ID}`;
 export const DEV_CLIENT_SRC = `/@id/${DEV_CLIENT_MODULE_ID}`;
-export const DEV_CLIENT_RESOLVED_RE = /^\0virtual:dd-apps-dev-client$/;
+export const DEV_CLIENT_RESOLVED_RE = new RegExp(`^${DEV_CLIENT_RESOLVED_ID}$`);
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');

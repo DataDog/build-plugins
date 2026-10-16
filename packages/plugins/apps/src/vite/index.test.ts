@@ -396,6 +396,16 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(matchesResolvedId).toBe(true);
     });
 
+    test('Should build the load filter from the resolved dev client id', () => {
+        const expectedSource = `^${DEV_CLIENT_RESOLVED_ID}$`;
+        const matchesPrefixed = DEV_CLIENT_RESOLVED_RE.test(`x${DEV_CLIENT_RESOLVED_ID}`);
+        const matchesSuffixed = DEV_CLIENT_RESOLVED_RE.test(`${DEV_CLIENT_RESOLVED_ID}x`);
+
+        expect(DEV_CLIENT_RESOLVED_RE.source).toBe(expectedSource);
+        expect(matchesPrefixed).toBe(false);
+        expect(matchesSuffixed).toBe(false);
+    });
+
     test('Should serve the built dev client as that module', async () => {
         const readFile = jest
             .spyOn(fsHelpers, 'readFile')
