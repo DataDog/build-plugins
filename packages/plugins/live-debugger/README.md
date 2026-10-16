@@ -9,7 +9,10 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Required peer dependencies](#required-peer-dependencies)
+-   [Prerequisites](#prerequisites)
+    -   [Source maps](#source-maps)
+    -   [Required peer dependencies](#required-peer-dependencies)
+-   [Limitations during Preview](#limitations-during-preview)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
@@ -29,7 +32,17 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
 
-## Required peer dependencies
+## Prerequisites
+
+### Source maps
+
+Datadog resolves the deployed build and its source code through the [debug ID in the build metadata](#build-metadata). Upload the build's source maps by debug ID, with Git metadata, to the same Datadog site and organization that receives the Browser Live Debugger data:
+
+- Generate source maps in your bundler, and set `debugId: true` and `upload: true` in the top-level [`sourcemaps`](/#sourcemaps) option. Existing [`errorTracking.sourcemaps`](/packages/plugins/error-tracking#sourcemaps-upload) configurations must upload by debug ID rather than by service and version.
+- Keep [`enableGit`](/#enablegit) enabled (the default) and build from a Git checkout of the deployed commit. Set [`gitRepositoryUrl`](/#gitrepositoryurl) if CI clones through a mirror or proxy.
+- Set [`auth.site`](/#authsite) to the site that the [Browser Debugger SDK](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#prerequisites) sends data to, and use an API key from the same organization as the SDK's client token.
+
+### Required peer dependencies
 
 The Live Debugger transform relies on Babel and `magic-string`. To keep the cost of
 `@datadog/*-plugin` packages small for projects that don't use Live Debugger, these
@@ -49,6 +62,15 @@ pnpm add --save-dev @babel/parser @babel/traverse @babel/types magic-string
 
 If any of these packages is missing when the plugin tries to instrument a file,
 the plugin throws an error with the exact install command above.
+
+## Limitations during Preview
+
+Browser Live Debugger is in Preview, with the following limitations:
+
+- Probes can be added only to named functions. Set [`liveDebugger.namedOnly`](#livedebuggernamedonly) to `true` to skip instrumenting anonymous functions, which would only add overhead.
+- All instrumented code on a page must come from a single build of one Git repository and commit. Pages that combine separately built or deployed instrumented code, such as micro-frontends, Module Federation remotes, or embedded widgets, aren't supported yet. Monorepos and code-split bundles are fine.
+- Your bundler's root directory (such as webpack's `context` or Vite's `root`) must be the root of your Git repository. Otherwise, probes are accepted but never fire. For the same reason, functions in Yarn PnP workspace packages that have peer dependencies can't be probed.
+- This plugin and the Browser Debugger SDK may get breaking changes during the Preview. You may need to upgrade, rebuild, and redeploy to keep debugging working, but your application itself should keep working normally.
 
 ## Configuration
 
@@ -80,8 +102,6 @@ Each instrumented function gets:
 - Exception tracking with variable state at throw time via `$dd_throw()`
 
 The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
-
-When `metadata.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you also upload sourcemaps through the Error Tracking plugin, use the same value for `errorTracking.sourcemaps.releaseVersion`.
 
 **Example transformation:**
 
@@ -129,7 +149,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-If omitted, Live Debugger instrumentation still works, but browser build lookup and source-code-aware resolution will gracefully degrade.
+Set `metadata.version` when you want version-specific probe targeting.
 
 ### liveDebugger.include
 
