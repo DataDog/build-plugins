@@ -486,7 +486,8 @@ describe('transformCode', () => {
     });
 
     describe('annotation comments', () => {
-        // Bundlers only honor a PURE annotation directly in front of a call or `new`.
+        // Bundlers only honor a PURE annotation directly in front of a call or `new`,
+        // or in front of the parens around one.
         const annotationCases = [
             {
                 description: 'a returned call',
@@ -508,6 +509,14 @@ describe('transformCode', () => {
                 description: 'a new expression annotated with #__PURE__',
                 code: 'const f = () => /*#__PURE__*/ new Make(1);',
             },
+            {
+                description: 'a returned call annotated in front of its parens',
+                code: 'function f() { return /* @__PURE__ */ (make(1)); }',
+            },
+            {
+                description: 'an arrow expression body annotated in front of its parens',
+                code: 'const f = () => /* @__PURE__ */ ((make(1)));',
+            },
         ];
 
         test.each(annotationCases)('should keep the annotation on $description', ({ code }) => {
@@ -518,11 +527,13 @@ describe('transformCode', () => {
             expect(countAnnotatedCalls(result.code)).toBe(1);
         });
 
-        it('should keep a comment outside the parens of a returned expression outside', () => {
+        // The parens move into the assignment with the comment, so it still holds the
+        // value of the whole sequence instead of its first element.
+        it('should wrap a comment in front of returned parens together with them', () => {
             const code = 'function f() { const x = 1; return /* note */ (x + 1, x + 2); }';
             const result = transformCode({ ...BASE_OPTIONS, code });
 
-            expect(result.code).toContain('return /* note */ ((');
+            expect(result.code).toContain('return ($dd_rv0 = (/* note */ (x + 1, x + 2)),');
             expect(runTransformedFunction(result.code)).toBe(3);
         });
     });

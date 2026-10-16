@@ -163,7 +163,7 @@ const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 interface ReturnInfo {
     start: number;
     end: number;
-    // Includes comments directly in front of the argument; see getStartWithLeadingComments.
+    // Includes comments directly in front of the argument; see getReturnArgumentRange.
     argStart: number | undefined;
     argEnd: number | undefined;
     hasSequenceExpressionArgument: boolean;
@@ -174,7 +174,7 @@ interface ReturnInfo {
 
 interface FunctionTarget {
     bodyStart: number;
-    // Where an expression body's block prefix goes; see getStartWithLeadingComments.
+    // Where an expression body's block prefix goes; see getExpressionBodyPrefixStart.
     bodyPrefixStart: number;
     bodyEnd: number;
     functionEnd: number;
@@ -391,7 +391,7 @@ export function transformCode(options: TransformOptions): TransformResult {
 
                 targets.push({
                     bodyStart: node.body.start!,
-                    bodyPrefixStart: getStartWithLeadingComments(code, node.body),
+                    bodyPrefixStart: getExpressionBodyPrefixStart(code, node.body),
                     bodyEnd: node.body.end!,
                     functionEnd: node.end!,
                     isExpressionBody,
@@ -523,8 +523,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // clears the chunk's intro/outro and would drop that suffix, producing
         // invalid JavaScript; `update()` edits the content only and preserves it.
         if (bodyParenStart != null) {
-            const openingParens = getLeadingArrowBodyParens(code, bodyParenStart, bodyStart);
-            const closingParens = getTrailingArrowBodyParens(code, bodyEnd, functionEnd);
+            const openingParens = getLeadingWrapperParens(code, bodyParenStart, bodyStart);
+            const closingParens = getTrailingWrapperParens(code, bodyEnd, functionEnd);
             const parenCount = Math.min(openingParens.length, closingParens.length);
 
             for (let i = 0; i < parenCount; i++) {
@@ -855,27 +855,29 @@ function getReturnCaptureArgs(
     return '';
 }
 
-function getLeadingArrowBodyParens(code: string, start: number, end: number): number[] {
-    return collectArrowWrapperParens(code, start, end, '(');
+function getLeadingWrapperParens(code: string, start: number, end: number): number[] {
+    return collectWrapperParens(code, start, end, '(');
 }
 
-function getTrailingArrowBodyParens(code: string, start: number, end: number): number[] {
-    return collectArrowWrapperParens(code, start, end, ')');
+function getTrailingWrapperParens(code: string, start: number, end: number): number[] {
+    return collectWrapperParens(code, start, end, ')');
 }
 
 /**
- * Collect the positions of wrapper parens around an arrow expression body.
+ * Collect the positions of wrapper parens around an arrow expression body or a
+ * return argument.
  *
  * Only whitespace, comments, and the wrapping parens themselves can appear
- * between the outermost paren and the body (leading) or between the body and
- * the arrow's end (trailing). Comments are skipped so that parens inside a
- * comment are not mistaken for wrapper parens, which would otherwise misalign
- * removal and emit invalid JavaScript.
+ * between the outermost paren and the expression (leading), and only those plus
+ * a `;` between the expression and the arrow's or return statement's end
+ * (trailing). Comments are skipped so that parens inside a comment are not
+ * mistaken for wrapper parens, which would otherwise misalign removal and emit
+ * invalid JavaScript.
  *
  * Any `/` in this range necessarily starts a comment (division/regex are not
  * grammatically valid here), so no string/regex handling is required.
  */
-function collectArrowWrapperParens(
+function collectWrapperParens(
     code: string,
     start: number,
     end: number,
@@ -949,13 +951,14 @@ function collectReturnStatements(
 ): void {
     for (const stmt of statements) {
         if (typesModule.isReturnStatement(stmt)) {
+            const argumentRange = stmt.argument
+                ? getReturnArgumentRange(code, stmt.argument, stmt.end!)
+                : undefined;
             returns.push({
                 start: stmt.start!,
                 end: stmt.end!,
-                argStart: stmt.argument
-                    ? getStartWithLeadingComments(code, stmt.argument)
-                    : undefined,
-                argEnd: stmt.argument?.end ?? undefined,
+                argStart: argumentRange?.start,
+                argEnd: argumentRange?.end,
                 hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
                 isStatementBody,
             });
@@ -1002,19 +1005,22 @@ function collectReturnStatements(
 }
 
 /**
- * Start of a node, extended over the comments directly in front of it (separated
- * only by whitespace). Inserting code there instead of at the node keeps
- * annotations like `/* @__PURE__ *\/` directly in front of the call they mark;
- * bundlers ignore them anywhere else. Comments outside a paren around the node
- * are not adjacent and stay where they are.
+ * Start of the comments directly in front of `position` (separated only by
+ * whitespace), or `position` itself when there are none. Inserting code there
+ * instead of at the node keeps annotations like `/* @__PURE__ *\/` directly in
+ * front of the call they mark; bundlers ignore them anywhere else.
  */
-function getStartWithLeadingComments(code: string, node: BabelTypes.Node): number {
-    let start = node.start!;
+function getStartWithLeadingComments(
+    code: string,
+    node: BabelTypes.Node,
+    position: number,
+): number {
+    let start = position;
     const comments = node.leadingComments ?? [];
     for (let i = comments.length - 1; i >= 0; i--) {
         const { start: commentStart, end: commentEnd } = comments[i];
-        if (commentStart == null || commentEnd == null) {
-            break;
+        if (commentStart == null || commentEnd == null || commentEnd > start) {
+            continue;
         }
         const gap = code.slice(commentEnd, start);
         if (gap.trim() !== '') {
@@ -1023,6 +1029,58 @@ function getStartWithLeadingComments(code: string, node: BabelTypes.Node): numbe
         start = commentStart;
     }
     return start;
+}
+
+/**
+ * Start of the comments directly in front of the outermost paren around a node,
+ * as in `/* @__PURE__ *\/ (make())`, or undefined when there are none. Bundlers
+ * honor an annotation there too.
+ */
+function getParenthesizedCommentStart(code: string, node: BabelTypes.Node): number | undefined {
+    const parenStart = node.extra?.parenStart;
+    if (typeof parenStart !== 'number') {
+        return undefined;
+    }
+    const start = getStartWithLeadingComments(code, node, parenStart);
+    return start < parenStart ? start : undefined;
+}
+
+/**
+ * Where the block prefix of an arrow expression body goes. The wrapper parens
+ * around the body are removed, so comments in front of them end up directly in
+ * front of the body.
+ */
+function getExpressionBodyPrefixStart(code: string, body: BabelTypes.Node): number {
+    const parenthesizedCommentStart = getParenthesizedCommentStart(code, body);
+    return parenthesizedCommentStart ?? getStartWithLeadingComments(code, body, body.start!);
+}
+
+/**
+ * Range of a return argument that instrumentation assigns to `$dd_rvN`, including
+ * the comments directly in front of it. When the comments sit in front of the
+ * parens around the argument, the range covers the parens too, so the assignment
+ * still holds the same value.
+ */
+function getReturnArgumentRange(
+    code: string,
+    argument: BabelTypes.Node,
+    statementEnd: number,
+): { start: number; end: number } {
+    const argumentStart = argument.start!;
+    const argumentEnd = argument.end!;
+    const parenStart = argument.extra?.parenStart;
+    const parenthesizedCommentStart = getParenthesizedCommentStart(code, argument);
+    if (parenthesizedCommentStart != null && typeof parenStart === 'number') {
+        const openingParens = getLeadingWrapperParens(code, parenStart, argumentStart);
+        const closingParens = getTrailingWrapperParens(code, argumentEnd, statementEnd);
+        const outermostClosingParen = closingParens[openingParens.length - 1];
+        if (outermostClosingParen != null) {
+            return { start: parenthesizedCommentStart, end: outermostClosingParen + 1 };
+        }
+    }
+
+    const start = getStartWithLeadingComments(code, argument, argumentStart);
+    return { start, end: argumentEnd };
 }
 
 /**
