@@ -498,11 +498,11 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // (undefined when no probe produced an entry), reusing the same binding so
     // every exit hook pairs with its own entry state, not a concurrent call's.
     //
-    // The `typeof` guard keeps the function from throwing where `$dd_probes` was
-    // never defined, such as an iframe or worker that runs instrumented code
-    // without the chunk bootstrap. It compares against `typeof void 0` instead of
-    // a string literal, which RUM privacy would collect, and keeps the bare call
-    // whose function ID RUM privacy leaves inline.
+    // The `typeof` guard keeps the function from throwing where `$dd_probes` isn't
+    // defined: before the Browser Debugger SDK initializes, and in global scopes
+    // without the SDK, such as a sandboxed iframe or a worker. It compares against
+    // `typeof void 0` instead of a string literal, which RUM privacy would collect,
+    // and keeps the bare call whose function ID RUM privacy leaves inline.
     const probeDecl = `let ${probeVarName} = typeof ${LIVE_DEBUGGER_PROBES_FUNCTION} !== typeof void 0 && ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;

@@ -263,19 +263,13 @@ Every instrumented function only calls `$dd_probes` when it is defined:
 let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.js;add');
 ```
 
-The plugin also injects a minimal no-op stub into every output chunk:
+This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
 
-```javascript
-if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = function() {} }
-```
-
-This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without probes, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
-
-The guard also covers instrumented code that runs where the chunk's stub didn't, such as a sandboxed iframe or a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
+This also covers instrumented code that runs in another global scope than the page, such as a sandboxed iframe, a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
 
 ### Build metadata
 
-The same injected code defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
+The plugin injects code into every output chunk that defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
 
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
@@ -314,4 +308,4 @@ Two properties of this contract are load-bearing for the generated code:
 
 ### Activating probes
 
-When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it overwrites `$dd_probes` with the real implementation and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
+When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it defines `$dd_probes` and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
