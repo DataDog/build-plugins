@@ -138,7 +138,7 @@ async function walkModuleGraph(
         const record = createParsedModuleRecord(moduleId, buildRoot, ast, staticDependencies);
         if (record) {
             // No build-time moduleParsed hook here (Rollup-only), so this is what catches a
-            // banned import or restricted global locally instead of only at publish time.
+            // restricted global locally instead of only at publish time.
             runBackendStaticChecks(record.ast, record.id, log, record.scopeAnalysis);
             records.set(record.id, record);
         }

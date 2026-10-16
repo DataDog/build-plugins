@@ -15,7 +15,7 @@ import type {
 } from 'estree';
 
 import { analyzeModuleScope, getModuleVariable } from '../backend/ast-parsing/module-scope';
-import { walkAst } from '../backend/ast-parsing/walk-ast';
+import { parentsOf, walkAst } from '../backend/ast-parsing/walk-ast';
 import type { AppsParameterSchema } from '../types';
 import { MAX_PARAMETERS, validateParameterSchema } from '../validate';
 
@@ -129,22 +129,6 @@ function toSchema(name: string, node: Node, describe: () => string): AppsParamet
 function importedName(specifier: ImportSpecifier | ExportSpecifier): string {
     const name = 'imported' in specifier ? specifier.imported : specifier.local;
     return name.type === 'Identifier' ? name.name : String(name.value);
-}
-
-function parentsOf(program: Program): Map<Node, Node> {
-    const parents = new Map<Node, Node>();
-    walkAst(program as Node, parents, {
-        _(node) {
-            for (const value of Object.values(node)) {
-                for (const child of Array.isArray(value) ? value : [value]) {
-                    if (child && typeof child === 'object' && typeof child.type === 'string') {
-                        parents.set(child as Node, node as Node);
-                    }
-                }
-            }
-        },
-    });
-    return parents;
 }
 
 /** A specifier written as a string or as a template string with no expressions. */

@@ -38,7 +38,7 @@ import { defaultServerConditions } from 'vite';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
-import { DEV_VERIFY_MODE } from '../constants';
+import { DEV_VERIFY_MODE, NODE_BACKEND_RUNTIME } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 // Spying on the shared core module fails once a sandbox guard makes `fork` non-configurable.
@@ -771,7 +771,7 @@ describe('Dev Server Middleware', () => {
                 await emitModuleParsed(
                     config,
                     '/project/backend/helpers/secrets.ts',
-                    "import fs from 'fs';\nexport function readSecret() { return fs.readFileSync('/etc/passwd'); }",
+                    "export function readSecret() { return Deno.readTextFileSync('/etc/passwd'); }",
                 );
                 return mockBuildResult('// code');
             });
@@ -789,9 +789,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(500);
             const responseText = res.getBody();
             const body = JSON.parse(responseText);
-            expect(body.error).toContain(
-                'Importing Node built-in module "fs" is not supported in backend function code',
-            );
+            expect(body.error).toContain(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
         });
 
         test('Should call vite.build with configFile: false and write: false', async () => {
@@ -2057,12 +2055,12 @@ describe('Dev Server Middleware', () => {
             });
         });
 
-        // getAllowedConnectionIds only resolves and transforms modules, so it rejects a banned
-        // import before any of the entry's code runs.
+        // getAllowedConnectionIds only resolves and transforms modules, so a module the static
+        // checks reject fails before any of the entry's code runs.
         test("Should never start a call's process when getAllowedConnectionIds rejects", async () => {
             const rejectingMiddleware = createTestMiddleware({
                 getAllowedConnectionIds: async () => {
-                    throw new Error('Importing Node built-in module "fs" is not supported');
+                    throw new Error(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
                 },
                 executeLocally: createTestExecutor(),
             });
@@ -2077,7 +2075,9 @@ describe('Dev Server Middleware', () => {
             await res.done;
 
             expect(res.statusCode).toBe(500);
-            expect(JSON.parse(res.getBody()).error).toContain('"fs" is not supported');
+            expect(JSON.parse(res.getBody()).error).toContain(
+                `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
+            );
             expect(forkMock).not.toHaveBeenCalled();
         });
 
