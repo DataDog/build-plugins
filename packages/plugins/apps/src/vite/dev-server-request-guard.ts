@@ -15,8 +15,14 @@ export interface HostCheckConfig {
 
 export const MISSING_HOST_MESSAGE = 'Blocked request with no Host header.';
 
+export const ALLOWED_HOSTS_HINT =
+    'If you trust this host, add it to `server.allowedHosts` in vite.config.js.';
+
+export const VITE_UPGRADE_HINT = 'On Vite 5 before 5.4.12 or Vite 6 before 6.0.9, upgrade Vite.';
+
 export interface RequestRejection {
     statusCode: 403 | 415;
+    reason: 'missing-host' | 'host' | 'origin' | 'content-type';
     message: string;
 }
 
@@ -118,33 +124,43 @@ function isJsonContentType(contentType: string | undefined): boolean {
     return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
 }
 
+export function getRequestHost(headers: IncomingHttpHeaders): string | undefined {
+    // HTTP/2 requests carry :authority and no Host.
+    const authority = headers[':authority'];
+    return headers.host ?? (typeof authority === 'string' ? authority : undefined);
+}
+
 export function checkDevServerRequest(
     headers: IncomingHttpHeaders,
     isHostAllowed: HostCheck,
 ): RequestRejection | undefined {
     const { origin } = headers;
-    // HTTP/2 requests carry :authority and no Host.
-    const authority = headers[':authority'];
-    const host = headers.host ?? (typeof authority === 'string' ? authority : undefined);
+    const host = getRequestHost(headers);
     if (!host) {
-        return { statusCode: 403, message: MISSING_HOST_MESSAGE };
+        return { statusCode: 403, reason: 'missing-host', message: MISSING_HOST_MESSAGE };
     }
     if (!isHostAllowed(host)) {
         const hostname = getHostname(host);
         const quotedHostname = JSON.stringify(hostname);
         return {
             statusCode: 403,
-            message: `Blocked request. This host (${quotedHostname}) is not allowed. To allow it, add it to \`server.allowedHosts\` in vite.config.js.`,
+            reason: 'host',
+            message: `Blocked request. This host (${quotedHostname}) is not allowed. ${ALLOWED_HOSTS_HINT} ${VITE_UPGRADE_HINT}`,
         };
     }
     if (origin !== undefined && !isSameOriginAsHost(origin, host)) {
         return {
             statusCode: 403,
+            reason: 'origin',
             message: "Blocked request. Only the dev server's own origin can call this endpoint.",
         };
     }
     if (!isJsonContentType(headers['content-type'])) {
-        return { statusCode: 415, message: 'Requests must use Content-Type: application/json.' };
+        return {
+            statusCode: 415,
+            reason: 'content-type',
+            message: 'Requests must use Content-Type: application/json.',
+        };
     }
     return undefined;
 }
