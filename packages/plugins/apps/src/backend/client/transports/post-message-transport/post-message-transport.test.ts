@@ -311,6 +311,32 @@ describe('postMessageTransport', () => {
         await expect(result).resolves.toBe('from-parent');
     });
 
+    test('Should settle each call only with the response carrying its own request id', async () => {
+        const { postMessage, reply } = installFakeWindow();
+
+        const first = postMessageTransport(QUERY_NAME, ['first']);
+        const second = postMessageTransport(QUERY_NAME, ['second']);
+        const [[firstQuery], [secondQuery]] = postMessage.mock.calls;
+        expect(firstQuery).toMatchObject({ args: ['first'] });
+        expect(secondQuery).toMatchObject({ args: ['second'] });
+        expect(firstQuery.requestId).not.toBe(secondQuery.requestId);
+
+        reply('unknown-request-id', 'stray');
+        const stillPending = new Promise((resolve) => {
+            setImmediate(resolve, 'pending');
+        });
+        const earlyOutcomes = await Promise.all([
+            Promise.race([first, stillPending]),
+            Promise.race([second, stillPending]),
+        ]);
+        expect(earlyOutcomes).toEqual(['pending', 'pending']);
+        reply(secondQuery.requestId, 'second-result');
+        reply(firstQuery.requestId, 'first-result');
+
+        await expect(first).resolves.toBe('first-result');
+        await expect(second).resolves.toBe('second-result');
+    });
+
     test('Should reject the call and stop waiting when the message cannot be posted', async () => {
         jest.useFakeTimers();
         const { postMessage, listenerCount } = installFakeWindow();

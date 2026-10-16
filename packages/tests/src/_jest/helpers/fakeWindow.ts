@@ -21,6 +21,7 @@ export const DATADOG_PARENT = 'https://app.datadoghq.com';
 export function installFakeWindow(
     location: { ancestorOrigins?: string[] | null } = { ancestorOrigins: [DATADOG_PARENT] },
 ) {
+    const parentOrigin = location.ancestorOrigins?.[0] ?? DATADOG_PARENT;
     const listeners = new Set<MessageListener>();
     const postMessage = jest.fn();
     const fakeWindow = {
@@ -47,7 +48,7 @@ export function installFakeWindow(
         postMessage.mock.calls
             .map(([message]: [PostedMessage]) => message)
             .filter((message) => message.type === PING);
-    const pong = (origin: string, source: unknown = fakeWindow.parent) => {
+    const pong = (origin = parentOrigin, source: unknown = fakeWindow.parent) => {
         const ping = pings().at(-1);
         for (const listener of [...listeners]) {
             listener({
@@ -61,7 +62,7 @@ export function installFakeWindow(
         requestId: string,
         data: unknown,
         source: unknown = fakeWindow.parent,
-        origin = DATADOG_PARENT,
+        origin = parentOrigin,
     ) => {
         for (const listener of [...listeners]) {
             listener({

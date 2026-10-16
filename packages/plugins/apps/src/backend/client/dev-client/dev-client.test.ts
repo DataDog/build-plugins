@@ -15,7 +15,7 @@ import {
 } from '@dd/tests/_jest/helpers/fakeWindow';
 import type { FakeResponse, PostedMessage } from '@dd/tests/_jest/helpers/fakeWindow';
 
-import { DEBUG_BUNDLE_PATH, DEV_CLIENT_HOOK, PING, RUN_QUERY } from '../../protocol';
+import { DEBUG_BUNDLE_PATH, DEV_CLIENT_HOOK, PING, PONG, RUN_QUERY } from '../../protocol';
 import {
     POSTMESSAGE_TIMEOUT_MS,
     postMessageTransport,
@@ -217,6 +217,36 @@ describe('dev client', () => {
             expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
             expect(postMessage).toHaveBeenCalledWith(message, '*');
         });
+
+        const unsupportedParentMessages = [
+            { description: 'null', data: null },
+            { description: 'a number', data: 42 },
+            { description: 'a bare message type string', data: PONG },
+            { description: 'an object without a type', data: {} },
+            { description: 'an object of another type', data: { type: 'something-else' } },
+        ];
+
+        test.each(unsupportedParentMessages)(
+            'Should keep waiting for a pong when the parent sends $description',
+            async ({ data }) => {
+                jest.useFakeTimers();
+                const { postMessage, posted, reply, listeners, parent } = installFakeWindow({});
+                mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+                const result = postMessageTransport(QUERY_NAME, ARGS);
+                await flushPing();
+                for (const listener of listeners()) {
+                    listener({ data, origin: DATADOG_PARENT, source: parent });
+                }
+                await jest.advanceTimersByTimeAsync(PARENT_PING_TIMEOUT_MS);
+                const message = await posted;
+                reply(message.requestId, 'ok');
+
+                await expect(result).resolves.toBe('ok');
+                expect(message).toEqual(MESSAGE_WITHOUT_BUNDLE);
+                expect(postMessage).toHaveBeenCalledWith(message, '*');
+            },
+        );
 
         test('Should send the call without a bundle when the parent never answers', async () => {
             jest.useFakeTimers();
