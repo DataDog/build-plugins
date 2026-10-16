@@ -41,7 +41,7 @@ type FileContentArgs = {
     scopes: SymDbScope[];
 };
 
-// The upload's file part: the symbol table, with the fields of each request, as backend SDKs send.
+// The upload's file part: the symbol table, with the fields of each request.
 const getFileContent = ({
     payload,
     context,

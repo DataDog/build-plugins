@@ -19,7 +19,7 @@ import { buildSymbolTable } from './table';
 import type { ChunkFunction, ChunkFunctions, SymbolTable } from './types';
 import { uploadSymbolTable } from './upload';
 
-const LOG_PREFIX = 'Live Debugger symbol table';
+const LOG_PREFIX = 'Live Debugger symbols';
 const JS_OUTPUT_TYPES = new Set(['js', 'mjs', 'cjs']);
 
 type GenerateSymbolTableArgs = {
@@ -48,7 +48,7 @@ export const generateSymbolTable = async ({
 }: GenerateSymbolTableArgs): Promise<SymbolTable | undefined> => {
     const repositoryRoot = getRepositoryRoot(buildRoot);
     if (!repositoryRoot) {
-        log.warn(`Skipping the ${LOG_PREFIX}: the build root isn't in a git repository.`);
+        log.warn(`Skipping ${LOG_PREFIX}: the build root isn't in a git repository.`);
         return undefined;
     }
 
@@ -127,7 +127,7 @@ export const writeSymbolTable = async (
     const absoluteDumpPath = path.resolve(dumpPath);
     if (isInsideDirectory(absoluteDumpPath, outDir)) {
         log.warn(
-            `${LOG_PREFIX}: not writing it to "${absoluteDumpPath}", because that's inside the output directory.`,
+            `${LOG_PREFIX}: not writing them to "${absoluteDumpPath}", because that's inside the output directory.`,
         );
         return;
     }
@@ -196,14 +196,14 @@ export const getSymbolTableHooks = (
         const repositoryData = context.git;
         if (!repositoryData) {
             log.warn(
-                `Not uploading the ${LOG_PREFIX}: no git repository data, for instance because the repository has no remote.`,
+                `Not uploading ${LOG_PREFIX}: no git repository data, for instance because the repository has no remote.`,
             );
             return;
         }
 
         const timer = log.time('upload symbol table');
         try {
-            const partCount = await uploadSymbolTable(
+            await uploadSymbolTable(
                 payload,
                 {
                     ...settings,
@@ -216,10 +216,10 @@ export const getSymbolTableHooks = (
                 log,
             );
             log.info(
-                `${LOG_PREFIX}: uploaded ${functionCount} function(s) from ${payload.scopes.length} file(s) in ${partCount} part(s).`,
+                `${LOG_PREFIX}: uploaded ${functionCount} function(s) from ${payload.scopes.length} file(s).`,
             );
         } catch (error) {
-            log.warn(`Could not upload the ${LOG_PREFIX}: ${error}`);
+            log.warn(`Could not upload ${LOG_PREFIX}: ${error}`);
         } finally {
             timer.end();
         }
@@ -240,7 +240,7 @@ export const getSymbolTableHooks = (
             });
             payload = table && serializeSymbolTable(table, pluginOptions.version);
         } catch (error) {
-            log.warn(`Could not generate the ${LOG_PREFIX}: ${error}`);
+            log.warn(`Could not collect ${LOG_PREFIX}: ${error}`);
         } finally {
             timer.end();
         }
@@ -253,7 +253,7 @@ export const getSymbolTableHooks = (
             try {
                 await writeSymbolTable(payload, dumpPath, context.bundler.outDir, log);
             } catch (error) {
-                log.warn(`Could not write the ${LOG_PREFIX}: ${error}`);
+                log.warn(`Could not write ${LOG_PREFIX}: ${error}`);
             }
         }
 
@@ -270,7 +270,7 @@ export const getSymbolTableHooks = (
             }
 
             if ('skipReason' in uploadSetup) {
-                log.warn(`Not uploading the ${LOG_PREFIX}: ${uploadSetup.skipReason}.`);
+                log.warn(`Not uploading ${LOG_PREFIX}: ${uploadSetup.skipReason}.`);
                 if (!dumpPath) {
                     return;
                 }

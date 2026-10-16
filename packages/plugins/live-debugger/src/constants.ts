@@ -22,7 +22,7 @@ export const ANONYMOUS_FUNCTION_NAME = '<anonymous>';
 // Path where an opt-in debug dump of the symbol table is written.
 export const SYMBOL_TABLE_PATH_ENV = 'DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH';
 
-// The symbol table is uploaded to SymDB through the debugger intake, like backend SDKs do.
+// Intake that the symbol table is uploaded to.
 export const SYMBOL_TABLE_INTAKE_SUBDOMAIN = 'debugger-intake';
 export const SYMBOL_TABLE_INTAKE_PATH = 'api/v2/debugger';
 // The intake accepts up to 50 MiB per request. Keep room for the request's event part.

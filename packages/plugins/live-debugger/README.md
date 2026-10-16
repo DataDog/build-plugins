@@ -22,7 +22,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
--   [Symbol table upload](#symbol-table-upload)
+-   [Symbol upload](#symbol-upload)
 -   [Skipped function types](#skipped-function-types)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
@@ -69,7 +69,7 @@ liveDebugger?: {
 
 Live Debugger also reads the build's service and version from the top-level [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion) options.
 
-After each build, the plugin uploads a [symbol table](#symbol-table-upload) to Datadog. Live Debugger needs it to create probes in the browser.
+After each production build, the plugin [uploads symbols](#symbol-upload) to Datadog, which Live Debugger needs to add logpoints to your browser application.
 
 ## How it works
 
@@ -131,7 +131,7 @@ datadogBuildPlugins({
 });
 ```
 
-The [symbol table](#symbol-table-upload) is uploaded for this service, and Live Debugger looks it up by the service the SDK reports, so they must match. Live Debugger injects the value into the runtime-visible [build metadata](#build-metadata), so the Browser Debugger SDK uses it as the default `service` during `init()`.
+[Symbols](#symbol-upload) are uploaded for this service, and Live Debugger looks them up by the service the SDK reports, so the two must match. Live Debugger injects the value into the runtime-visible [build metadata](#build-metadata), so the Browser Debugger SDK uses it as the default `service` during `init()`.
 
 ### metadata.version
 
@@ -148,7 +148,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-If omitted, Live Debugger instrumentation still works, but the [symbol table](#symbol-table-upload) isn't uploaded, and browser build lookup and source-code-aware resolution will gracefully degrade.
+If omitted, Live Debugger instrumentation still works, but [symbols](#symbol-upload) aren't uploaded, and browser build lookup and source-code-aware resolution will gracefully degrade.
 
 ### liveDebugger.include
 
@@ -264,19 +264,18 @@ liveDebugger: {
 }
 ```
 
-## Symbol table upload
+## Symbol upload
 
-The UI and MCP create probes from a symbol table: the list of the instrumented functions that ship in a build, with their path relative to the git repository root and their original line range. After each production build, the plugin generates the table from the build output and uploads it to Datadog. It needs:
+To let you add logpoints to your browser application, Live Debugger needs to know which functions each build contains. After each production build, the plugin uploads nonsensitive symbols and metadata to Datadog: the names of the instrumented functions, the files they're in, and their line numbers.
 
-- an API key (`auth.apiKey`);
-- a service ([`metadata.service`](#metadataservice));
-- a version ([`metadata.version`](#metadataversion));
-- a git repository with a remote, and git enabled (the top-level `enableGit` option);
-- source maps, for the line ranges.
+The upload needs:
 
-When one of them is missing, the plugin logs a warning and skips the upload. Watch mode and dev servers skip it silently. The upload never fails the build, and the table is never written to the output directory.
+- an API key;
+- a [service](#metadataservice) and a [version](#metadataversion);
+- a git repository with a remote, and the [git integration](/README.md#enablegit) enabled;
+- source maps, for the line numbers.
 
-Each build's upload replaces the previous table of the same service and version.
+When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols. The upload never fails your build, and doesn't add anything to your build output.
 
 ## Skipped function types
 
