@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import fs from 'fs';
-
 export function readSomething() {
-    return fs.readFileSync('/etc/hosts', 'utf8');
+    return Deno.readTextFileSync('/etc/hosts');
 }

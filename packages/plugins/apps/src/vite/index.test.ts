@@ -3,7 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
-import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import {
+    getVitePlugin,
+    localNodeWarning,
+    MIN_LOCAL_NODE_MAJOR,
+    SSR_WARMUP_SETTING,
+} from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import { rmSync } from '@dd/core/helpers/fs';
@@ -40,6 +45,8 @@ import {
     BACKEND_FILE_WITH_QUERY_RE,
     DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
+    NODE_BACKEND_RUNTIME,
+    NODE_BACKEND_RUNTIME_NODE_MAJOR,
 } from '../constants';
 
 import * as buildPackage from './build-package';
@@ -49,6 +56,8 @@ import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
+
+const NODE_WITHOUT_WEBSOCKET = `${MIN_LOCAL_NODE_MAJOR - 1}.7.3`;
 
 // Narrows `plugin.transform` to the object-hook form via a runtime check, since tests need to access both `handler` and `filter` without an `as` cast.
 function getTransformObject(plugin: ReturnType<typeof getVitePlugin>) {
@@ -277,6 +286,36 @@ describe('Backend Functions - getVitePlugin', () => {
         nock.cleanAll();
     });
 
+    const runtimeMajor = `"${NODE_BACKEND_RUNTIME_NODE_MAJOR}"`;
+    const nodeVersionCases = [
+        { version: `${MIN_LOCAL_NODE_MAJOR - 2}.19.4`, warns: true, mentions: ['WebSocket'] },
+        { version: NODE_WITHOUT_WEBSOCKET, warns: true, mentions: ['WebSocket'] },
+        { version: `${MIN_LOCAL_NODE_MAJOR}.0.0`, warns: true, mentions: [runtimeMajor] },
+        {
+            version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR - 1}.0.0`,
+            warns: true,
+            mentions: [runtimeMajor],
+        },
+        { version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR}.0.0`, warns: false, mentions: [] },
+        { version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR}.13.1`, warns: false, mentions: [] },
+        {
+            version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR + 1}.0.0`,
+            warns: true,
+            mentions: [runtimeMajor],
+        },
+    ];
+    test.each(nodeVersionCases)(
+        'Should warn about local Node $version (warns: $warns)',
+        ({ version, warns, mentions }) => {
+            const warning = localNodeWarning(version);
+
+            expect(warning !== undefined).toBe(warns);
+            for (const expected of [...mentions, ...(warns ? [version] : [])]) {
+                expect(warning).toContain(expected);
+            }
+        },
+    );
+
     test('Should return a vite plugin object with closeBundle', () => {
         const plugin = getVitePlugin(defaultOptions);
         expect(plugin).toBeDefined();
@@ -409,60 +448,41 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(authSpy).not.toHaveBeenCalled();
     });
 
-    test('Should reject a backend file importing a Node built-in module', () => {
+    const transformBackendFile = (code: string) => {
         const plugin = getVitePlugin(defaultOptions);
         const handler = getTransformHandler(plugin);
         const resolveMock = jest.fn(async () => null);
         const loadMock = jest.fn(async () => null);
         const addWatchFileMock = jest.fn();
-
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    import fs from 'node:fs';
-                    export function myHandler() {
-                        return fs.readFileSync('/etc/passwd', 'utf8');
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).toThrow(
-            'Importing Node built-in module "node:fs" is not supported in backend function code',
+        return handler.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            code,
+            '/build/src/backend/myHandler.backend.ts',
         );
+    };
+
+    test('Should accept a backend file using fetch and a Node built-in module', async () => {
+        const result = await transformBackendFile(`
+            import os from 'node:os';
+            export async function myHandler() {
+                const response = await fetch('https://example.com');
+                return { host: os.hostname(), status: response.status };
+            }
+        `);
+        const transformedCode = extractTransformedCode(result);
+
+        expect(transformedCode).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
-    test('Should warn, but not reject, a backend file referencing crypto or Intl', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const handler = getTransformHandler(plugin);
-        const resolveMock = jest.fn(async () => null);
-        const loadMock = jest.fn(async () => null);
-        const addWatchFileMock = jest.fn();
-
+    test('Should reject a backend file using Deno', () => {
         expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    export function myHandler() {
-                        return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).not.toThrow();
-
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
+            transformBackendFile('export function myHandler() { return Deno.cwd(); }'),
+        ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
     });
 
     // Regression test: without the suffix check, ssrLoadModule() would get the proxy stub instead of the real function body.
@@ -1198,34 +1218,47 @@ describe('Backend Functions - getVitePlugin', () => {
 
     // Without auth both endpoints are off, and dev-verify sends every execution to the cloud.
     test.each([
-        { scenario: 'no authentication', mode: 'development', withAuth: false, installs: 0 },
-        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, installs: 0 },
-        { scenario: 'local execution', mode: 'development', withAuth: true, installs: 1 },
+        { scenario: 'no authentication', mode: 'development', withAuth: false, runsLocally: false },
+        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, runsLocally: false },
+        { scenario: 'local execution', mode: 'development', withAuth: true, runsLocally: true },
     ])(
-        'Should install the sandbox guards only when local execution can run ($scenario)',
-        ({ mode, withAuth, installs }) => {
+        'Should install the sandbox guards and check local Node only when local execution can run ($scenario)',
+        ({ mode, withAuth, runsLocally }) => {
             const plugin = getVitePlugin(defaultOptions);
             const installGuards = jest
                 .spyOn(networkGuard, 'installGuards')
                 .mockImplementation(() => undefined);
             const configureServer = getConfigureServer(plugin);
+            const realVersion = Object.getOwnPropertyDescriptor(process.versions, 'node');
             const restoreEnv = clearDatadogEnv();
-            if (withAuth) {
-                process.env.DD_API_KEY = 'test-api-key';
-                process.env.DD_APP_KEY = 'test-app-key';
-            }
 
             try {
+                Object.defineProperty(process.versions, 'node', {
+                    value: NODE_WITHOUT_WEBSOCKET,
+                    configurable: true,
+                });
+                if (withAuth) {
+                    process.env.DD_API_KEY = 'test-api-key';
+                    process.env.DD_APP_KEY = 'test-app-key';
+                }
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
                     config: fakeServerConfig(mode),
                 });
 
+                const warning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
+                const warnings = mockLogFn.mock.calls.filter(([message]) => message === warning);
+                const installs = runsLocally ? 1 : 0;
+                const expectedWarnings = runsLocally ? [[warning, 'warn']] : [];
                 expect(installGuards).toHaveBeenCalledTimes(installs);
+                expect(warnings).toEqual(expectedWarnings);
             } finally {
                 restoreEnv();
                 installGuards.mockRestore();
+                if (realVersion) {
+                    Object.defineProperty(process.versions, 'node', realVersion);
+                }
             }
         },
     );
@@ -1324,6 +1357,55 @@ describe('Backend Functions - getVitePlugin', () => {
             }
         },
     );
+
+    test('Should check the local Node version when backend functions run in child processes', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const resolveRunner = jest
+            .spyOn(localExecutionProcess, 'resolveViteModuleRunner')
+            .mockReturnValue('/project/node_modules/vite/dist/node/module-runner.js');
+        const isYarnPnp = jest
+            .spyOn(localExecutionProcess, 'isYarnPnpRuntime')
+            .mockReturnValue(false);
+        const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const configureServer = getConfigureServer(plugin);
+        const realVersion = Object.getOwnPropertyDescriptor(process.versions, 'node');
+        const restoreEnv = clearDatadogEnv();
+        process.env.DD_API_KEY = 'test-api-key';
+        process.env.DD_APP_KEY = 'test-app-key';
+
+        try {
+            Object.defineProperty(process.versions, 'node', {
+                value: NODE_WITHOUT_WEBSOCKET,
+                configurable: true,
+            });
+            configureServer({
+                middlewares: { use: jest.fn() },
+                ssrLoadModule: jest.fn(),
+                close: jest.fn(),
+                config: fakeServerConfig('development'),
+                environments: {
+                    ssr: {
+                        hot: { handleInvoke: jest.fn() },
+                        config: { dev: {} },
+                        fetchModule: jest.fn(),
+                    },
+                },
+            });
+
+            expect(typeof createMiddleware.mock.calls[0]?.[11]).toBe('function');
+            const warning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
+            const warnings = mockLogFn.mock.calls.filter(([message]) => message === warning);
+            expect(warnings).toEqual([[warning, 'warn']]);
+        } finally {
+            restoreEnv();
+            resolveRunner.mockRestore();
+            isYarnPnp.mockRestore();
+            createMiddleware.mockRestore();
+            if (realVersion) {
+                Object.defineProperty(process.versions, 'node', realVersion);
+            }
+        }
+    });
 
     test.each([
         { predates: true, warns: true },

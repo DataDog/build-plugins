@@ -2,8 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { readSomething } from './helperWithBannedImport';
+import { readSomething } from './helperUsingDeno';
 
-export async function usesBannedHelper() {
+export async function usesDenoHelper() {
     return readSomething();
 }

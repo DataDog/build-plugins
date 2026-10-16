@@ -4,9 +4,18 @@
 
 import type { BaseNode, Node, Program } from 'estree';
 
-import { walkAst } from './walk-ast';
+import { parentsOf, walkAst } from './walk-ast';
 
 describe('Backend AST Parsing - walkAst', () => {
+    test('Should map every child node to its parent', () => {
+        const ast = buildEstreeFixture();
+        const parents = parentsOf(ast);
+        const [statement] = ast.body;
+
+        expect(parents.get(ast)).toBeUndefined();
+        expect(parents.get(statement)).toBe(ast);
+    });
+
     test('Should visit universal and specialized visitors for ESTree-shaped nodes', () => {
         const ast = buildEstreeFixture();
         const state = {

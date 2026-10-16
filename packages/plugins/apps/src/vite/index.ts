@@ -31,6 +31,8 @@ import {
     BACKEND_FILE_WITH_QUERY_RE,
     DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
+    NODE_BACKEND_RUNTIME,
+    NODE_BACKEND_RUNTIME_NODE_MAJOR,
     PLUGIN_NAME,
 } from '../constants';
 import { PARAMETERS_MODULE } from '../parameters/extract-parameters';
@@ -124,6 +126,20 @@ function createBackendFunctionRegistry() {
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
+
+// Local execution runs on the developer's own Node; WebSocket is a default global from Node 22.
+export const MIN_LOCAL_NODE_MAJOR = 22;
+
+export function localNodeWarning(nodeVersion: string): string | undefined {
+    const major = Number.parseInt(nodeVersion, 10);
+    if (major < MIN_LOCAL_NODE_MAJOR) {
+        return `Node ${nodeVersion} has no global WebSocket, which backend functions get on the ${NODE_BACKEND_RUNTIME}; use Node ${MIN_LOCAL_NODE_MAJOR} or later to run them locally.`;
+    }
+    if (major !== NODE_BACKEND_RUNTIME_NODE_MAJOR) {
+        return `Your local Node version "${nodeVersion}" doesn't match the ${NODE_BACKEND_RUNTIME}'s Node version "${NODE_BACKEND_RUNTIME_NODE_MAJOR}", so backend functions may behave differently locally.`;
+    }
+    return undefined;
+}
 
 const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
 
@@ -329,9 +345,8 @@ export const getVitePlugin = ({
 
                 const ast = this.parse(code);
                 const program = ensureProgram(ast, normalizedId);
-                // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
                 const scopeAnalysis = analyzeModuleScope(program);
-                // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
+                // Runs even for a file with zero exports, to catch a restricted global as soon as it's written.
                 runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
@@ -530,6 +545,10 @@ export const getVitePlugin = ({
                 log.warn(usesYarnPnp ? YARN_PNP_WARNING : MODULE_RUNNER_UNRESOLVED_WARNING);
             }
             if (runsLocally) {
+                const nodeWarning = localNodeWarning(process.versions.node);
+                if (nodeWarning) {
+                    log.warn(nodeWarning);
+                }
                 // Started here so an unusable Vite is reported at startup; each execution reuses
                 // this load, or retries it after a failure.
                 loadViteParseAst().catch((error: unknown) => {
