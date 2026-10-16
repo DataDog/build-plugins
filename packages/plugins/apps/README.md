@@ -87,6 +87,8 @@ The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/execu
 -   its `Origin`, when sent, names the same host and port as its `Host`;
 -   its body is sent with `Content-Type: application/json`.
 
+The dev server warns once for each distinct refusal and logs repeats at `debug`. Past a per-server cap, it warns once more to say so, then logs new refusals at `debug` too.
+
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
 ## Cloud execution

@@ -4,6 +4,7 @@
 
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
+    ALLOWED_HOSTS_HINT,
     checkDevServerRequest,
     createViteHostCheck,
     getRequestHost,
@@ -372,6 +373,25 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         );
 
         expect(rejection?.message).toContain('"[fe80::zz]"');
+    });
+
+    test("Should escape a Host's non-ASCII characters in the rejection message", () => {
+        const rejection = checkDevServerRequest(
+            { host: 'evil\u009b2J\u0085.example:5173', 'content-type': json },
+            isHostAllowed,
+        );
+
+        expect(rejection?.message).toContain('"evil\\u009b2J\\u0085.example"');
+        expect(rejection?.message).toMatch(/^[\x20-\x7e]*$/);
+    });
+
+    test('Should end a refused-host message with the allowedHosts hint', () => {
+        const rejection = checkDevServerRequest(
+            { host: 'tunnel.example:5173', 'content-type': json },
+            isHostAllowed,
+        );
+
+        expect(rejection?.message.split(ALLOWED_HOSTS_HINT)[1]).toBe('');
     });
 
     test('Should treat an empty Host header as missing, even under a "." allowedHosts entry', () => {
