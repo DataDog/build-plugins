@@ -9,7 +9,7 @@ import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
-import { SKIP_INSTRUMENTATION_COMMENT } from '../constants';
+import { LIVE_DEBUGGER_THROW_FUNCTION, SKIP_INSTRUMENTATION_COMMENT } from '../constants';
 import type { DecoratorSyntax, FunctionKind } from '../types';
 
 import type { BabelPath, BabelTypesModule } from './babel-path.types';
@@ -504,7 +504,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // every exit hook pairs with its own entry state, not a concurrent call's.
     const probeDecl = `let ${probeVarName} = ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
-    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
+    const catchBlock = `catch(e) { if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr

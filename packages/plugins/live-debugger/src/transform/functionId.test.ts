@@ -7,7 +7,7 @@ import type * as t from '@babel/types';
 
 import type { BabelPath } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
-import { generateFunctionId, getFunctionName } from './functionId';
+import { generateFunctionId, getFunctionName, parseFunctionId } from './functionId';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const babelTypes = require('@babel/types') as typeof import('@babel/types');
@@ -310,5 +310,39 @@ describe('generateFunctionId', () => {
 
             fnPath.node.loc = original;
         });
+    });
+});
+
+describe('parseFunctionId', () => {
+    const cases = [
+        {
+            description: 'split a named function ID',
+            input: 'src/utils.js;add',
+            expected: { modulePath: 'src/utils.js', name: 'add' },
+        },
+        {
+            description: 'keep separators that are part of the function name',
+            input: 'src/utils.js;get;user',
+            expected: { modulePath: 'src/utils.js', name: 'get;user' },
+        },
+        {
+            description: 'drop the location of anonymous functions',
+            input: 'src/widget.js;<anonymous>@4:16:0',
+            expected: { modulePath: 'src/widget.js', name: '<anonymous>' },
+        },
+        {
+            description: 'keep the query string of the module path',
+            input: 'src/Cart.vue?vue&type=script;total',
+            expected: { modulePath: 'src/Cart.vue?vue&type=script', name: 'total' },
+        },
+        {
+            description: 'reject an ID without a module path',
+            input: ';add',
+            expected: undefined,
+        },
+    ];
+
+    test.each(cases)('Should $description.', ({ input, expected }) => {
+        expect(parseFunctionId(input)).toEqual(expected);
     });
 });
