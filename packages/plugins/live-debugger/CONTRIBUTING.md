@@ -37,7 +37,7 @@ Changes that affect source positions, injected wrappers, return rewriting, or er
 
 The Babel packages and `magic-string` are optional peer dependencies for consumers. Keep the transform dependencies lazy-loaded and preserve the user-facing missing-dependency error path. Update [`src/transform/lazy-deps.test.ts`](./src/transform/lazy-deps.test.ts) when touching dependency loading.
 
-Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts).
+Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Keep the `typeof` guard before that call, so instrumented code can run where `$dd_probes` was never defined, and preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts). Generated code must not add string literals besides the function ID: RUM privacy would move them into the module's dictionary, which instrumented functions would then read before the module has run. Keep `$dd_probes` a bare identifier call, because RUM privacy only leaves the function ID inline for that form.
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
