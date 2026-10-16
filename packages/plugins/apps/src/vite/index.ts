@@ -8,8 +8,10 @@ import { InjectPosition } from '@dd/core/types';
 import path from 'path';
 import type { build } from 'vite';
 
+import { resolveScriptMaxLength } from '../action-script-limits';
 import {
     AUTH_GUIDANCE,
+    getAuthCredentials,
     getAuthenticatedRequest,
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
@@ -496,8 +498,16 @@ export const getVitePlugin = ({
                     `No authentication configured. Both the /__dd/executeAction and /__dd/executeActionViaCloud endpoints will be unavailable. ${AUTH_GUIDANCE}`,
                 );
             }
-            // Without auth nothing executes, and dev-verify sends every execution to the cloud.
-            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
+            // The credentials getAuthenticatedRequest sends, so the script limit is read for the same org.
+            const credentials = getAuthCredentials();
+            const getScriptMaxLength = async (): Promise<number | undefined> =>
+                credentials && resolveScriptMaxLength(auth.site, credentials, log);
+            // Without auth nothing executes.
+            if (doAuthenticatedRequest && server.config.mode === DEV_VERIFY_MODE) {
+                // Started now so the first execution doesn't wait on it, and caught so it can never go unhandled.
+                getScriptMaxLength().catch(() => {});
+            } else if (doAuthenticatedRequest) {
+                // Local execution only, since dev-verify sends every execution to the cloud.
                 // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
                 // predate it. A failure must not stop the server: each execution installs again, failing closed.
                 try {
@@ -558,6 +568,7 @@ export const getVitePlugin = ({
                 server.config.mode,
                 isHostAllowed,
                 getBackendRuntime,
+                getScriptMaxLength,
             );
             server.middlewares.use(middleware);
         },

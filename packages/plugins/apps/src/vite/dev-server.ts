@@ -12,7 +12,7 @@ import type { build } from 'vite';
 
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
-import type { BackendRuntimeStatus } from '../backend-runtime';
+import { SCRIPT_ACTION_FQN, type BackendRuntimeStatus } from '../backend-runtime';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
@@ -258,23 +258,59 @@ async function submitQuery(
     return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log, signal);
 }
 
+// Counts as Array.from(text).length does, a lone surrogate as one, without building the array.
+export function countCodePoints(text: string): number {
+    let count = 0;
+    for (let index = 0; index < text.length; index++) {
+        const codePoint = text.codePointAt(index) ?? 0;
+        if (codePoint > 0xffff) {
+            index++;
+        }
+        count++;
+    }
+    return count;
+}
+
+// JSON Schema's maxLength counts code points, which never exceed the UTF-16 length.
+function assertWithinScriptLimit(
+    code: string,
+    maxLength: number | undefined,
+    displayName: string,
+): void {
+    if (maxLength === undefined || code.length <= maxLength) {
+        return;
+    }
+    const length = countCodePoints(code);
+    if (length <= maxLength) {
+        return;
+    }
+    const message = scriptLimitMessage(displayName, length, maxLength);
+    throw new ScriptLimitError(message, displayName);
+}
+
+export function scriptLimitMessage(displayName: string, length: number, maxLength: number): string {
+    return `Backend function "${displayName}" is larger than production accepts: its minified bundle is ${length} characters, over the ${maxLength}-character limit for a script sent inline to ${SCRIPT_ACTION_FQN}. It may fail after upload too, so shrink the bundle, for example by splitting the function or moving large data out of it.`;
+}
+
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
 async function executeScriptViaDatadog(
-    scriptBody: string,
-    func: BackendFunction,
+    { func, code }: BundleResult,
     args: unknown[],
+    maxLength: number | undefined,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
 ): Promise<BackendOutputs> {
     const displayName = formatRef(func);
+    assertWithinScriptLimit(code, maxLength, displayName);
 
+    log.debug(`Executing "${displayName}" via cloud as ${SCRIPT_ACTION_FQN}`);
     const outputs = await submitQuery(
         {
-            fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+            fqn: SCRIPT_ACTION_FQN,
             inputs: {
-                script: scriptBody,
+                script: code,
                 allowedConnectionIds: func.allowedConnectionIds,
                 context: { backendFunctionArgs: args },
             },
@@ -323,7 +359,7 @@ function makeGetRuntimeContextRemotely(
             const outputs = await Promise.race([
                 submitQuery(
                     {
-                        fqn: 'com.datadoghq.datatransformation.jsFunctionWithActions',
+                        fqn: SCRIPT_ACTION_FQN,
                         inputs: {
                             script: RUNTIME_CONTEXT_SCRIPT,
                             allowedConnectionIds: [],
@@ -529,10 +565,16 @@ class HttpError extends Error {
     }
 }
 
-/**
- * Split out from `validateAndBundle` so `handleExecuteAction`'s no-bundling local path can
- * reuse the same parse-and-lookup step without pulling in a bundle.
- */
+class ScriptLimitError extends HttpError {
+    constructor(
+        message: string,
+        readonly displayName: string,
+    ) {
+        super(413, message);
+    }
+}
+
+/** Shared by every route, so request validation can't drift between them. */
 async function parseAndLookupFunction(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
@@ -552,21 +594,6 @@ async function parseAndLookupFunction(
 }
 
 /**
- * Shared by `handleDebugBundle` and `handleExecuteActionViaCloud` — the two handlers that
- * still need a bundle; `handleExecuteAction`'s no-bundling path calls `parseAndLookupFunction`
- * directly instead.
- */
-async function validateAndBundle(
-    req: IncomingMessage,
-    functionsByName: Map<string, BackendFunction>,
-    bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
-    const { func, args } = await parseAndLookupFunction(req, functionsByName);
-    const bundled = await bundle(func);
-    return { ...bundled, args };
-}
-
-/**
  * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
  */
 async function handleDebugBundle(
@@ -576,7 +603,8 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func } = await parseAndLookupFunction(req, functionsByName);
+        const { code } = await bundle(func);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
@@ -652,17 +680,19 @@ async function handleExecuteActionViaCloud(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
+    getScriptMaxLength: () => Promise<number | undefined>,
+    oversizedFunctionsWarned: Set<string>,
 ): Promise<void> {
     try {
-        const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
-        const displayName = formatRef(func);
-
-        log.debug(`Executing action via cloud: ${displayName} with args`);
+        const { func, args } = await parseAndLookupFunction(req, functionsByName);
+        // Started before bundling so the first call doesn't wait on both in turn; it never rejects.
+        const scriptMaxLength = getScriptMaxLength();
+        const bundled = await bundle(func);
 
         const result = await executeScriptViaDatadog(
-            code,
-            func,
+            bundled,
             args,
+            await scriptMaxLength,
             auth,
             doAuthenticatedRequest,
             longPolling,
@@ -671,6 +701,10 @@ async function handleExecuteActionViaCloud(
 
         sendSuccess(res, result);
     } catch (error: unknown) {
+        if (error instanceof ScriptLimitError && !oversizedFunctionsWarned.has(error.displayName)) {
+            oversizedFunctionsWarned.add(error.displayName);
+            log.warn(error.message);
+        }
         // Labeled by the actual URL hit, not a fixed name, since dev-verify mode also reaches this via /__dd/executeAction.
         handleHttpError(res, error, log, req.url ?? 'executeActionViaCloud');
     }
@@ -686,6 +720,8 @@ function routeToCloudHandler(
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
     log: Logger,
+    getScriptMaxLength: () => Promise<number | undefined>,
+    oversizedFunctionsWarned: Set<string>,
 ): void {
     guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
         handleExecuteActionViaCloud(
@@ -697,6 +733,8 @@ function routeToCloudHandler(
             authedRequest,
             longPolling,
             log,
+            getScriptMaxLength,
+            oversizedFunctionsWarned,
         ),
     );
 }
@@ -726,12 +764,14 @@ export function createDevServerMiddleware(
     mode: string,
     isHostAllowed: HostCheck,
     getBackendRuntime: () => Promise<BackendRuntimeStatus>,
+    getScriptMaxLength: () => Promise<number | undefined>,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = async (func: BackendFunction) => {
         const runtime = await getBackendRuntime();
         return bundleBackendFunction(viteBuild, func, projectRoot, log, runtime);
     };
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -750,6 +790,8 @@ export function createDevServerMiddleware(
             doAuthenticatedRequest,
             longPolling,
             log,
+            getScriptMaxLength,
+            oversizedFunctionsWarned,
         );
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>

@@ -9,6 +9,13 @@
  * SSR transform output, not a hand-crafted stand-in.
  */
 
+import {
+    DATATRANSFORMATION_MANIFEST_PATH,
+    SCRIPT_INPUTS_DEF_NAME,
+    getProperty,
+    resetScriptLimitCache,
+    resolveScriptMaxLength,
+} from '@dd/apps-plugin/action-script-limits';
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { V1_RUNTIME } from '@dd/apps-plugin/backend-runtime.fixtures';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
@@ -40,6 +47,7 @@ import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { DEV_VERIFY_MODE } from '../constants';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
@@ -73,8 +81,9 @@ const mockLongPolling = {
 
 // Also read by the real configureServer hook below, which without auth only warns and leaves both
 // action endpoints unavailable.
-process.env.DD_API_KEY = 'test-api-key';
-process.env.DD_APP_KEY = 'test-app-key';
+const TEST_API_KEYS = { apiKey: 'test-api-key', appKey: 'test-app-key' };
+process.env.DD_API_KEY = TEST_API_KEYS.apiKey;
+process.env.DD_APP_KEY = TEST_API_KEYS.appKey;
 const testApiKeyRequest = getAuthenticatedRequest();
 
 const getRuntimeUsersFunc: BackendFunction = {
@@ -220,6 +229,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -266,6 +276,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -306,6 +317,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -386,6 +398,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -440,6 +453,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -503,6 +517,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             async () => V1_RUNTIME,
+            async () => undefined,
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -531,6 +546,106 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
 // Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
 // would race other test files that copy that whole tree in parallel.
 const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
+
+describe('Dev Server Middleware — cloud execution bundles', () => {
+    beforeEach(() => {
+        resetScriptLimitCache();
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
+        resetScriptLimitCache();
+    });
+
+    test('Should submit a dev:verify bundle minified like an upload', async () => {
+        const seed = `dev-verify-minify-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const absolutePath = `${workingDir}/src/names.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            class BackendValidationError extends Error {}
+            const readableHelper = (value: string) => {
+                if (!value) throw new BackendValidationError('missing value');
+                return value;
+            };
+            export async function readableBackendFunction(value: string) {
+                return readableHelper(value);
+            }
+        `,
+            );
+            const namesFunc: BackendFunction = {
+                relativePath: 'src/names',
+                name: 'readableBackendFunction',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+            const scriptInputs = { properties: { script: { type: 'string', maxLength: 100_000 } } };
+            const inputsDefName = SCRIPT_INPUTS_DEF_NAME;
+            const captured: { spec?: unknown } = {};
+            const apiScope = nock('https://api.datadoghq.com')
+                .get(DATATRANSFORMATION_MANIFEST_PATH)
+                .reply(200, {
+                    data: {
+                        attributes: {
+                            types: { $defs: { [inputsDefName]: scriptInputs } },
+                        },
+                    },
+                })
+                .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                    const specPath = ['data', 'attributes', 'query', 'properties', 'spec'];
+                    captured.spec = specPath.reduce(getProperty, body);
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-verify-minified' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-verify-minified')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+            const limitLog = getMockLogger();
+            const middleware = createDevServerMiddleware(
+                build,
+                async () => ({}),
+                () => [namesFunc],
+                async () => [],
+                { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
+                testApiKeyRequest,
+                mockLongPolling,
+                workingDir,
+                getMockLogger(),
+                DEV_VERIFY_MODE,
+                createViteHostCheck({ server: { allowedHosts: [] }, preview: {} }),
+                async () => V1_RUNTIME,
+                () => resolveScriptMaxLength('datadoghq.com', TEST_API_KEYS, limitLog),
+            );
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(namesFunc),
+                args: ['QA'],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            const apiDone = apiScope.isDone();
+            expect(res.statusCode).toBe(200);
+            expect(apiDone).toBe(true);
+            const inputs = getProperty(captured.spec, 'inputs');
+            const script = getProperty(inputs, 'script');
+            if (typeof script !== 'string') {
+                throw new Error('Expected the submitted script to be a string.');
+            }
+            // Minified: the unminified output spans many lines.
+            const lineCount = script.trim().split('\n').length;
+            expect(lineCount).toBeLessThan(5);
+            expect(script).toContain('"BackendValidationError"');
+            expect(script).toContain('"readableHelper"');
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+});
 
 describe('Dev Server Middleware — editing files between local executions', () => {
     let editRoot: string | undefined;

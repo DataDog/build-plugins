@@ -24,6 +24,12 @@ export const NO_FAILURE_DETAILS = 'no details came back';
 
 export const FAILED_LOOKUP_WARNING = `Could not determine the org's backend runtime, so the stricter checks of the ${describeRuntime('v1')} apply.`;
 
+export const DATATRANSFORMATION_BUNDLE_ID = 'com.datadoghq.datatransformation';
+
+// Uploaded backend functions run as this action, on whichever runtime the cutover flag gives the org.
+export const SCRIPT_ACTION_NAME = 'jsFunctionWithActions';
+export const SCRIPT_ACTION_FQN = `${DATATRANSFORMATION_BUNDLE_ID}.${SCRIPT_ACTION_NAME}`;
+
 // The endpoint can rate-limit, so a successful lookup is reused for the life of the process; kept on
 // globalThis because a dev server restart can load a fresh copy of this module.
 export const RUNTIME_CACHE_KEY = Symbol.for('@datadog/vite-plugin/apps/backend-runtime');
@@ -36,6 +42,18 @@ export const MAX_LOGGED_REASON_LENGTH = 200;
 
 // doRequest's status line describes the internal endpoint rather than anything the developer can act on.
 const HTTP_STATUS_LINE = /^HTTP \d{3}\b[^\n]*\n?/;
+
+// String() throws on some values, such as an object without a prototype.
+export function summarizeRequestError(error: unknown): string {
+    try {
+        const message: unknown = error instanceof Error ? error.message : error;
+        const details = String(message).replace(HTTP_STATUS_LINE, '');
+        const reason = details.split('\n').join('; ').slice(0, MAX_LOGGED_REASON_LENGTH);
+        return reason || NO_FAILURE_DETAILS;
+    } catch {
+        return NO_FAILURE_DETAILS;
+    }
+}
 
 type CacheEntry = { runtime: Promise<BackendRuntime>; expiresAt: number };
 
@@ -113,24 +131,13 @@ function startLookup(
         runtime: lookUpBackendRuntime(site, credentials, log).catch((error: unknown) => {
             entry.expiresAt = Date.now() + FAILED_LOOKUP_RETRY_MS;
             log.warn(FAILED_LOOKUP_WARNING);
-            const reason = failureReason(error);
-            log.debug(`Backend runtime lookup failed: ${reason || NO_FAILURE_DETAILS}`);
+            const reason = summarizeRequestError(error);
+            log.debug(`Backend runtime lookup failed: ${reason}`);
             return 'v1';
         }),
         expiresAt: Number.POSITIVE_INFINITY,
     };
     return entry;
-}
-
-// String() throws on some values, such as an object without a prototype.
-function failureReason(error: unknown): string {
-    try {
-        const message: unknown = error instanceof Error ? error.message : error;
-        const details = String(message).replace(HTTP_STATUS_LINE, '');
-        return details.split('\n').join('; ').slice(0, MAX_LOGGED_REASON_LENGTH);
-    } catch {
-        return '';
-    }
 }
 
 // One entry per set of credentials, since the flag is per org. Hashed so the cache never holds

@@ -19,6 +19,7 @@ import {
     resetBackendRuntimeCache,
     resolveBackendRuntime,
     RUNTIME_CACHE_KEY,
+    SCRIPT_ACTION_FQN,
     describeRuntime,
     FAILED_LOOKUP_WARNING,
     NO_CREDENTIALS_MESSAGE,
@@ -44,6 +45,10 @@ const FLAG_OFF_BODY = loggedIn(['some-other-flag']);
 // The plugin's auth as the factory resolves it from the environment and the auth option.
 const pluginAuth = (options: AuthOptions = {}) =>
     validateOptions({ auth: { site: SITE, ...options } }).auth;
+
+test('should run backend functions as jsFunctionWithActions', () => {
+    expect(SCRIPT_ACTION_FQN).toBe('com.datadoghq.datatransformation.jsFunctionWithActions');
+});
 
 const useApiKeys = () => {
     process.env.DD_API_KEY = API_KEY;
