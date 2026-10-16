@@ -18,7 +18,7 @@ import { serializeSymbolTable } from './serialize';
 import { buildSymbolTable } from './table';
 import type { ChunkFunction, ChunkFunctions, SymbolTable } from './types';
 
-const LOG_PREFIX = 'Live Debugger symbol table';
+const LOG_PREFIX = 'Live Debugger symbols';
 const JS_OUTPUT_TYPES = new Set(['js', 'mjs', 'cjs']);
 
 type GenerateSymbolTableArgs = {
@@ -47,7 +47,7 @@ export const generateSymbolTable = async ({
 }: GenerateSymbolTableArgs): Promise<SymbolTable | undefined> => {
     const repositoryRoot = getRepositoryRoot(buildRoot);
     if (!repositoryRoot) {
-        log.warn(`Skipping the ${LOG_PREFIX}: the build root isn't in a git repository.`);
+        log.warn(`Skipping ${LOG_PREFIX}: the build root isn't in a git repository.`);
         return undefined;
     }
 
@@ -126,7 +126,7 @@ export const writeSymbolTable = async (
     const absoluteDumpPath = path.resolve(dumpPath);
     if (isInsideDirectory(absoluteDumpPath, outDir)) {
         log.warn(
-            `${LOG_PREFIX}: not writing it to "${absoluteDumpPath}", because that's inside the output directory.`,
+            `${LOG_PREFIX}: not writing them to "${absoluteDumpPath}", because that's inside the output directory.`,
         );
         return;
     }
@@ -166,7 +166,7 @@ export const getSymbolTableHooks = (
                 await writeSymbolTable(payload, dumpPath, context.bundler.outDir, log);
             }
         } catch (error) {
-            log.warn(`Could not generate the ${LOG_PREFIX}: ${error}`);
+            log.warn(`Could not collect ${LOG_PREFIX}: ${error}`);
         } finally {
             timer.end();
         }

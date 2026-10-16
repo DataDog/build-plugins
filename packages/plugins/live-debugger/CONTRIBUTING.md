@@ -44,7 +44,7 @@ When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./
 
 ## Symbol table
 
-The plugin can list the instrumented functions that ship in a build, for upload to Live Debugger's symbol database (SymDB). Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The table lives in [`src/symbol-table`](./src/symbol-table).
+The plugin can list the instrumented functions that ship in a build, for upload to Datadog's Symbol Database. Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The table lives in [`src/symbol-table`](./src/symbol-table).
 
 For now, the only consumer is an opt-in debug dump. Set `DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH` to a file path to generate the table and write it there:
 
@@ -56,7 +56,7 @@ Without that variable, the plugin doesn't add any hook or build time. The dump i
 
 How it works:
 
-- After a one-off build (not in watch mode or on a dev server), the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
+- After a one-off build, outside watch mode and dev servers, the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
 - Every instrumented function has exactly one `$dd_probes('<id>')` call at the start of its body and one `$dd_throw(` call at its end. The scan pairs them like brackets, which also gives each function's parent.
 - The transform anchors the `$dd_probes` call to the original body's opening brace, which gives the start line through the chunk's final source map. The end line is the last mapped position up to the `$dd_throw` call: for block bodies that's the closing brace. The code appended after an arrow function's expression body has no mapping, and minifiers leave some tokens unmapped, so the closest mapped token before it is used instead.
 - The path and display name come from the function ID. Query strings are removed, Yarn PnP virtual paths and symlinks are resolved, and the path is made relative to the git root. Without a git repository, the table is skipped.
@@ -69,7 +69,7 @@ Known limitations:
 - esbuild doesn't tell plugins whether it's watching, so its rebuilds always regenerate the table.
 - In minified builds, the end line of an arrow function's expression body is the last line the minifier keeps mapped, which can be before the real end.
 - Helpers that compilers inject, such as `_define_property`, have no original source, so they have no line range.
-- On webpack and Rspack, files that reach the plugin without a source map from an earlier loader get shifted line numbers ([DEBUG-6343](https://datadoghq.atlassian.net/browse/DEBUG-6343)).
+- On webpack and Rspack, files that reach the plugin without a source map from an earlier loader get shifted line numbers.
 
 ## Consumer build canary
 
