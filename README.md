@@ -214,10 +214,11 @@ The Datadog site to use APIs from, and which Datadog site telemetry metrics and 
 - `'us2.ddog-gov.com'`
 - `'ap1.datadoghq.com'`
 - `'ap2.datadoghq.com'`
+- `'uk1.datadoghq.com'`
 
 You can also prefix any of the sites above with a custom subdomain (e.g. `'myorg.us5.datadoghq.com'`), if your organization uses a custom Datadog URL. All API calls (metrics, error tracking sourcemaps) still go to the base site.
 
-An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization.
+An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization. An empty value is treated as unset, as it is for every other `DATADOG_*` / `DD_*` override variable, such as `DATADOG_API_KEY`.
 
 > [!NOTE]
 > The `DATADOG_SITE` environment variable takes priority over this configuration.
