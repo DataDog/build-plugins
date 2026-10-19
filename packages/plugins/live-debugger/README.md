@@ -22,6 +22,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
 -   [Skipped function types](#skipped-function-types)
+-   [Bundle size impact](#bundle-size-impact)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
     -   [Build metadata](#build-metadata)
@@ -250,6 +251,17 @@ liveDebugger: {
 The following function types are always skipped regardless of configuration:
 - **Generators** — `function*` declarations and expressions
 - **Constructors** — `constructor()` methods in classes
+
+## Bundle size impact
+
+Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. The added code compresses well, so the gzipped size grows far less than the uncompressed size.
+
+Check the size limits your build enforces before enabling Live Debugger, especially limits on uncompressed file size:
+
+- **Service-worker precache limits**, such as `maximumFileSizeToCacheInBytes` in `vite-plugin-pwa` or Workbox. Depending on the tool, a file over the limit either fails the build or is left out of the precache, so it is no longer available offline.
+- **Bundle budgets and size checks**, such as Angular CLI `budgets` with an error threshold, webpack's `performance.hints: 'error'`, or CI tools like `size-limit`.
+
+If a chunk no longer fits, raise the limit, or instrument less of your code with [`include`](#livedebuggerinclude), [`exclude`](#livedebuggerexclude), [`namedOnly`](#livedebuggernamedonly), or [`functionTypes`](#livedebuggerfunctiontypes).
 
 ## Runtime requirements
 
