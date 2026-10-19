@@ -143,7 +143,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should reuse an already-parsed module record instead of re-parsing', () => {
         const moduleId = '/project/src/backend/helpers/http.js';
         const ast = parseAst('export function callIt() { return fetch("https://example.com"); }');
-        const record = createParsedModuleRecord(moduleId, '/project', ast);
+        const record = createParsedModuleRecord(moduleId, '/project', ast, []);
         if (!record) {
             throw new Error('Expected a module record to be created for this test.');
         }

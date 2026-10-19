@@ -153,7 +153,8 @@ const getBuildEnvironment = (variant: CanaryVariant): Record<string, string> => 
     return {
         BUILD_PLUGIN_DISABLE_METRICS: 'true',
         BUILD_PLUGIN_DISABLE_SOURCEMAPS: 'true',
-        BUILD_PLUGIN_LIVE_DEBUGGER: variant === 'instrumented' ? 'true' : 'false',
+        BUILD_PLUGIN_LIVE_DEBUGGER: variant === 'control' ? 'false' : 'true',
+        BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: variant === 'named-only' ? 'true' : 'false',
         BUILD_PLUGIN_RUM_PRIVACY: 'true',
         BUILD_PLUGIN_UPLOAD_SOURCEMAPS: 'false',
         NODE_OPTIONS: nodeOptions,

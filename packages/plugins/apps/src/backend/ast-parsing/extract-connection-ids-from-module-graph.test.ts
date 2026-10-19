@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { createFixtureRecord } from '@dd/tests/_jest/helpers/moduleGraph';
 import type { Program } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
@@ -15,17 +16,8 @@ function parse(code: string): Program {
     return parseAst(code) as Program;
 }
 
-function createRecord(
-    id: string,
-    code: string,
-    staticDependencies: string[] = [],
-): ParsedModuleRecord {
-    const record = createParsedModuleRecord(id, buildRoot, parse(code), staticDependencies);
-    if (!record) {
-        throw new Error(`Expected ${id} to create a parsed module record`);
-    }
-    return record;
-}
+const createRecord = (id: string, code: string, resolvedIds: string[] = []): ParsedModuleRecord =>
+    createFixtureRecord(id, buildRoot, code, resolvedIds);
 
 function extract(records: ParsedModuleRecord[]): string[] {
     return extractConnectionIdsFromModuleGraph(
@@ -37,13 +29,14 @@ function extract(records: ParsedModuleRecord[]): string[] {
 
 describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
     test('Should return null when creating records for modules outside the backend graph', () => {
-        expect(
-            createParsedModuleRecord(
-                '/project/node_modules/package/index.js',
-                buildRoot,
-                parse('export const value = true;'),
-            ),
-        ).toBeNull();
+        const ast = parse('export const value = true;');
+        const record = createParsedModuleRecord(
+            '/project/node_modules/package/index.js',
+            buildRoot,
+            ast,
+            [],
+        );
+        expect(record).toBeNull();
     });
 
     test('Should extract inline connection IDs from statically reachable helper modules', () => {
@@ -68,6 +61,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: 'conn-helper', inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, helper])).toEqual(['conn-helper']);
@@ -83,6 +77,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: '', inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry])).toEqual(['']);
@@ -114,6 +109,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     request({ connectionId: CONNECTIONS.HTTP.PROD, inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, helper])).toEqual(['conn-const', 'conn-object']);
@@ -144,7 +140,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     request({ connectionId: TEMPLATE_CONNECTION_ID, inputs: {} });
                 }
             `,
-            [idsId],
+            [idsId, '@datadog/action-catalog/http/http'],
         );
         const ids = createRecord(
             idsId,
@@ -183,7 +179,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
                 }
             `,
-            [idsId],
+            [idsId, '@datadog/action-catalog/http/http'],
         );
         const ids = createRecord(
             idsId,
@@ -221,7 +217,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     request({ connectionId: CONNECTIONS.NESTED.PROD, inputs: {} });
                 }
             `,
-            [idsId],
+            [idsId, '@datadog/action-catalog/http/http'],
         );
         const ids = createRecord(
             idsId,
@@ -273,7 +269,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     request({ connectionId: STAR_CONNECTION_ID, inputs: {} });
                 }
             `,
-            [indexId],
+            [indexId, '@datadog/action-catalog/http/http'],
         );
         const local = createRecord(
             localId,
@@ -338,6 +334,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: 'conn-named', inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
         const star = createRecord(
             starId,
@@ -347,6 +344,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: 'conn-star', inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, barrel, named, star])).toEqual(['conn-named', 'conn-star']);
@@ -411,6 +409,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
 
                 request({ connectionId: '${connectionId}', inputs: {} });
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, helper])).toEqual([connectionId]);
@@ -435,7 +434,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                 import { request } from '@datadog/action-catalog/http/http';
                 request({ connectionId: 'conn-a', inputs: {} });
             `,
-            [bId],
+            [bId, '@datadog/action-catalog/http/http'],
         );
         const b = createRecord(
             bId,
@@ -444,7 +443,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                 import { request } from '@datadog/action-catalog/http/http';
                 request({ connectionId: 'conn-b', inputs: {} });
             `,
-            [aId],
+            [aId, '@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, a, b])).toEqual(['conn-a', 'conn-b']);
@@ -518,7 +517,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
                 }
             `,
-            [idsId],
+            [idsId, '@datadog/action-catalog/http/http'],
         );
 
         expect(() => extract([entry, helper])).toThrow(
@@ -678,7 +677,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                         return request({ connectionId: ${connectionId}, inputs: {} });
                     }
                 `,
-                dependencies,
+                [...dependencies, '@datadog/action-catalog/http/http'],
             );
 
             expect(() => extract([entry, helper, ...dependencyRecords])).toThrow(message);
@@ -711,6 +710,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return request({ connectionId: getConnectionId(), inputs: {} });
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(() => extract([entry, helper])).toThrow('unsupported-expression');
@@ -741,6 +741,7 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
                     return { ok: true };
                 }
             `,
+            ['@datadog/action-catalog/http/http'],
         );
 
         expect(extract([entry, helper])).toEqual(['conn-ts']);

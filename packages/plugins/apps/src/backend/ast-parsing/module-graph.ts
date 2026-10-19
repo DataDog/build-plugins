@@ -144,8 +144,10 @@ export const PACKAGE_MANAGER_DIRS = new Set(['node_modules', '.yarn']);
 
 /**
  * Creates the per-module analysis record consumed by backend-entry reachability
- * analysis. The caller supplies canonical module IDs and already-resolved
- * static dependency IDs instead of asking this module to resolve/load files.
+ * analysis. The caller supplies canonical module IDs and each static
+ * import/export source's resolved ID (see `resolveStaticModuleSources`) instead
+ * of asking this module to resolve/load files; a source with no resolved ID
+ * fails closed.
  *
  * Returns null when the module is outside the analyzable app-local backend
  * graph, allowing build collectors to skip package/generated modules without
@@ -155,7 +157,7 @@ export function createParsedModuleRecord(
     moduleId: string,
     buildRoot: string,
     ast: BaseNode,
-    staticDependencies: string[] = [],
+    staticDependencies: StaticModuleDependency[],
 ): ParsedModuleRecord | null {
     if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
         return null;
@@ -163,35 +165,69 @@ export function createParsedModuleRecord(
 
     const program = ensureProgram(ast, moduleId);
     const scopeAnalysis = analyzeModuleScope(program);
-    const staticModuleDependencies = collectStaticModuleDependencies(program, staticDependencies);
+    const staticSourceList = getStaticModuleSources(program);
+    const staticSources = new Set(staticSourceList);
+    const resolvedIdBySource = new Map<string, string>();
+    for (const { source, resolvedId } of staticDependencies) {
+        if (!staticSources.has(source) || resolvedIdBySource.has(source)) {
+            throw unsupportedModuleGraphDependency(
+                moduleId,
+                `resolved ID for "${source}", which isn't a distinct static import/export source,`,
+            );
+        }
+        resolvedIdBySource.set(source, resolvedId);
+    }
+    const resolveSource = (source: string): string => {
+        const resolvedId = resolvedIdBySource.get(source);
+        if (resolvedId === undefined) {
+            throw unsupportedModuleGraphDependency(
+                moduleId,
+                `static import/export source "${source}" with no resolved ID`,
+            );
+        }
+        return resolvedId;
+    };
 
     return {
         id: moduleId,
         ast: program,
         scopeAnalysis,
-        staticDependencies: staticModuleDependencies,
+        staticDependencies,
         unsupportedDependencies: collectUnsupportedModuleDependencies(program),
-        importsByVariable: collectImportBindings(program, scopeAnalysis, staticModuleDependencies),
-        exportsByName: collectExportBindings(program, scopeAnalysis, staticModuleDependencies),
-        starExports: collectStarExports(program, staticModuleDependencies),
+        importsByVariable: collectImportBindings(program, scopeAnalysis, resolveSource),
+        exportsByName: collectExportBindings(program, scopeAnalysis, resolveSource),
+        starExports: collectStarExports(program, resolveSource),
         topLevelBindingsByVariable: collectTopLevelBindings(program, scopeAnalysis),
     };
 }
 
-function collectStaticModuleDependencies(
+/**
+ * Resolves each distinct static import/export source once, into the
+ * source/ID pairs `createParsedModuleRecord` expects; a source `resolve` can't
+ * resolve (null) fails closed. Bundler-reported import lists can't stand in
+ * for this: Rolldown dedupes them by resolved ID, so they can't be paired with
+ * the AST's sources.
+ */
+export async function resolveStaticModuleSources(
     ast: Program,
-    staticDependencyIds: string[],
-): StaticModuleDependency[] {
+    moduleId: string,
+    resolve: (source: string) => Promise<string | null>,
+): Promise<StaticModuleDependency[]> {
     const staticModuleSources = getStaticModuleSources(ast);
-
-    return staticDependencyIds.map((resolvedId, index) => ({
-        source: staticModuleSources[index] ?? resolvedId,
-        resolvedId,
-    }));
+    const distinctSources = [...new Set(staticModuleSources)];
+    const resolutions = distinctSources.map(async (source) => {
+        const resolvedId = await resolve(source);
+        if (resolvedId === null) {
+            throw unsupportedModuleGraphDependency(
+                moduleId,
+                `unresolvable import specifier "${source}"`,
+            );
+        }
+        return { source, resolvedId };
+    });
+    return Promise.all(resolutions);
 }
 
-// Exported so a caller without build-time Rollup ModuleInfo (the dev server) can resolve each
-// specifier against this same list instead of a second AST walk that could drift from it.
 export function getStaticModuleSources(ast: Program): string[] {
     return ast.body.flatMap((node) => {
         if (
@@ -211,7 +247,7 @@ export function getStaticModuleSources(ast: Program): string[] {
 function collectImportBindings(
     ast: Program,
     scopeAnalysis: ModuleScopeAnalysis,
-    staticDependencies: StaticModuleDependency[],
+    resolveSource: (source: string) => string,
 ): Map<eslintScope.Variable, ImportBinding> {
     const importsByVariable = new Map<eslintScope.Variable, ImportBinding>();
 
@@ -220,7 +256,7 @@ function collectImportBindings(
             continue;
         }
 
-        const resolvedId = getResolvedSource(staticDependencies, node.source.value);
+        const resolvedId = resolveSource(node.source.value);
         for (const specifier of node.specifiers) {
             const [variable] = scopeAnalysis.scopeManager.getDeclaredVariables(specifier);
             if (!variable) {
@@ -249,13 +285,13 @@ function collectImportBindings(
 function collectExportBindings(
     ast: Program,
     scopeAnalysis: ModuleScopeAnalysis,
-    staticDependencies: StaticModuleDependency[],
+    resolveSource: (source: string) => string,
 ): Map<string, ExportBinding> {
     const exportsByName = new Map<string, ExportBinding>();
 
     for (const node of ast.body) {
         if (node.type === 'ExportNamedDeclaration') {
-            collectNamedExportBindings(node, scopeAnalysis, staticDependencies, exportsByName);
+            collectNamedExportBindings(node, scopeAnalysis, resolveSource, exportsByName);
             continue;
         }
 
@@ -265,7 +301,7 @@ function collectExportBindings(
         }
 
         if (node.type === 'ExportAllDeclaration') {
-            collectNamespaceExportBinding(node, staticDependencies, exportsByName);
+            collectNamespaceExportBinding(node, resolveSource, exportsByName);
         }
     }
 
@@ -275,7 +311,7 @@ function collectExportBindings(
 function collectNamedExportBindings(
     node: ExportNamedDeclaration,
     scopeAnalysis: ModuleScopeAnalysis,
-    staticDependencies: StaticModuleDependency[],
+    resolveSource: (source: string) => string,
     exportsByName: Map<string, ExportBinding>,
 ): void {
     if (node.declaration) {
@@ -284,7 +320,7 @@ function collectNamedExportBindings(
     }
 
     if (node.source && isStringLiteral(node.source)) {
-        const resolvedId = getResolvedSource(staticDependencies, node.source.value);
+        const resolvedId = resolveSource(node.source.value);
         for (const specifier of node.specifiers) {
             if (specifier.type !== 'ExportSpecifier') {
                 continue;
@@ -372,7 +408,7 @@ function collectDeclarationExportBindings(
 
 function collectNamespaceExportBinding(
     node: ExportAllDeclaration,
-    staticDependencies: StaticModuleDependency[],
+    resolveSource: (source: string) => string,
     exportsByName: Map<string, ExportBinding>,
 ): void {
     const exported = getExportAllExportedName(node);
@@ -383,14 +419,11 @@ function collectNamespaceExportBinding(
     exportsByName.set(exported, {
         kind: 'unsupported',
         reason: 'namespace re-export',
-        resolvedId: getResolvedSource(staticDependencies, node.source.value),
+        resolvedId: resolveSource(node.source.value),
     });
 }
 
-function collectStarExports(
-    ast: Program,
-    staticDependencies: StaticModuleDependency[],
-): StarExport[] {
+function collectStarExports(ast: Program, resolveSource: (source: string) => string): StarExport[] {
     return ast.body.flatMap((node) => {
         if (
             node.type !== 'ExportAllDeclaration' ||
@@ -400,7 +433,7 @@ function collectStarExports(
             return [];
         }
 
-        return [{ resolvedId: getResolvedSource(staticDependencies, node.source.value) }];
+        return [{ resolvedId: resolveSource(node.source.value) }];
     });
 }
 
@@ -611,12 +644,6 @@ function getExportAllExportedName(node: ExportAllDeclaration): string | undefine
     const exported = (node as ExportAllDeclaration & { exported?: ModuleExportName | null })
         .exported;
     return exported ? getModuleExportName(exported) : undefined;
-}
-
-function getResolvedSource(staticDependencies: StaticModuleDependency[], source: string): string {
-    return (
-        staticDependencies.find((dependency) => dependency.source === source)?.resolvedId ?? source
-    );
 }
 
 /**
