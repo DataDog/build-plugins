@@ -7,6 +7,7 @@ Developer notes for the Live Debugger plugin.
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
 -   [Consumer build canary](#consumer-build-canary)
+    -   [Excalidraw target](#excalidraw-target)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
     -   [What it measures](#what-it-measures)
@@ -99,9 +100,33 @@ build fails.
 
 The report records each repository's HEAD commit and whether its worktree was
 dirty when the run started. The canary fails when a build or validation command
-exits unsuccessfully, no JavaScript is emitted, the instrumented output lacks
-Live Debugger markers, or the plugin reports an instrumentation or source-map
-error.
+exits unsuccessfully, no JavaScript is emitted, emitted JavaScript does not
+parse, the instrumented output lacks Live Debugger markers, or the plugin
+reports an instrumentation or source-map error.
+
+### Excalidraw target
+
+The `excalidraw` target builds the public
+[Excalidraw](https://github.com/excalidraw/excalidraw) app (`excalidraw-app`)
+with Vite. By default it expects a checkout next to this repository, with its
+dependencies installed. Excalidraw pins Yarn 1 through its `packageManager`
+field, so `yarn` must honor that field in its checkout, for example through
+Corepack:
+
+```bash
+git clone https://github.com/excalidraw/excalidraw.git ../excalidraw
+(cd ../excalidraw && yarn install --frozen-lockfile)
+yarn cli canary excalidraw
+```
+
+Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
+Babel peer dependencies into the checkout, and generates
+`excalidraw-app/vite.config.live-debugger-canary.mjs`, which wraps the app's
+Vite config. Instrumentation pushes the app's main chunk past its service-worker
+precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
+warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
+Vite config, then reinstalls the checkout's dependencies. Builds are written to
+`excalidraw-app/build/live-debugger-canary/`.
 
 ## Runtime benchmark
 
