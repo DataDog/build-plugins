@@ -104,6 +104,18 @@ export const createExcalidrawPhase = (): CanaryPhase => {
     };
 };
 
+const installExcalidraw = async ({ root, runCommand }: TargetSetupContext): Promise<void> => {
+    const targetEnvironment = getTargetCommandEnvironment(process.env);
+    const installSpec: CommandSpec = {
+        command: 'yarn',
+        args: ['install', '--frozen-lockfile'],
+        cwd: root,
+        env: targetEnvironment,
+        label: 'install Excalidraw dependencies',
+    };
+    await runCheckedCommand(runCommand, installSpec);
+};
+
 const preflightExcalidraw = async ({ root }: TargetSetupContext): Promise<void> => {
     const packageJsonPath = path.resolve(root, EXCALIDRAW_PACKAGE_JSON);
     const appConfigPath = path.resolve(root, APP_DIRECTORY, APP_CONFIG);
@@ -119,7 +131,7 @@ const preflightExcalidraw = async ({ root }: TargetSetupContext): Promise<void> 
     const dependenciesPath = path.resolve(root, EXCALIDRAW_DEPENDENCIES);
     if (!existsSync(dependenciesPath)) {
         throw new CanaryCommandError(
-            'Excalidraw dependencies are not installed. Run "yarn install --frozen-lockfile" in its checkout first.',
+            'Excalidraw dependencies are not installed. Run "yarn install --frozen-lockfile" in its checkout first, or pass --install.',
         );
     }
 
@@ -193,8 +205,15 @@ const setupExcalidraw = async (context: TargetSetupContext): Promise<void> => {
 
 export const excalidrawTarget: CanaryTarget = {
     id: TARGET_ID,
+    repository: {
+        name: 'excalidraw/excalidraw',
+        branch: 'master',
+    },
+    // Excalidraw only declares `engines.node: >=18`, so build with the newest LTS release.
+    nodeVersion: 'lts/*',
     getDefaultRoot: () => path.resolve(ROOT, '../excalidraw'),
     getPhases: () => [createExcalidrawPhase()],
+    install: installExcalidraw,
     preflight: preflightExcalidraw,
     setup: setupExcalidraw,
 };

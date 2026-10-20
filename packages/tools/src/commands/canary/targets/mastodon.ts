@@ -83,6 +83,18 @@ export const createMastodonPhase = (): CanaryPhase => {
     };
 };
 
+const installMastodon = async ({ root, runCommand }: TargetSetupContext): Promise<void> => {
+    const targetEnvironment = getTargetCommandEnvironment(process.env);
+    const installSpec: CommandSpec = {
+        command: 'yarn',
+        args: ['install', '--immutable'],
+        cwd: root,
+        env: targetEnvironment,
+        label: 'install Mastodon dependencies',
+    };
+    await runCheckedCommand(runCommand, installSpec);
+};
+
 const preflightMastodon = async ({ root }: TargetSetupContext): Promise<void> => {
     const packageJsonPath = path.resolve(root, MASTODON_PACKAGE_JSON);
     const appConfigPath = path.resolve(root, APP_CONFIG);
@@ -98,7 +110,7 @@ const preflightMastodon = async ({ root }: TargetSetupContext): Promise<void> =>
     const dependenciesPath = path.resolve(root, MASTODON_DEPENDENCIES);
     if (!existsSync(dependenciesPath)) {
         throw new CanaryCommandError(
-            'Mastodon dependencies are not installed. Run "yarn install --immutable" in its checkout first.',
+            'Mastodon dependencies are not installed. Run "yarn install --immutable" in its checkout first, or pass --install.',
         );
     }
 
@@ -162,8 +174,13 @@ const setupMastodon = async (context: TargetSetupContext): Promise<void> => {
 
 export const mastodonTarget: CanaryTarget = {
     id: TARGET_ID,
+    repository: {
+        name: 'mastodon/mastodon',
+        branch: 'main',
+    },
     getDefaultRoot: () => path.resolve(ROOT, '../mastodon'),
     getPhases: () => [createMastodonPhase()],
+    install: installMastodon,
     preflight: preflightMastodon,
     setup: setupMastodon,
 };

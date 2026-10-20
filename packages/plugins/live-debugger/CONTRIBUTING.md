@@ -7,6 +7,7 @@ Developer notes for the Live Debugger plugin.
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
 -   [Consumer build canary](#consumer-build-canary)
+    -   [Fresh checkouts and CI](#fresh-checkouts-and-ci)
     -   [Excalidraw target](#excalidraw-target)
     -   [Mastodon target](#mastodon-target)
 -   [Runtime benchmark](#runtime-benchmark)
@@ -61,9 +62,10 @@ Run every phase defined by a target with:
 yarn cli canary <target>
 ```
 
-Install the dependencies of both repositories first. A target may refuse to run
-when either checkout already has a local package-link setup, so it cannot
-overwrite an existing development environment.
+Install the dependencies of both repositories first, or pass `--install` to
+install the target's. A target may refuse to run when either checkout already
+has a local package-link setup, so it cannot overwrite an existing development
+environment.
 
 Each phase builds three variants:
 
@@ -104,6 +106,41 @@ dirty when the run started. The canary fails when a build or validation command
 exits unsuccessfully, no JavaScript is emitted, emitted JavaScript does not
 parse, the instrumented output lacks Live Debugger markers, or the plugin
 reports an instrumentation or source-map error.
+
+### Fresh checkouts and CI
+
+Each target declares its GitHub repository and the branch it tracks.
+`canary-checkout` fetches only the tip commit of that branch into an empty
+directory, then resolves the toolchain the checkout declares:
+
+```bash
+yarn cli canary-checkout <target> --root /tmp/canary-target --artifacts-dir /tmp/canary-artifacts
+```
+
+-   `--ref <branch-or-sha>` checks out something else. While upstream is broken,
+    a target can temporarily pin a commit with `repository.pin`, whose reason
+    links the tracking issue. `--ref` still overrides the pin.
+-   Set `GH_TOKEN` to read a private repository. Git receives the token through
+    environment variables, so it doesn't appear in command lines or logs.
+-   The Node.js version comes from the checkout's `.nvmrc`, `.node-version` or
+    `volta.node`, then from the target's `nodeVersion`. Aliases such as
+    `lts/*` and partial versions resolve against
+    `https://nodejs.org/dist/index.json`; set `CANARY_NODE_DIST_URL` to use a
+    mirror. The package manager comes from `packageManager`.
+-   The result is printed and, with `--artifacts-dir`, written to
+    `toolchain.env` for the CI job to install.
+
+Then run the canary on that checkout:
+
+```bash
+yarn cli canary <target> --root /tmp/canary-target --install --no-cleanup --artifacts-dir /tmp/canary-artifacts
+```
+
+`--install` installs the target's dependencies first and retries network
+failures twice. `--no-cleanup` leaves the checkout's changes in place, which is
+only appropriate for a disposable checkout. `--artifacts-dir` writes the report
+to `report.json` and each command's output to a numbered file in
+`logs/canary/`, next to `canary-checkout`'s `logs/checkout/`.
 
 ### Excalidraw target
 
