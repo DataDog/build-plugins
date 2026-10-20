@@ -211,6 +211,59 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
+        test('Should retry on transient fetch network errors (e.g. ECONNRESET / EPIPE)', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const onRetryMock = jest.fn();
+            const connResetCause = Object.assign(new Error('write ECONNRESET'), {
+                code: 'ECONNRESET',
+            });
+            const fetchFailedError = Object.assign(new TypeError('fetch failed'), {
+                cause: connResetCause,
+            });
+            const fetchImpl = jest
+                .fn()
+                .mockRejectedValueOnce(fetchFailedError)
+                .mockResolvedValueOnce(new Response('{"data":"ok"}'));
+
+            const response = await doRequest({
+                ...requestOpts,
+                retries: 2,
+                minTimeout: 1,
+                maxTimeout: 5,
+                onRetry: onRetryMock,
+                fetchImpl,
+            });
+
+            expect(response).toEqual({ data: 'ok' });
+            expect(fetchImpl).toHaveBeenCalledTimes(2);
+            expect(onRetryMock).toHaveBeenCalledTimes(1);
+            expect(onRetryMock).toHaveBeenCalledWith(fetchFailedError, 1);
+        });
+
+        test('Should bail without retrying when AbortSignal is aborted', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const onRetryMock = jest.fn();
+            const controller = new AbortController();
+            controller.abort();
+            const abortError = Object.assign(new Error('The operation was aborted'), {
+                name: 'AbortError',
+            });
+            const fetchImpl = jest.fn().mockRejectedValue(abortError);
+
+            await expect(
+                doRequest({
+                    ...requestOpts,
+                    retries: 3,
+                    signal: controller.signal,
+                    onRetry: onRetryMock,
+                    fetchImpl,
+                }),
+            ).rejects.toThrow('The operation was aborted');
+
+            expect(fetchImpl).toHaveBeenCalledTimes(1);
+            expect(onRetryMock).not.toHaveBeenCalled();
+        });
+
         test('Should add authentication headers when using API and APP keys.', async () => {
             const fetchMock = jest
                 .spyOn(global, 'fetch')
@@ -290,6 +343,37 @@ describe('Request Helpers', () => {
                     }),
                 }),
             );
+        });
+    });
+
+    describe('createRequestData', () => {
+        test('Should materialize compressed body and set Content-Length before returning', async () => {
+            const { createRequestData } = await import('@dd/core/helpers/request');
+            let formConsumed = false;
+
+            const { data, headers } = await createRequestData({
+                getForm: () => {
+                    const form = new FormData();
+                    form.append(
+                        'event',
+                        new Blob([JSON.stringify({ service: 'web-ui' })], {
+                            type: 'application/json',
+                        }),
+                        'event',
+                    );
+                    formConsumed = true;
+                    return form;
+                },
+                defaultHeaders: { 'DD-EVP-ORIGIN': 'rspack-build-plugin_sourcemaps' },
+                zip: true,
+            });
+
+            expect(formConsumed).toBe(true);
+            expect(headers['Content-Encoding']).toBe('gzip');
+            expect(Number(headers['Content-Length'])).toBeGreaterThan(0);
+
+            const compressedBytes = new Uint8Array(await new Response(data).arrayBuffer());
+            expect(String(compressedBytes.byteLength)).toBe(headers['Content-Length']);
         });
     });
 });
