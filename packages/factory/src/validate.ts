@@ -76,12 +76,12 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
     }
     if (
         runtimeOptions.upload !== true &&
-        ['bailOnError', 'dryRun', 'maxConcurrency'].some(
+        ['bailOnError', 'dryRun', 'experimentalDuplicateCheck', 'maxConcurrency'].some(
             (option) => runtimeOptions[option] !== undefined,
         )
     ) {
         errors.push(
-            'sourcemaps.bailOnError, sourcemaps.dryRun, and sourcemaps.maxConcurrency require sourcemaps.upload to be true',
+            'sourcemaps.bailOnError, sourcemaps.dryRun, sourcemaps.experimentalDuplicateCheck, and sourcemaps.maxConcurrency require sourcemaps.upload to be true',
         );
     }
     if (options.rum?.sourceCodeContext?.debugId === false) {
@@ -123,6 +123,9 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
                     bailOnError: sourcemaps.bailOnError,
                 }),
                 ...(sourcemaps.dryRun !== undefined && { dryRun: sourcemaps.dryRun }),
+                ...(sourcemaps.experimentalDuplicateCheck !== undefined && {
+                    experimentalDuplicateCheck: sourcemaps.experimentalDuplicateCheck,
+                }),
                 ...(sourcemaps.maxConcurrency !== undefined && {
                     maxConcurrency: sourcemaps.maxConcurrency,
                 }),

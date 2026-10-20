@@ -9,7 +9,11 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 <!-- This is auto generated with yarn cli integrity -->
 
 <!-- #toc -->
--   [Required peer dependencies](#required-peer-dependencies)
+-   [Prerequisites](#prerequisites)
+    -   [Source maps](#source-maps)
+    -   [Service and version](#service-and-version)
+    -   [Required peer dependencies](#required-peer-dependencies)
+-   [Limitations during Preview](#limitations-during-preview)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
@@ -24,6 +28,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.decorators](#livedebuggerdecorators)
 -   [Symbol upload](#symbol-upload)
 -   [Skipped function types](#skipped-function-types)
+-   [Bundle size impact](#bundle-size-impact)
 -   [Runtime requirements](#runtime-requirements)
     -   [Safe fallback when the SDK is absent](#safe-fallback-when-the-sdk-is-absent)
     -   [Build metadata](#build-metadata)
@@ -31,7 +36,21 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [Activating probes](#activating-probes)
 <!-- #toc -->
 
-## Required peer dependencies
+## Prerequisites
+
+### Source maps
+
+Datadog resolves the deployed build and its source code through the [debug ID in the build metadata](#build-metadata). Upload the build's source maps by debug ID, with Git metadata, to the same Datadog site and organization that receives the Browser Live Debugger data:
+
+- Generate source maps in your bundler, and set `debugId: true` and `upload: true` in the top-level [`sourcemaps`](/#sourcemaps) option. Existing [`errorTracking.sourcemaps`](/packages/plugins/error-tracking#sourcemaps-upload) configurations must upload by debug ID rather than by service and version.
+- Keep [`enableGit`](/#enablegit) enabled (the default) and build from a Git checkout of the deployed commit. Set [`gitRepositoryUrl`](/#gitrepositoryurl) if CI clones through a mirror or proxy.
+- Set [`auth.site`](/#authsite) to the site that the [Browser Debugger SDK](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#prerequisites) sends data to, and use an API key from the same organization as the SDK's client token.
+
+### Service and version
+
+Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload).
+
+### Required peer dependencies
 
 The Live Debugger transform relies on Babel and `magic-string`. To keep the cost of
 `@datadog/*-plugin` packages small for projects that don't use Live Debugger, these
@@ -51,6 +70,15 @@ pnpm add --save-dev @babel/parser @babel/traverse @babel/types magic-string
 
 If any of these packages is missing when the plugin tries to instrument a file,
 the plugin throws an error with the exact install command above.
+
+## Limitations during Preview
+
+Browser Live Debugger is in Preview, with the following limitations:
+
+- Probes can be added only to named functions. Set [`liveDebugger.namedOnly`](#livedebuggernamedonly) to `true` to skip instrumenting anonymous functions, which would only add overhead.
+- All instrumented code on a page must come from a single build of one Git repository and commit. Pages that combine separately built or deployed instrumented code, such as micro-frontends, Module Federation remotes, or embedded widgets, aren't supported yet. Monorepos and code-split bundles are fine.
+- Your bundler's root directory (such as webpack's `context` or Vite's `root`) must be the root of your Git repository. Otherwise, probes are accepted but never fire. For the same reason, functions in Yarn PnP workspace packages that have peer dependencies can't be probed.
+- This plugin and the Browser Debugger SDK may get breaking changes during the Preview. You may need to upgrade, rebuild, and redeploy to keep debugging working, but your application itself should keep working normally.
 
 ## Configuration
 
@@ -83,9 +111,7 @@ Each instrumented function gets:
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
 
-The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
-
-When `metadata.version` is set, it should match the immutable deployed build identifier used by your Browser Debugger SDK initialization. If you also upload sourcemaps through the Error Tracking plugin, use the same value for `errorTracking.sourcemaps.releaseVersion`.
+The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the guarded `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
 **Example transformation:**
 
@@ -98,7 +124,7 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -148,7 +174,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-If omitted, Live Debugger instrumentation still works, but [symbols](#symbol-upload) aren't uploaded, and browser build lookup and source-code-aware resolution will gracefully degrade.
+[Symbols](#symbol-upload) are only uploaded when `metadata.version` is set. It also enables version-specific probe targeting.
 
 ### liveDebugger.include
 
@@ -282,6 +308,18 @@ When something is missing, the plugin logs a warning and skips the upload. Devel
 The following function types are always skipped regardless of configuration:
 - **Generators** — `function*` declarations and expressions
 - **Constructors** — `constructor()` methods in classes
+- **Functions that see a local `globalThis` binding** — e.g. a `globalThis` parameter or a module-level `var globalThis`, which would shadow the global the [safe fallback](#safe-fallback-when-the-sdk-is-absent) reads
+
+## Bundle size impact
+
+Instrumentation adds code to every instrumented function, so the emitted JavaScript grows. The growth depends on how much of each chunk is your own code, because `node_modules` is [excluded](#livedebuggerexclude) by default. The added code compresses well, so the gzipped size grows far less than the uncompressed size.
+
+Check the size limits your build enforces before enabling Live Debugger, especially limits on uncompressed file size:
+
+- **Service-worker precache limits**, such as `maximumFileSizeToCacheInBytes` in `vite-plugin-pwa` or Workbox. Depending on the tool, a file over the limit either fails the build or is left out of the precache, so it is no longer available offline.
+- **Bundle budgets and size checks**, such as Angular CLI `budgets` with an error threshold, webpack's `performance.hints: 'error'`, or CI tools like `size-limit`.
+
+If a chunk no longer fits, raise the limit, or instrument less of your code with [`include`](#livedebuggerinclude), [`exclude`](#livedebuggerexclude), [`namedOnly`](#livedebuggernamedonly), or [`functionTypes`](#livedebuggerfunctiontypes).
 
 ## Runtime requirements
 
@@ -289,17 +327,19 @@ The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd
 
 ### Safe fallback when the SDK is absent
 
-The plugin automatically injects a minimal no-op stub into every output chunk:
+Every instrumented function only calls `$dd_probes` when it is defined:
 
 ```javascript
-if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = function() {} }
+let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
 ```
 
-This ensures that instrumented code never crashes, even if the SDK has not been loaded. The stub makes `$dd_probes` return `undefined`, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+
+This also covers instrumented code that runs in another global scope than the page, such as a sandboxed iframe, a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
 
 ### Build metadata
 
-The same injected code defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
+The plugin injects code into every output chunk that defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
 
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
@@ -323,7 +363,7 @@ Each instrumented function holds a single binding that identifies the call curre
 
 ```js
 function add(a, b) {
-    let $dd_p0 = $dd_probes('src/math.ts;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/math.ts;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -343,4 +383,4 @@ Two properties of this contract are load-bearing for the generated code:
 
 ### Activating probes
 
-When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it overwrites `$dd_probes` with the real implementation and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
+When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it defines `$dd_probes` and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.

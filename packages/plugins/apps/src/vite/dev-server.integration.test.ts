@@ -11,7 +11,12 @@
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
-import { createDevServerMiddleware } from '@dd/apps-plugin/vite/dev-server';
+import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
+import {
+    createDevServerMiddleware,
+    DEBUG_BUNDLE_ROUTE,
+    EXECUTE_ACTION_ROUTE,
+} from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
@@ -24,6 +29,7 @@ import {
     getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs';
+import http from 'http';
 import nock from 'nock';
 import os from 'os';
 import path from 'path';
@@ -190,6 +196,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
@@ -201,6 +208,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -233,6 +241,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
@@ -244,6 +253,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -270,6 +280,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             server.ssrLoadModule.bind(server),
@@ -281,6 +292,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -346,6 +358,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             loadModule,
@@ -357,6 +370,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -396,6 +410,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             loadModule,
@@ -407,6 +422,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -455,6 +471,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             appKey: 'test-app-key',
             site: 'datadoghq.com',
         };
+        const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
             loadModule,
@@ -466,6 +483,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             FIXTURE_ROOT,
             getMockLogger(),
             'development',
+            isHostAllowed,
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -959,4 +977,193 @@ describe('Dev Server Middleware — dynamic imports inside a backend function', 
             rmSync(outsideTmpDir);
         }
     }, 30000);
+});
+
+describe('Dev Server Middleware — request origin and host checks over real HTTP', () => {
+    const VITE_ADDITIONAL_ALLOWED_HOSTS_ENV = '__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS';
+    const previewSuffix = '.preview.example';
+    const configuredOriginHost = 'origin.internal';
+    let server: ViteDevServer;
+    let port: number;
+
+    function request(
+        method: string,
+        urlPath: string,
+        headers: http.OutgoingHttpHeaders,
+        body?: string,
+    ): Promise<{ status: number; body: string }> {
+        return new Promise((resolve, reject) => {
+            const req = http.request(
+                { host: '127.0.0.1', port, method, path: urlPath, headers },
+                (res) => {
+                    let responseBody = '';
+                    res.on('data', (chunk: Buffer) => {
+                        responseBody += chunk.toString();
+                    });
+                    res.on('end', () =>
+                        resolve({ status: res.statusCode ?? 0, body: responseBody }),
+                    );
+                },
+            );
+            req.on('error', reject);
+            req.end(body);
+        });
+    }
+
+    const functionName = encodeQueryName(getRuntimeUsersFunc);
+    const debugBundleBody = JSON.stringify({ functionName });
+    const executeActionBody = JSON.stringify({ functionName, args: [] });
+    const unknownFunctionBody = JSON.stringify({ functionName: 'unknown' });
+    const postDebugBundle = (headers: http.OutgoingHttpHeaders) =>
+        request('POST', DEBUG_BUNDLE_ROUTE, headers, debugBundleBody);
+
+    beforeAll(async () => {
+        const context = getContextMock({ buildRoot: FIXTURE_ROOT });
+        const appsPlugin: Plugin = {
+            name: 'dd-apps-test',
+            ...getVitePlugin({
+                bundler: { build },
+                context,
+                options: { include: [], tags: [], longPolling: mockLongPolling },
+            }),
+        };
+
+        // Hosted preview environments set this so Vite answers to their proxy's host.
+        const previousAllowedHosts = process.env[VITE_ADDITIONAL_ALLOWED_HOSTS_ENV];
+        process.env[VITE_ADDITIONAL_ALLOWED_HOSTS_ENV] = previewSuffix;
+        try {
+            server = await createServer({
+                configFile: false,
+                root: FIXTURE_ROOT,
+                logLevel: 'silent',
+                server: {
+                    host: '127.0.0.1',
+                    port: 0,
+                    hmr: false,
+                    origin: `http://${configuredOriginHost}`,
+                },
+                plugins: [appsPlugin],
+                optimizeDeps: { noDiscovery: true },
+            });
+        } finally {
+            if (previousAllowedHosts === undefined) {
+                delete process.env[VITE_ADDITIONAL_ALLOWED_HOSTS_ENV];
+            } else {
+                process.env[VITE_ADDITIONAL_ALLOWED_HOSTS_ENV] = previousAllowedHosts;
+            }
+        }
+        await server.listen();
+        const address = server.httpServer?.address();
+        if (!address || typeof address === 'string') {
+            throw new Error('Expected the dev server to listen on a TCP port');
+        }
+        port = address.port;
+        await server.ssrLoadModule(getRuntimeUsersFunc.absolutePath);
+        nock.enableNetConnect(`127.0.0.1:${port}`);
+    }, 30000);
+
+    afterAll(async () => {
+        nock.disableNetConnect();
+        await server?.close();
+    });
+
+    test('Should serve a same-origin JSON request on localhost', async () => {
+        const response = await postDebugBundle({
+            host: `localhost:${port}`,
+            origin: `http://localhost:${port}`,
+            'content-type': 'application/json',
+        });
+
+        expect(response.status).toBe(200);
+    }, 30000);
+
+    test('Should serve a request proxied under an allowed preview proxy host', async () => {
+        const previewHost = `app-${port}${previewSuffix}`;
+        const response = await postDebugBundle({
+            host: previewHost,
+            origin: `https://${previewHost}`,
+            'content-type': 'application/json',
+        });
+
+        expect(response.status).toBe(200);
+    }, 30000);
+
+    test.each([
+        {
+            description: 'a cross-site Origin',
+            headers: (p: number) => ({
+                host: `localhost:${p}`,
+                origin: 'https://attacker.example',
+                'content-type': 'application/json',
+            }),
+            expectedStatus: 403,
+        },
+        {
+            description: 'a text/plain body',
+            headers: (p: number) => ({
+                host: `127.0.0.1:${p}`,
+                origin: `http://127.0.0.1:${p}`,
+                'content-type': 'text/plain',
+            }),
+            expectedStatus: 415,
+        },
+        {
+            description: 'a same-origin request under a host Vite would not serve',
+            headers: (p: number) => ({
+                host: `attacker.example:${p}`,
+                origin: `http://attacker.example:${p}`,
+                'content-type': 'application/json',
+            }),
+            expectedStatus: 403,
+        },
+    ])(
+        `Should reject ${EXECUTE_ACTION_ROUTE} with $expectedStatus for $description`,
+        async ({ headers, expectedStatus }) => {
+            const requestHeaders = headers(port);
+            const response = await request(
+                'POST',
+                EXECUTE_ACTION_ROUTE,
+                requestHeaders,
+                executeActionBody,
+            );
+
+            const body = JSON.parse(response.body);
+
+            expect(response.status).toBe(expectedStatus);
+            expect(body.success).toBe(false);
+        },
+    );
+
+    test.each([
+        'localhost',
+        '127.0.0.1',
+        'app.localhost',
+        'attacker.example',
+        `app-5173${previewSuffix}`,
+        previewSuffix.slice(1),
+        `not${previewSuffix.slice(1)}`,
+        '[::1]',
+        configuredOriginHost,
+        `sub.${configuredOriginHost}`,
+    ])(
+        "Should accept the host %s exactly when Vite's own host check does",
+        async (hostname) => {
+            const host = `${hostname}:${port}`;
+            const viteResponse = await request('GET', '/@vite/client', { host });
+            const ownHeaders = {
+                host,
+                origin: `http://${host}`,
+                'content-type': 'application/json',
+            };
+            const ownResponse = await request(
+                'POST',
+                DEBUG_BUNDLE_ROUTE,
+                ownHeaders,
+                unknownFunctionBody,
+            );
+
+            expect(ownResponse.status).toBe(viteResponse.status === 403 ? 403 : 404);
+        },
+        30000,
+    );
 });

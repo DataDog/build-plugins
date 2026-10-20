@@ -13,6 +13,7 @@ import {
     SOURCEMAPS_API_PATH,
 } from '@dd/error-tracking-plugin/sourcemaps/sender';
 import { SOURCEMAP_UPLOAD_METRIC_PREFIX } from '@dd/error-tracking-plugin/sourcemaps/upload-metrics';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
     getContextMock,
     getRepositoryDataMock,
@@ -27,6 +28,7 @@ import {
 import os from 'os';
 import path from 'path';
 
+import { getExistingDebugIds } from './check-exists';
 import * as payloadModule from './payload';
 
 jest.mock('@dd/core/helpers/fs', () => {
@@ -43,6 +45,14 @@ jest.mock('@dd/core/helpers/request', () => {
     return {
         ...original,
         doRequest: jest.fn(),
+    };
+});
+
+jest.mock('./check-exists', () => {
+    const original = jest.requireActual('./check-exists');
+    return {
+        ...original,
+        getExistingDebugIds: jest.fn(),
     };
 });
 
@@ -64,22 +74,14 @@ const senderContextMock = {
 
 describe('Error Tracking Plugin Sourcemaps', () => {
     describe('getIntakeUrl', () => {
-        const realProcessEnv = process.env;
-        // A synthetic literal, never derived from the real process.env — beforeEach resets
-        // from it before every test, so a real value here would leak into all of them.
-        const baselineEnv = {
-            PATH: '/usr/bin',
-            HOME: '/home/dev',
-            NODE_ENV: 'test',
-            TMPDIR: '/tmp',
-        };
+        let restoreEnv: () => void;
 
         beforeEach(() => {
-            process.env = { ...baselineEnv };
+            restoreEnv = clearDatadogEnv();
         });
 
-        afterAll(() => {
-            process.env = realProcessEnv;
+        afterEach(() => {
+            restoreEnv();
         });
 
         test('Should return correct intake URL for US3 site', () => {
@@ -558,6 +560,243 @@ describe('Error Tracking Plugin Sourcemaps', () => {
                     'error_type:http_408',
                 ]),
             });
+        });
+    });
+
+    describe('sendSourcemaps duplicate check', () => {
+        const getExistingDebugIdsMock = jest.mocked(getExistingDebugIds);
+        const duplicateDebugId = '12345678-1234-4123-8123-123456789012';
+        const otherDebugId = '22345678-1234-4123-8123-123456789012';
+
+        // Each sourcemap needs its own minified file holding a real debug ID, because the plugin
+        // reads them back off disk instead of trusting a filename.
+        const addDebugIdSourcemaps = (dirName: string, debugIds: string[]) => {
+            const tempDir = path.join(os.tmpdir(), dirName);
+            const sourcemaps = debugIds.map((debugId, index) => {
+                const minifiedFilePath = path.join(tempDir, `chunk-${index}.js`);
+                const sourcemapFilePath = path.join(tempDir, `chunk-${index}.js.map`);
+                const minifiedFileContent = `({"ddDebugId":"${debugId}"},"DD_SOURCE_CODE_CONTEXT");`;
+                const sourcemapContent = '{"version":3,"sources":[]}';
+                outputFileSync(minifiedFilePath, minifiedFileContent);
+                outputFileSync(sourcemapFilePath, sourcemapContent);
+                addFixtureFiles({
+                    [minifiedFilePath]: minifiedFileContent,
+                    [sourcemapFilePath]: sourcemapContent,
+                });
+
+                return getSourcemapMock({
+                    minifiedFilePath,
+                    minifiedPathPrefix: undefined,
+                    minifiedUrl: `chunk-${index}.js`,
+                    relativePath: `chunk-${index}.js`,
+                    sourcemapFilePath,
+                });
+            });
+
+            return { sourcemaps, tempDir };
+        };
+
+        const getDuplicateCheckOptions = () =>
+            getDebugIdSourcemapsConfiguration({ experimentalDuplicateCheck: true });
+
+        beforeEach(() => {
+            getExistingDebugIdsMock.mockReset();
+        });
+
+        test('Should skip the sourcemaps that already exist and upload the remaining ones', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check',
+                [duplicateDebugId, otherDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+            const getPayloadSpy = jest.spyOn(payloadModule, 'getPayload');
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getExistingDebugIdsMock).toHaveBeenCalledWith([duplicateDebugId, otherDebugId], {
+                apiKey: senderContextMock.apiKey,
+                bundlerName: senderContextMock.bundlerName,
+                site: senderContextMock.site,
+                version: senderContextMock.version,
+            });
+            // Only the sourcemap Datadog does not have yet reaches the upload.
+            expect(getPayloadSpy).toHaveBeenCalledTimes(1);
+            expect(getPayloadSpy).toHaveBeenCalledWith(
+                expect.objectContaining({ minifiedFilePath: sourcemaps[1].minifiedFilePath }),
+                expect.any(Object),
+                undefined,
+                senderContextMock.git,
+                otherDebugId,
+            );
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('already exists in Datadog'),
+                'debug',
+            );
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringMatching(/Skipped .*1\/2.* sourcemaps that already exist in Datadog/),
+                'info',
+            );
+
+            getPayloadSpy.mockRestore();
+            rmSync(tempDir);
+        });
+
+        test('Should run the duplicate check during a dry run', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-dry-run',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+            const dryRunOptions = getDebugIdSourcemapsConfiguration({
+                dryRun: true,
+                experimentalDuplicateCheck: true,
+            });
+
+            await sendSourcemaps(sourcemaps, dryRunOptions, senderContextMock, mockLogger);
+
+            expect(getExistingDebugIdsMock).toHaveBeenCalledTimes(1);
+            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining('already exists in Datadog'),
+                'debug',
+            );
+
+            rmSync(tempDir);
+        });
+
+        test('Should not query the endpoint unless the duplicate check is enabled', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-disabled',
+                [duplicateDebugId],
+            );
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDebugIdSourcemapsConfiguration(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(getExistingDebugIdsMock).not.toHaveBeenCalled();
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+
+            rmSync(tempDir);
+        });
+
+        test('Should not query the endpoint without an API key', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-no-api-key',
+                [duplicateDebugId],
+            );
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                { ...senderContextMock, apiKey: undefined },
+                mockLogger,
+            );
+
+            expect(getExistingDebugIdsMock).not.toHaveBeenCalled();
+
+            rmSync(tempDir);
+        });
+
+        test('Should upload everything when the duplicate check fails', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-failure',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockRejectedValue(new Error('HTTP 404 Not Found'));
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringContaining(
+                    'Could not check for existing sourcemaps, uploading all of them: HTTP 404 Not Found',
+                ),
+                'warn',
+            );
+
+            rmSync(tempDir);
+        });
+
+        test('Should not upload anything when every sourcemap already exists', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-all',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(doRequestMock).not.toHaveBeenCalled();
+            // The duplicate summary is enough of an explanation; no "No sourcemaps to upload" warning.
+            expect(mockLogFn).not.toHaveBeenCalledWith(
+                expect.stringContaining('No sourcemaps to upload'),
+                'warn',
+            );
+
+            rmSync(tempDir);
+        });
+
+        test('Should report the skipped sourcemaps as a metric when metrics are enabled', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-metric',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                { ...senderContextMock, sendMetrics: true },
+                mockLogger,
+            );
+
+            expect(uploadContextMock.addMetric).toHaveBeenCalledWith({
+                metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.skipped_existing`,
+                type: 'count',
+                points: [[expect.any(Number), 1]],
+                tags: [],
+            });
+
+            rmSync(tempDir);
+        });
+
+        test('Should not report a metric when metrics are disabled', async () => {
+            const { sourcemaps, tempDir } = addDebugIdSourcemaps(
+                'dd-build-plugins-duplicate-check-no-metric',
+                [duplicateDebugId],
+            );
+            getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
+
+            await sendSourcemaps(
+                sourcemaps,
+                getDuplicateCheckOptions(),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(uploadContextMock.addMetric).not.toHaveBeenCalled();
+
+            rmSync(tempDir);
         });
     });
 });

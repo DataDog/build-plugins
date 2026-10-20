@@ -2,14 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { datadogRollupPlugin } from '@datadog/rollup-plugin';
 import { datadogRspackPlugin } from '@datadog/rspack-plugin';
 import { outputFileSync, readFileSync, rm } from '@dd/core/helpers/fs';
 import { getUniqueId } from '@dd/core/helpers/strings';
 import { prepareWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
-import { buildWithRspack } from '@dd/tools/bundlers';
+import { buildWithRollup, buildWithRspack } from '@dd/tools/bundlers';
 import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import path from 'path';
+import type { RollupOptions } from 'rollup';
 
 // Tiny rspack/webpack loader that publishes an identity source map for the
 // modules it touches. It is required because unplugin's rspack/webpack
@@ -222,4 +224,87 @@ describe('Live Debugger sourcemaps', () => {
             expect(resolved.line).not.toBeGreaterThan(5);
         }
     });
+
+    // Rollup drops a module's mappings when a transform returns code without a
+    // map, so modules the plugin leaves unchanged must not report a missing map.
+    const unchangedModuleCases = [
+        {
+            description: 'a module without functions',
+            name: 'no-functions',
+            source: ['export const LABELS = [', "    ['live', 'debugger'].join('-'),", '];'].join(
+                '\n',
+            ),
+            marker: "['live', 'debugger']",
+            expectedLine: 2,
+        },
+        {
+            description: 'a module with only generator functions',
+            name: 'generators-only',
+            source: ['export function* labels() {', "    yield 'live-debugger';", '}'].join('\n'),
+            marker: "yield 'live-debugger'",
+            expectedLine: 2,
+        },
+    ];
+
+    test.each(unchangedModuleCases)(
+        'should keep the Rollup source map of $description',
+        async ({ name, source, marker, expectedLine }) => {
+            const caseDir = path.resolve(workingDir, `rollup-unchanged-${name}`);
+            const entry = path.resolve(caseDir, 'entry.js');
+            const unchangedModule = path.resolve(caseDir, 'unchanged.js');
+            const outDir = path.resolve(caseDir, 'dist');
+            const entrySource = [
+                "import * as unchanged from './unchanged.js';",
+                'export function describeUnchanged() {',
+                "    return Object.keys(unchanged).join(',');",
+                '}',
+            ].join('\n');
+            outputFileSync(unchangedModule, source);
+            outputFileSync(entry, entrySource);
+
+            const warningCodes: Array<string | undefined> = [];
+            const rollupConfig: RollupOptions = {
+                input: { main: entry },
+                onwarn: (warning) => {
+                    warningCodes.push(warning.code);
+                },
+                output: {
+                    dir: outDir,
+                    entryFileNames: '[name].js',
+                    format: 'esm',
+                    sourcemap: true,
+                },
+                plugins: [
+                    datadogRollupPlugin({
+                        ...defaultPluginOptions,
+                        liveDebugger: {
+                            enable: true,
+                        },
+                    }),
+                ],
+            };
+            const { errors } = await buildWithRollup(rollupConfig);
+
+            expect(errors).toEqual([]);
+            expect(warningCodes).not.toContain('SOURCEMAP_BROKEN');
+
+            const bundlePath = path.resolve(outDir, 'main.js');
+            const sourceMapPath = path.resolve(outDir, 'main.js.map');
+            const bundle = readFileSync(bundlePath);
+            const sourceMapContent = readFileSync(sourceMapPath);
+            const sourceMap = JSON.parse(sourceMapContent);
+            const lines = bundle.split('\n');
+            const markerLine = lines.findIndex((line) => line.includes(marker));
+            expect(markerLine).toBeGreaterThan(-1);
+
+            const traceMap = new TraceMap(sourceMap);
+            const markerColumn = lines[markerLine].indexOf(marker);
+            const resolved = originalPositionFor(traceMap, {
+                line: markerLine + 1,
+                column: markerColumn,
+            });
+            expect(resolved.source).toMatch(/unchanged\.js$/);
+            expect(resolved.line).toBe(expectedLine);
+        },
+    );
 });

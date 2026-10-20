@@ -96,6 +96,19 @@ export const getSourcemapUploadMetrics = (uploadMetrics: SourcemapUploadMetrics)
     }));
 };
 
+// Counts the sourcemaps the duplicate check kept out of the upload.
+// Carries no `service` tag on purpose: the check only runs in debug-ID mode, where a
+// service is not part of the configuration.
+export const getSkippedExistingMetric = (count: number): Metric => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    return {
+        metric: `${SOURCEMAP_UPLOAD_METRIC_PREFIX}.skipped_existing`,
+        type: 'count',
+        points: [[timestamp, count]],
+        tags: [],
+    };
+};
+
 export const addSourcemapUploadMetrics = (
     uploadMetrics: SourcemapUploadMetrics,
     context: UploadContext,

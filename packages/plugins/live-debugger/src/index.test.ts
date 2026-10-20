@@ -63,13 +63,17 @@ function getTransformHook(plugin: ReturnType<typeof getLiveDebuggerPlugin>) {
     return transform;
 }
 
+// Returns null when the plugin leaves the file unchanged.
 function getHandler(
     options: LiveDebuggerOptionsWithDefaults,
-): (code: string, id: string) => { code: string } {
+): (code: string, id: string) => { code: string } | null {
     const { handler } = getTransformHook(getLiveDebuggerPlugin(options, mockContext));
     return (code: string, id: string) => {
         const result = handler.call(mockBuildContext, code, id);
-        if (typeof result === 'object' && result !== null && 'code' in result) {
+        if (result === null) {
+            return null;
+        }
+        if (typeof result === 'object' && 'code' in result) {
             return { code: result.code };
         }
         throw new Error('Unexpected handler result');
@@ -108,7 +112,10 @@ describe('getLiveDebuggerPlugin', () => {
 
                 const handler = (code: string, id: string) => {
                     const result = transform.handler.call(mockBuildContext, code, id);
-                    if (typeof result === 'object' && result !== null && 'code' in result) {
+                    if (result === null) {
+                        return null;
+                    }
+                    if (typeof result === 'object' && 'code' in result) {
                         return { code: result.code };
                     }
                     throw new Error('Unexpected handler result');
@@ -119,7 +126,7 @@ describe('getLiveDebuggerPlugin', () => {
 
                 // The first file WITH functions should still be instrumented
                 const result = handler('function f() { return 1; }', '/src/utils.ts');
-                expect(result.code).toContain('$dd_probes');
+                expect(result?.code).toContain('$dd_probes');
             });
         });
 
@@ -142,7 +149,10 @@ describe('getLiveDebuggerPlugin', () => {
 
                 const handler = (code: string, id: string) => {
                     const result = transform.handler.call(mockBuildContext, code, id);
-                    if (typeof result === 'object' && result !== null && 'code' in result) {
+                    if (result === null) {
+                        return null;
+                    }
+                    if (typeof result === 'object' && 'code' in result) {
                         return { code: result.code };
                     }
                     throw new Error('Unexpected handler result');
@@ -150,12 +160,11 @@ describe('getLiveDebuggerPlugin', () => {
 
                 // First file with functions — within limit
                 const result1 = handler('function f() { return 1; }', '/src/a.ts');
-                expect(result1.code).toContain('$dd_probes');
+                expect(result1?.code).toContain('$dd_probes');
 
-                // Second file with functions — exceeds limit
-                const code2 = 'function g() { return 2; }';
-                const result2 = handler(code2, '/src/b.ts');
-                expect(result2.code).toBe(code2);
+                // Second file with functions — exceeds limit, left unchanged
+                const result2 = handler('function g() { return 2; }', '/src/b.ts');
+                expect(result2).toBeNull();
             });
         });
     });
@@ -165,14 +174,14 @@ describe('getLiveDebuggerPlugin', () => {
             const handler = getHandler(makeOptions({ include: [/\.tsx?$/] }));
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/src/utils.js')).toEqual({ code });
+            expect(handler(code, '/src/utils.js')).toBeNull();
         });
 
         it('should process files matching an include pattern', () => {
             const handler = getHandler(makeOptions({ include: [/\.tsx?$/] }));
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/src/utils.ts').code).toContain('$dd_probes');
+            expect(handler(code, '/src/utils.ts')?.code).toContain('$dd_probes');
         });
 
         it.each(DEFAULT_FILE_EXTENSIONS)(
@@ -181,7 +190,7 @@ describe('getLiveDebuggerPlugin', () => {
                 const handler = getHandler(makeOptions({ include: [], exclude: [] }));
                 const code = 'function f() { return 1; }';
 
-                expect(handler(code, `/src/utils${extension}`).code).toContain('$dd_probes');
+                expect(handler(code, `/src/utils${extension}`)?.code).toContain('$dd_probes');
             },
         );
 
@@ -194,8 +203,8 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/project/src/styles.css')).toEqual({ code });
-            expect(handler(code, '/project/src/utils.ts').code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/styles.css')).toBeNull();
+            expect(handler(code, '/project/src/utils.ts')?.code).toContain('$dd_probes');
         });
 
         it('should process a custom file extension', () => {
@@ -208,8 +217,8 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/project/src/component.vue').code).toContain('$dd_probes');
-            expect(handler(code, '/project/src/utils.ts')).toEqual({ code });
+            expect(handler(code, '/project/src/component.vue')?.code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/utils.ts')).toBeNull();
         });
 
         it('should process any file extension when configured with "all"', () => {
@@ -222,14 +231,14 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/project/src/anything.xyz').code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/anything.xyz')?.code).toContain('$dd_probes');
         });
 
         it('should match file extensions case-insensitively before an ID query', () => {
             const handler = getHandler(makeOptions({ include: [], exclude: [] }));
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/src/component.TSX?loader=transformed').code).toContain(
+            expect(handler(code, '/src/component.TSX?loader=transformed')?.code).toContain(
                 '$dd_probes',
             );
         });
@@ -243,7 +252,7 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/node_modules/dep/index.ts')).toEqual({ code });
+            expect(handler(code, '/node_modules/dep/index.ts')).toBeNull();
         });
 
         it('should support glob include patterns', () => {
@@ -251,8 +260,8 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
             const projectRoot = process.cwd();
 
-            expect(handler(code, `${projectRoot}/src/utils.ts`).code).toContain('$dd_probes');
-            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toEqual({ code });
+            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toBeNull();
         });
 
         it('should support glob exclude patterns', () => {
@@ -265,8 +274,8 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
             const projectRoot = process.cwd();
 
-            expect(handler(code, `${projectRoot}/src/utils.ts`).code).toContain('$dd_probes');
-            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toEqual({ code });
+            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toBeNull();
         });
     });
 
@@ -361,9 +370,14 @@ describe('getLiveDebuggerPlugin', () => {
             expect(map.sources).toContain(id);
         });
 
-        it('returns no map when the file has no instrumentable functions', () => {
-            const result = callHandler(mockBuildContext, 'const x = 42;', '/src/utils.ts');
-            expect(result.map).toBeUndefined();
+        it('leaves a file without instrumentable functions unchanged so its map is kept', () => {
+            const plugin = getLiveDebuggerPlugin(
+                makeOptions({ include: [], exclude: [] }),
+                mockContext,
+            );
+            const { handler } = getTransformHook(plugin);
+            const result = handler.call(mockBuildContext, 'const x = 42;', '/src/utils.ts');
+            expect(result).toBeNull();
         });
 
         it('falls back to the un-composed map and logs an error when composition throws', () => {
@@ -384,7 +398,7 @@ describe('getLiveDebuggerPlugin', () => {
     });
 
     describe('error handling', () => {
-        it('should return original code when transformCode throws', () => {
+        it('should leave the file unchanged when transformCode throws', () => {
             jest.isolateModules(() => {
                 jest.doMock('./transform', () => ({
                     transformCode: () => {
@@ -411,10 +425,7 @@ describe('getLiveDebuggerPlugin', () => {
 
                 const code = 'function f() { return 1; }';
                 const result = transform.handler.call(mockBuildContext, code, '/src/a.ts');
-                if (typeof result !== 'object' || result === null || !('code' in result)) {
-                    throw new Error('Unexpected handler result');
-                }
-                expect(result.code).toBe(code);
+                expect(result).toBeNull();
                 expect(mockLog.error).toHaveBeenCalledWith(
                     expect.stringContaining('Instrumentation Error'),
                     expect.objectContaining({ forward: true }),

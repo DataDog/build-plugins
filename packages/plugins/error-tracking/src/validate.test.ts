@@ -99,6 +99,26 @@ describe('Error Tracking Plugins validate', () => {
                 bailOnError: false,
                 debugId: true,
                 dryRun: false,
+                experimentalDuplicateCheck: false,
+                maxConcurrency: 20,
+            });
+        });
+
+        test('Should accept an explicit duplicate check for debug ID uploads', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                auth: { apiKey: '123' },
+                errorTracking: {
+                    sourcemaps: { debugId: true, experimentalDuplicateCheck: true },
+                },
+                rum: { sourceCodeContext: { debugId: true } },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual({
+                bailOnError: false,
+                debugId: true,
+                dryRun: false,
+                experimentalDuplicateCheck: true,
                 maxConcurrency: 20,
             });
         });

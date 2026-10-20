@@ -2,8 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-export const CANARY_VARIANTS = ['control', 'instrumented'] as const;
+export const INSTRUMENTED_VARIANTS = ['all-functions', 'named-only'] as const;
+export const CANARY_VARIANTS = ['control', ...INSTRUMENTED_VARIANTS] as const;
 export type CanaryVariant = (typeof CANARY_VARIANTS)[number];
+export type InstrumentedVariant = (typeof INSTRUMENTED_VARIANTS)[number];
 export type InterruptSignal = 'SIGINT' | 'SIGTERM';
 
 export type CommandSpec = {
@@ -94,7 +96,7 @@ export type PhaseReport = {
     localPackages: string[];
     variantOrder: CanaryVariant[];
     variants: Record<CanaryVariant, VariantReport>;
-    comparison: PhaseComparison;
+    comparisons: Record<InstrumentedVariant, PhaseComparison>;
 };
 
 export type CanaryFailure = {
@@ -103,7 +105,7 @@ export type CanaryFailure = {
 };
 
 export type CanaryReport = {
-    schemaVersion: 1;
+    schemaVersion: 2;
     status: 'passed' | 'failed';
     target: string;
     phaseSelection: string;

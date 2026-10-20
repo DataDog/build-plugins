@@ -10,11 +10,13 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 <!-- #toc -->
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
+-   [Development server requests](#development-server-requests)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
     -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
+    -   [apps.parameters](#appsparameters)
 <!-- #toc -->
 
 ## Configuration
@@ -30,6 +32,7 @@ apps?: {
         exponentialBackoff?: boolean;
         timeoutMs?: number;
     };
+    parameters?: ReturnType<typeof defineDatadogAppParameters>;
 }
 ```
 
@@ -44,6 +47,16 @@ Backend function execution authenticates in this order:
 passes it to the dev server via `DD_OAUTH_ACCESS_TOKEN`. When no credentials are
 configured, backend function execution is unavailable and the dev server tells
 you to start it with `datadog-apps dev`.
+
+## Development server requests
+
+The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/executeActionViaCloud` and `/__dd/debugBundle`) accept a `POST` only when:
+
+-   its `Host` passes Vite's [`server.allowedHosts`](https://vite.dev/config/server-options#server-allowedhosts) check, which Vite skips when `server.https` is set or `server.allowedHosts` is `true`;
+-   its `Origin`, when sent, names the same host and port as its `Host`;
+-   its body is sent with `Content-Type: application/json`.
+
+To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
 ## Package output
 
@@ -90,3 +103,11 @@ The retry delay is capped at 2s: the server answering `done: false` is the expec
 
 > [!NOTE]
 > `timeoutMs` must stay comfortably above the server's ~30s long-poll window. Setting it at or below that window causes healthy polls to be aborted as they race their own response.
+
+### apps.parameters
+
+> default: discovered from app code
+
+Production builds read every `defineDatadogAppParameters({...})` call from `@datadog/apps-frontend/parameters` in the app's source, merge them, and write the result to `manifest.json` as `inputSchema.parameters`. Each upload stores it on the new app version, and a build that finds none clears any earlier declaration. Import the function by name, renamed, or through a namespace import, and call it directly with an object literal. Import it with the literal `@datadog/apps-frontend/parameters` specifier, not through a bundler alias or a tsconfig path. A declaration the build cannot read literally (variables, spreads, re-exports, dynamic imports, aliased imports, calling the function through another variable) fails the build, as does one parameter declared differently in two places, more than 50 parameters, or a declaration outside the app's own source (another package, or `node_modules`).
+
+Set `apps.parameters` to a `defineDatadogAppParameters()` result only to override discovery.

@@ -15,6 +15,7 @@ const c = chalk.bold.dim;
 // reuses the env the first run had before its scrub.
 let fixtureSetupEnv: typeof process.env | undefined;
 const getFixtureSetupEnv = () => {
+    // eslint-disable-next-line @dd/no-whole-process-env -- fixture setup's yarn and git steps need the full env
     fixtureSetupEnv ??= { ...process.env };
     return fixtureSetupEnv;
 };

@@ -128,6 +128,7 @@ describe('factory validateOptions', () => {
                         bailOnError: true,
                         debugId: true,
                         dryRun: true,
+                        experimentalDuplicateCheck: true,
                         maxConcurrency: 5,
                         upload: true,
                     },
@@ -139,6 +140,7 @@ describe('factory validateOptions', () => {
                             bailOnError: true,
                             debugId: true,
                             dryRun: true,
+                            experimentalDuplicateCheck: true,
                             maxConcurrency: 5,
                         },
                     },
@@ -183,6 +185,10 @@ describe('factory validateOptions', () => {
             },
             {
                 input: { sourcemaps: { bailOnError: true, debugId: true } },
+                error: /require sourcemaps\.upload to be true/,
+            },
+            {
+                input: { sourcemaps: { debugId: true, experimentalDuplicateCheck: true } },
                 error: /require sourcemaps\.upload to be true/,
             },
             {

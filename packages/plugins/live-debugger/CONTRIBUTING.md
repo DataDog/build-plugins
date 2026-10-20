@@ -38,7 +38,7 @@ Changes that affect source positions, injected wrappers, return rewriting, or er
 
 The Babel packages and `magic-string` are optional peer dependencies for consumers. Keep the transform dependencies lazy-loaded and preserve the user-facing missing-dependency error path. Update [`src/transform/lazy-deps.test.ts`](./src/transform/lazy-deps.test.ts) when touching dependency loading.
 
-Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts).
+Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Keep the `globalThis.$dd_probes !== void 0` guard before that call: nothing defines `$dd_probes` until the SDK initializes, and never in global scopes without the SDK. Don't turn it into a `typeof` check: minifiers rewrite `typeof x !== 'undefined'` into a relational comparison such as `"u">typeof x`, which costs 5–9 ns per call in every major engine once the SDK is loaded. Generated code must not add string literals besides the function ID: RUM privacy would move them into the module's dictionary, which instrumented functions would then read before the module has run. Keep `$dd_probes` a bare identifier call, because RUM privacy only leaves the function ID inline for that form.
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
@@ -93,8 +93,16 @@ Install the dependencies of both repositories first. A target may refuse to run
 when either checkout already has a local package-link setup, so it cannot
 overwrite an existing development environment.
 
-The default run compares control and Live Debugger-instrumented variants. Only
-Live Debugger is toggled between a target's paired builds. To select one
+Each phase builds three variants:
+
+- `control`: Live Debugger disabled;
+- `all-functions`: Live Debugger with its default options, which instrument
+  anonymous functions such as inline callbacks too;
+- `named-only`: Live Debugger with
+  [`namedOnly: true`](./README.md#livedebuggernamedonly), which skips anonymous
+  functions.
+
+Only Live Debugger settings change between a target's builds. To select one
 target-defined phase or use a non-default checkout, run:
 
 ```bash
@@ -106,9 +114,10 @@ For each phase, the result reports:
 - wall-clock build duration, excluding the separate syntax-validation pass;
 - total raw bytes across all emitted JavaScript files;
 - total gzip bytes when each emitted JavaScript file is compressed separately;
-- absolute and percentage differences between control and instrumented builds.
+- absolute and percentage differences between control and each instrumented
+  variant.
 
-Build order alternates across runs to reduce systematic warm-cache bias. A
+Build order is permuted across runs to reduce systematic warm-cache bias. A
 single duration difference is still noisy and should be interpreted as part of
 a trend, not as a hard regression threshold.
 

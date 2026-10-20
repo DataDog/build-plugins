@@ -78,7 +78,8 @@ describe('getRuntimeBootstrap', () => {
         const code = getRuntimeBootstrap(options)(inputChunk);
         const globalScope = runInFreshGlobal(code);
 
-        expect(typeof globalScope.$dd_probes).toBe('function');
+        // Instrumented functions only call `$dd_probes` once the SDK has defined it.
+        expect(typeof globalScope.$dd_probes).toBe('undefined');
         // The vm returns objects from another realm, so compare their JSON shape.
         const serializedBuildMetadata = JSON.stringify(globalScope[BUILD_METADATA_GLOBAL]);
         const buildMetadata = JSON.parse(serializedBuildMetadata);
@@ -111,18 +112,5 @@ describe('getRuntimeBootstrap', () => {
         const firstChunkDebugId = getChunkDebugId(firstChunk);
 
         expect(globalScope[BUILD_METADATA_GLOBAL].debugId).toBe(firstChunkDebugId);
-    });
-
-    test('should not override an existing probes implementation', () => {
-        const code = getRuntimeBootstrap({
-            version: undefined,
-            service: undefined,
-            debugId: false,
-        })();
-        const globalScope = vm.createContext({ $dd_probes: 'sdk' });
-
-        vm.runInContext(code, globalScope);
-
-        expect(globalScope.$dd_probes).toBe('sdk');
     });
 });

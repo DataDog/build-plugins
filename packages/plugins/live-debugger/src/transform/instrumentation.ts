@@ -63,7 +63,7 @@ export function shouldSkipFunction(
 
 /**
  * Check if function should be instrumented
- * Skips: generators and constructors
+ * Skips: generators, constructors, and functions that see a `globalThis` binding
  */
 export function canInstrumentFunction(
     functionPath: BabelPath<t.Function>,
@@ -78,6 +78,13 @@ export function canInstrumentFunction(
 
     // Skip constructors
     if (typesModule.isClassMethod(node) && node.kind === 'constructor') {
+        return false;
+    }
+
+    // Skip functions where `globalThis` resolves to a local binding, such as a
+    // parameter or a module-level `var globalThis`: the probe guard reads
+    // `globalThis.$dd_probes` and would read that binding instead.
+    if (functionPath.scope.getBinding('globalThis')) {
         return false;
     }
 
