@@ -94,7 +94,7 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -250,6 +250,7 @@ liveDebugger: {
 The following function types are always skipped regardless of configuration:
 - **Generators** — `function*` declarations and expressions
 - **Constructors** — `constructor()` methods in classes
+- **Functions that see a local `globalThis` binding** — e.g. a `globalThis` parameter or a module-level `var globalThis`, which would shadow the global the [safe fallback](#safe-fallback-when-the-sdk-is-absent) reads
 
 ## Runtime requirements
 
@@ -260,7 +261,7 @@ The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd
 Every instrumented function only calls `$dd_probes` when it is defined:
 
 ```javascript
-let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.js;add');
+let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
 ```
 
 This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
@@ -288,7 +289,7 @@ Each instrumented function holds a single binding that identifies the call curre
 
 ```js
 function add(a, b) {
-    let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/math.ts;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/math.ts;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});

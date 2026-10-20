@@ -745,6 +745,52 @@ describe('transformCode', () => {
             expect(result.skippedUnsupportedCount).toBe(1);
         });
 
+        // The probe guard reads `globalThis.$dd_probes`, which these bindings would shadow.
+        const globalThisBindingCases = [
+            {
+                description: 'a globalThis parameter',
+                code: 'function f(globalThis) { return 1; }',
+            },
+            {
+                description: 'a globalThis variable in its own body',
+                code: 'function f() { const globalThis = {}; return 1; }',
+            },
+            {
+                description: 'a module-level globalThis variable',
+                code: 'function f() { return 1; } var globalThis = {};',
+            },
+            {
+                description: 'an imported globalThis',
+                code: 'import globalThis from "./global"; export function f() { return 1; }',
+            },
+            {
+                description: 'a class named globalThis',
+                code: 'class globalThis { m() { return 1; } }',
+            },
+        ];
+
+        test.each(globalThisBindingCases)(
+            'should skip functions that see $description',
+            ({ code }) => {
+                const result = transformCode({ ...BASE_OPTIONS, code });
+
+                expect(result.instrumentedCount).toBe(0);
+                expect(result.skippedUnsupportedCount).toBe(1);
+                expect(result.code).toBe(code);
+            },
+        );
+
+        it('should instrument functions that a globalThis binding does not reach', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f(globalThis) { return 1; } function g() { { const globalThis = {}; } return 2; }',
+            });
+
+            expect(result.instrumentedCount).toBe(1);
+            expect(result.skippedUnsupportedCount).toBe(1);
+            expect(result.code).toContain("$dd_probes('src/utils.ts;g')");
+        });
+
         it('should return original code when nothing instrumented', () => {
             const code = 'function* gen() { yield 1; }';
             const result = transformCode({
@@ -1350,7 +1396,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
@@ -1368,7 +1414,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
@@ -1386,7 +1432,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
@@ -1404,7 +1450,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
@@ -1422,7 +1468,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f(flag) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;f');",
+                    "function f(flag) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
@@ -1440,7 +1486,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f() {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;f');",
+                    "function f() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
@@ -1460,7 +1506,7 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const double = (x) => {',
-                    "  let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;double');",
+                    "  let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;double');",
                     '  try {',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = x * 2;',
@@ -1481,7 +1527,7 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const getObj = (x) => {',
-                    "  let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;getObj');",
+                    "  let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getObj');",
                     '  try {',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = {key: x};',
@@ -1512,7 +1558,7 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(items) {let $dd_t;',
                     '    ($dd_t = super(items.map((x) => {',
-                    "      let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
+                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
@@ -1546,7 +1592,7 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(args) {let $dd_t;',
                     '    const init = () => {',
-                    "      let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;init');",
+                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;init');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);',
                     '        const $dd_rv0 = ($dd_t = super(args));',
@@ -1569,7 +1615,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function log(msg) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;log');",
+                    "function log(msg) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;log');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
@@ -1588,7 +1634,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function abs(x) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;abs');",
+                    "function abs(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;abs');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
@@ -1606,7 +1652,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function earlyExit(x) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;earlyExit');",
+                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
@@ -1625,7 +1671,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function earlyExit(x) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;earlyExit');",
+                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
@@ -1652,7 +1698,7 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function sign(x) {let $dd_p0 = typeof $dd_probes !== typeof void 0 && $dd_probes('src/utils.ts;sign');",
+                    "function sign(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;sign');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
