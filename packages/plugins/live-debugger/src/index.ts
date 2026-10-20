@@ -58,15 +58,19 @@ export const getLiveDebuggerPlugin = (
                 },
             },
             handler(code, id) {
+                // Files left unchanged return null rather than `{ code }`: a
+                // result without a map makes Rollup and Vite discard the
+                // file's existing source map.
+
                 // Enforce all file filters at runtime because unplugin's
                 // native filter is not applied in bundler child compilations
                 // (e.g., web worker bundles in rspack/webpack).
                 if (!shouldInstrumentFile(id)) {
-                    return { code };
+                    return null;
                 }
 
                 if (totalFilesWithFunctions >= DD_LD_LIMIT) {
-                    return { code };
+                    return null;
                 }
 
                 try {
@@ -92,10 +96,7 @@ export const getLiveDebuggerPlugin = (
                     }
 
                     if (result.instrumentedCount === 0) {
-                        return {
-                            // No changes, return original code
-                            code,
-                        };
+                        return null;
                     }
 
                     transformedFileCount++;
@@ -112,9 +113,7 @@ export const getLiveDebuggerPlugin = (
                     };
                 } catch (e) {
                     log.error(`Instrumentation Error in ${id}: ${e}`, { forward: true });
-                    return {
-                        code,
-                    };
+                    return null;
                 }
             },
         },
@@ -146,10 +145,9 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
 
-    // Inject no-op stubs for the runtime globals so instrumented code
-    // doesn't crash when the Datadog Browser Debugger SDK is absent,
-    // along with the build metadata the SDK reads.
-    // The SDK's init() overwrites the stubs with the real implementations.
+    // Inject the build metadata the Datadog Browser Debugger SDK reads.
+    // Instrumented code doesn't need a stub for the SDK's runtime globals:
+    // it only calls them once the SDK has defined them.
     context.inject({
         type: 'code',
         position: InjectPosition.BEFORE,

@@ -1,7 +1,7 @@
 {
     "name": "@datadog/build-plugins",
     "private": true,
-    "version": "3.3.1",
+    "version": "3.3.2",
     "license": "MIT",
     "author": "Datadog",
     "description": "Root of Datadog's Build Plugins monorepo",
@@ -40,6 +40,7 @@
         }
     },
     "devDependencies": {
+        "@dd/eslint-plugin": "workspace:*",
         "@types/node": "^20",
         "@typescript-eslint/eslint-plugin": "7.5.0",
         "@typescript-eslint/parser": "7.5.0",

@@ -47,7 +47,7 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -68,7 +68,7 @@ const double = (x) => x * 2;
 
 // After
 const double = (x) => {
-    let $dd_p0 = $dd_probes('src/utils.js;double');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;double');
     try {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = x * 2;
@@ -89,7 +89,7 @@ const getObj = (x) => ({key: x});
 
 // After
 const getObj = (x) => {
-    let $dd_p0 = $dd_probes('src/utils.js;getObj');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getObj');
     try {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = {key: x};
@@ -112,7 +112,7 @@ function getTime() {
 
 // After
 function getTime() {
-    let $dd_p0 = $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getTime');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
@@ -135,7 +135,7 @@ function getTime() {
 
 // After
 function getTime() {
-    let $dd_p0 = $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getTime');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
@@ -158,7 +158,7 @@ function log(msg) {
 
 // After
 function log(msg) {
-    let $dd_p0 = $dd_probes('src/utils.js;log');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;log');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg});
@@ -184,7 +184,7 @@ function earlyExit(x) {
 
 // After
 function earlyExit(x) {
-    let $dd_p0 = $dd_probes('src/utils.js;earlyExit');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;earlyExit');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
@@ -196,6 +196,17 @@ function earlyExit(x) {
         if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
     } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }
 }
+```
+
+When the bare `return;` is the brace-less body of an `if`, `else`, or loop, the report and the
+`return` are wrapped in braces, so the return stays conditional:
+
+```js
+// Before
+if (!x) return;
+
+// After
+if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; }
 ```
 
 ## Multiple returns
@@ -213,7 +224,7 @@ function abs(x) {
 
 // After
 function abs(x) {
-    let $dd_p0 = $dd_probes('src/utils.js;abs');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;abs');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
@@ -241,7 +252,7 @@ function sign(x) {
 
 // After
 function sign(x) {
-    let $dd_p0 = $dd_probes('src/utils.js;sign');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;sign');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
@@ -272,7 +283,7 @@ function f(flag) {
 
 // After
 function f(flag) {
-    let $dd_p0 = $dd_probes('src/utils.js;f');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;f');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag});
@@ -312,7 +323,7 @@ class Button extends Component {
     constructor(props) {
         let $dd_t;
         const handleClick = () => {
-            let $dd_p0 = $dd_probes('src/Button.js;handleClick');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/Button.js;handleClick');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = this.props.onClick();
@@ -346,7 +357,7 @@ class Widget extends Base {
     constructor(items) {
         let $dd_t;
         ($dd_t = super(items.map((x) => {
-            let $dd_p0 = $dd_probes('src/widget.js;<anonymous>@4:16:0');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;<anonymous>@4:16:0');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
@@ -377,7 +388,7 @@ class Widget extends Base {
     constructor(args) {
         let $dd_t;
         const init = () => {
-            let $dd_p0 = $dd_probes('src/widget.js;init');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;init');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = ($dd_t = super(args));
@@ -409,7 +420,7 @@ class Widget extends Base {
 class Widget extends Base {
     constructor(items) {
         const double = function(x) {
-            let $dd_p0 = $dd_probes('src/widget.js;double');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;double');
             try {
                 let $dd_rv0;
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
@@ -435,7 +446,7 @@ where `<line>` and `<column>` are the function's position in the original source
 For example, the callback in `[1, 2].map((x) => x * 2)` might become:
 
 ```js
-let $dd_p0 = $dd_probes('src/utils.js;<anonymous>@1:11:0');
+let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;<anonymous>@1:11:0');
 ```
 
 > Setting [`liveDebugger.namedOnly`](./README.md#livedebuggernamedonly) to `true` skips

@@ -98,7 +98,17 @@ describe('canary runner', () => {
         const sorted = [...first].sort();
 
         expect(second).toEqual(first);
-        expect(sorted).toEqual(['control', 'instrumented']);
+        expect(sorted).toEqual(['all-functions', 'control', 'named-only']);
+    });
+
+    test('should use every variant order across runs', () => {
+        const orders = new Set<string>();
+        for (let run = 0; run < 60; run++) {
+            const order = getVariantOrder(`run-${run}`, 'main');
+            orders.add(order.join(','));
+        }
+
+        expect(orders.size).toBe(6);
     });
 
     test('should measure raw and gzip bytes without double-counting overlapping roots', async () => {
@@ -129,9 +139,11 @@ describe('canary runner', () => {
 
     test('should run a non-Rspack phase, compare variants, write a report, and clean up', async () => {
         const controlPath = path.resolve(TEST_ROOT, 'control/app.js');
-        const instrumentedPath = path.resolve(TEST_ROOT, 'instrumented/app.js');
+        const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
+        const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
         await outputFile(controlPath, 'function app() { return 1; }');
-        await outputFile(instrumentedPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes("a"); return 1; }');
 
         const commands: string[] = [];
         const runCommand: RunCommand = async (spec) => {
@@ -139,8 +151,11 @@ describe('canary runner', () => {
             if (spec.label === 'build:control') {
                 return successfulResult(100);
             }
-            if (spec.label === 'build:instrumented') {
+            if (spec.label === 'build:all-functions') {
                 return successfulResult(125);
+            }
+            if (spec.label === 'build:named-only') {
+                return successfulResult(110);
             }
             return successfulResult(1);
         };
@@ -159,25 +174,34 @@ describe('canary runner', () => {
 
         expect(report.status).toBe('passed');
         expect(report.phases[0]?.buildTool).toBe('webpack');
-        expect(report.phases[0]?.comparison.durationMs).toEqual({
+        expect(report.phases[0]?.comparisons['all-functions'].durationMs).toEqual({
             control: 100,
             instrumented: 125,
             delta: 25,
             deltaPercent: 25,
         });
-        expect(commands).toHaveLength(4);
+        expect(report.phases[0]?.comparisons['named-only'].durationMs).toEqual({
+            control: 100,
+            instrumented: 110,
+            delta: 10,
+            deltaPercent: 10,
+        });
+        expect(report.phases[0]?.comparisons['named-only'].rawBytes.delta).toBe(
+            Buffer.byteLength('$dd_probes("a"); '),
+        );
+        expect(commands).toHaveLength(6);
         expect(cleanupOrder).toEqual(['second', 'first']);
         const serialized = await readFile(reportPath);
-        expect(serialized).toContain('"schemaVersion": 1');
+        expect(serialized).toContain('"schemaVersion": 2');
         expect(serialized).toContain('"buildTool": "webpack"');
         expect(serialized).toContain('"dirty": true');
     });
 
     test('should write failure details and run cleanup in reverse order', async () => {
         const controlPath = path.resolve(TEST_ROOT, 'control/app.js');
-        const instrumentedPath = path.resolve(TEST_ROOT, 'instrumented/app.js');
+        const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
         await outputFile(controlPath, 'control');
-        await outputFile(instrumentedPath, 'instrumented');
+        await outputFile(allFunctionsPath, 'all-functions');
 
         const runCommand: RunCommand = async () => ({
             durationMs: 10,
