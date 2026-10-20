@@ -8,6 +8,7 @@ Developer notes for the Live Debugger plugin.
 -   [Development workflow](#development-workflow)
 -   [Consumer build canary](#consumer-build-canary)
     -   [Excalidraw target](#excalidraw-target)
+    -   [Mastodon target](#mastodon-target)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
     -   [What it measures](#what-it-measures)
@@ -127,6 +128,28 @@ precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
 warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
 Vite config, then reinstalls the checkout's dependencies. Builds are written to
 `excalidraw-app/build/live-debugger-canary/`.
+
+### Mastodon target
+
+The `mastodon` target builds the web frontend of the public
+[Mastodon](https://github.com/mastodon/mastodon) server with Vite 8, which
+bundles with Rolldown. Building the frontend needs Node.js and Yarn only, not
+Ruby. By default the target expects a checkout next to this repository, with its
+dependencies installed. Mastodon pins Yarn 4 through its `packageManager` field,
+so `yarn` must honor that field in its checkout:
+
+```bash
+git clone --depth 1 https://github.com/mastodon/mastodon.git ../mastodon
+(cd ../mastodon && yarn install --immutable)
+yarn cli canary mastodon
+```
+
+Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
+Babel peer dependencies into the checkout, and generates
+`vite.config.live-debugger-canary.mjs`, which wraps Mastodon's unmodified Vite
+config. Cleanup restores `package.json` and `yarn.lock`, then reinstalls the
+checkout's dependencies. Every variant is a production build, written to
+`build/live-debugger-canary/`.
 
 ## Runtime benchmark
 
