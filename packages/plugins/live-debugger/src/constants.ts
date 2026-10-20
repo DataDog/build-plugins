@@ -20,7 +20,7 @@ export const FUNCTION_ID_SEPARATOR = ';';
 export const ANONYMOUS_FUNCTION_NAME = '<anonymous>';
 
 // Path where an opt-in debug dump of the symbol table is written.
-export const SYMBOL_TABLE_PATH_ENV = 'DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH';
+export const SYMBOL_TABLE_PATH_ENV = 'DD_LIVE_DEBUGGER_SYMBOLS_PATH';
 
 // Intake that the symbol table is uploaded to.
 export const SYMBOL_TABLE_INTAKE_SUBDOMAIN = 'debugger-intake';

@@ -349,7 +349,7 @@ This is used to identify the build in logs, metrics and spans.
 > default: `null`
 
 The service of the deployed application, as set in the Datadog browser SDKs.<br/>
-This is the canonical place to declare the service once. Plugins that need a service (Live Debugger's symbol table upload, RUM source code context, source map upload, etc.) read it from here unless they're given a more specific override.
+This is the canonical place to declare the service once. Plugins that need a service (Live Debugger's symbol upload, RUM source code context, source map upload, etc.) read it from here unless they're given a more specific override.
 
 ### `metadata.version`
 > default: `null`
