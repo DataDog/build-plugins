@@ -11,6 +11,7 @@ import {
     assertLiveDebuggerArtifacts,
     assertLiveDebuggerBuildOutput,
 } from '../assertions/live-debugger';
+import { getTargetCommandEnvironment } from '../environment';
 import { isJsonObject, parseJsonObject, readFiles, restoreSnapshots } from '../files';
 import { CanaryCommandError, runCheckedCommand } from '../runner';
 import type {
@@ -188,6 +189,22 @@ export const createWebUiPhase = (id: 'main' | 'federated'): CanaryPhase => {
     };
 };
 
+const installWebUi = async ({ root, runCommand }: TargetSetupContext): Promise<void> => {
+    const targetEnvironment = getTargetCommandEnvironment(process.env);
+    const installSpec: CommandSpec = {
+        command: 'yarn',
+        args: ['install', '--immutable'],
+        cwd: root,
+        env: {
+            ...targetEnvironment,
+            // Like web-ui's own CI: no build needs Puppeteer's browser download.
+            PUPPETEER_SKIP_DOWNLOAD: 'true',
+        },
+        label: 'install web-ui dependencies',
+    };
+    await runCheckedCommand(runCommand, installSpec);
+};
+
 const preflightWebUi = async ({ buildPluginsRoot, root }: TargetSetupContext): Promise<void> => {
     const packageJsonPath = path.resolve(root, WEB_UI_PACKAGE_JSON);
     const buildCommandPath = path.resolve(root, WEB_UI_BUILD_COMMAND);
@@ -284,11 +301,16 @@ const setupWebUi = async ({
 
 export const webUiTarget: CanaryTarget = {
     id: 'web-ui',
+    repository: {
+        name: 'ddoghq/web-ui',
+        branch: 'preprod',
+    },
     getDefaultRoot: () => {
         const datadogRoot = process.env.DATADOG_ROOT;
         return datadogRoot ? path.resolve(datadogRoot, 'web-ui') : path.resolve(ROOT, '../web-ui');
     },
     getPhases: () => [createWebUiPhase('main'), createWebUiPhase('federated')],
+    install: installWebUi,
     preflight: preflightWebUi,
     setup: setupWebUi,
 };
