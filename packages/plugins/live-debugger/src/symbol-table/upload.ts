@@ -209,7 +209,7 @@ export const uploadSymbolTable = async (
             getData: () => getPartData(part, context, payload, uploadId),
             onRetry: (error, attempt) => {
                 log.debug(
-                    `Retrying the upload of symbol table part ${part.batchNum} (attempt ${attempt}): ${error.message}`,
+                    `Retrying part ${part.batchNum} of the symbol upload (attempt ${attempt}): ${error.message}`,
                 );
             },
         });

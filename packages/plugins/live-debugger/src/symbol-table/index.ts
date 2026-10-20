@@ -201,7 +201,7 @@ export const getSymbolTableHooks = (
             return;
         }
 
-        const timer = log.time('upload symbol table');
+        const timer = log.time('upload symbols');
         try {
             await uploadSymbolTable(
                 payload,
@@ -229,7 +229,7 @@ export const getSymbolTableHooks = (
         // Wait for the injection plugin to finish rewriting esbuild's output.
         await context.artifactsReady;
 
-        const timer = log.time('generate symbol table');
+        const timer = log.time('collect symbols');
         let table: SymbolTable | undefined;
         let payload: SymbolTablePayload | undefined;
         try {
