@@ -14,6 +14,16 @@ export interface BabelPath<T extends t.Node = t.Node> {
     node: T;
     parent: t.Node;
     parentPath: BabelPath | null;
+    scope: BabelScope;
+}
+
+/**
+ * Minimal Babel `Scope` interface, for the same reason as `BabelPath`.
+ */
+export interface BabelScope {
+    // The binding `name` resolves to from this scope, or undefined when it
+    // resolves to a global.
+    getBinding(name: string): object | undefined;
 }
 
 /**
