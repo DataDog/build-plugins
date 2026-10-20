@@ -62,10 +62,10 @@ describe('Live Debugger', () => {
         await userFlow(testBaseUrl, page, bundler);
         expect((await bundleRequest).ok()).toBe(true);
 
-        // The plugin should inject no-op globals so instrumented code can run safely
-        // when the debugger SDK is absent.
-        const hasProbeStub = await page.evaluate(() => typeof (globalThis as any).$dd_probes);
-        expect(hasProbeStub).toBe('function');
+        // Without the debugger SDK, nothing defines `$dd_probes`, and the
+        // instrumented code must still run safely.
+        const probesType = await page.evaluate(() => typeof (globalThis as any).$dd_probes);
+        expect(probesType).toBe('undefined');
 
         await expect(page.locator('#status')).toHaveText('Ready');
         await expect(page.locator('#count')).toHaveText('0');
@@ -80,7 +80,7 @@ describe('Live Debugger', () => {
         await expect(page.locator('#chunk-status')).toHaveText('Chunk loaded');
 
         // Verify all instrumentation code paths executed correctly
-        // with the no-op probe stubs (no active probes).
+        // without the debugger SDK (no active probes).
         await expect(page.locator('#pattern-add')).toHaveText('5');
         await expect(page.locator('#pattern-addWithLocal')).toHaveText('5');
         await expect(page.locator('#pattern-double')).toHaveText('14');

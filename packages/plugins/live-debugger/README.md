@@ -102,7 +102,7 @@ Each instrumented function gets:
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
 
-The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
+The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the guarded `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
 **Example transformation:**
 
@@ -115,7 +115,7 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -271,6 +271,7 @@ liveDebugger: {
 The following function types are always skipped regardless of configuration:
 - **Generators** — `function*` declarations and expressions
 - **Constructors** — `constructor()` methods in classes
+- **Functions that see a local `globalThis` binding** — e.g. a `globalThis` parameter or a module-level `var globalThis`, which would shadow the global the [safe fallback](#safe-fallback-when-the-sdk-is-absent) reads
 
 ## Bundle size impact
 
@@ -289,17 +290,19 @@ The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd
 
 ### Safe fallback when the SDK is absent
 
-The plugin automatically injects a minimal no-op stub into every output chunk:
+Every instrumented function only calls `$dd_probes` when it is defined:
 
 ```javascript
-if (typeof globalThis.$dd_probes === 'undefined') { globalThis.$dd_probes = function() {} }
+let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
 ```
 
-This ensures that instrumented code never crashes, even if the SDK has not been loaded. The stub makes `$dd_probes` return `undefined`, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+
+This also covers instrumented code that runs in another global scope than the page, such as a sandboxed iframe, a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
 
 ### Build metadata
 
-The same injected code defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
+The plugin injects code into every output chunk that defines a `__DD_LIVE_DEBUGGER_BUILD__` global, which the Browser Debugger SDK reads during `init()`:
 
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
@@ -318,7 +321,7 @@ Each instrumented function holds a single binding that identifies the call curre
 
 ```js
 function add(a, b) {
-    let $dd_p0 = $dd_probes('src/math.ts;add');
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/math.ts;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
@@ -338,4 +341,4 @@ Two properties of this contract are load-bearing for the generated code:
 
 ### Activating probes
 
-When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it overwrites `$dd_probes` with the real implementation and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
+When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it defines `$dd_probes` and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
