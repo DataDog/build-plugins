@@ -16,6 +16,16 @@ import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
 import { createEpochGuard } from './execution-epoch';
+import type { ActionCallArgs } from './local-execution-shared';
+import {
+    assertJsonRoundTrippable,
+    assertNoSelfDeclaredScope,
+    isIndexableRecord,
+    makeActionsProxy,
+    returnValueSubject,
+    serializeActionInputs,
+    validateActionCall,
+} from './local-execution-shared';
 import { assertNoForeignGuard, installGuards, runBlocked } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
@@ -118,16 +128,6 @@ type ExecutionDispatch = {
 /** Distinct from `backendGlobalsContext` so dispatch-only fields (the real `executeAction`, `allowedConnectionIds`) never leak onto `globalThis.$`. */
 const executionDispatchContext = new AsyncLocalStorage<ExecutionDispatch>();
 
-interface ActionCallArgs {
-    inputs: Record<string, unknown>;
-    connectionId?: string;
-}
-
-/** Narrows an unknown value enough to read named properties off it by key. */
-function isIndexableRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
-}
-
 function assertRuntimeUser(value: unknown, label: string): asserts value is RuntimeUser {
     if (!isIndexableRecord(value) || Array.isArray(value)) {
         throw new Error(`The preview runtime context ${label} must be an object.`);
@@ -225,48 +225,7 @@ export type ExecuteAction = (
 /** Resolves a fresh serializable `$` snapshot from an authenticated preview execution. */
 export type GetRuntimeContext = () => Promise<unknown>;
 
-/** Checks this one call's own connectionId field against the function's allowlist — not full parity with the cloud path's server-side restriction, since a nested meta-action's own inputs can carry a separate scope this never inspects (see validateActionCall's own check for that). */
-function assertConnectionIdAllowed(
-    connectionId: string | undefined,
-    allowedConnectionIds: string[],
-    actionDescription: string,
-): void {
-    if (connectionId !== undefined && !allowedConnectionIds.includes(connectionId)) {
-        throw new Error(
-            `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
-        );
-    }
-}
-
-/** Rejects a top-level `allowedConnectionIds` key on `inputs`, not one nested deeper. Checked before serialization and again after, since a custom `toJSON()` can introduce the key. */
-function assertNoSelfDeclaredScope(
-    inputs: Record<string, unknown>,
-    actionDescription: string,
-): void {
-    // Own-property check, so a polluted Object.prototype can't make every call appear to declare it.
-    if (Object.prototype.hasOwnProperty.call(inputs, 'allowedConnectionIds')) {
-        throw new Error(
-            `Action ${actionDescription} must not declare its own allowedConnectionIds in inputs — this function's own allowlist already governs which connections it can use.`,
-        );
-    }
-}
-
-/** Shared validation for both $.Actions entry points (raw proxy and action-catalog typed wrapper) — extracted so a contract change can't be applied to one path and missed on the other. */
-function validateActionCall(
-    call: Partial<ActionCallArgs>,
-    allowedConnectionIds: string[],
-    actionDescription: string,
-): { inputs: Record<string, unknown>; connectionId: string | undefined } {
-    const { inputs, connectionId } = call;
-    if (typeof inputs !== 'object' || !inputs) {
-        throw new Error(`Action ${actionDescription} must have an inputs field`);
-    }
-    assertNoSelfDeclaredScope(inputs, actionDescription);
-    assertConnectionIdAllowed(connectionId, allowedConnectionIds, actionDescription);
-    return { inputs, connectionId };
-}
-
-/** Shared validate → serialize → dispatch sequence for both $.Actions entry points — same reasoning as `validateActionCall` above, extended to cover the whole call instead of just the inputs check. */
+/** Shared validate → serialize → dispatch sequence for both $.Actions entry points, so a contract change can't reach one and miss the other. */
 async function invokeAction(
     executeAction: ExecuteAction,
     actionId: string,
@@ -311,55 +270,6 @@ function abandonedExecutionError(functionName: string, refusedAction: string): E
  * its own scope is still active, so delayed cleanup can't clobber a newer scope.
  */
 const executionEpoch = createEpochGuard();
-
-/** JSON round-trips `$.Actions` inputs with the same strict validation as a return value (`assertJsonRoundTrippable`), so a Map/Set/NaN/symbol-keyed input fails loudly instead of reaching the destination corrupted. Also re-checks the round-tripped shape, since a top-level `toJSON()` can turn an object into a string/array. */
-function serializeActionInputs(
-    inputs: Record<string, unknown>,
-    actionDescription: string,
-): Record<string, unknown> {
-    const subject = `Inputs to action ${actionDescription}`;
-    const roundTripped = assertJsonRoundTrippable(inputs, subject);
-    if (roundTripped === null || typeof roundTripped !== 'object' || Array.isArray(roundTripped)) {
-        throw new Error(
-            `${subject} must be a plain object after JSON round-tripping, but a custom toJSON() changed its top-level shape to ${Array.isArray(roundTripped) ? 'an array' : roundTripped === null ? 'null' : typeof roundTripped} — return a plain JSON-compatible object instead.`,
-        );
-    }
-    return roundTripped as Record<string, unknown>;
-}
-
-/** Resolves a `$.Actions` path to a callable that dispatches through `invokeAction`. */
-function makeActionsProxy(
-    executeAction: ExecuteAction,
-    allowedConnectionIds: string[],
-    pathParts: string[] = [],
-): unknown {
-    return new Proxy(function () {}, {
-        get(_target, prop) {
-            // Must not look thenable/serializable — Promise/assertJsonSerializable probes for
-            // .then()/.toJSON() would otherwise hit apply() below and hang or leak a rejection.
-            if (prop === 'then' || prop === 'toJSON') {
-                return undefined;
-            }
-            const nestedPathParts = pathParts.concat(String(prop));
-            return makeActionsProxy(executeAction, allowedConnectionIds, nestedPathParts);
-        },
-        async apply(_target, _thisArg, args: unknown[]) {
-            const actionPath = pathParts.join('.');
-            if (args.length === 0) {
-                throw new Error(`No arguments provided to action $.Actions.${actionPath}`);
-            }
-            const call: Partial<ActionCallArgs> = isIndexableRecord(args[0]) ? args[0] : {};
-            const fqn = `com.datadoghq.${actionPath}`;
-            return invokeAction(
-                executeAction,
-                fqn,
-                call,
-                allowedConnectionIds,
-                `$.Actions.${actionPath}`,
-            );
-        },
-    });
-}
 
 /** Bounds a promise that could otherwise hang forever — a `loadModule` call against a broken/circular graph, or a `$.Actions` call with no deadline of its own. Doesn't cancel the underlying promise, so late side effects can still fire if it eventually settles; see each call site for why that's harmless there. `label` is the full subject of the timeout message (e.g. `` `Loading ${specifier}` ``), not a suffix on a fixed prefix. */
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -530,102 +440,9 @@ async function registerBackendRuntimeOnce(
     setBackend(backendRuntimeProxy);
 }
 
-/** Rejects a non-JSON-serializable result (circular reference, `BigInt`, a dropped function/`Symbol`, a `Map`/`Set` flattened to `{}`) here with a clear error, instead of failing downstream when serialized for the HTTP response. */
-// Lets the replacer's already-specific message pass through the outer catch below unwrapped, instead of being replaced by its generic fallback.
-class UnsupportedJsonValueError extends Error {}
-
-/**
- * Shared by a function's return value and its `$.Actions` call inputs — both cross a JSON boundary
- * and need the same protection against JSON.stringify's silent corruption (Map/Set flattened to
- * `{}`, non-finite numbers to `null`, functions/symbols/`undefined` dropped, symbol-keyed
- * properties omitted) rather than a bare `JSON.parse(JSON.stringify(...))` that would let corrupted
- * data pass through unnoticed. `subject` names what's being checked for the thrown error message.
- */
-function assertJsonRoundTrippable(value: unknown, subject: string): unknown {
-    let serialized: string | undefined;
-    try {
-        // Visits every key/value pair including the root, catching a disallowed value at any
-        // depth. Root is tracked via a one-shot flag, not `key === ''`, since a real property can
-        // itself be named `''`.
-        let isRootCall = true;
-        serialized = JSON.stringify(value, function (key, childValue) {
-            const wasRootCall = isRootCall;
-            isRootCall = false;
-            // Checked on `childValue` (a custom toJSON()'s return value, not necessarily the
-            // original object) since the replacer never runs for a symbol-keyed property at all —
-            // a symbol key introduced only by toJSON() would otherwise go undetected.
-            if (
-                childValue !== null &&
-                typeof childValue === 'object' &&
-                Object.getOwnPropertySymbols(childValue).length > 0
-            ) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains a Symbol-keyed property${key ? ` (at "${key}")` : ''}, which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
-                );
-            }
-            if (childValue instanceof Map || childValue instanceof Set) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains a ${childValue.constructor.name}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently flattens to "{}" instead of serializing its entries — use a plain array or object instead.`,
-                );
-            }
-            if (typeof childValue === 'number' && !Number.isFinite(childValue)) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains ${childValue}${key ? ` (at "${key}")` : ''}, which JSON.stringify silently converts to "null" instead of throwing — use a finite number instead.`,
-                );
-            }
-            // A plain object property holding `undefined` is silently omitted by JSON.stringify —
-            // matching production's own serialization, so it's not flagged (unlike an array
-            // element, where `undefined` is converted to `null` instead of dropped).
-            if (!wasRootCall && childValue === undefined && Array.isArray(this)) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains undefined inside an array (at index ${key}), which JSON.stringify silently converts to null instead of dropping it — use null explicitly instead.`,
-                );
-            }
-            if (
-                !wasRootCall &&
-                (typeof childValue === 'function' || typeof childValue === 'symbol') &&
-                Array.isArray(this)
-            ) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains a ${typeof childValue} inside an array (at index ${key}), which JSON.stringify silently converts to null instead of dropping it — use null explicitly instead.`,
-                );
-            }
-            if (
-                !wasRootCall &&
-                (typeof childValue === 'function' || typeof childValue === 'symbol') &&
-                !Array.isArray(this)
-            ) {
-                throw new UnsupportedJsonValueError(
-                    `${subject} contains a ${typeof childValue} (at "${key}"), which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
-                );
-            }
-            return childValue;
-        });
-    } catch (err) {
-        if (err instanceof UnsupportedJsonValueError) {
-            throw err;
-        }
-        throw new Error(
-            `${subject} can't be serialized to JSON: ${
-                err instanceof Error ? err.message : String(err)
-            }`,
-        );
-    }
-    if (serialized === undefined) {
-        if (value !== undefined) {
-            throw new Error(
-                `${subject} is a ${typeof value} value, which JSON.stringify silently drops instead of serializing — use a plain JSON-compatible value instead.`,
-            );
-        }
-        return undefined;
-    }
-    // Return the parsed-and-reserialized value, not the original — a caller serializing again
-    // for the HTTP response (or the executeAction call) would otherwise invoke a custom toJSON() a second time.
-    return JSON.parse(serialized);
-}
-
 function assertJsonSerializable(result: unknown, func: BackendFunction): unknown {
-    return assertJsonRoundTrippable(result, `Local execution of "${func.name}"'s return value`);
+    const subject = returnValueSubject(func.name);
+    return assertJsonRoundTrippable(result, subject);
 }
 
 /**
@@ -807,7 +624,15 @@ async function runScriptLocally(
     const $: BackendGlobals = {
         ...runtimeContext,
         backendFunctionArgs: args,
-        Actions: makeActionsProxy(guardedExecuteAction, func.allowedConnectionIds),
+        Actions: makeActionsProxy((fqn, call, actionDescription) =>
+            invokeAction(
+                guardedExecuteAction,
+                fqn,
+                call,
+                func.allowedConnectionIds,
+                actionDescription,
+            ),
+        ),
     };
 
     const dispatch: ExecutionDispatch = {
