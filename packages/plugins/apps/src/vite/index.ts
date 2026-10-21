@@ -50,6 +50,14 @@ import type { AppsOptionsWithDefaults } from '../types';
 import { normalizeViteModuleId } from './backend-module-graph-collector';
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
+import {
+    CSP_VIOLATION_LOGGER_ID,
+    CSP_VIOLATION_LOGGER_ID_RE,
+    CSP_VIOLATION_LOGGER_SOURCE,
+    getCspViolationLoggerTags,
+    RESOLVED_CSP_VIOLATION_LOGGER_ID,
+} from './dev-server-csp-violations';
+import { createAppCspMiddleware, SELF_SERVED_APP_TYPE } from './dev-server-csp';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
@@ -213,8 +221,8 @@ function allowPackageRoots(allow: string[], packages: BackendFunctionPackage[]):
  * Production (closeBundle): builds backend functions (if any) then writes the
  * deployable package without resolving authentication or performing requests.
 
- * Dev (configureServer): registers middleware for local backend function
- * testing when auth credentials are available.
+ * Dev (configureServer): reports the app CSP on HTML and worker responses, and registers
+ * middleware for local backend function testing when auth credentials are available.
  */
 export const getVitePlugin = ({
     bundler,
@@ -245,6 +253,7 @@ export const getVitePlugin = ({
     // dev exit must not rebuild backend functions or replace the production
     // package with dev-session-derived output.
     let devServerActive = false;
+    let isAppCspActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
     let isBuild = false;
@@ -361,6 +370,9 @@ export const getVitePlugin = ({
                         ? DEV_CLIENT_RESOLVED_ID
                         : null;
                 }
+                if (source === CSP_VIOLATION_LOGGER_ID) {
+                    return RESOLVED_CSP_VIOLATION_LOGGER_ID;
+                }
 
                 // In a frontend build, each client-side import of a backend function file resolves
                 // to a proxy module of its own (see load below). Under the backend file's id, the
@@ -448,7 +460,15 @@ export const getVitePlugin = ({
         load: {
             // Ahead of other plugins' load hooks, which may claim any id.
             order: 'pre',
-            filter: { id: { include: [DEV_CLIENT_RESOLVED_RE, FRONTEND_PROXY_ID_RE] } },
+            filter: {
+                id: {
+                    include: [
+                        DEV_CLIENT_RESOLVED_RE,
+                        CSP_VIOLATION_LOGGER_ID_RE,
+                        FRONTEND_PROXY_ID_RE,
+                    ],
+                },
+            },
             async handler(id) {
                 if (id === DEV_CLIENT_RESOLVED_ID) {
                     try {
@@ -459,6 +479,9 @@ export const getVitePlugin = ({
                             `Framed backend calls won't carry their bundle, the dev client didn't load: ${errorMessage}`,
                         );
                     }
+                }
+                if (id === RESOLVED_CSP_VIOLATION_LOGGER_ID) {
+                    return CSP_VIOLATION_LOGGER_SOURCE;
                 }
                 // Vite < 6.3 ignores hook filters.
                 if (!FRONTEND_PROXY_ID_RE.test(id)) {
@@ -657,6 +680,7 @@ export const getVitePlugin = ({
                     return [];
                 }
                 return [
+                    ...getCspViolationLoggerTags(isAppCspActive),
                     {
                         tag: 'script',
                         attrs: { type: 'module', src: DEV_CLIENT_SRC },
@@ -667,6 +691,12 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             devServerActive = true;
+            // Vitest serves its own UI and browser-mode pages, with inline scripts, from this server.
+            isAppCspActive = !process.env.VITEST && server.config.appType !== SELF_SERVED_APP_TYPE;
+            if (isAppCspActive) {
+                const appCspMiddleware = createAppCspMiddleware(server.config);
+                server.middlewares.use(appCspMiddleware);
+            }
             if (server.environments?.ssr?.config.dev.preTransformRequests) {
                 log.warn(
                     `SSR import warmup (${SSR_WARMUP_SETTING}) is on, so edited backend code may not run until the dev server restarts.`,

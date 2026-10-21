@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { SELF_SERVED_APP_TYPE } from '@dd/apps-plugin/vite/dev-server-csp';
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     APPS_DEV_CLIENT_PATH,
@@ -102,7 +103,7 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
-    config: { mode: string } & HostCheckConfig;
+    config: { mode: string; appType?: string } & HostCheckConfig;
     pluginContainer?: object;
 };
 
@@ -1436,6 +1437,64 @@ describe('Backend Functions - getVitePlugin', () => {
         },
     );
 
+    const appTypeCases: {
+        description: string;
+        appType: string | undefined;
+        middlewareCount: number;
+    }[] = [
+        {
+            description:
+                'register only the backend function routes for a host that serves its own HTML',
+            appType: SELF_SERVED_APP_TYPE,
+            middlewareCount: 1,
+        },
+        {
+            description: 'register the app CSP for the default app type',
+            appType: undefined,
+            middlewareCount: 2,
+        },
+    ];
+
+    test.each(appTypeCases)('Should $description', ({ appType, middlewareCount }) => {
+        const plugin = getVitePlugin(defaultOptions);
+        const use = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+
+        try {
+            configureServer({
+                middlewares: { use },
+                ssrLoadModule: jest.fn(),
+                config: { ...fakeServerConfig('development'), appType },
+            });
+        } finally {
+            restoreEnv();
+        }
+
+        expect(use).toHaveBeenCalledTimes(middlewareCount);
+    });
+
+    test('Should register only the backend function routes under Vitest', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const use = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        process.env.VITEST = 'true';
+
+        try {
+            configureServer({
+                middlewares: { use },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig('development'),
+            });
+        } finally {
+            delete process.env.VITEST;
+            restoreEnv();
+        }
+
+        expect(use).toHaveBeenCalledTimes(1);
+    });
+
     // Each local execution installs again and fails closed, so the server itself must still start.
     test('Should keep the dev server starting when installing the sandbox guards throws', () => {
         const plugin = getVitePlugin(defaultOptions);
@@ -1457,7 +1516,8 @@ describe('Backend Functions - getVitePlugin', () => {
                 }),
             ).not.toThrow();
             expect(installGuards).toHaveBeenCalled();
-            expect(use).toHaveBeenCalledTimes(1);
+            // The app CSP, then the backend function routes.
+            expect(use).toHaveBeenCalledTimes(2);
         } finally {
             restoreEnv();
             installGuards.mockRestore();
@@ -1594,8 +1654,8 @@ describe('Backend Functions - getVitePlugin', () => {
         });
         restoreEnv();
 
-        expect(use).toHaveBeenCalledTimes(1);
-        const [registeredMiddleware] = use.mock.calls[0];
+        expect(use).toHaveBeenCalledTimes(2);
+        const [registeredMiddleware] = use.mock.calls[1];
         if (!isDevServerMiddleware(registeredMiddleware)) {
             throw new Error(
                 'Expected middlewares.use to have been called with a middleware function',

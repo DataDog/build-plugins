@@ -6,6 +6,7 @@ import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-gu
 import {
     checkDevServerRequest,
     createViteHostCheck,
+    getRequestHost,
     MISSING_HOST_MESSAGE,
 } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import type { IncomingHttpHeaders } from 'http';
@@ -390,5 +391,30 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         );
 
         expect(rejection?.statusCode).toBe(403);
+    });
+});
+
+describe('dev-server-request-guard — getRequestHost', () => {
+    const cases: { description: string; headers: IncomingHttpHeaders; expected?: string }[] = [
+        {
+            description: 'read Host',
+            headers: { host: 'localhost:5173' },
+            expected: 'localhost:5173',
+        },
+        {
+            description: 'read :authority from an HTTP/2 request',
+            headers: { ':authority': 'localhost:5173' },
+            expected: 'localhost:5173',
+        },
+        {
+            description: 'prefer Host over :authority',
+            headers: { host: 'a.localhost', ':authority': 'b.localhost' },
+            expected: 'a.localhost',
+        },
+        { description: 'return nothing without either', headers: {}, expected: undefined },
+    ];
+
+    test.each(cases)('Should $description', ({ headers, expected }) => {
+        expect(getRequestHost(headers)).toBe(expected);
     });
 });

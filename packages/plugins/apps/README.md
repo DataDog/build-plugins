@@ -14,6 +14,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
 -   [Cloud execution](#cloud-execution)
+-   [Development server Content Security Policy](#development-server-content-security-policy)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -91,6 +92,29 @@ To call one by hand, send that content type, for example `curl -X POST -H 'Conte
 Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Two cases still follow the dev server's `NODE_ENV`: package export conditions on Vite 5, which doesn't export its default server conditions, and Vite's stub for an optional peer dependency the app hasn't installed.
 
 When Datadog rejects a bundle as longer than the `jsFunctionWithActions` `script` input accepts, the dev server answers with a 413 naming the function, its size and Datadog's answer, and warns once per function until the dev server restarts.
+
+## Development server Content Security Policy
+
+The dev server sends its HTML pages and worker scripts with the policy the sandbox shim applies to uploaded apps, as `Content-Security-Policy-Report-Only`: until the shim covers production, it reports what the policy would block and doesn't block it. A policy already on the response, for example from `server.headers`, is kept. The policy would block, among others:
+
+-   classic inline `<script>` elements, `eval` and scripts from another origin;
+-   requests to `http:`, `ws:` and `wss:` URLs, and `https:` images;
+-   `blob:` workers, frames and form submissions.
+
+Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. Two things production doesn't need are allowed: the HMR WebSocket in `connect-src`, and, by its hash, the inline React Refresh preamble that `@vitejs/plugin-react` and `@vitejs/plugin-react-swc` inject. The hash is taken from the page when its whole uncompressed body goes to `res.end()`, as Vite sends it.
+
+Known gaps:
+
+-   What Vite inlines only in a build, such as a `?worker&inline` worker, isn't covered.
+-   Paths under [`server.proxy`](https://vite.dev/config/server-options#server-proxy) are left alone, even when a `bypass` hands the request back to Vite.
+-   In middleware mode, HTML from the host server's own routes gets the policy too.
+-   On Vite 7 and 8, the client's reconnect check after a dev server restart starts a `blob:` worker, which the logger reports.
+-   HTML that another plugin's own dev-server middleware sends isn't covered, since this plugin's middleware runs after normal-order plugins' middlewares.
+-   Worker scripts are recognized by their `Sec-Fetch-Dest` request header, which Safari sends from version 16.4.
+-   Under Vitest, the policy is off.
+-   Tools that serve their own HTML through Vite (`appType: 'custom'`, for example Storybook) aren't covered, since they never run under the sandbox shim.
+-   The HMR WebSocket source also admits `http:` requests to the dev server's own host and port.
+-   Violations inside a worker, in pages Vite doesn't transform (such as files in `public/`) and in Vite 8's bundled dev mode go only to the browser's own console error.
 
 ## Package output
 
