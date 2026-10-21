@@ -40,6 +40,14 @@ import type { AppsOptionsWithDefaults } from '../types';
 
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
+import {
+    CSP_VIOLATION_LOGGER_ID,
+    CSP_VIOLATION_LOGGER_ID_RE,
+    CSP_VIOLATION_LOGGER_SOURCE,
+    getCspViolationLoggerTags,
+    RESOLVED_CSP_VIOLATION_LOGGER_ID,
+} from './dev-server-csp-violations';
+import { createAppCspMiddleware, SELF_SERVED_APP_TYPE } from './dev-server-csp';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
@@ -166,8 +174,8 @@ const shouldTransformBackendModule = (id: string, buildRoot: string, outDir: str
  * Production (closeBundle): builds backend functions (if any) then writes the
  * deployable package without resolving authentication or performing requests.
 
- * Dev (configureServer): registers middleware for local backend function
- * testing when auth credentials are available.
+ * Dev (configureServer): reports the app CSP on HTML and worker responses, and registers
+ * middleware for local backend function testing when auth credentials are available.
  */
 export const getVitePlugin = ({
     bundler,
@@ -198,6 +206,7 @@ export const getVitePlugin = ({
     // dev exit must not rebuild backend functions or replace the production
     // package with dev-session-derived output.
     let devServerActive = false;
+    let isAppCspActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
 
@@ -250,6 +259,9 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
+                if (source === CSP_VIOLATION_LOGGER_ID) {
+                    return RESOLVED_CSP_VIOLATION_LOGGER_ID;
+                }
                 // Top-level guard (not folded into each branch) so any future branch added below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.
@@ -294,6 +306,16 @@ export const getVitePlugin = ({
                 }
                 return { ...resolved, id: suffixedId };
             },
+        },
+        load: {
+            filter: { id: { include: [CSP_VIOLATION_LOGGER_ID_RE] } },
+            handler(id) {
+                return id === RESOLVED_CSP_VIOLATION_LOGGER_ID ? CSP_VIOLATION_LOGGER_SOURCE : null;
+            },
+        },
+        transformIndexHtml(html, htmlContext) {
+            const devServerBase = isAppCspActive ? htmlContext.server?.config.base : undefined;
+            return getCspViolationLoggerTags(devServerBase);
         },
         transform: {
             // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative exclusions.
@@ -460,6 +482,12 @@ export const getVitePlugin = ({
         },
         configureServer(server) {
             devServerActive = true;
+            // Vitest serves its own UI and browser-mode pages, with inline scripts, from this server.
+            isAppCspActive = !process.env.VITEST && server.config.appType !== SELF_SERVED_APP_TYPE;
+            if (isAppCspActive) {
+                const appCspMiddleware = createAppCspMiddleware(server.config);
+                server.middlewares.use(appCspMiddleware);
+            }
             if (server.environments?.ssr?.config.dev.preTransformRequests) {
                 log.warn(
                     `SSR import warmup (${SSR_WARMUP_SETTING}) is on, so edited backend code may not run until the dev server restarts.`,
