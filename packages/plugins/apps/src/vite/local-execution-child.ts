@@ -16,7 +16,9 @@ import type { ActionCallArgs } from './local-execution-shared';
 import {
     assertJsonRoundTrippable,
     assertNoSelfDeclaredScope,
+    callBackendFunction,
     describeError,
+    FunctionThrewError,
     isIndexableRecord,
     makeActionsProxy,
     returnValueSubject,
@@ -38,7 +40,7 @@ type ModuleRunnerModule = {
     createNodeImportMeta: CreateImportMeta;
 };
 
-type Settle = { resolve(value: unknown): void; reject(error: Error): void };
+type Settle = { resolve(value: unknown): void; reject(reason: unknown): void };
 
 const send = process.send?.bind(process);
 let nextRequestId = 0;
@@ -107,8 +109,8 @@ function onParentMessage(message: ParentMessage): void {
         if (message.ok) {
             settle?.resolve(message.value);
         } else {
-            const error = new Error(message.message);
-            settle?.reject(error);
+            const failure = message.thrownString ? message.message : new Error(message.message);
+            settle?.reject(failure);
         }
     }
 }
@@ -193,7 +195,7 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     Reflect.set(globalThis, '$', $);
     await registerSdkAdapters(runner, config, $);
     await sendMessage({ type: 'loaded' });
-    const returned = await fn(...config.args);
+    const returned = await callBackendFunction(() => fn(...config.args));
     const subject = returnValueSubject(config.functionName);
     return assertJsonRoundTrippable(returned, subject);
 }
@@ -216,6 +218,7 @@ async function run(config: ChildStartConfig): Promise<void> {
         outcome = {
             type: 'error',
             message: describeError(error),
+            ...(error instanceof FunctionThrewError && { detail: error.detail }),
         };
     }
     const stdoutFlushed = flush(process.stdout, writeStdout, config.flushTimeoutMs);

@@ -89,7 +89,7 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
         longPolling.maxRetries * longPolling.timeoutMs + getTotalRetryDelayBudgetMs(longPolling);
     return {
         // Bounds a single $.Actions call, exempt from the hang-detection timer — doRequest has
-        // no deadline of its own, so an unsettled call would wedge the whole serialized queue.
+        // no deadline of its own, so an unsettled call would otherwise never end.
         actionCallTimeoutMs: worstCaseMs * 2,
         // Absolute wall-clock ceiling, independent of the pause-and-extend mechanism above —
         // that can't tell a genuinely slow $.Actions call from a fire-and-forgot one masking a
@@ -107,18 +107,6 @@ export type ExecuteAction = (
 
 /** Resolves a fresh serializable `$` snapshot from an authenticated preview execution. */
 export type GetRuntimeContext = () => Promise<unknown>;
-
-/** Runs local executions one at a time, in arrival order. */
-let queueTail: Promise<unknown> = Promise.resolve();
-
-export function enqueue<T>(run: () => Promise<T>): Promise<T> {
-    const result = queueTail.then(run);
-    queueTail = result.then(
-        () => undefined,
-        () => undefined,
-    );
-    return result;
-}
 
 /** Bounds a promise that could otherwise hang forever, such as a `$.Actions` call with no deadline of its own, without cancelling it. `label` is the full subject of the timeout message. */
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {

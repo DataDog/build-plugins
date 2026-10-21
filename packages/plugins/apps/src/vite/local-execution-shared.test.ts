@@ -6,23 +6,24 @@ import type { ActionCallArgs } from '@dd/apps-plugin/vite/local-execution-shared
 import { validateActionCallShape } from '@dd/apps-plugin/vite/local-execution-shared';
 
 const actionDescription = '$.Actions.http.request';
+const missingInputs = `First argument to action ${actionDescription} must have an inputs field that is an object`;
 
 describe('local-execution-shared — validateActionCallShape', () => {
     const rejected: Array<{ description: string; call: Partial<ActionCallArgs>; error: string }> = [
         {
             description: 'reject a call with no inputs',
             call: {},
-            error: `Action ${actionDescription} must have an inputs field`,
+            error: missingInputs,
         },
         {
             description: 'reject null inputs',
             call: { inputs: null as unknown as Record<string, unknown> },
-            error: `Action ${actionDescription} must have an inputs field`,
+            error: missingInputs,
         },
         {
             description: 'reject non-object inputs',
             call: { inputs: 'url' as unknown as Record<string, unknown> },
-            error: `Action ${actionDescription} must have an inputs field`,
+            error: missingInputs,
         },
         {
             description: 'reject inputs that declare their own allowedConnectionIds',
