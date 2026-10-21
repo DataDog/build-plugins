@@ -18,7 +18,8 @@ import type {
     LocalExecutor,
 } from '@dd/apps-plugin/vite/local-execution-process';
 import { createChildProcessExecutor } from '@dd/apps-plugin/vite/local-execution-process';
-import { DEFAULT_TIMEOUT_MS } from '@dd/apps-plugin/vite/local-execution';
+import { FunctionThrewError } from '@dd/apps-plugin/vite/local-execution-shared';
+import { DEFAULT_TIMEOUT_MS, withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import { rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
@@ -227,6 +228,14 @@ function postMessageExecutor(connectionId: string | undefined): LocalExecutor {
         );
         return { data };
     };
+}
+
+function createDeferred() {
+    let resolve: () => void = () => {};
+    const promise = new Promise<void>((resolvePromise) => {
+        resolve = resolvePromise;
+    });
+    return { promise, resolve };
 }
 
 const previewRuntimeContext = {
@@ -1548,6 +1557,67 @@ describe('Dev Server Middleware', () => {
             );
         });
 
+        test('Should send one runtime context query for calls that need it at the same time', async () => {
+            nock.cleanAll();
+            const hydration = mockRuntimeContextHydration(1);
+            const callCount = 3;
+            const allStarted = createDeferred();
+            let started = 0;
+            const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
+                started += 1;
+                if (started === callCount) {
+                    allStarted.resolve();
+                }
+                await withTimeout(allStarted.promise, 5000, 'Waiting for every call to start');
+                const data = await request.getRuntimeContext();
+                return { data };
+            });
+            const childMiddleware = createTestMiddleware({ executeLocally });
+            const responses = Array.from({ length: callCount }, () => {
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                childMiddleware(req, res, jest.fn());
+                return res;
+            });
+            const allDone = responses.map((res) => res.done);
+            await Promise.all(allDone);
+
+            for (const res of responses) {
+                expect(res.statusCode).toBe(200);
+                expect(JSON.parse(res.getBody()).result).toEqual({
+                    data: previewRuntimeContext,
+                });
+            }
+            expect(hydration.isDone()).toBe(true);
+        });
+
+        test('Should query the runtime context again for a call that starts after the last query ended', async () => {
+            nock.cleanAll();
+            const hydration = mockRuntimeContextHydration(2);
+            const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
+                const data = await request.getRuntimeContext();
+                return { data };
+            });
+            const childMiddleware = createTestMiddleware({ executeLocally });
+            const callAndWait = async () => {
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                childMiddleware(req, res, jest.fn());
+                await res.done;
+                return res.statusCode;
+            };
+
+            expect(await callAndWait()).toBe(200);
+            expect(await callAndWait()).toBe(200);
+            expect(hydration.isDone()).toBe(true);
+        });
+
         test("Should reject a malformed hydrated identity before starting a call's process without exposing the response body", async () => {
             nock.cleanAll();
             mockRuntimeContextHydration(1, {
@@ -1607,9 +1677,13 @@ describe('Dev Server Middleware', () => {
                 nock.cleanAll();
                 const executeLocally = createTestExecutor();
                 let hydrationSignal: AbortSignal | undefined;
+                const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
                 const nonAbortableRuntimeContextRequest = <T>(
                     options: Omit<RequestOpts, 'auth'>,
                 ) => {
+                    if (hydrationSignal) {
+                        return recoveringRuntimeContextRequest(options) as Promise<T>;
+                    }
                     hydrationSignal = options.signal;
                     // Models doRequest sleeping in async-retry backoff: the signal is aborted,
                     // but the request promise does not settle until the retry timer wakes up.
@@ -1618,7 +1692,9 @@ describe('Dev Server Middleware', () => {
                 const hangingHydrationMiddleware = createDevServerMiddleware(
                     mockViteBuild,
                     () => mockFunctions,
-                    async () => [],
+                    async () => {
+                        throw new Error('reached the connection lookup');
+                    },
                     mockAuth,
                     nonAbortableRuntimeContextRequest,
                     mockLongPolling,
@@ -1648,31 +1724,15 @@ describe('Dev Server Middleware', () => {
                 expect(hydrationSignal?.aborted).toBe(true);
                 expect(forkMock).not.toHaveBeenCalled();
 
-                const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
-                // Reaching the connection lookup shows the stalled call no longer holds the queue.
-                const recoveringMiddleware = createDevServerMiddleware(
-                    mockViteBuild,
-                    () => mockFunctions,
-                    async () => {
-                        throw new Error('reached the connection lookup');
-                    },
-                    mockAuth,
-                    recoveringRuntimeContextRequest,
-                    mockLongPolling,
-                    '/project',
-                    mockLog,
-                    'development',
-                    localOnlyHostCheck,
-                    defaultServerConditions,
-                    executeLocally,
-                );
+                // The same dev server reaching the connection lookup shows the timed-out query no
+                // longer holds the shared runtime context.
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
                     functionName: encodeQueryName(mockFunctions[0]),
                     args: [],
                 });
                 const recoveringRes = createMockResponse();
 
-                recoveringMiddleware(recoveringReq, recoveringRes, jest.fn());
+                hangingHydrationMiddleware(recoveringReq, recoveringRes, jest.fn());
                 const recoveringDone = recoveringRes.done;
                 await jest.advanceTimersByTimeAsync(0);
                 await recoveringDone;
@@ -1892,6 +1952,109 @@ describe('Dev Server Middleware', () => {
                 expect.stringContaining('Connection is not authorized for this action'),
                 'error',
             );
+        });
+
+        describe('What a failed $.Actions call rejects with, as in a deployed app', () => {
+            const catchingPostMessage: LocalExecutor = async ({ executeAction }) => {
+                try {
+                    await executeAction(
+                        'com.datadoghq.slack.chat.postMessage',
+                        { text: 'hi' },
+                        undefined,
+                    );
+                    return { data: 'no error' };
+                } catch (error) {
+                    return { data: { type: typeof error, value: error } };
+                }
+            };
+            const runAndReadData = async () => {
+                const actionMiddleware = createTestMiddleware({
+                    executeLocally: catchingPostMessage,
+                });
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                actionMiddleware(req, res, jest.fn());
+                await res.done;
+                return JSON.parse(res.getBody()).result.data;
+            };
+            const mockActionErrors = (errors: Array<{ detail?: string; title?: string }>) =>
+                nock(DD_API_ORIGIN)
+                    .post('/api/v2/app-builder/queries/preview-async')
+                    .reply(200, { data: { id: 'receipt-action-failure' } })
+                    .get(
+                        '/api/v2/app-builder/queries/execution-long-polling/receipt-action-failure',
+                    )
+                    .reply(200, { errors });
+
+            test("Should reject with the platform's bare error detail as a string", async () => {
+                mockActionErrors([
+                    { detail: 'rpc error: code = NotFound desc = connection not found' },
+                ]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'rpc error: code = NotFound desc = connection not found',
+                });
+            });
+
+            test("Should join several of the platform's errors, using a title when there's no detail", async () => {
+                mockActionErrors([{ detail: 'first' }, { title: 'second' }]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'first; second',
+                });
+            });
+
+            test('Should reject with a fallback message when no platform error has a detail or a title', async () => {
+                mockActionErrors([{}, { detail: '' }]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'Query execution failed',
+                });
+                expect(mockLogFn).toHaveBeenCalledWith(
+                    '$.Actions call to "com.datadoghq.slack.chat.postMessage" failed: Query execution failed',
+                    'error',
+                );
+            });
+        });
+
+        describe('What an uncaught failure reports, as in a deployed app', () => {
+            const runAndReadError = async (failure: unknown) => {
+                const failingMiddleware = createTestMiddleware({
+                    executeLocally: jest.fn().mockRejectedValue(failure),
+                });
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                failingMiddleware(req, res, jest.fn());
+                await res.done;
+                return { statusCode: res.statusCode, error: JSON.parse(res.getBody()).error };
+            };
+
+            test('Should prefix what the function threw with "Execution failed: "', async () => {
+                const thrown = new FunctionThrewError('plain error x', 'TypeError: plain error x');
+
+                await expect(runAndReadError(thrown)).resolves.toEqual({
+                    statusCode: 500,
+                    error: 'Execution failed: TypeError: plain error x',
+                });
+            });
+
+            test("Should leave the dev server's own failures unprefixed", async () => {
+                await expect(
+                    runAndReadError(new Error('"getGreeting" is not a function')),
+                ).resolves.toEqual({
+                    statusCode: 500,
+                    error: '"getGreeting" is not a function',
+                });
+            });
         });
 
         // getAllowedConnectionIds only resolves and transforms modules, so it rejects a banned
