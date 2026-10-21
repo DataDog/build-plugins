@@ -502,7 +502,14 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // `$dd_entry` swaps the probe list for a handle identifying this invocation
     // (undefined when no probe produced an entry), reusing the same binding so
     // every exit hook pairs with its own entry state, not a concurrent call's.
-    const probeDecl = `let ${probeVarName} = ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
+    //
+    // The guard keeps the function from throwing where `$dd_probes` isn't defined:
+    // before the Browser Debugger SDK initializes, and in global scopes without the
+    // SDK, such as a sandboxed iframe or a worker. It reads `globalThis` instead of
+    // using `typeof`, which minifiers turn into a relational string comparison that
+    // engines don't fast-path. It adds no string literal, which RUM privacy would
+    // collect, and keeps the bare call whose function ID RUM privacy leaves inline.
+    const probeDecl = `let ${probeVarName} = globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION} !== void 0 && ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
@@ -798,6 +805,7 @@ function getDerivedConstructorForLexicalThis(
                 node,
                 parent: current.parent,
                 parentPath: current.parentPath,
+                scope: current.scope,
             };
         }
 

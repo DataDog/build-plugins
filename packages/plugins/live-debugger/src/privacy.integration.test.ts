@@ -151,7 +151,7 @@ const getProbeEvents = (variant: Variant, target: Target) => {
     recordProbes(preloadedGlobals, loadEvents);
     loadBundle(variant, target, preloadedGlobals);
 
-    // The SDK is initialized after the bundle ran, replacing the injected stubs.
+    // The SDK is initialized after the bundle ran.
     const callEvents: ProbeEvent[] = [];
     const globals = loadBundle(variant, target);
     recordProbes(globals, callEvents);

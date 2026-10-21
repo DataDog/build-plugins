@@ -20,7 +20,7 @@ const resolveSite = (
     source: string,
     errors: string[],
 ): ReturnType<typeof parseSite> => {
-    if (value === undefined) {
+    if (value === undefined || value === '') {
         return undefined;
     }
     const parsed = parseSite(value);
@@ -136,9 +136,8 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     const errors: string[] = validateMetadata(options.metadata);
     const normalizedOptions = normalizeSourcemapsOptions(options, errors);
-    // DATADOG_SITE env var takes precedence over configuration; only validate
-    // auth.site when no env var is set, so a stale auth.site can't block a
-    // build that has already opted into an env override.
+    // A valid DATADOG_SITE/DD_SITE takes precedence over configuration, so a
+    // stale auth.site can't block a build that has opted into an env override.
     const envRaw = getDDEnvValue('SITE');
     const resolvedSite =
         resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors) ??

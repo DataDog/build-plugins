@@ -7,6 +7,9 @@ Developer notes for the Live Debugger plugin.
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
 -   [Consumer build canary](#consumer-build-canary)
+    -   [Fresh checkouts and CI](#fresh-checkouts-and-ci)
+    -   [Excalidraw target](#excalidraw-target)
+    -   [Mastodon target](#mastodon-target)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
     -   [What it measures](#what-it-measures)
@@ -37,7 +40,7 @@ Changes that affect source positions, injected wrappers, return rewriting, or er
 
 The Babel packages and `magic-string` are optional peer dependencies for consumers. Keep the transform dependencies lazy-loaded and preserve the user-facing missing-dependency error path. Update [`src/transform/lazy-deps.test.ts`](./src/transform/lazy-deps.test.ts) when touching dependency loading.
 
-Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Preserve the no-SDK fallback injected from [`src/runtime-bootstrap.ts`](./src/runtime-bootstrap.ts).
+Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Keep the `globalThis.$dd_probes !== void 0` guard before that call: nothing defines `$dd_probes` until the SDK initializes, and never in global scopes without the SDK. Don't turn it into a `typeof` check: minifiers rewrite `typeof x !== 'undefined'` into a relational comparison such as `"u">typeof x`, which costs 5–9 ns per call in every major engine once the SDK is loaded. Generated code must not add string literals besides the function ID: RUM privacy would move them into the module's dictionary, which instrumented functions would then read before the module has run. Keep `$dd_probes` a bare identifier call, because RUM privacy only leaves the function ID inline for that form.
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
@@ -59,9 +62,10 @@ Run every phase defined by a target with:
 yarn cli canary <target>
 ```
 
-Install the dependencies of both repositories first. A target may refuse to run
-when either checkout already has a local package-link setup, so it cannot
-overwrite an existing development environment.
+Install the dependencies of both repositories first, or pass `--install` to
+install the target's. A target may refuse to run when either checkout already
+has a local package-link setup, so it cannot overwrite an existing development
+environment.
 
 Each phase builds three variants:
 
@@ -99,9 +103,90 @@ build fails.
 
 The report records each repository's HEAD commit and whether its worktree was
 dirty when the run started. The canary fails when a build or validation command
-exits unsuccessfully, no JavaScript is emitted, the instrumented output lacks
-Live Debugger markers, or the plugin reports an instrumentation or source-map
-error.
+exits unsuccessfully, no JavaScript is emitted, emitted JavaScript does not
+parse, the instrumented output lacks Live Debugger markers, or the plugin
+reports an instrumentation or source-map error.
+
+### Fresh checkouts and CI
+
+Each target declares its GitHub repository and the branch it tracks.
+`canary-checkout` fetches only the tip commit of that branch into an empty
+directory, then resolves the toolchain the checkout declares:
+
+```bash
+yarn cli canary-checkout <target> --root /tmp/canary-target --artifacts-dir /tmp/canary-artifacts
+```
+
+-   `--ref <branch-or-sha>` checks out something else. While upstream is broken,
+    a target can temporarily pin a commit with `repository.pin`, whose reason
+    links the tracking issue. `--ref` still overrides the pin.
+-   Set `GH_TOKEN` to read a private repository. Git receives the token through
+    environment variables, so it doesn't appear in command lines or logs.
+-   The Node.js version comes from the checkout's `.nvmrc`, `.node-version` or
+    `volta.node`, then from the target's `nodeVersion`. Aliases such as
+    `lts/*` and partial versions resolve against
+    `https://nodejs.org/dist/index.json`; set `CANARY_NODE_DIST_URL` to use a
+    mirror. The package manager comes from `packageManager`.
+-   The result is printed and, with `--artifacts-dir`, written to
+    `toolchain.env` for the CI job to install.
+
+Then run the canary on that checkout:
+
+```bash
+yarn cli canary <target> --root /tmp/canary-target --install --no-cleanup --artifacts-dir /tmp/canary-artifacts
+```
+
+`--install` installs the target's dependencies first and retries network
+failures twice. `--no-cleanup` leaves the checkout's changes in place, which is
+only appropriate for a disposable checkout. `--artifacts-dir` writes the report
+to `report.json` and each command's output to a numbered file in
+`logs/canary/`, next to `canary-checkout`'s `logs/checkout/`.
+
+### Excalidraw target
+
+The `excalidraw` target builds the public
+[Excalidraw](https://github.com/excalidraw/excalidraw) app (`excalidraw-app`)
+with Vite. By default it expects a checkout next to this repository, with its
+dependencies installed. Excalidraw pins Yarn 1 through its `packageManager`
+field, so `yarn` must honor that field in its checkout, for example through
+Corepack:
+
+```bash
+git clone https://github.com/excalidraw/excalidraw.git ../excalidraw
+(cd ../excalidraw && yarn install --frozen-lockfile)
+yarn cli canary excalidraw
+```
+
+Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
+Babel peer dependencies into the checkout, and generates
+`excalidraw-app/vite.config.live-debugger-canary.mjs`, which wraps the app's
+Vite config. Instrumentation pushes the app's main chunk past its service-worker
+precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
+warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
+Vite config, then reinstalls the checkout's dependencies. Builds are written to
+`excalidraw-app/build/live-debugger-canary/`.
+
+### Mastodon target
+
+The `mastodon` target builds the web frontend of the public
+[Mastodon](https://github.com/mastodon/mastodon) server with Vite 8, which
+bundles with Rolldown. Building the frontend needs Node.js and Yarn only, not
+Ruby. By default the target expects a checkout next to this repository, with its
+dependencies installed. Mastodon pins Yarn 4 through its `packageManager` field,
+so `yarn` must honor that field in its checkout:
+
+```bash
+git clone --depth 1 https://github.com/mastodon/mastodon.git ../mastodon
+(cd ../mastodon && yarn install --immutable)
+yarn cli canary mastodon
+```
+
+Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
+Babel peer dependencies into the checkout, and generates
+`vite.config.live-debugger-canary.mjs`, which wraps Mastodon's unmodified Vite
+config. Cleanup restores `package.json` and `yarn.lock`, then reinstalls the
+checkout's dependencies. Every variant is a production build, written to
+`build/live-debugger-canary/`.
 
 ## Runtime benchmark
 
