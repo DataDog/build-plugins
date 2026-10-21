@@ -19,6 +19,12 @@
                 "format": [
                     "esm"
                 ]
+            },
+            "local-execution-child": {
+                "entry": "./src/vite/local-execution-child.ts",
+                "format": [
+                    "esm"
+                ]
             }
         }
     },

@@ -119,6 +119,24 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             };
         };
 
+        test('Should leave an edited entry the walk primed cached when asked to, as child processes do', async () => {
+            const server = makeFakeServer(resolveToDependency);
+            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'edited');
+            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [entry]);
+
+            const log = getMockLogger();
+            await collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                log,
+                parseAst,
+                false,
+            );
+
+            expect(updateModuleTransformResult).not.toHaveBeenCalled();
+        });
+
         test('Should un-cache an edited entry the walk primed', async () => {
             const server = makeFakeServer(resolveToDependency);
             const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'edited');
