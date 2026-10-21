@@ -2,8 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global globalThis */
-
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
@@ -15,7 +13,12 @@ import {
     getRetryDelay,
     oversizedBundleMessage,
 } from '@dd/apps-plugin/vite/dev-server';
-import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
+import type {
+    LocalExecutionRequest,
+    LocalExecutor,
+} from '@dd/apps-plugin/vite/local-execution-process';
+import { createChildProcessExecutor } from '@dd/apps-plugin/vite/local-execution-process';
+import { DEFAULT_TIMEOUT_MS } from '@dd/apps-plugin/vite/local-execution';
 import { rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
@@ -23,32 +26,30 @@ import {
     createMockResponse,
     getMockLogger,
     mockLogFn,
-    moduleResolverFor,
 } from '@dd/tests/_jest/helpers/mocks';
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
+import { fork } from 'node:child_process';
 import type { InlineConfig } from 'vite';
 import { defaultServerConditions } from 'vite';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
-import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
-/** Shape of the `$.Actions` dynamic proxy — a nested property path (e.g. `$.Actions.slack.chat.postMessage`) callable at any depth; types `globalThis.$` in tests without an `any` cast. */
-type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => Promise<unknown>);
-
-/** Reads the `$.Actions` local-execution.ts installs onto `globalThis` — genuinely untyped, so the cast is centralized here instead of repeated at each call site. */
-function testDollarActions(): ActionsProxy {
-    return (globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }).$.Actions;
-}
+// Spying on the shared core module fails once a sandbox guard makes `fork` non-configurable.
+jest.mock('node:child_process', () => {
+    const actual = jest.requireActual<typeof import('node:child_process')>('node:child_process');
+    return { ...actual, fork: jest.fn(actual.fork) };
+});
 
 const mockViteBuild = jest.fn();
 
-/** Stands in for the real `server.ssrLoadModule` — the local executeAction path doesn't bundle, so tests exercising it configure this directly instead of `mockBuildWithParsedBackend`. */
-const mockLoadModule = jest.fn();
+/** Stands in for the child process executor, which the local executeAction path hands each call to. */
+const mockExecuteLocally = jest.fn();
 
 const DD_API_ORIGIN = 'https://api.datadoghq.com';
 
@@ -192,22 +193,36 @@ describe('getRetryDelay', () => {
     });
 });
 
-/**
- * Configures `mockLoadModule` to resolve `func`'s absolute path to a module
- * exporting a single named function, matching what the real `ssrLoadModule`
- * returns for a real backend-function file.
- */
-function mockLoadModuleReturning(func: BackendFunction, fn: (...args: never[]) => unknown) {
-    const resolveModule = moduleResolverFor(func, { [func.name]: fn });
-    mockLoadModule.mockImplementation(resolveModule);
+/** Has `mockExecuteLocally` hydrate `$` through the request, as the real executor does, then return `fn`'s result. */
+function mockExecutorReturning(fn: (...args: unknown[]) => unknown) {
+    mockExecuteLocally.mockImplementation(async (request: LocalExecutionRequest) => {
+        await request.getRuntimeContext();
+        return { data: await fn(...request.args) };
+    });
 }
 
-function createDeferred() {
-    let resolve: () => void = () => {};
-    const promise = new Promise<void>((resolvePromise) => {
-        resolve = resolvePromise;
+/** The real executor, for checks that end before a call's process starts; a fork fails the test. */
+function createTestExecutor(): LocalExecutor {
+    return createChildProcessExecutor({
+        invokeChannel: { handleInvoke: async () => ({}) },
+        projectRoot: '/project',
+        childEntryPath: '/nonexistent/local-execution-child.mjs',
+        moduleRunnerPath: '/nonexistent/module-runner.js',
+        log: mockLog,
     });
-    return { promise, resolve };
+}
+
+/** Stands in for a call whose backend function makes one `$.Actions.slack.chat.postMessage` call. */
+function postMessageExecutor(connectionId: string | undefined): LocalExecutor {
+    return async ({ executeAction }) => {
+        const inputs = { text: 'hi' };
+        const data = await executeAction(
+            'com.datadoghq.slack.chat.postMessage',
+            inputs,
+            connectionId,
+        );
+        return { data };
+    };
 }
 
 const previewRuntimeContext = {
@@ -282,22 +297,21 @@ type CreateDevServerMiddlewareArgs = Parameters<typeof createDevServerMiddleware
 function createTestMiddleware(
     overrides: {
         viteBuild?: CreateDevServerMiddlewareArgs[0];
-        loadModule?: CreateDevServerMiddlewareArgs[1];
-        getBackendFunctions?: CreateDevServerMiddlewareArgs[2];
-        getAllowedConnectionIds?: CreateDevServerMiddlewareArgs[3];
-        auth?: CreateDevServerMiddlewareArgs[4];
-        doAuthenticatedRequest?: CreateDevServerMiddlewareArgs[5];
-        longPolling?: CreateDevServerMiddlewareArgs[6];
-        projectRoot?: CreateDevServerMiddlewareArgs[7];
-        log?: CreateDevServerMiddlewareArgs[8];
-        mode?: CreateDevServerMiddlewareArgs[9];
-        isHostAllowed?: CreateDevServerMiddlewareArgs[10];
-        serverConditions?: CreateDevServerMiddlewareArgs[11];
+        getBackendFunctions?: CreateDevServerMiddlewareArgs[1];
+        getAllowedConnectionIds?: CreateDevServerMiddlewareArgs[2];
+        auth?: CreateDevServerMiddlewareArgs[3];
+        doAuthenticatedRequest?: CreateDevServerMiddlewareArgs[4];
+        longPolling?: CreateDevServerMiddlewareArgs[5];
+        projectRoot?: CreateDevServerMiddlewareArgs[6];
+        log?: CreateDevServerMiddlewareArgs[7];
+        mode?: CreateDevServerMiddlewareArgs[8];
+        isHostAllowed?: CreateDevServerMiddlewareArgs[9];
+        serverConditions?: CreateDevServerMiddlewareArgs[10];
+        executeLocally?: CreateDevServerMiddlewareArgs[11];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
         overrides.viteBuild ?? mockViteBuild,
-        overrides.loadModule ?? mockLoadModule,
         overrides.getBackendFunctions ?? (() => mockFunctions),
         overrides.getAllowedConnectionIds ?? (async () => []),
         overrides.auth ?? mockAuth,
@@ -310,6 +324,7 @@ function createTestMiddleware(
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
         overrides.serverConditions ?? defaultServerConditions,
+        overrides.executeLocally ?? mockExecuteLocally,
     );
 }
 
@@ -317,7 +332,7 @@ describe('Dev Server Middleware', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockViteBuild.mockReset();
-        mockLoadModule.mockReset();
+        mockExecuteLocally.mockReset();
     });
 
     afterEach(() => {
@@ -370,7 +385,7 @@ describe('Dev Server Middleware', () => {
 
         test('Should handle /__dd/executeAction POST by hydrating context and running the function locally without bundling', async () => {
             mockRuntimeContextHydration();
-            mockLoadModuleReturning(mockFunctions[0], (arg) => arg);
+            mockExecutorReturning((arg) => arg);
 
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -461,7 +476,7 @@ describe('Dev Server Middleware', () => {
             expect(body.success).toBe(true);
             expect(body.result).toEqual({ data: { result: 'via cloud' } });
             expect(apiScope.isDone()).toBe(true);
-            expect(mockLoadModule).not.toHaveBeenCalled();
+            expect(mockExecuteLocally).not.toHaveBeenCalled();
         });
     });
 
@@ -510,7 +525,7 @@ describe('Dev Server Middleware', () => {
                 expect(body.success).toBe(false);
                 expect(next).not.toHaveBeenCalled();
                 expect(mockViteBuild).not.toHaveBeenCalled();
-                expect(mockLoadModule).not.toHaveBeenCalled();
+                expect(mockExecuteLocally).not.toHaveBeenCalled();
                 const routeMessage = expect.stringContaining(route);
                 expect(mockLogFn).toHaveBeenCalledWith(routeMessage, 'debug');
             },
@@ -1476,11 +1491,12 @@ describe('Dev Server Middleware', () => {
     });
 
     describe('executeAction handler (local)', () => {
+        const forkMock = jest.mocked(fork);
         beforeEach(() => {
             mockRuntimeContextHydration();
         });
 
-        const middleware = createTestMiddleware();
+        const middleware = createTestMiddleware({ executeLocally: createTestExecutor() });
 
         test('Should return 400 for missing functionRef', async () => {
             const req = createMockRequest('/__dd/executeAction', {});
@@ -1504,26 +1520,31 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(404);
         });
 
-        test('Should hydrate context, run the function directly in-process, and return its result without bundling', async () => {
-            mockLoadModuleReturning(mockFunctions[0], (arg: number) => arg * 2);
-
+        test('Should hand the call, with its timeout and long polling, to the local executor', async () => {
+            const executeLocally = jest.fn().mockResolvedValue({ data: 'from child' });
+            const childMiddleware = createTestMiddleware({ executeLocally });
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
                 args: [21],
             });
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            childMiddleware(req, res, jest.fn());
             await res.done;
 
             expect(res.statusCode).toBe(200);
-            const body = JSON.parse(res.getBody());
-            expect(body.success).toBe(true);
-            expect(body.result).toEqual({ data: 42 });
-            expect(mockViteBuild).not.toHaveBeenCalled();
+            expect(JSON.parse(res.getBody()).result).toEqual({ data: 'from child' });
+            expect(executeLocally).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    func: mockFunctions[0],
+                    args: [21],
+                    timeoutMs: DEFAULT_TIMEOUT_MS,
+                    longPolling: mockLongPolling,
+                }),
+            );
         });
 
-        test('Should reject a malformed hydrated identity before loading customer code without exposing the response body', async () => {
+        test("Should reject a malformed hydrated identity before starting a call's process without exposing the response body", async () => {
             nock.cleanAll();
             mockRuntimeContextHydration(1, {
                 data: {
@@ -1548,14 +1569,14 @@ describe('Dev Server Middleware', () => {
             const body = JSON.parse(res.getBody());
             expect(body.error).toContain('Source.initiator');
             expect(body.error).not.toContain('must-not-appear');
-            expect(mockLoadModule).not.toHaveBeenCalled();
+            expect(forkMock).not.toHaveBeenCalled();
             expect(mockLogFn).not.toHaveBeenCalledWith(
                 expect.stringContaining('must-not-appear'),
                 expect.anything(),
             );
         });
 
-        test('Should reject hydration outputs with no data field before loading customer code', async () => {
+        test("Should reject hydration outputs with no data field before starting a call's process", async () => {
             nock.cleanAll();
             mockRuntimeContextHydration(1, {});
 
@@ -1573,13 +1594,14 @@ describe('Dev Server Middleware', () => {
             expect(body.error).toContain(
                 'Runtime context hydration completed without a "data" field',
             );
-            expect(mockLoadModule).not.toHaveBeenCalled();
+            expect(forkMock).not.toHaveBeenCalled();
         });
 
         test('Should bound stalled runtime-context hydration when the request ignores abort so later local executions are not wedged', async () => {
             jest.useFakeTimers();
             try {
                 nock.cleanAll();
+                const executeLocally = createTestExecutor();
                 let hydrationSignal: AbortSignal | undefined;
                 const nonAbortableRuntimeContextRequest = <T>(
                     options: Omit<RequestOpts, 'auth'>,
@@ -1591,7 +1613,6 @@ describe('Dev Server Middleware', () => {
                 };
                 const hangingHydrationMiddleware = createDevServerMiddleware(
                     mockViteBuild,
-                    mockLoadModule,
                     () => mockFunctions,
                     async () => [],
                     mockAuth,
@@ -1602,6 +1623,7 @@ describe('Dev Server Middleware', () => {
                     'development',
                     localOnlyHostCheck,
                     defaultServerConditions,
+                    executeLocally,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1620,14 +1642,16 @@ describe('Dev Server Middleware', () => {
                 const body = JSON.parse(res.getBody());
                 expect(body.error).toContain('Runtime context hydration timed out after 60000ms');
                 expect(hydrationSignal?.aborted).toBe(true);
-                expect(mockLoadModule).not.toHaveBeenCalled();
+                expect(forkMock).not.toHaveBeenCalled();
 
                 const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
+                // Reaching the connection lookup shows the stalled call no longer holds the queue.
                 const recoveringMiddleware = createDevServerMiddleware(
                     mockViteBuild,
-                    mockLoadModule,
                     () => mockFunctions,
-                    async () => [],
+                    async () => {
+                        throw new Error('reached the connection lookup');
+                    },
                     mockAuth,
                     recoveringRuntimeContextRequest,
                     mockLongPolling,
@@ -1636,8 +1660,8 @@ describe('Dev Server Middleware', () => {
                     'development',
                     localOnlyHostCheck,
                     defaultServerConditions,
+                    executeLocally,
                 );
-                mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
                     functionName: encodeQueryName(mockFunctions[0]),
                     args: [],
@@ -1649,10 +1673,9 @@ describe('Dev Server Middleware', () => {
                 await jest.advanceTimersByTimeAsync(0);
                 await recoveringDone;
 
-                expect(recoveringRes.statusCode).toBe(200);
-                expect(JSON.parse(recoveringRes.getBody()).result).toEqual({
-                    data: 'recovered',
-                });
+                expect(recoveringRes.statusCode).toBe(500);
+                const recoveringBody = JSON.parse(recoveringRes.getBody());
+                expect(recoveringBody.error).toContain('reached the connection lookup');
             } finally {
                 jest.useRealTimers();
             }
@@ -1660,7 +1683,6 @@ describe('Dev Server Middleware', () => {
 
         test('Should reject a request with no auth configured upfront, even for a function that never calls $.Actions — matching production, which authenticates before any backend code runs', async () => {
             const noAuthMiddleware = createTestMiddleware({ doAuthenticatedRequest: undefined });
-            mockLoadModuleReturning(mockFunctions[0], () => 'pure result, no $.Actions call');
 
             const req = createMockRequest('/__dd/executeAction', {
                 functionName: encodeQueryName(mockFunctions[0]),
@@ -1684,15 +1706,8 @@ describe('Dev Server Middleware', () => {
             };
             const middlewareWithConnection = createTestMiddleware({
                 getBackendFunctions: () => [funcWithConnection, mockFunctions[1]],
-                getAllowedConnectionIds: async (entryId: string) =>
-                    entryId === funcWithConnection.absolutePath ? ['conn-1'] : [],
+                executeLocally: postMessageExecutor('conn-1'),
             });
-            mockLoadModuleReturning(funcWithConnection, () =>
-                testDollarActions().slack.chat.postMessage({
-                    inputs: { text: 'hi' },
-                    connectionId: 'conn-1',
-                }),
-            );
 
             type PreviewAsyncBody = {
                 data: {
@@ -1733,9 +1748,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(200);
             const body = JSON.parse(res.getBody());
             expect(body.success).toBe(true);
-            // The action's raw output ({ok, ts}) is what $.Actions.foo.bar() resolves to; the
-            // outer {data: ...} comes from executeScriptLocally's usual return-value wrapping,
-            // not anything action-specific.
+            // The action's raw output ({ok, ts}) is what $.Actions.foo.bar() resolves to.
             expect(body.result).toEqual({ data: { ok: true, ts: '123' } });
             expect(apiScope.isDone()).toBe(true);
             expect(capturedBody?.data.attributes.query.properties.spec).toEqual({
@@ -1755,15 +1768,8 @@ describe('Dev Server Middleware', () => {
             };
             const middlewareWithEmptyConnection = createTestMiddleware({
                 getBackendFunctions: () => [funcWithEmptyConnection, mockFunctions[1]],
-                getAllowedConnectionIds: async (entryId: string) =>
-                    entryId === funcWithEmptyConnection.absolutePath ? [''] : [],
+                executeLocally: postMessageExecutor(''),
             });
-            mockLoadModuleReturning(funcWithEmptyConnection, () =>
-                testDollarActions().slack.chat.postMessage({
-                    inputs: { text: 'hi' },
-                    connectionId: '',
-                }),
-            );
 
             let capturedBody:
                 | {
@@ -1800,11 +1806,9 @@ describe('Dev Server Middleware', () => {
         });
 
         test("Should log a successful $.Actions call's fqn, duration, and response size at debug level without logging the response body", async () => {
-            mockLoadModuleReturning(mockFunctions[0], () =>
-                testDollarActions().slack.chat.postMessage({
-                    inputs: { text: 'hi' },
-                }),
-            );
+            const actionMiddleware = createTestMiddleware({
+                executeLocally: postMessageExecutor(undefined),
+            });
 
             const responseSentinel = 'monitor-creator@example.com';
             const actionOutputs = { ok: true, creator: responseSentinel, name: 'café' };
@@ -1826,7 +1830,7 @@ describe('Dev Server Middleware', () => {
             });
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            actionMiddleware(req, res, jest.fn());
             await res.done;
 
             expect(res.statusCode).toBe(200);
@@ -1854,11 +1858,9 @@ describe('Dev Server Middleware', () => {
         });
 
         test("Should surface a failed $.Actions call's error detail to the local console", async () => {
-            mockLoadModuleReturning(mockFunctions[0], () =>
-                testDollarActions().slack.chat.postMessage({
-                    inputs: { text: 'hi' },
-                }),
-            );
+            const actionMiddleware = createTestMiddleware({
+                executeLocally: postMessageExecutor(undefined),
+            });
 
             nock(DD_API_ORIGIN)
                 .post('/api/v2/app-builder/queries/preview-async')
@@ -1874,7 +1876,7 @@ describe('Dev Server Middleware', () => {
             });
             const res = createMockResponse();
 
-            middleware(req, res, jest.fn());
+            actionMiddleware(req, res, jest.fn());
             await res.done;
 
             expect(res.statusCode).toBe(500);
@@ -1888,215 +1890,14 @@ describe('Dev Server Middleware', () => {
             );
         });
 
-        // The priming loadModule call (see handleExecuteAction) is the only place the entry's
-        // top-level code runs (Vite caches the module for executeScriptLocally's reuse), so it
-        // must carry the same $-scoping guarantee executeScriptLocally's own load would provide.
-        test('Should read $ as undefined when a customer module reaches for it during its own top-level evaluation, before runScriptLocally installs its own execution-scoped $', async () => {
-            let dollarDuringTopLevelLoad: unknown = 'not captured';
-            mockLoadModule.mockImplementation(async (specifier: string) => {
-                if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    dollarDuringTopLevelLoad = (globalThis as Record<string, unknown>).$;
-                    return { [mockFunctions[0].name]: () => 'done' };
-                }
-                throw new Error(`Cannot find module '${specifier}'`);
-            });
-
-            const req = createMockRequest('/__dd/executeAction', {
-                functionName: encodeQueryName(mockFunctions[0]),
-                args: [],
-            });
-            const res = createMockResponse();
-
-            middleware(req, res, jest.fn());
-            await res.done;
-
-            expect(res.statusCode).toBe(200);
-            expect(dollarDuringTopLevelLoad).toBeUndefined();
-        });
-
-        // The priming load runs before runScriptLocally's own hang-detection timeout is
-        // installed, so a hanging top-level await would otherwise wedge this request and every
-        // request queued behind it forever.
-        test('Should eventually time out and return a clear error when the priming load never settles', async () => {
-            jest.useFakeTimers();
-            try {
-                const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
-                const hangingLoadModule = jest.fn(
-                    // Never settles.
-                    () => new Promise<Record<string, unknown>>(() => {}),
-                );
-                const immediateHydrationMiddleware = createDevServerMiddleware(
-                    mockViteBuild,
-                    hangingLoadModule,
-                    () => mockFunctions,
-                    async () => [],
-                    mockAuth,
-                    immediateRuntimeContextRequest,
-                    mockLongPolling,
-                    '/project',
-                    mockLog,
-                    'development',
-                    localOnlyHostCheck,
-                    defaultServerConditions,
-                );
-
-                const req = createMockRequest('/__dd/executeAction', {
-                    functionName: encodeQueryName(mockFunctions[0]),
-                    args: [],
-                });
-                const res = createMockResponse();
-
-                immediateHydrationMiddleware(req, res, jest.fn());
-                const doneAssertion = res.done;
-
-                // createMockRequest emits the body via a real process.nextTick, which fake timers
-                // don't advance — drain it first so the priming load's setTimeout is scheduled
-                // before runAllTimersAsync tries to advance past it.
-                await jest.advanceTimersByTimeAsync(0);
-                await jest.runAllTimersAsync();
-                await doneAssertion;
-
-                expect(res.statusCode).toBe(500);
-                const body = JSON.parse(res.getBody());
-                expect(body.error).toMatch(/timed out after 10000ms/);
-            } finally {
-                jest.useRealTimers();
-            }
-        });
-
-        // The race test's timeout leaves both deadlines room to fail with their own message.
-        const RACE_SIGNAL_DEADLINE_MS = 5000;
-        const RACE_RESPONSE_DEADLINE_MS = 4000;
-        // Priming evaluates real top-level customer code — if it ran outside executeColdActionLocally's
-        // enqueue() call, two concurrent requests for two different cold functions could evaluate
-        // their top-level code in genuine parallel instead of one fully finishing before the other starts.
-        test(
-            'Should never let two concurrent requests for different cold functions race their priming loads',
-            async () => {
-                // The describe's beforeEach registers greet's hydration; this one serves compute's.
-                const apiScope = mockRuntimeContextHydration();
-                const order: string[] = [];
-                const greetPrimingGate = createDeferred();
-                const greetPrimingStarted = createDeferred();
-                const computeQueued = createDeferred();
-                // handleExecuteAction logs this and reaches enqueue() with no await in between.
-                const computeQueuedMessage = `Executing action locally: ${formatRef(mockFunctions[1])}`;
-                const queueAwareLog = getMockLogger({
-                    debug: (text: string) => {
-                        if (text.startsWith(computeQueuedMessage)) {
-                            computeQueued.resolve();
-                        }
-                    },
-                });
-                // A cold execution submits its runtime-context query as soon as its queued turn starts,
-                // so a second submission means compute's turn began while greet still held the queue.
-                let submittedQueryCount = 0;
-                const countingRequest = <T>(opts: Omit<RequestOpts, 'auth'>) => {
-                    if (opts.method === 'POST') {
-                        submittedQueryCount += 1;
-                    }
-                    return testAuthenticatedRequest<T>(opts);
-                };
-                const queueAwareMiddleware = createTestMiddleware({
-                    log: queueAwareLog,
-                    doAuthenticatedRequest: countingRequest,
-                });
-
-                mockLoadModule.mockImplementation(async (specifier: string) => {
-                    if (specifier === mockFunctions[0].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                        order.push('greet-priming-start');
-                        greetPrimingStarted.resolve();
-                        await greetPrimingGate.promise;
-                        order.push('greet-priming-end');
-                        return { [mockFunctions[0].name]: () => 'greet-done' };
-                    }
-                    if (specifier === mockFunctions[1].absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                        order.push('compute-priming-start');
-                        order.push('compute-priming-end');
-                        return { [mockFunctions[1].name]: () => 'compute-done' };
-                    }
-                    throw new Error(`Cannot find module '${specifier}'`);
-                });
-
-                const reqGreet = createMockRequest('/__dd/executeAction', {
-                    functionName: encodeQueryName(mockFunctions[0]),
-                    args: [],
-                });
-                const resGreet = createMockResponse();
-                const reqCompute = createMockRequest('/__dd/executeAction', {
-                    functionName: encodeQueryName(mockFunctions[1]),
-                    args: [],
-                });
-                const resCompute = createMockResponse();
-
-                // Fired back-to-back, before either request's own body has even finished parsing.
-                const nextGreet = jest.fn();
-                const nextCompute = jest.fn();
-                queueAwareMiddleware(reqGreet, resGreet, nextGreet);
-                queueAwareMiddleware(reqCompute, resCompute, nextCompute);
-
-                // The finally releases greet so queued work can drain before the next test. Its deadline
-                // doesn't throw, so a stuck response can't hide an earlier failure.
-                let responsesOutcome = '';
-                try {
-                    const bothSignals = Promise.all([
-                        greetPrimingStarted.promise,
-                        computeQueued.promise,
-                    ]);
-                    await withTimeout(
-                        bothSignals,
-                        RACE_SIGNAL_DEADLINE_MS,
-                        'Waiting for greet to prime and compute to queue',
-                    );
-                    // Compute starting its turn early or priming outside the queue has no event to wait
-                    // for, so this delay only bounds how long either regression gets to show up; correct
-                    // code passes for any delay well under the priming and test timeouts.
-                    await new Promise((resolve) => setTimeout(resolve, 20));
-                    expect(submittedQueryCount).toBe(1);
-                    expect(order).toEqual(['greet-priming-start']);
-                } finally {
-                    greetPrimingGate.resolve();
-                    const bothResponses = Promise.all([resGreet.done, resCompute.done]);
-                    responsesOutcome = await withTimeout(
-                        bothResponses,
-                        RACE_RESPONSE_DEADLINE_MS,
-                        'Waiting for responses',
-                    ).then(
-                        () => 'ended',
-                        (error: unknown) => String(error),
-                    );
-                }
-
-                expect(responsesOutcome).toBe('ended');
-                expect(resGreet.statusCode).toBe(200);
-                expect(resCompute.statusCode).toBe(200);
-                expect(nextGreet).not.toHaveBeenCalled();
-                expect(nextCompute).not.toHaveBeenCalled();
-                const isComputeHydrated = apiScope.isDone();
-                expect(isComputeHydrated).toBe(true);
-                expect(order).toEqual([
-                    'greet-priming-start',
-                    'greet-priming-end',
-                    'compute-priming-start',
-                    'compute-priming-end',
-                ]);
-            },
-            RACE_SIGNAL_DEADLINE_MS + RACE_RESPONSE_DEADLINE_MS + 5000,
-        );
-
-        // Regression test: getAllowedConnectionIds (which only resolves/transforms modules, never
-        // executes them) must run and reject before the priming load ever evaluates the entry's
-        // real top-level code — otherwise a banned import there could run before being rejected.
-        test('Should never prime (evaluate) the entry when getAllowedConnectionIds rejects', async () => {
-            const primingCalls: string[] = [];
-            mockLoadModule.mockImplementation(async (specifier: string) => {
-                primingCalls.push(specifier);
-                return { [mockFunctions[0].name]: () => 'done' };
-            });
+        // getAllowedConnectionIds only resolves and transforms modules, so it rejects a banned
+        // import before any of the entry's code runs.
+        test("Should never start a call's process when getAllowedConnectionIds rejects", async () => {
             const rejectingMiddleware = createTestMiddleware({
                 getAllowedConnectionIds: async () => {
                     throw new Error('Importing Node built-in module "fs" is not supported');
                 },
+                executeLocally: createTestExecutor(),
             });
 
             const req = createMockRequest('/__dd/executeAction', {
@@ -2109,21 +1910,21 @@ describe('Dev Server Middleware', () => {
             await res.done;
 
             expect(res.statusCode).toBe(500);
-            expect(primingCalls).toEqual([]);
+            expect(JSON.parse(res.getBody()).error).toContain('"fs" is not supported');
+            expect(forkMock).not.toHaveBeenCalled();
         });
 
-        // Guards getAllowedConnectionIds — it reads and transforms every reachable module from
-        // disk (dev-server-module-graph.ts) with no bound of its own, unlike the sibling priming
-        // load next to it in executeColdActionLocally.
+        // getAllowedConnectionIds reads and transforms every reachable module from disk
+        // (dev-server-module-graph.ts) with no bound of its own.
         test('Should eventually time out and return a clear error when getAllowedConnectionIds never settles', async () => {
             jest.useFakeTimers();
             try {
-                mockLoadModuleReturning(mockFunctions[0], () => 'done');
                 const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
                 const hangingMiddleware = createTestMiddleware({
                     // Never settles.
                     getAllowedConnectionIds: () => new Promise(() => {}),
                     doAuthenticatedRequest: immediateRuntimeContextRequest,
+                    executeLocally: createTestExecutor(),
                 });
 
                 const req = createMockRequest('/__dd/executeAction', {

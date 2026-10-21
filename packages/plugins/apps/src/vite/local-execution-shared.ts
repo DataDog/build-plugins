@@ -4,7 +4,7 @@
 
 /* global Proxy */
 
-// Must stay side-effect free: importing it must not install local-execution.ts's `globalThis.$` accessor.
+// Side-effect free, so the local execution child process can bundle it.
 
 export interface ActionCallArgs {
     inputs: Record<string, unknown>;
@@ -17,6 +17,15 @@ export type ActionDispatch = (
     call: Partial<ActionCallArgs>,
     actionDescription: string,
 ) => Promise<unknown>;
+
+/** Never throws, so reporting an odd thrown value can't itself fail and leave a call waiting. */
+export function describeError(error: unknown): string {
+    try {
+        return error instanceof Error ? error.message : String(error);
+    } catch {
+        return `A thrown ${typeof error} that can't be converted to a string`;
+    }
+}
 
 /** Narrows an unknown value enough to read named properties off it by key. */
 export function isIndexableRecord(value: unknown): value is Record<string, unknown> {

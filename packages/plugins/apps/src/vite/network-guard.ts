@@ -1035,28 +1035,15 @@ function installFsGuards(): void {
     realTmpDirs ??= captureRealTmpDirs();
 }
 
-// graceful-fs publishes its queue on the real fs when it loads; a clone it (or fs-extra) made before
-// the install copied fs's original functions, so writes through it skip the guards.
-const GRACEFUL_FS_QUEUE = Symbol.for('graceful-fs.queue');
-let gracefulFsLoadedFirst = false;
-
-export const GRACEFUL_FS_UNGUARDED_WARNING =
-    'fs-extra or graceful-fs was loaded before the dev server installed the backend function sandbox guards, so filesystem writes a backend function makes through it are not blocked.';
-
-export function gracefulFsPredatesGuards(): boolean {
-    return gracefulFsLoadedFirst;
-}
-
 let guardsInstalled = false;
-// Patches process-wide built-ins, so it's called explicitly (by the Vite dev server and before
-// each local execution) rather than at import: every bundler that loads this plugin imports this file.
+// Patches process-wide built-ins, so a call's process calls it explicitly rather than at import:
+// every bundler that loads this plugin imports this file.
 export function installGuards(): void {
     if (guardsInstalled) {
         installPromisesOpenGuard();
         startGuardingFileHandles();
         return;
     }
-    gracefulFsLoadedFirst ||= Object.prototype.hasOwnProperty.call(fs, GRACEFUL_FS_QUEUE);
     // Each property install is a no-op once done, so a call after a failed attempt retries the rest.
     installSubprocessGuards();
     installFsGuards();
@@ -1070,39 +1057,13 @@ export function installGuards(): void {
 // Captured at load, since Jest's fake timers replace process.nextTick and would stall a run's close.
 const { nextTick } = process;
 
-// Runs `fn` outside any run's blocked scope — for work done on a run's behalf that isn't customer
-// code, like Vite resolving and transforming a module the run dynamically imports.
-export function runOutsideBlockedScope<T>(fn: () => T): T {
-    return getBlockedContext().exit(fn);
-}
-
-export const NON_STRING_MODULE_ID_MESSAGE = 'Module id must be a string';
-
-// Vite and its plugins call methods on the id, so a customer object's own toString or startsWith
-// would otherwise run exempt. Vite's methods are async, so a rejection matches how they fail on one.
-function runExemptForStringId<T>(id: unknown, call: () => Promise<T>): Promise<T> {
-    if (typeof id !== 'string') {
-        const idError = new TypeError(NON_STRING_MODULE_ID_MESSAGE);
-        return Promise.reject(idError);
-    }
-    return runOutsideBlockedScope(call);
-}
-
-// Wraps Vite's module fetch (resolve, load, transform) so project plugins doing that work for a
-// run's dynamic import aren't blocked; evaluating the fetched module still runs in the run's scope.
-export function exemptFetchFromBlockedScope<Rest extends unknown[], Result>(
-    fetchModule: (id: string, ...rest: Rest) => Promise<Result>,
-): (id: string, ...rest: Rest) => Promise<Result> {
-    return (id, ...rest) => runExemptForStringId(id, () => fetchModule(id, ...rest));
-}
-
 function closeScope(scope: BlockedScope): void {
     scope.closed = true;
     deregisterIfIdle(scope);
 }
 
 // Runs `fn` with subprocesses, worker_threads and fs writes outside the OS temp dir blocked; wraps
-// the customer's function body in `local-execution.ts`'s `runScriptLocally`.
+// a call's module load and function in its own process.
 // Aborting `signal` closes the scope for a caller that gives up on a `fn` that never settles.
 export async function runBlocked<T>(
     fn: () => Promise<T>,
