@@ -16,6 +16,7 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
 -   [Cloud execution](#cloud-execution)
+-   [Local execution](#local-execution)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -93,6 +94,19 @@ To call one by hand, send that content type, for example `curl -X POST -H 'Conte
 Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Vite's stub for an optional peer dependency the app hasn't installed still follows the dev server's `NODE_ENV`.
 
 When Datadog rejects a bundle as longer than the `jsFunctionWithActions` `script` input accepts, the dev server answers with a 413 naming the function, its size and Datadog's answer, and warns once per function until the dev server restarts.
+
+## Local execution
+
+`/__dd/executeAction` runs each backend function call the way production does: in a fresh Node process of its own. Calls run one at a time.
+
+-   **Fresh state**: module-level variables and globals start over on every call.
+-   **Timeout**: a call that runs past its time budget is killed, even inside a synchronous loop.
+-   **Guards**: guards in the call's process refuse writes outside the call's own temp dir (`os.tmpdir()`, also its working directory) and `/tmp`, subprocesses and worker threads, from the module's top-level code on. The heap is capped at 256 MB.
+-   **Environment**: a call sees no variables from the dev server's environment, keys included, except Node's TLS and time zone settings (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `TZ`), plus `SystemRoot` on Windows, and no Node options from `NODE_OPTIONS`. Vite still inlines `import.meta.env` and `define` values into the code it serves. `$.Actions` calls go back to the dev server, which holds the credentials and checks each call's connection against the function's allowed connections.
+-   **Logs**: a call's `stdout` and `stderr` reach the dev server's terminal line by line, as each line ends.
+-   **Debugging**: when the dev server runs under a debugger (`--inspect`), each call's process listens on a random local port and prints its `Debugger listening on ws://…` URL. Attach to that URL to debug the call; calls don't time out while the dev server is under a debugger.
+
+Local execution doesn't support Yarn Plug'n'Play, whose packages load through hooks a call's process doesn't get: each call fails with a hint to set `nodeLinker: node-modules` or use `dev:verify`.
 
 ## Package output
 

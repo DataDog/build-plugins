@@ -29,8 +29,9 @@ import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin'
 import { getBaseBackendBuildConfig, withProductionSettings } from './build-config';
 import type { HostCheck } from './dev-server-request-guard';
 import { checkDevServerRequest } from './dev-server-request-guard';
-import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
-import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
+import type { LocalExecutor } from './local-execution-process';
+import type { ExecuteAction, GetRuntimeContext } from './local-execution';
+import { DEFAULT_TIMEOUT_MS } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
 
 interface BundleResult {
@@ -656,9 +657,9 @@ async function handleDebugBundle(
 }
 
 /**
- * Handles POST /__dd/executeAction — imports a backend function's real file and executes
- * it in-process (see local-execution.ts), with no bundling. Auth is checked upfront by the
- * caller in `createDevServerMiddleware`, matching production's auth-before-execution ordering.
+ * Handles POST /__dd/executeAction — runs a backend function's real file with no bundling, in its
+ * own child process (see local-execution-process.ts). Auth is checked upfront by the caller in
+ * `createDevServerMiddleware`, matching production's auth-before-execution ordering.
  */
 async function handleExecuteAction(
     req: IncomingMessage,
@@ -667,19 +668,19 @@ async function handleExecuteAction(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
-    loadModule: LoadModule,
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
-    projectRoot: string,
     log: Logger,
+    executeLocally: LocalExecutor | undefined,
 ): Promise<void> {
     try {
+        if (!executeLocally) {
+            throw new Error('Local execution is not set up on this dev server.');
+        }
         const { func, args } = await parseAndLookupFunction(req, functionsByName);
         const displayName = formatRef(func);
 
         log.debug(`Executing action locally: ${displayName} with args`);
 
-        // Priming and connection-ID collection must happen inside the same serialization
-        // boundary as execution — see executeColdActionLocally's doc comment for why.
         const executeAction = makeExecuteActionRemotely(
             auth,
             doAuthenticatedRequest,
@@ -692,18 +693,15 @@ async function handleExecuteAction(
             longPolling,
             log,
         );
-        const result = await executeColdActionLocally(
+        const result = await executeLocally({
             func,
-            projectRoot,
             args,
             executeAction,
             getRuntimeContext,
-            loadModule,
             getAllowedConnectionIds,
-            log,
-            DEFAULT_TIMEOUT_MS,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
             longPolling,
-        );
+        });
 
         sendSuccess(res, result);
     } catch (error: unknown) {
@@ -794,7 +792,6 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     auth: AuthConfig,
@@ -805,6 +802,7 @@ export function createDevServerMiddleware(
     mode: string,
     isHostAllowed: HostCheck,
     serverConditions: readonly string[],
+    executeLocally?: LocalExecutor,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
@@ -839,10 +837,9 @@ export function createDevServerMiddleware(
                 auth,
                 authedRequest,
                 longPolling,
-                loadModule,
                 getAllowedConnectionIds,
-                projectRoot,
                 log,
+                executeLocally,
             ),
         );
     const routeHandlers: Record<DevServerRoute, RouteHandler> = {
