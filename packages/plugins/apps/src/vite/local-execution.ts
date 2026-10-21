@@ -20,6 +20,7 @@ import type { ActionCallArgs } from './local-execution-shared';
 import {
     assertJsonRoundTrippable,
     assertNoSelfDeclaredScope,
+    callBackendFunction,
     isIndexableRecord,
     makeActionsProxy,
     returnValueSubject,
@@ -246,7 +247,7 @@ async function invokeAction(
 /** Serializes local executions — a customer function deleting `globalThis.$` mid-flight would otherwise break `$` access for any other execution concurrently in progress (see `ensureDollarAccessorInstalled`). */
 let queueTail: Promise<unknown> = Promise.resolve();
 
-export function enqueue<T>(run: () => Promise<T>): Promise<T> {
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
     const result = queueTail.then(run);
     queueTail = result.then(
         () => undefined,
@@ -697,7 +698,7 @@ async function runScriptLocally(
                     // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
                     const data = await runBlocked(
                         async () => {
-                            const result = await fn(...args);
+                            const result = await callBackendFunction(() => fn(...args));
                             return assertJsonSerializable(result, func);
                         },
                         { signal: blockedScopeController.signal },

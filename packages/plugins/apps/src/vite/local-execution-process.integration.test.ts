@@ -53,19 +53,14 @@ const fixtureFunction = (
     allowedConnectionIds,
 });
 
-type TimedCall = { calls: number; pid: number; startedAt: number; endedAt: number };
+type PidResult = { pid: number; result: unknown };
 
-const isTimedCall = (value: unknown): value is TimedCall =>
+const isPidResult = (value: unknown): value is PidResult =>
     typeof value === 'object' &&
     value !== null &&
-    'calls' in value &&
     'pid' in value &&
-    'startedAt' in value &&
-    'endedAt' in value &&
-    typeof value.calls === 'number' &&
-    typeof value.pid === 'number' &&
-    typeof value.startedAt === 'number' &&
-    typeof value.endedAt === 'number';
+    'result' in value &&
+    typeof value.pid === 'number';
 
 const isProcessAlive = (pid: number) => {
     try {
@@ -194,37 +189,54 @@ describe('Local execution in a child process', () => {
         );
 
         test(
-            'Should run concurrent calls one at a time, each in its own fresh process',
+            'Should run concurrent calls in parallel, each in its own fresh process',
             async () => {
                 const execute = makeExecutor();
+                const reportPid = fixtureFunction('childActions', 'callHttpReportingPid');
+                const callCount = 4;
+                // Each call's $.Actions request is held until all of them have arrived, which only
+                // happens if every call is running at once.
+                const held: Array<() => void> = [];
+                const executeAction: ExecuteAction = () =>
+                    new Promise((resolve) => {
+                        held.push(() => resolve({ released: true }));
+                        if (held.length === callCount) {
+                            held.forEach((release) => release());
+                        }
+                    });
+
                 const results = await Promise.all(
-                    [1, 2, 3].map(() => execute(makeRequest(countCalls, [300]))),
+                    Array.from({ length: callCount }, () =>
+                        execute(makeRequest(reportPid, [], { executeAction })),
+                    ),
                 );
 
-                const data = results.map((r) => r.data).filter(isTimedCall);
-                expect(data).toHaveLength(3);
-                expect(data.map((d) => d.calls)).toEqual([1, 1, 1]);
-                expect(new Set(data.map((d) => d.pid)).size).toBe(3);
-                const byStart = [...data].sort((a, b) => a.startedAt - b.startedAt);
-                const overlapping = byStart.filter(
-                    (d, i) => i > 0 && d.startedAt < byStart[i - 1].endedAt,
+                const data = results.map((r) => r.data).filter(isPidResult);
+                expect(data.map((d) => d.result)).toEqual(
+                    Array(callCount).fill({ released: true }),
                 );
-                expect(overlapping).toEqual([]);
+                const pids = data.map((d) => d.pid);
+                expect(new Set(pids).size).toBe(callCount);
+                expect(pids).not.toContain(process.pid);
             },
             CALL_TIMEOUT_MS,
         );
 
         test(
-            'Should run each call in its own temp dir, so a .env in the project is not picked up from the working directory',
+            'Should run each call, concurrent ones included, in its own temp dir, so a .env in the project is not picked up from the working directory',
             async () => {
                 const execute = makeExecutor();
-                const result = await execute(
-                    makeRequest(fixtureFunction('childState', 'readWorkingDirectory'), []),
-                );
-                expect(result.data).toEqual({
-                    cwd: expect.stringContaining('dd-apps-exec-'),
-                    cwdIsTmpdir: true,
-                });
+                const readWorkingDirectory = fixtureFunction('childState', 'readWorkingDirectory');
+                const calls = [1, 2].map(() => execute(makeRequest(readWorkingDirectory, [])));
+                const results = await Promise.all(calls);
+                for (const result of results) {
+                    expect(result.data).toEqual({
+                        cwd: expect.stringContaining('dd-apps-exec-'),
+                        cwdIsTmpdir: true,
+                    });
+                }
+                const workingDirectories = results.map((result) => JSON.stringify(result.data));
+                expect(new Set(workingDirectories).size).toBe(2);
             },
             CALL_TIMEOUT_MS,
         );
@@ -1012,6 +1024,126 @@ describe('Local execution in a child process', () => {
             CALL_TIMEOUT_MS,
         );
 
+        describe('What a failed call rejects with, as in a deployed app', () => {
+            const catchHttpFailure = fixtureFunction('childActions', 'catchHttpFailure', [
+                'conn-a',
+            ]);
+            const execute = (request: LocalExecutionRequest) => makeExecutor()(request);
+
+            test(
+                "Should reject with the dev server's string as that string",
+                async () => {
+                    const executeAction: ExecuteAction = () => {
+                        const detail = 'rpc error: code = NotFound desc = connection not found';
+                        return Promise.reject(detail);
+                    };
+                    const result = await execute(
+                        makeRequest(catchHttpFailure, ['conn-a'], { executeAction }),
+                    );
+                    expect(result.data).toEqual({
+                        type: 'string',
+                        value: 'rpc error: code = NotFound desc = connection not found',
+                    });
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                "Should reject a connection outside the function's allowlist as a string",
+                async () => {
+                    const result = await execute(makeRequest(catchHttpFailure, ['conn-b']));
+                    expect(result.data).toEqual({
+                        type: 'string',
+                        value: `Action $.Actions.http.request used connection "conn-b", which is not in this function's allowed connections: [conn-a]`,
+                    });
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                'Should reject a call with no inputs with the deployed wording, as a string',
+                async () => {
+                    const result = await execute(makeRequest(catchHttpFailure, ['conn-a', false]));
+                    expect(result.data).toEqual({
+                        type: 'string',
+                        value: 'First argument to action $.Actions.http.request must have an inputs field that is an object',
+                    });
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                'Should still reject with an Error when the dev server failed with one',
+                async () => {
+                    const executeAction: ExecuteAction = () => Promise.reject(new Error('boom'));
+                    const result = await execute(
+                        makeRequest(catchHttpFailure, ['conn-a'], { executeAction }),
+                    );
+                    expect(result.data).toEqual({ type: 'Error', value: 'boom' });
+                },
+                CALL_TIMEOUT_MS,
+            );
+        });
+
+        describe('What an uncaught failure reports, as in a deployed app', () => {
+            const execute = (request: LocalExecutionRequest) => makeExecutor()(request);
+            const throwValue = fixtureFunction('childActions', 'throwValue');
+
+            test(
+                "Should report a thrown Error's stack as its detail",
+                async () => {
+                    await expect(execute(makeRequest(throwValue, ['error']))).rejects.toMatchObject(
+                        {
+                            message: 'plain error x',
+                            detail: expect.stringMatching(/^Error: plain error x\n {4}at /),
+                        },
+                    );
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                'Should report a thrown string as its detail',
+                async () => {
+                    await expect(
+                        execute(makeRequest(throwValue, ['string'])),
+                    ).rejects.toMatchObject({
+                        message: 'plain string failure',
+                        detail: 'plain string failure',
+                    });
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                "Should report an uncaught $.Actions failure's bare detail",
+                async () => {
+                    const executeAction: ExecuteAction = () => {
+                        const detail = 'a connection is required for com.datadoghq.http.request';
+                        return Promise.reject(detail);
+                    };
+                    const callHttp = fixtureFunction('childActions', 'callHttp');
+                    await expect(
+                        execute(makeRequest(callHttp, [], { executeAction })),
+                    ).rejects.toMatchObject({
+                        detail: 'a connection is required for com.datadoghq.http.request',
+                    });
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test(
+                "Should give the dev server's own failures no detail",
+                async () => {
+                    const missing = fixtureFunction('childActions', 'notExported');
+                    const error = await execute(makeRequest(missing, [])).catch((e: unknown) => e);
+                    expect(error).toBeInstanceOf(Error);
+                    expect(error).not.toHaveProperty('detail');
+                },
+                CALL_TIMEOUT_MS,
+            );
+        });
+
         test(
             'Should refuse a forged IPC action request outside the allowed connections',
             async () => {
@@ -1024,6 +1156,7 @@ describe('Local execution in a child process', () => {
                     id: 999_999,
                     ok: false,
                     message: `Action forged used connection "conn-evil", which is not in this function's allowed connections: [conn-a]`,
+                    thrownString: true,
                 });
                 expect(calls).toEqual([]);
             },
@@ -1042,6 +1175,7 @@ describe('Local execution in a child process', () => {
                     id: 999_999,
                     ok: false,
                     message: expect.stringContaining('Malformed $.Actions request'),
+                    thrownString: false,
                 });
                 expect(calls).toEqual([]);
             },
@@ -1136,7 +1270,7 @@ describe('Local execution in a child process', () => {
 
     describe('Logs', () => {
         test(
-            'Should stream each line as it is written, not after the call ends',
+            'Should stream each line with its call prefix as it is written, not after the call ends',
             async () => {
                 const lines: Array<{ stream: OutputStream; line: string; at: number }> = [];
                 const execute = makeExecutor({
@@ -1151,9 +1285,9 @@ describe('Local execution in a child process', () => {
 
                 expect(result.data).toBe('logged');
                 expect(lines.map(({ stream, line }) => ({ stream, line }))).toEqual([
-                    { stream: 'stdout', line: 'first line' },
-                    { stream: 'stderr', line: 'second line' },
-                    { stream: 'stdout', line: 'no trailing newline' },
+                    { stream: 'stdout', line: '[logLines#2] first line' },
+                    { stream: 'stderr', line: '[logLines#2] second line' },
+                    { stream: 'stdout', line: '[logLines#2] no trailing newline' },
                 ]);
                 expect(endedAt - lines[0].at).toBeGreaterThanOrEqual(delayMs * 0.75);
             },
