@@ -224,7 +224,7 @@ const installRealDebuggerSdk = async (page: Page, bundlePath: string) => {
 // is reliably active in every browser. `proxyOrigin` is the page origin, keeping the poll
 // same-origin (no CORS preflight). The instrumented workloads only run later (in
 // runBenchPair), so $dd_probes is the real getProbes for every measured call even though init
-// happens after the bundle's bootstrap stub.
+// happens after the bundle has loaded.
 const initRealDebuggerSdk = async (page: Page, proxyOrigin: string) => {
     await page.evaluate((proxy) => {
         globalThis.DD_DEBUGGER?.init({

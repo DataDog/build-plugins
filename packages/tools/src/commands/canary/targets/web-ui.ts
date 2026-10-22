@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { existsSync, outputFile, readFile } from '@dd/core/helpers/fs';
+import { existsSync, readFile } from '@dd/core/helpers/fs';
 import { ROOT } from '@dd/tools/constants';
 import { glob } from 'glob';
 import path from 'path';
@@ -11,6 +11,8 @@ import {
     assertLiveDebuggerArtifacts,
     assertLiveDebuggerBuildOutput,
 } from '../assertions/live-debugger';
+import { getTargetCommandEnvironment } from '../environment';
+import { isJsonObject, parseJsonObject, readFiles, restoreSnapshots } from '../files';
 import { CanaryCommandError, runCheckedCommand } from '../runner';
 import type {
     ArtifactSpec,
@@ -39,20 +41,6 @@ const MAIN_ENTRIES = [
     'spa-internal-rspack',
     'snapshot-print-rspack',
 ];
-
-type JsonObject = Record<string, unknown>;
-
-const isJsonObject = (value: unknown): value is JsonObject => {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
-const parseJsonObject = (content: string, filePath: string): JsonObject => {
-    const value: unknown = JSON.parse(content);
-    if (!isJsonObject(value)) {
-        throw new CanaryCommandError(`${filePath} does not contain a JSON object.`);
-    }
-    return value;
-};
 
 export const containsLinkReference = (value: unknown): boolean => {
     if (typeof value === 'string') {
@@ -101,24 +89,6 @@ const assertPublishedPackagesArePrepared = async (buildPluginsRoot: string): Pro
     }
 };
 
-const readFiles = async (filePaths: string[]): Promise<Map<string, string>> => {
-    const files = new Map<string, string>();
-    for (const filePath of filePaths) {
-        const content = await readFile(filePath);
-        files.set(filePath, content);
-    }
-    return files;
-};
-
-const restoreSnapshots = async (snapshots: Map<string, string>): Promise<void> => {
-    for (const [filePath, expected] of snapshots) {
-        const actual = await readFile(filePath);
-        if (actual !== expected) {
-            await outputFile(filePath, expected);
-        }
-    }
-};
-
 const getOutputSubdirectories = (
     phaseId: string,
     variant: CanaryVariant,
@@ -153,7 +123,8 @@ const getBuildEnvironment = (variant: CanaryVariant): Record<string, string> => 
     return {
         BUILD_PLUGIN_DISABLE_METRICS: 'true',
         BUILD_PLUGIN_DISABLE_SOURCEMAPS: 'true',
-        BUILD_PLUGIN_LIVE_DEBUGGER: variant === 'instrumented' ? 'true' : 'false',
+        BUILD_PLUGIN_LIVE_DEBUGGER: variant === 'control' ? 'false' : 'true',
+        BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: variant === 'named-only' ? 'true' : 'false',
         BUILD_PLUGIN_RUM_PRIVACY: 'true',
         BUILD_PLUGIN_UPLOAD_SOURCEMAPS: 'false',
         NODE_OPTIONS: nodeOptions,
@@ -216,6 +187,22 @@ export const createWebUiPhase = (id: 'main' | 'federated'): CanaryPhase => {
         assertBuildOutput: assertLiveDebuggerBuildOutput,
         assertArtifacts: assertLiveDebuggerArtifacts,
     };
+};
+
+const installWebUi = async ({ root, runCommand }: TargetSetupContext): Promise<void> => {
+    const targetEnvironment = getTargetCommandEnvironment(process.env);
+    const installSpec: CommandSpec = {
+        command: 'yarn',
+        args: ['install', '--immutable'],
+        cwd: root,
+        env: {
+            ...targetEnvironment,
+            // Like web-ui's own CI: no build needs Puppeteer's browser download.
+            PUPPETEER_SKIP_DOWNLOAD: 'true',
+        },
+        label: 'install web-ui dependencies',
+    };
+    await runCheckedCommand(runCommand, installSpec);
 };
 
 const preflightWebUi = async ({ buildPluginsRoot, root }: TargetSetupContext): Promise<void> => {
@@ -314,11 +301,16 @@ const setupWebUi = async ({
 
 export const webUiTarget: CanaryTarget = {
     id: 'web-ui',
+    repository: {
+        name: 'ddoghq/web-ui',
+        branch: 'preprod',
+    },
     getDefaultRoot: () => {
         const datadogRoot = process.env.DATADOG_ROOT;
         return datadogRoot ? path.resolve(datadogRoot, 'web-ui') : path.resolve(ROOT, '../web-ui');
     },
     getPhases: () => [createWebUiPhase('main'), createWebUiPhase('federated')],
+    install: installWebUi,
     preflight: preflightWebUi,
     setup: setupWebUi,
 };

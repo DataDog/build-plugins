@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
@@ -91,9 +92,13 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
-    config: { mode: string };
+    config: { mode: string } & HostCheckConfig;
     pluginContainer?: object;
 };
+
+function fakeServerConfig(mode: string): FakeViteDevServer['config'] {
+    return { server: { allowedHosts: [] }, preview: {}, mode };
+}
 
 // Narrows `plugin.configureServer` to its plain-function hook form via a runtime check, then wraps
 // it in a signature scoped to the fake server this test passes, since the real hook's `ViteDevServer`
@@ -316,7 +321,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: fakeServerConfig('development'),
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
@@ -345,7 +350,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: fakeServerConfig('development'),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -373,7 +378,7 @@ describe('Backend Functions - getVitePlugin', () => {
         const server = {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
-            config: { mode: 'development' },
+            config: fakeServerConfig('development'),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -1204,7 +1209,7 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
-                    config: { mode },
+                    config: fakeServerConfig(mode),
                 });
 
                 expect(installGuards).toHaveBeenCalledTimes(installs);
@@ -1237,7 +1242,7 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
-                    config: { mode: 'development' },
+                    config: fakeServerConfig('development'),
                 });
                 const warned = mockLogFn.mock.calls.some(
                     ([text, level]) =>
@@ -1270,7 +1275,7 @@ describe('Backend Functions - getVitePlugin', () => {
                 configureServer({
                     middlewares: { use },
                     ssrLoadModule: jest.fn(),
-                    config: { mode: 'development' },
+                    config: fakeServerConfig('development'),
                 }),
             ).not.toThrow();
             expect(installGuards).toHaveBeenCalled();
@@ -1314,7 +1319,7 @@ describe('Backend Functions - getVitePlugin', () => {
             configureServer({
                 middlewares: { use: jest.fn() },
                 ssrLoadModule: jest.fn(),
-                config: { mode: 'development' },
+                config: fakeServerConfig('development'),
                 pluginContainer,
             });
             const inRunPath = path.join(cacheDir, 'in-run.txt');
@@ -1384,7 +1389,7 @@ describe('Backend Functions - getVitePlugin', () => {
         configureServer({
             middlewares: { use },
             ssrLoadModule,
-            config: { mode: DEV_VERIFY_MODE },
+            config: fakeServerConfig(DEV_VERIFY_MODE),
         });
         restoreEnv();
 

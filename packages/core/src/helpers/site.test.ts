@@ -13,6 +13,16 @@ describe('Core Helpers', () => {
                 expected: { site: 'us5.datadoghq.com' },
             },
             {
+                description: 'accept the UK1 site',
+                input: 'uk1.datadoghq.com',
+                expected: { site: 'uk1.datadoghq.com' },
+            },
+            {
+                description: 'resolve a custom subdomain on top of the UK1 site',
+                input: 'myorg.uk1.datadoghq.com',
+                expected: { site: 'uk1.datadoghq.com', subdomain: 'myorg' },
+            },
+            {
                 description: 'accept a custom subdomain on top of a known site',
                 input: 'customsubdomain.us5.datadoghq.com',
                 expected: { site: 'us5.datadoghq.com', subdomain: 'customsubdomain' },

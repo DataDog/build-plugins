@@ -163,13 +163,19 @@ const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 interface ReturnInfo {
     start: number;
     end: number;
+    // Includes comments directly in front of the argument; see getReturnArgumentRange.
     argStart: number | undefined;
     argEnd: number | undefined;
     hasSequenceExpressionArgument: boolean;
+    // True when the return is the brace-less body of an if, else, loop, label,
+    // or with statement, where inserted statements need braces around them.
+    isStatementBody: boolean;
 }
 
 interface FunctionTarget {
     bodyStart: number;
+    // Where an expression body's block prefix goes; see getExpressionBodyPrefixStart.
+    bodyPrefixStart: number;
     bodyEnd: number;
     functionEnd: number;
     isExpressionBody: boolean;
@@ -370,7 +376,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     !babelTypes.isBlockStatement(node.body) ||
                     !alwaysReturns(node.body.body, babelTypes);
                 if (!isExpressionBody && babelTypes.isBlockStatement(node.body)) {
-                    collectReturnStatements(node.body.body, returns, babelTypes);
+                    collectReturnStatements(code, node.body.body, returns, babelTypes, false);
                 }
 
                 let directivesEnd: number | undefined;
@@ -385,6 +391,7 @@ export function transformCode(options: TransformOptions): TransformResult {
 
                 targets.push({
                     bodyStart: node.body.start!,
+                    bodyPrefixStart: getExpressionBodyPrefixStart(code, node.body),
                     bodyEnd: node.body.end!,
                     functionEnd: node.end!,
                     isExpressionBody,
@@ -470,6 +477,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         localVars,
         returns,
         bodyStart,
+        bodyPrefixStart,
         bodyEnd,
         functionEnd,
         isExpressionBody,
@@ -494,7 +502,14 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // `$dd_entry` swaps the probe list for a handle identifying this invocation
     // (undefined when no probe produced an entry), reusing the same binding so
     // every exit hook pairs with its own entry state, not a concurrent call's.
-    const probeDecl = `let ${probeVarName} = ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
+    //
+    // The guard keeps the function from throwing where `$dd_probes` isn't defined:
+    // before the Browser Debugger SDK initializes, and in global scopes without the
+    // SDK, such as a sandboxed iframe or a worker. It reads `globalThis` instead of
+    // using `typeof`, which minifiers turn into a relational string comparison that
+    // engines don't fast-path. It adds no string literal, which RUM privacy would
+    // collect, and keeps the bare call whose function ID RUM privacy leaves inline.
+    const probeDecl = `let ${probeVarName} = globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION} !== void 0 && ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
 
@@ -515,8 +530,8 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // clears the chunk's intro/outro and would drop that suffix, producing
         // invalid JavaScript; `update()` edits the content only and preserves it.
         if (bodyParenStart != null) {
-            const openingParens = getLeadingArrowBodyParens(code, bodyParenStart, bodyStart);
-            const closingParens = getTrailingArrowBodyParens(code, bodyEnd, functionEnd);
+            const openingParens = getLeadingWrapperParens(code, bodyParenStart, bodyStart);
+            const closingParens = getTrailingWrapperParens(code, bodyEnd, functionEnd);
             const parenCount = Math.min(openingParens.length, closingParens.length);
 
             for (let i = 0; i < parenCount; i++) {
@@ -558,11 +573,14 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
         // arrow's expression body ends at the inner function's closing brace.
         // For a single-char body (e.g. `() => 1`) the two ranges would
         // collide, so we fall back to one update covering the whole body.
-        if (bodyEnd - bodyStart >= 2) {
+        // The prefix goes in front of comments directly before the body, so the
+        // `const $dd_rvN = ` assignment keeps annotations like `/* @__PURE__ */`
+        // next to the expression they mark.
+        if (bodyEnd - bodyPrefixStart >= 2) {
             const bodyPrefix = hasSequenceExpressionBody
-                ? `${prefix}(${code[bodyStart]}`
-                : prefix + code[bodyStart];
-            s.update(bodyStart, bodyStart + 1, bodyPrefix);
+                ? `${prefix}(${code[bodyPrefixStart]}`
+                : prefix + code[bodyPrefixStart];
+            s.update(bodyPrefixStart, bodyPrefixStart + 1, bodyPrefix);
             s.appendRight(bodyEnd, suffix);
         } else {
             s.update(bodyStart, bodyEnd, prefix + code.slice(bodyStart, bodyEnd) + suffix);
@@ -599,10 +617,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
-                s.appendLeft(
-                    ret.start,
-                    `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `,
-                );
+                const returnReport = `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `;
+                if (ret.isStatementBody) {
+                    // if (x) return; → if (x) { if (probe) $dd_return(...); return; }
+                    // Without the braces, only the report would stay conditional.
+                    s.appendLeft(ret.start, `{ ${returnReport}`);
+                    s.appendRight(ret.end, ' }');
+                } else {
+                    s.appendLeft(ret.start, returnReport);
+                }
             }
         }
 
@@ -782,6 +805,7 @@ function getDerivedConstructorForLexicalThis(
                 node,
                 parent: current.parent,
                 parentPath: current.parentPath,
+                scope: current.scope,
             };
         }
 
@@ -839,27 +863,29 @@ function getReturnCaptureArgs(
     return '';
 }
 
-function getLeadingArrowBodyParens(code: string, start: number, end: number): number[] {
-    return collectArrowWrapperParens(code, start, end, '(');
+function getLeadingWrapperParens(code: string, start: number, end: number): number[] {
+    return collectWrapperParens(code, start, end, '(');
 }
 
-function getTrailingArrowBodyParens(code: string, start: number, end: number): number[] {
-    return collectArrowWrapperParens(code, start, end, ')');
+function getTrailingWrapperParens(code: string, start: number, end: number): number[] {
+    return collectWrapperParens(code, start, end, ')');
 }
 
 /**
- * Collect the positions of wrapper parens around an arrow expression body.
+ * Collect the positions of wrapper parens around an arrow expression body or a
+ * return argument.
  *
  * Only whitespace, comments, and the wrapping parens themselves can appear
- * between the outermost paren and the body (leading) or between the body and
- * the arrow's end (trailing). Comments are skipped so that parens inside a
- * comment are not mistaken for wrapper parens, which would otherwise misalign
- * removal and emit invalid JavaScript.
+ * between the outermost paren and the expression (leading), and only those plus
+ * a `;` between the expression and the arrow's or return statement's end
+ * (trailing). Comments are skipped so that parens inside a comment are not
+ * mistaken for wrapper parens, which would otherwise misalign removal and emit
+ * invalid JavaScript.
  *
  * Any `/` in this range necessarily starts a comment (division/regex are not
  * grammatically valid here), so no string/regex handling is required.
  */
-function collectArrowWrapperParens(
+function collectWrapperParens(
     code: string,
     start: number,
     end: number,
@@ -925,18 +951,24 @@ function isInTemporalDeadZone(
  * skipping nested function/class bodies.
  */
 function collectReturnStatements(
+    code: string,
     statements: BabelTypes.Statement[],
     returns: ReturnInfo[],
     typesModule: BabelTypesModule,
+    isStatementBody: boolean,
 ): void {
     for (const stmt of statements) {
         if (typesModule.isReturnStatement(stmt)) {
+            const argumentRange = stmt.argument
+                ? getReturnArgumentRange(code, stmt.argument, stmt.end!)
+                : undefined;
             returns.push({
                 start: stmt.start!,
                 end: stmt.end!,
-                argStart: stmt.argument?.start ?? undefined,
-                argEnd: stmt.argument?.end ?? undefined,
+                argStart: argumentRange?.start,
+                argEnd: argumentRange?.end,
                 hasSequenceExpressionArgument: typesModule.isSequenceExpression(stmt.argument),
+                isStatementBody,
             });
             continue;
         }
@@ -946,11 +978,11 @@ function collectReturnStatements(
         }
 
         if (typesModule.isBlockStatement(stmt)) {
-            collectReturnStatements(stmt.body, returns, typesModule);
+            collectReturnStatements(code, stmt.body, returns, typesModule, false);
         } else if (typesModule.isIfStatement(stmt)) {
-            collectReturnStatements([stmt.consequent], returns, typesModule);
+            collectReturnStatements(code, [stmt.consequent], returns, typesModule, true);
             if (stmt.alternate) {
-                collectReturnStatements([stmt.alternate], returns, typesModule);
+                collectReturnStatements(code, [stmt.alternate], returns, typesModule, true);
             }
         } else if (
             typesModule.isForStatement(stmt) ||
@@ -959,25 +991,104 @@ function collectReturnStatements(
             typesModule.isWhileStatement(stmt) ||
             typesModule.isDoWhileStatement(stmt)
         ) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         } else if (typesModule.isSwitchStatement(stmt)) {
             for (const caseClause of stmt.cases) {
-                collectReturnStatements(caseClause.consequent, returns, typesModule);
+                collectReturnStatements(code, caseClause.consequent, returns, typesModule, false);
             }
         } else if (typesModule.isTryStatement(stmt)) {
-            collectReturnStatements(stmt.block.body, returns, typesModule);
+            collectReturnStatements(code, stmt.block.body, returns, typesModule, false);
             if (stmt.handler) {
-                collectReturnStatements(stmt.handler.body.body, returns, typesModule);
+                collectReturnStatements(code, stmt.handler.body.body, returns, typesModule, false);
             }
             if (stmt.finalizer) {
-                collectReturnStatements(stmt.finalizer.body, returns, typesModule);
+                collectReturnStatements(code, stmt.finalizer.body, returns, typesModule, false);
             }
         } else if (typesModule.isLabeledStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         } else if (typesModule.isWithStatement(stmt)) {
-            collectReturnStatements([stmt.body], returns, typesModule);
+            collectReturnStatements(code, [stmt.body], returns, typesModule, true);
         }
     }
+}
+
+/**
+ * Start of the comments directly in front of `position` (separated only by
+ * whitespace), or `position` itself when there are none. Inserting code there
+ * instead of at the node keeps annotations like `/* @__PURE__ *\/` directly in
+ * front of the call they mark; bundlers ignore them anywhere else.
+ */
+function getStartWithLeadingComments(
+    code: string,
+    node: BabelTypes.Node,
+    position: number,
+): number {
+    let start = position;
+    const comments = node.leadingComments ?? [];
+    for (let i = comments.length - 1; i >= 0; i--) {
+        const { start: commentStart, end: commentEnd } = comments[i];
+        if (commentStart == null || commentEnd == null || commentEnd > start) {
+            continue;
+        }
+        const gap = code.slice(commentEnd, start);
+        if (gap.trim() !== '') {
+            break;
+        }
+        start = commentStart;
+    }
+    return start;
+}
+
+/**
+ * Start of the comments directly in front of the outermost paren around a node,
+ * as in `/* @__PURE__ *\/ (make())`, or undefined when there are none. Bundlers
+ * honor an annotation there too.
+ */
+function getParenthesizedCommentStart(code: string, node: BabelTypes.Node): number | undefined {
+    const parenStart = node.extra?.parenStart;
+    if (typeof parenStart !== 'number') {
+        return undefined;
+    }
+    const start = getStartWithLeadingComments(code, node, parenStart);
+    return start < parenStart ? start : undefined;
+}
+
+/**
+ * Where the block prefix of an arrow expression body goes. The wrapper parens
+ * around the body are removed, so comments in front of them end up directly in
+ * front of the body.
+ */
+function getExpressionBodyPrefixStart(code: string, body: BabelTypes.Node): number {
+    const parenthesizedCommentStart = getParenthesizedCommentStart(code, body);
+    return parenthesizedCommentStart ?? getStartWithLeadingComments(code, body, body.start!);
+}
+
+/**
+ * Range of a return argument that instrumentation assigns to `$dd_rvN`, including
+ * the comments directly in front of it. When the comments sit in front of the
+ * parens around the argument, the range covers the parens too, so the assignment
+ * still holds the same value.
+ */
+function getReturnArgumentRange(
+    code: string,
+    argument: BabelTypes.Node,
+    statementEnd: number,
+): { start: number; end: number } {
+    const argumentStart = argument.start!;
+    const argumentEnd = argument.end!;
+    const parenStart = argument.extra?.parenStart;
+    const parenthesizedCommentStart = getParenthesizedCommentStart(code, argument);
+    if (parenthesizedCommentStart != null && typeof parenStart === 'number') {
+        const openingParens = getLeadingWrapperParens(code, parenStart, argumentStart);
+        const closingParens = getTrailingWrapperParens(code, argumentEnd, statementEnd);
+        const outermostClosingParen = closingParens[openingParens.length - 1];
+        if (outermostClosingParen != null) {
+            return { start: parenthesizedCommentStart, end: outermostClosingParen + 1 };
+        }
+    }
+
+    const start = getStartWithLeadingComments(code, argument, argumentStart);
+    return { start, end: argumentEnd };
 }
 
 /**

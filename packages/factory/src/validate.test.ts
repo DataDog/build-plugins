@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options } from '@dd/core/types';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 
 import { validateOptions } from './validate';
 
@@ -69,6 +71,123 @@ describe('factory validateOptions', () => {
                 validateOptions({ auth: { site: 123 as unknown as string } }),
             ).toThrow(/auth\.site.*is not a supported Datadog site/);
         });
+    });
+
+    describe('site resolution from the environment and auth.site', () => {
+        let restoreEnv: () => void;
+
+        beforeEach(() => {
+            restoreEnv = clearDatadogEnv();
+        });
+
+        afterEach(() => {
+            restoreEnv();
+        });
+
+        const cases = [
+            {
+                description: 'treat an empty DD_SITE as unset',
+                env: { DD_SITE: '' },
+                options: {},
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'treat an empty DATADOG_SITE as unset',
+                env: { DATADOG_SITE: '' },
+                options: {},
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'fall back to DD_SITE when DATADOG_SITE is empty',
+                env: { DATADOG_SITE: '', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'fall back to auth.site when DD_SITE is empty',
+                env: { DD_SITE: '' },
+                options: { auth: { site: 'datadoghq.eu' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'prefer a valid DD_SITE over auth.site',
+                env: { DD_SITE: 'datadoghq.eu' },
+                options: { auth: { site: 'us5.datadoghq.com' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'treat an empty auth.site as unset',
+                env: {},
+                options: { auth: { site: '' } },
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'treat an empty auth.site as unset when DD_SITE is also empty',
+                env: { DD_SITE: '' },
+                options: { auth: { site: '' } },
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'accept the UK1 site from DD_SITE',
+                env: { DD_SITE: 'uk1.datadoghq.com' },
+                options: {},
+                expected: 'uk1.datadoghq.com',
+            },
+        ];
+
+        test.each(cases)('should $description', ({ env, options, expected }) => {
+            Object.assign(process.env, env);
+            expect(validateOptions(options).auth.site).toBe(expected);
+        });
+
+        const rejectionCases = [
+            {
+                description: 'an unsupported DD_SITE',
+                env: { DD_SITE: 'not-a-real-site.example.com' },
+                options: {},
+                expectedError:
+                    'DATADOG_SITE/DD_SITE "not-a-real-site.example.com" is not a supported',
+            },
+            {
+                description: 'an unsupported DD_SITE, even with a valid auth.site',
+                env: { DD_SITE: 'not-a-real-site.example.com' },
+                options: { auth: { site: 'datadoghq.eu' } },
+                expectedError:
+                    'DATADOG_SITE/DD_SITE "not-a-real-site.example.com" is not a supported',
+            },
+            {
+                description: 'a whitespace-only DD_SITE',
+                env: { DD_SITE: '  ' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE "  " is not a supported',
+            },
+            {
+                description: 'a whitespace-only DATADOG_SITE, even with a valid DD_SITE',
+                env: { DATADOG_SITE: '  ', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE "  " is not a supported',
+            },
+            {
+                description: 'a DD_SITE with surrounding whitespace',
+                env: { DD_SITE: ' datadoghq.eu\n' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE " datadoghq.eu\n" is not a supported',
+            },
+            {
+                description: 'a whitespace-only auth.site',
+                env: {},
+                options: { auth: { site: '  ' } },
+                expectedError: 'auth.site "  " is not a supported',
+            },
+        ];
+
+        test.each(rejectionCases)(
+            'should reject $description',
+            ({ env, options, expectedError }) => {
+                Object.assign(process.env, env);
+                expect(() => validateOptions(options)).toThrow(expectedError);
+            },
+        );
     });
 
     describe('metadata validation', () => {

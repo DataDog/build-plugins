@@ -3,14 +3,16 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFile, readFile } from '@dd/core/helpers/fs';
-import { execute } from '@dd/tools/helpers';
+import { execute, slugify } from '@dd/tools/helpers';
 import type { ChildProcess } from 'child_process';
 import { spawn } from 'child_process';
 import { glob } from 'glob';
+import path from 'path';
 import { performance } from 'perf_hooks';
 import type { Readable, Writable } from 'stream';
 import { gzipSync } from 'zlib';
 
+import { CANARY_VARIANTS } from './types';
 import type {
     ArtifactMeasurement,
     ArtifactSpec,
@@ -37,14 +39,83 @@ const normalizeError = (error: unknown): Error => {
 
 export class CanaryCommandError extends Error {}
 
+// Thrown for commands that are cut short or refused after an interrupt, so retries stop.
+export class CanaryInterruptedError extends Error {}
+
+// Network-bound steps (fetching the target, installing its dependencies) are retried
+// after these delays. Builds and validations are never retried.
+export const NETWORK_RETRY_DELAYS_MS = [10_000, 30_000];
+
+const wait = (durationMs: number): Promise<void> => {
+    return new Promise((resolve) => {
+        setTimeout(resolve, durationMs);
+    });
+};
+
+export const withRetries = async <T>(task: () => Promise<T>, delaysMs: number[]): Promise<T> => {
+    for (const delayMs of delaysMs) {
+        try {
+            return await task();
+        } catch (error) {
+            if (error instanceof CanaryInterruptedError) {
+                throw error;
+            }
+            const normalized = normalizeError(error);
+            console.log(`\n[Canary] ${normalized.message} Retrying in ${delayMs / 1_000}s.`);
+            await wait(delayMs);
+        }
+    }
+    return task();
+};
+
+const formatCommandLog = (spec: CommandSpec, output: string, outcome: string): string => {
+    const commandLine = [spec.command, ...spec.args].join(' ');
+    return `$ ${commandLine}\n# cwd: ${spec.cwd}\n\n${output}\n# ${outcome}\n`;
+};
+
 export class StreamingCommandRunner {
     private activeChild: ChildProcess | undefined;
+    private interruption: InterruptSignal | undefined;
+    private commandCount = 0;
+    // When set, each command's output is also written to its own numbered log file.
+    private readonly logDirectory: string | undefined;
+
+    constructor(logDirectory?: string) {
+        this.logDirectory = logDirectory;
+    }
 
     cancel(signal: InterruptSignal): void {
+        this.interruption = signal;
         this.activeChild?.kill(signal);
     }
 
+    private async writeLog(
+        sequence: number,
+        spec: CommandSpec,
+        output: string,
+        outcome: string,
+    ): Promise<void> {
+        if (!this.logDirectory) {
+            return;
+        }
+        const prefix = String(sequence).padStart(2, '0');
+        // Keep repository names like owner/name readable in the file name.
+        const label = spec.label.replace(/\//g, ' ');
+        const fileName = `${prefix}-${slugify(label)}.log`;
+        const logPath = path.resolve(this.logDirectory, fileName);
+        const log = formatCommandLog(spec, output, outcome);
+        await outputFile(logPath, log);
+    }
+
     run: RunCommand = async (spec) => {
+        if (this.interruption) {
+            throw new CanaryInterruptedError(
+                `${spec.label} was not started after ${this.interruption}.`,
+            );
+        }
+
+        this.commandCount += 1;
+        const sequence = this.commandCount;
         const startedAt = performance.now();
         const env = {
             ...process.env,
@@ -79,7 +150,8 @@ export class StreamingCommandRunner {
                 }
                 settled = true;
                 this.activeChild = undefined;
-                reject(error);
+                const logWritten = this.writeLog(sequence, spec, output, `error: ${error.message}`);
+                logWritten.then(() => reject(error), reject);
             });
 
             child.once('close', (exitCode, signal) => {
@@ -88,12 +160,23 @@ export class StreamingCommandRunner {
                 }
                 settled = true;
                 this.activeChild = undefined;
-                resolve({
-                    durationMs: performance.now() - startedAt,
-                    exitCode,
-                    output,
-                    signal,
-                });
+                const outcome = signal ? `signal ${signal}` : `exit code ${exitCode}`;
+                const logWritten = this.writeLog(sequence, spec, output, outcome);
+                logWritten.then(() => {
+                    if (this.interruption) {
+                        const interrupted = new CanaryInterruptedError(
+                            `${spec.label} was interrupted by ${this.interruption}.`,
+                        );
+                        reject(interrupted);
+                        return;
+                    }
+                    resolve({
+                        durationMs: performance.now() - startedAt,
+                        exitCode,
+                        output,
+                        signal,
+                    });
+                }, reject);
             });
         });
     };
@@ -186,9 +269,26 @@ const hash = (value: string): number => {
     return result;
 };
 
+const getPermutations = <T>(values: readonly T[]): T[][] => {
+    if (values.length <= 1) {
+        return [[...values]];
+    }
+
+    return values.flatMap((value, index) => {
+        const remaining = values.filter((_, remainingIndex) => remainingIndex !== index);
+        const permutations = getPermutations(remaining);
+        return permutations.map((permutation) => [value, ...permutation]);
+    });
+};
+
+// Every permutation is equally likely, so each pair of variants runs in
+// either order equally often across runs.
+const VARIANT_ORDERS = getPermutations(CANARY_VARIANTS);
+
 export const getVariantOrder = (runId: string, phaseId: string): CanaryVariant[] => {
     const key = `${runId}:${phaseId}`;
-    return hash(key) % 2 === 0 ? ['control', 'instrumented'] : ['instrumented', 'control'];
+    const index = hash(key) % VARIANT_ORDERS.length;
+    return VARIANT_ORDERS[index] ?? [...CANARY_VARIANTS];
 };
 
 const measureVariant = async ({
@@ -217,8 +317,10 @@ const measureVariant = async ({
         await phase.assertArtifacts(artifacts.filePaths, variant);
     }
 
-    const validationCommand = phase.getValidationCommand(root, variant);
-    await runCheckedCommand(runCommand, validationCommand);
+    if (phase.getValidationCommand) {
+        const validationCommand = phase.getValidationCommand(root, variant);
+        await runCheckedCommand(runCommand, validationCommand);
+    }
 
     return {
         durationMs: buildResult.durationMs,
@@ -241,26 +343,23 @@ const runPhase = async ({
     runId: string;
 }): Promise<PhaseReport> => {
     const variantOrder = getVariantOrder(runId, phase.id);
-    let control: VariantReport | undefined;
-    let instrumented: VariantReport | undefined;
+    const results: Partial<Record<CanaryVariant, VariantReport>> = {};
 
     for (const variant of variantOrder) {
         console.log(`\n[Canary] Running ${phase.id} ${variant} build.`);
-        const result = await measureVariant({
+        results[variant] = await measureVariant({
             phase,
             root,
             runCommand,
             variant,
         });
-        if (variant === 'control') {
-            control = result;
-        } else {
-            instrumented = result;
-        }
     }
 
-    if (!control || !instrumented) {
-        throw new CanaryCommandError(`${phase.id} did not produce both canary variants.`);
+    const control = results.control;
+    const allFunctions = results['all-functions'];
+    const namedOnly = results['named-only'];
+    if (!control || !allFunctions || !namedOnly) {
+        throw new CanaryCommandError(`${phase.id} did not produce every canary variant.`);
     }
 
     return {
@@ -270,9 +369,13 @@ const runPhase = async ({
         variantOrder,
         variants: {
             control,
-            instrumented,
+            'all-functions': allFunctions,
+            'named-only': namedOnly,
         },
-        comparison: createPhaseComparison(control, instrumented),
+        comparisons: {
+            'all-functions': createPhaseComparison(control, allFunctions),
+            'named-only': createPhaseComparison(control, namedOnly),
+        },
     };
 };
 
@@ -325,6 +428,9 @@ const writeReport = async (report: CanaryReport): Promise<void> => {
 
 export const runCanary = async ({
     buildPluginsRoot,
+    cleanup,
+    install,
+    networkRetryDelaysMs,
     phaseSelection,
     reportPath,
     root,
@@ -333,6 +439,10 @@ export const runCanary = async ({
     target,
 }: {
     buildPluginsRoot: string;
+    // Disposable CI checkouts skip reverting the target's changes.
+    cleanup: boolean;
+    install: boolean;
+    networkRetryDelaysMs: number[];
     phaseSelection: string;
     reportPath: string;
     root: string;
@@ -344,7 +454,7 @@ export const runCanary = async ({
     const buildPluginsGit = await getGitState(buildPluginsRoot);
     const targetGit = await getGitState(root);
     const report: CanaryReport = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         status: 'passed',
         target: target.id,
         phaseSelection,
@@ -371,8 +481,8 @@ export const runCanary = async ({
         failures: [],
     };
     const cleanups: Cleanup[] = [];
-    const registerCleanup = (cleanup: Cleanup): void => {
-        cleanups.push(cleanup);
+    const registerCleanup = (step: Cleanup): void => {
+        cleanups.push(step);
     };
     const setupContext = {
         buildPluginsRoot,
@@ -384,6 +494,11 @@ export const runCanary = async ({
     let stage = 'preflight';
 
     try {
+        if (install) {
+            stage = 'install';
+            await withRetries(() => target.install(setupContext), networkRetryDelaysMs);
+        }
+        stage = 'preflight';
         await target.preflight(setupContext);
         stage = 'setup';
         await target.setup(setupContext);
@@ -416,8 +531,12 @@ export const runCanary = async ({
             stage,
         });
     } finally {
-        const cleanupError = await runCleanups(cleanups, report.failures);
-        primaryError ??= cleanupError;
+        if (cleanup) {
+            const cleanupError = await runCleanups(cleanups, report.failures);
+            primaryError ??= cleanupError;
+        } else if (cleanups.length > 0) {
+            console.log(`\n[Canary] Skipping ${cleanups.length} cleanup step(s) (--no-cleanup).`);
+        }
         report.status = report.failures.length === 0 ? 'passed' : 'failed';
         report.generatedAt = new Date().toISOString();
 
