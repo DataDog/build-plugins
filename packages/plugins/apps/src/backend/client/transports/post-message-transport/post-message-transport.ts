@@ -5,28 +5,43 @@
 /* eslint-env browser */
 /* global globalThis */
 
-import { DEV_CLIENT_HOOK, RUN_QUERY, RUN_QUERY_RESPONSE } from '../../../protocol';
+import {
+    DEV_CLIENT_HOOK,
+    RUN_QUERY,
+    RUN_QUERY_KEEPALIVE,
+    RUN_QUERY_RESPONSE,
+} from '../../../protocol';
 import type { DebugBundleResponse, PreparedCall } from '../../../protocol';
 import { copyByIndex, copyDebugBundleActions, isDebugBundle, isRecord } from '../../guards';
 import { generateRequestId } from '../../request-id';
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
 
-import type { IframeQueryRequest, IframeQueryResponse } from './types';
+import type { IframeQueryKeepAlive, IframeQueryRequest, IframeQueryResponse } from './types';
 
 export const POSTMESSAGE_TIMEOUT_MS = 120_000;
+// A safety net for a parent that keeps a call alive but never answers, not a user deadline.
+export const POSTMESSAGE_MAX_WAIT_MS = 60 * 60_000;
+
+function isMessageFor(data: unknown, type: string, requestId: string): boolean {
+    return (
+        isRecord(data) &&
+        'type' in data &&
+        data.type === type &&
+        'requestId' in data &&
+        data.requestId === requestId
+    );
+}
+
+function isKeepAlive(data: unknown, requestId: string): data is IframeQueryKeepAlive {
+    return isMessageFor(data, RUN_QUERY_KEEPALIVE, requestId);
+}
 
 function isQueryResponse<TData>(
     data: unknown,
     requestId: string,
 ): data is IframeQueryResponse<TData> {
-    return (
-        isRecord(data) &&
-        'type' in data &&
-        data.type === RUN_QUERY_RESPONSE &&
-        'requestId' in data &&
-        data.requestId === requestId
-    );
+    return isMessageFor(data, RUN_QUERY_RESPONSE, requestId);
 }
 
 // Only an exact target origin restricts who receives the message, so a bundle is never posted with '*'.
@@ -95,11 +110,32 @@ function postRunQuery<TData>(
     const requestId = generateRequestId();
 
     return new Promise<TData>((resolve, reject) => {
-        let timeoutId: ReturnType<typeof setTimeout>;
+        // Wall-clock deadlines, so time the machine spends asleep counts toward them.
+        const maxDeadline = Date.now() + POSTMESSAGE_MAX_WAIT_MS;
+        let deadline = Date.now() + POSTMESSAGE_TIMEOUT_MS;
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
         function cleanup(): void {
             window.removeEventListener('message', handleMessage);
             clearTimeout(timeoutId);
+        }
+
+        function timeOut(): void {
+            cleanup();
+            const timeoutError = new BackendFunctionError(
+                `Backend function "${functionName}" timed out waiting for response`,
+                functionName,
+            );
+            reject(timeoutError);
+        }
+
+        function checkDeadline(): void {
+            const remainingMs = deadline - Date.now();
+            if (remainingMs <= 0) {
+                timeOut();
+                return;
+            }
+            timeoutId = setTimeout(checkDeadline, remainingMs);
         }
 
         function isFromRecipient(event: MessageEvent<unknown>): boolean {
@@ -110,8 +146,19 @@ function postRunQuery<TData>(
         }
 
         function handleMessage(event: MessageEvent<unknown>): void {
+            if (!isFromRecipient(event)) {
+                return;
+            }
             const response = event.data;
-            if (!isFromRecipient(event) || !isQueryResponse<TData>(response, requestId)) {
+            if (isKeepAlive(response, requestId)) {
+                if (Date.now() >= deadline) {
+                    timeOut();
+                    return;
+                }
+                deadline = Math.min(Date.now() + POSTMESSAGE_TIMEOUT_MS, maxDeadline);
+                return;
+            }
+            if (!isQueryResponse<TData>(response, requestId)) {
                 return;
             }
 
@@ -132,16 +179,7 @@ function postRunQuery<TData>(
         }
 
         window.addEventListener('message', handleMessage);
-
-        timeoutId = setTimeout(() => {
-            cleanup();
-            reject(
-                new BackendFunctionError(
-                    `Backend function "${functionName}" timed out waiting for response`,
-                    functionName,
-                ),
-            );
-        }, POSTMESSAGE_TIMEOUT_MS);
+        checkDeadline();
 
         const message: IframeQueryRequest = {
             type: RUN_QUERY,
@@ -160,11 +198,11 @@ function postRunQuery<TData>(
 }
 
 /**
- * Transport for executing backend functions via `postMessage` when the app is framed (e.g. App
- * Builder preview): posts `app-builder:run-query` to the parent and waits up to
- * {@link POSTMESSAGE_TIMEOUT_MS} for the matching response. On a dev server framed by a Datadog
- * page, the injected dev client first adds the function's bundle and the parent's exact origin,
- * which can take up to another {@link POSTMESSAGE_TIMEOUT_MS} before the call is sent without them.
+ * Transport for backend functions in a frame (e.g. App Builder preview): posts
+ * `app-builder:run-query` to the parent and waits {@link POSTMESSAGE_TIMEOUT_MS} for the response,
+ * re-armed by each keepalive up to {@link POSTMESSAGE_MAX_WAIT_MS}. On a Datadog-framed dev server,
+ * the injected dev client first adds the function's bundle and the parent's exact origin, which can
+ * take up to another {@link POSTMESSAGE_TIMEOUT_MS} before the call is sent without them.
  */
 export const postMessageTransport: BackendFunctionTransport = <TData>(
     functionName: string,

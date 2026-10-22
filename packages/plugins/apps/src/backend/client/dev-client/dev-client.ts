@@ -6,7 +6,13 @@
 
 import { parseSite } from '@dd/core/helpers/site';
 
-import { DEBUG_BUNDLE_PATH, PING, PONG, RUN_QUERY_RESPONSE } from '../../protocol';
+import {
+    DEBUG_BUNDLE_PATH,
+    PING,
+    PONG,
+    RUN_QUERY_KEEPALIVE,
+    RUN_QUERY_RESPONSE,
+} from '../../protocol';
 import type {
     DebugBundleResponse,
     ExecuteActionRequest,
@@ -20,10 +26,14 @@ export const BUNDLE_FETCH_TIMEOUT_MS = 60_000;
 export const PARENT_PING_TIMEOUT_MS = 2_000;
 
 // The bridge requires a ping's requestId, but any answer from the parent will do: the frame only needs its origin.
+const PARENT_ANSWERS: ReadonlySet<unknown> = new Set([
+    PONG,
+    RUN_QUERY_RESPONSE,
+    RUN_QUERY_KEEPALIVE,
+]);
+
 function isParentAnswer(data: unknown): boolean {
-    return (
-        isRecord(data) && 'type' in data && (data.type === PONG || data.type === RUN_QUERY_RESPONSE)
-    );
+    return isRecord(data) && 'type' in data && PARENT_ANSWERS.has(data.type);
 }
 
 function isDatadogOrigin(origin: string): boolean {
@@ -60,7 +70,7 @@ export const resetDevClient = (): void => {
     warnedOpaqueParentOrigin = false;
 };
 
-// The browser stamps the sender's origin on each message, so a pong or response from the parent reveals it.
+// The browser stamps the sender's origin on each message, so any answer from the parent reveals it.
 function handleParentMessage(event: MessageEvent): void {
     if (event.source !== window.parent || !isParentAnswer(event.data)) {
         return;
@@ -104,7 +114,7 @@ function pingParent(): Promise<void> {
 }
 
 // Firefox has no ancestorOrigins; App Builder's bridge answers a ping from its frame.
-// After MAX_UNANSWERED_PINGS misses, calls stop pinging; a later pong or response still sets the origin.
+// After MAX_UNANSWERED_PINGS misses, calls stop pinging; a later parent answer still sets the origin.
 function needsParentPing(): boolean {
     return (
         !window.location.ancestorOrigins &&

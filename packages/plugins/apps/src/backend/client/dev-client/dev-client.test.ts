@@ -540,6 +540,31 @@ describe('dev client', () => {
             expect(remainingListeners).toBe(0);
         });
 
+        test("Should learn the parent's origin from a keepalive after giving up on pings", async () => {
+            jest.useFakeTimers();
+            const { postMessage, reply, keepAlive, listenerCount } = installFakeWindow({});
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+            await exhaustPings();
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [firstQuery] = postMessage.mock.calls.at(-1);
+            expect(firstQuery).toEqual(MESSAGE_WITHOUT_BUNDLE);
+            keepAlive(firstQuery.requestId);
+
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await jest.advanceTimersByTimeAsync(0);
+            const [secondQuery] = postMessage.mock.calls.at(-1);
+            expect(secondQuery).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+            expect(postMessage).toHaveBeenCalledWith(secondQuery, DATADOG_PARENT);
+            reply(firstQuery.requestId, 'first');
+            reply(secondQuery.requestId, 'second');
+            await expect(first).resolves.toBe('first');
+            await expect(second).resolves.toBe('second');
+            const remainingListeners = listenerCount();
+            expect(remainingListeners).toBe(0);
+        });
+
         test('Should use a late answer to an earlier ping', async () => {
             jest.useFakeTimers();
             const { postMessage, reply, pings, pong } = installFakeWindow({});
