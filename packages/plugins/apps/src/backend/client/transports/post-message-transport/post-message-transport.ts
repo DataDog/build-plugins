@@ -3,46 +3,91 @@
 // Copyright 2019-Present Datadog, Inc.
 
 /* eslint-env browser */
+/* global globalThis */
 
+import { DEV_CLIENT_HOOK, RUN_QUERY, RUN_QUERY_RESPONSE } from '../../../protocol';
+import type { DebugBundleResponse, PreparedCall } from '../../../protocol';
+import { copyByIndex, isDebugBundle, isRecord } from '../../guards';
+import { generateRequestId } from '../../request-id';
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
 
-import type { IframeQueryResponse } from './types';
+import type { IframeQueryRequest, IframeQueryResponse } from './types';
 
-const POSTMESSAGE_TIMEOUT_MS = 120_000;
+export const POSTMESSAGE_TIMEOUT_MS = 120_000;
 
-let requestCounter = 0;
-
-function generateRequestId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    requestCounter += 1;
-    return `req-${Date.now()}-${requestCounter}`;
-}
-
-function isQueryResponse(data: unknown, requestId: string): data is IframeQueryResponse {
+function isQueryResponse<TData>(
+    data: unknown,
+    requestId: string,
+): data is IframeQueryResponse<TData> {
     return (
-        data !== null &&
-        typeof data === 'object' &&
+        isRecord(data) &&
         'type' in data &&
-        data.type === 'app-builder:run-query:response' &&
+        data.type === RUN_QUERY_RESPONSE &&
         'requestId' in data &&
         data.requestId === requestId
     );
 }
 
-/**
- * Transport for executing backend functions via `postMessage` when the app
- * is hosted inside an iframe (e.g. App Builder preview). Sends a
- * `app-builder:run-query` message to the parent window and listens for a
- * matching `app-builder:run-query:response` reply. Rejects if no response
- * arrives within {@link POSTMESSAGE_TIMEOUT_MS}.
- */
-export const postMessageTransport: BackendFunctionTransport = <TData>(
+// Only an exact target origin restricts who receives the message, so a bundle is never posted with '*'.
+function isExactOrigin(targetOrigin: unknown): targetOrigin is string {
+    if (typeof targetOrigin !== 'string') {
+        return false;
+    }
+    try {
+        return new URL(targetOrigin).origin === targetOrigin;
+    } catch {
+        return false;
+    }
+}
+
+function copyBundle(candidate: unknown): DebugBundleResponse | undefined {
+    if (!isRecord(candidate)) {
+        return undefined;
+    }
+    const ids = 'allowedConnectionIds' in candidate ? candidate.allowedConnectionIds : undefined;
+    // Checked on a copy, so only the code and connection ids reach postMessage.
+    const copy = {
+        code: 'code' in candidate ? candidate.code : undefined,
+        allowedConnectionIds: Array.isArray(ids) ? copyByIndex(ids) : undefined,
+    };
+    return isDebugBundle(copy) ? copy : undefined;
+}
+
+// Any page script could install the hook, so its result is checked before anything is posted.
+function toPreparedCall(value: unknown): PreparedCall {
+    try {
+        if (!isRecord(value)) {
+            return {};
+        }
+        const targetOrigin = 'targetOrigin' in value ? value.targetOrigin : undefined;
+        if (!isExactOrigin(targetOrigin)) {
+            return {};
+        }
+        const bundle = copyBundle('bundle' in value ? value.bundle : undefined);
+        return bundle === undefined ? { targetOrigin } : { targetOrigin, bundle };
+    } catch {
+        return {};
+    }
+}
+
+function readDevClientHook(): unknown {
+    try {
+        return Reflect.get(globalThis, DEV_CLIENT_HOOK);
+    } catch {
+        return undefined;
+    }
+}
+
+function isPrepareCall(value: unknown): value is (functionName: string) => unknown {
+    return typeof value === 'function';
+}
+
+function postRunQuery<TData>(
     functionName: string,
     args: unknown[],
-): Promise<TData> => {
+    { targetOrigin, bundle }: PreparedCall,
+): Promise<TData> {
     const requestId = generateRequestId();
 
     return new Promise<TData>((resolve, reject) => {
@@ -53,25 +98,33 @@ export const postMessageTransport: BackendFunctionTransport = <TData>(
             clearTimeout(timeoutId);
         }
 
-        function handleMessage(event: MessageEvent): void {
-            if (!isQueryResponse(event.data, requestId)) {
+        function isFromRecipient(event: MessageEvent<unknown>): boolean {
+            return (
+                event.source === window.parent &&
+                (targetOrigin === undefined || event.origin === targetOrigin)
+            );
+        }
+
+        function handleMessage(event: MessageEvent<unknown>): void {
+            const response = event.data;
+            if (!isFromRecipient(event) || !isQueryResponse<TData>(response, requestId)) {
                 return;
             }
 
             cleanup();
 
-            const response = event.data as IframeQueryResponse<TData>;
-
-            if (response.success) {
+            // The parent's reply is checked here, so a malformed one settles the call instead of throwing.
+            if (response.success === true && isRecord(response.result)) {
                 resolve(response.result.data);
-            } else {
-                reject(
-                    new BackendFunctionError(
-                        response.error ?? `Backend function "${functionName}" failed`,
-                        functionName,
-                    ),
-                );
+                return;
             }
+            const parentError = 'error' in response ? response.error : undefined;
+            const errorMessage =
+                typeof parentError === 'string'
+                    ? parentError
+                    : `Backend function "${functionName}" failed`;
+            const failure = new BackendFunctionError(errorMessage, functionName);
+            reject(failure);
         }
 
         window.addEventListener('message', handleMessage);
@@ -86,14 +139,47 @@ export const postMessageTransport: BackendFunctionTransport = <TData>(
             );
         }, POSTMESSAGE_TIMEOUT_MS);
 
-        window.parent.postMessage(
-            {
-                type: 'app-builder:run-query',
-                requestId,
-                queryName: functionName,
-                args,
-            },
-            '*',
-        );
+        const message: IframeQueryRequest = {
+            type: RUN_QUERY,
+            requestId,
+            queryName: functionName,
+            args,
+            ...(bundle && { bundle }),
+        };
+        try {
+            window.parent.postMessage(message, targetOrigin ?? '*');
+        } catch (error) {
+            cleanup();
+            reject(error);
+        }
+    });
+}
+
+/**
+ * Transport for executing backend functions via `postMessage` when the app is framed (e.g. App
+ * Builder preview): posts `app-builder:run-query` to the parent and waits up to
+ * {@link POSTMESSAGE_TIMEOUT_MS} for the matching response. On a dev server framed by a Datadog
+ * page, the injected dev client first adds the function's bundle and the parent's exact origin.
+ */
+export const postMessageTransport: BackendFunctionTransport = <TData>(
+    functionName: string,
+    args: unknown[],
+): Promise<TData> => {
+    const prepareCall = readDevClientHook();
+    if (!isPrepareCall(prepareCall)) {
+        return postRunQuery<TData>(functionName, args, {});
+    }
+    // A failing or stuck hook must not stop the call, which is then sent as it would be outside dev.
+    let giveUpTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    const givenUp = new Promise<unknown>((resolve) => {
+        giveUpTimeoutId = setTimeout(() => resolve({}), POSTMESSAGE_TIMEOUT_MS);
+    });
+    const prepared = Promise.resolve()
+        .then(() => prepareCall(functionName))
+        .catch(() => ({}));
+    return Promise.race([prepared, givenUp]).then((preparedCall) => {
+        clearTimeout(giveUpTimeoutId);
+        const checkedCall = toPreparedCall(preparedCall);
+        return postRunQuery<TData>(functionName, args, checkedCall);
     });
 };
