@@ -45,6 +45,7 @@ import {
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE } from '../constants';
 
@@ -461,6 +462,42 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { ok: true } });
         expect(apiScope.isDone()).toBe(true);
+    }, 30000);
+
+    test('Should return a real bundle with the connection IDs it uses from /__dd/debugBundle as JSON', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const log = getMockLogger();
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [actionCatalogCallFunc],
+            async () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            mockLongPolling,
+            FIXTURE_ROOT,
+            log,
+            'development',
+            createViteHostCheck(server.config),
+        );
+
+        const functionName = encodeQueryName(actionCatalogCallFunc);
+        const req = createMockRequest(
+            DEBUG_BUNDLE_PATH,
+            { functionName },
+            { accept: 'application/json' },
+        );
+        const res = createMockResponse();
+
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const rawBody = res.getBody();
+        const body = JSON.parse(rawBody);
+        expect(body.allowedConnectionIds).toEqual(['conn-1']);
+        expect(body.code).toContain('conn-1');
     }, 30000);
 
     // A dynamic import sits between two static ones, so resolution must come from the AST

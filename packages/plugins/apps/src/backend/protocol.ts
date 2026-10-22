@@ -18,6 +18,13 @@ export interface ExecuteActionRequest {
     args: unknown[];
 }
 
+export const DEBUG_BUNDLE_PATH = '/__dd/debugBundle';
+
+export interface DebugBundleResponse {
+    code: string;
+    allowedConnectionIds: string[];
+}
+
 /**
  * Response from executing a backend function.
  *
