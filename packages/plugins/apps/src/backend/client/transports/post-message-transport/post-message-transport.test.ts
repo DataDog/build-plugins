@@ -109,8 +109,16 @@ describe('postMessageTransport', () => {
 
     test("Should post only the checked fields of the dev client's action list", async () => {
         const { posted, reply } = installFakeWindow();
-        const action = { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] };
-        const extendedActions = [{ ...action, extra: () => 'not cloneable' }];
+        const call = { connectionId: 'conn-1', inputs: { url: 'https://example.com' } };
+        const action = {
+            fqn: 'com.datadoghq.http.request',
+            connectionIds: ['conn-1'],
+            calls: [call],
+        };
+        const extendedCall = { ...call, extra: () => 'not cloneable' };
+        const extendedActions = [
+            { ...action, calls: [extendedCall], extra: () => 'not cloneable' },
+        ];
         const bundle = { ...BUNDLE, actions: extendedActions };
         const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
         Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
@@ -128,8 +136,12 @@ describe('postMessageTransport', () => {
 
     test("Should copy the dev client's action list without running that array's own methods", async () => {
         const { posted, reply } = installFakeWindow();
-        const action = { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] };
-        const forgedAction = { fqn: 'com.datadoghq.forged', connectionIds: ['conn-forged'] };
+        const action = { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'], calls: [] };
+        const forgedAction = {
+            fqn: 'com.datadoghq.forged',
+            connectionIds: ['conn-forged'],
+            calls: [],
+        };
         class ForgingArray extends Array<unknown> {}
         Reflect.defineProperty(ForgingArray, Symbol.species, {
             get: () =>
@@ -154,6 +166,92 @@ describe('postMessageTransport', () => {
             ...MESSAGE_WITHOUT_BUNDLE,
             bundle: { ...BUNDLE, actions: [action] },
         });
+    });
+
+    test("Should copy a call's inputs as own string entries, without running the calls array's own methods", async () => {
+        const { posted, reply } = installFakeWindow();
+        const forged = { map: () => forged, every: () => true, extra: () => 'not cloneable' };
+        const calls = [{ inputs: { url: 'https://example.com' } }];
+        Object.defineProperty(calls, 'constructor', {
+            value: { [Symbol.species]: () => forged },
+        });
+        const inputs = Object.create({ inherited: 'not copied' });
+        inputs.verb = 'GET';
+        const actions = [
+            { fqn: 'com.datadoghq.http.request', connectionIds: [], calls },
+            { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: [], calls: [{ inputs }] },
+        ];
+        const bundle = { ...BUNDLE, actions };
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        const expectedActions = [
+            {
+                fqn: 'com.datadoghq.http.request',
+                connectionIds: [],
+                calls: [{ inputs: { url: 'https://example.com' } }],
+            },
+            {
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                connectionIds: [],
+                calls: [{ inputs: { verb: 'GET' } }],
+            },
+        ];
+        expect(message).toEqual({
+            ...MESSAGE_WITHOUT_BUNDLE,
+            bundle: { ...BUNDLE, actions: expectedActions },
+        });
+    });
+
+    test("Should copy a call's connectionId only when the call sets it itself", async () => {
+        const { posted, reply } = installFakeWindow();
+        const call = Object.create({ connectionId: 'conn-inherited' });
+        call.inputs = {};
+        const actions = [{ fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [call] }];
+        const bundle = { ...BUNDLE, actions };
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        const expectedActions = [
+            { fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [{ inputs: {} }] },
+        ];
+        expect(message).toEqual({
+            ...MESSAGE_WITHOUT_BUNDLE,
+            bundle: { ...BUNDLE, actions: expectedActions },
+        });
+    });
+
+    test("Should post the bundle without its action list when reading a call's inputs throws", async () => {
+        const { posted, reply } = installFakeWindow();
+        const inputs = Object.defineProperty({}, 'url', {
+            enumerable: true,
+            get(): never {
+                throw new Error('unreadable');
+            },
+        });
+        const actions = [
+            { fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [{ inputs }] },
+        ];
+        const bundle = { ...BUNDLE, actions };
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
     });
 
     test('Should post the bundle without its action list when reading that list throws', async () => {

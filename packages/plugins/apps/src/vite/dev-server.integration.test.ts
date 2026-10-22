@@ -530,8 +530,21 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const body = JSON.parse(rawBody);
         expect(body.allowedConnectionIds).toEqual(['conn-1', 'conn-http']);
         expect(body.actions).toEqual([
-            { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-http'] },
-            { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: ['conn-1'] },
+            {
+                fqn: 'com.datadoghq.http.request',
+                connectionIds: ['conn-http'],
+                calls: [
+                    {
+                        connectionId: 'conn-http',
+                        inputs: { url: 'https://example.com', verb: 'GET' },
+                    },
+                ],
+            },
+            {
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                connectionIds: ['conn-1'],
+                calls: [{ connectionId: 'conn-1', inputs: { text: 'hi' } }],
+            },
         ]);
     }, 30000);
 

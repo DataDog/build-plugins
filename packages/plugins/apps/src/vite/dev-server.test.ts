@@ -761,8 +761,16 @@ describe('Dev Server Middleware', () => {
                 code: '// bundled',
                 allowedConnectionIds: ['conn-http'],
                 actions: [
-                    { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-http'] },
-                    { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: [] },
+                    {
+                        fqn: 'com.datadoghq.http.request',
+                        connectionIds: ['conn-http'],
+                        calls: [{ connectionId: 'conn-http', inputs: {} }],
+                    },
+                    {
+                        fqn: 'com.datadoghq.slack.chat.postMessage',
+                        connectionIds: [],
+                        calls: [{ inputs: {} }],
+                    },
                 ],
             });
             expect(mockLogFn).not.toHaveBeenCalledWith(NO_ACTION_FQNS_MESSAGE, 'warn');

@@ -29,6 +29,7 @@ import {
     resolveStaticDefinitionForIdentifier,
     type UnsupportedStaticDefinition,
 } from './static-definition-resolution';
+import { getStaticPropertyKey, hasExpressionValue } from './type-guards';
 import { walkAst } from './walk-ast';
 
 export type StaticStringValueResolution = ResolvedStaticStringValue | UnsupportedStaticStringValue;
@@ -171,6 +172,7 @@ interface ResolverState {
     modules: ReadonlyMap<string, ParsedModuleRecord>;
     mutatedImportedObjectVariables: ReadonlySet<eslintScope.Variable>;
     seenVariables: Set<eslintScope.Variable>;
+    followObjectMembers: boolean;
 }
 
 interface ImportedObjectMutationState {
@@ -229,6 +231,25 @@ export function resolveStaticStringValue(
             modules,
             mutatedImportedObjectVariables,
             seenVariables: new Set(),
+            followObjectMembers: true,
+        },
+        moduleId,
+        expression,
+    );
+}
+
+// Leaves out object members, since an alias or a call can mutate a const object unseen.
+export function resolveStaticStringConstant(
+    modules: ReadonlyMap<string, ParsedModuleRecord>,
+    moduleId: string,
+    expression: Expression,
+): StaticStringValueResolution {
+    return resolveExpression(
+        {
+            modules,
+            mutatedImportedObjectVariables: new Set(),
+            seenVariables: new Set(),
+            followObjectMembers: false,
         },
         moduleId,
         expression,
@@ -250,7 +271,9 @@ function resolveExpression(
         case 'Identifier':
             return resolveIdentifierValue(state, moduleId, expression);
         case 'MemberExpression':
-            return resolveMemberExpressionValue(state, moduleId, expression);
+            return state.followObjectMembers
+                ? resolveMemberExpressionValue(state, moduleId, expression)
+                : unsupportedExpression(moduleId, expression.type);
         default:
             return unsupportedExpression(moduleId, expression.type);
     }
@@ -468,16 +491,6 @@ function resolveObjectPropertyExpression(
     };
 }
 
-function hasExpressionValue(property: Property): property is Property & { value: Expression } {
-    const { value } = property;
-    return (
-        value.type !== 'ObjectPattern' &&
-        value.type !== 'ArrayPattern' &&
-        value.type !== 'RestElement' &&
-        value.type !== 'AssignmentPattern'
-    );
-}
-
 export function collectMutatedImportedObjectVariables(
     modules: ReadonlyMap<string, ParsedModuleRecord>,
 ): Set<eslintScope.Variable> {
@@ -650,16 +663,6 @@ function getAliasVariable(
         definition.exportReason === BINDING_PATTERN_EXPORT_REASON
     ) {
         return getModuleVariable(definition.exportName, record.scopeAnalysis);
-    }
-    return undefined;
-}
-
-function getStaticPropertyKey(property: Property): string | undefined {
-    if (property.key.type === 'Identifier') {
-        return property.key.name;
-    }
-    if (property.key.type === 'Literal' && typeof property.key.value === 'string') {
-        return property.key.value;
     }
     return undefined;
 }

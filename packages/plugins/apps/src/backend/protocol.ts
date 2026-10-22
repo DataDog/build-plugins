@@ -29,9 +29,23 @@ export const PONG = 'app-builder:pong';
 // The `globalThis` key where the dev client the dev server injects installs its call hook.
 export const DEV_CLIENT_HOOK = 'DD_APPS_PREPARE_CALL';
 
+export interface DebugBundleActionCall {
+    /** Absent when the call sets no `connectionId`. */
+    connectionId?: string;
+    /**
+     * Inline `inputs` keys set to a string literal or a top-level string const, such as
+     * http.request's `url` and `verb`. Empty when `inputs` isn't an object literal of plain static
+     * keys, the options or `inputs` literal has an accessor, or `inputs` has a toJSON, then or
+     * __proto__ key. A hook inherited from a prototype or added by an executor wrapper isn't detected.
+     */
+    inputs: Record<string, string>;
+}
+
 export interface DebugBundleAction {
     fqn: string;
     connectionIds: string[];
+    /** One entry per call site. */
+    calls: DebugBundleActionCall[];
 }
 
 export interface DebugBundleResponse {

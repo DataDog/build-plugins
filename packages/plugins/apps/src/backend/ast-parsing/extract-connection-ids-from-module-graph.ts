@@ -15,6 +15,7 @@ import {
     collectMutatedImportedObjectVariables,
     resolveStaticStringValue,
 } from './static-string-resolution';
+import { getStaticPropertyKey, hasExpressionValue } from './type-guards';
 import { walkModuleGraph } from './walk-module-graph';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
@@ -43,7 +44,7 @@ export function extractConnectionIdsFromModuleGraph(
     return getConnectionIds(calls);
 }
 
-export function getConnectionIds(calls: ActionCatalogCall[]): string[] {
+export function getConnectionIds(calls: ReadonlyArray<{ connectionId?: string }>): string[] {
     const connectionIds = new Set<string>();
 
     for (const { connectionId } of calls) {
@@ -174,16 +175,6 @@ function findConnectionIdProperty(
     return connectionIdProperty;
 }
 
-function hasExpressionValue(property: Property): property is ConnectionIdProperty {
-    const { value } = property;
-    return (
-        value.type !== 'ObjectPattern' &&
-        value.type !== 'ArrayPattern' &&
-        value.type !== 'RestElement' &&
-        value.type !== 'AssignmentPattern'
-    );
-}
-
 // A shorthand `__proto__` is an own property, and a null prototype supplies nothing.
 function isInertProtoKey(key: string, property: Property): boolean {
     const { value } = property;
@@ -195,16 +186,6 @@ function isInertProtoKey(key: string, property: Property): boolean {
 
 function isConnectionIdKey(property: Property): boolean {
     return getStaticPropertyKey(property) === CONNECTION_ID_PROPERTY;
-}
-
-function getStaticPropertyKey(property: Property): string | undefined {
-    if (property.key.type === 'Identifier') {
-        return property.key.name;
-    }
-    if (property.key.type === 'Literal' && typeof property.key.value === 'string') {
-        return property.key.value;
-    }
-    return undefined;
 }
 
 function unsupportedActionCatalogCall(filePath: string, unsupported: string): Error {
