@@ -4,7 +4,13 @@
 
 /* global globalThis */
 
-import { PING, PONG, RUN_QUERY, RUN_QUERY_RESPONSE } from '@dd/apps-plugin/backend/protocol';
+import {
+    PING,
+    PONG,
+    RUN_QUERY,
+    RUN_QUERY_KEEPALIVE,
+    RUN_QUERY_RESPONSE,
+} from '@dd/apps-plugin/backend/protocol';
 
 type MessageListener = (event: { data: unknown; origin?: string; source?: unknown }) => void;
 export type PostedMessage = { type: string; requestId: string };
@@ -48,15 +54,14 @@ export function installFakeWindow(
         postMessage.mock.calls
             .map(([message]: [PostedMessage]) => message)
             .filter((message) => message.type === PING);
+    const dispatch = (data: unknown, origin: string, source: unknown) => {
+        for (const listener of [...listeners]) {
+            listener({ data, origin, source });
+        }
+    };
     const pong = (origin = parentOrigin, source: unknown = fakeWindow.parent) => {
         const ping = pings().at(-1);
-        for (const listener of [...listeners]) {
-            listener({
-                data: { type: PONG, requestId: ping?.requestId },
-                origin,
-                source,
-            });
-        }
+        dispatch({ type: PONG, requestId: ping?.requestId }, origin, source);
     };
     const reply = (
         requestId: string,
@@ -64,24 +69,22 @@ export function installFakeWindow(
         source: unknown = fakeWindow.parent,
         origin = parentOrigin,
     ) => {
-        for (const listener of [...listeners]) {
-            listener({
-                data: {
-                    type: RUN_QUERY_RESPONSE,
-                    requestId,
-                    success: true,
-                    result: { data },
-                },
-                origin,
-                source,
-            });
-        }
+        const response = { type: RUN_QUERY_RESPONSE, requestId, success: true, result: { data } };
+        dispatch(response, origin, source);
+    };
+    const keepAlive = (
+        requestId: string,
+        source: unknown = fakeWindow.parent,
+        origin = parentOrigin,
+    ) => {
+        dispatch({ type: RUN_QUERY_KEEPALIVE, requestId }, origin, source);
     };
 
     return {
         postMessage,
         posted,
         reply,
+        keepAlive,
         pings,
         pong,
         listeners: () => [...listeners],

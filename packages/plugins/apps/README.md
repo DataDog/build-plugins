@@ -11,6 +11,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
+-   [Framed backend function calls](#framed-backend-function-calls)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -57,6 +58,15 @@ The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/execu
 -   its body is sent with `Content-Type: application/json`.
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
+
+## Framed backend function calls
+
+When the app runs in a frame, a backend function call posts `app-builder:run-query` to the parent window and waits for the `app-builder:run-query:response` with the same `requestId`:
+
+-   the wait times out after 2 minutes;
+-   the parent can restart it with `{ type: 'app-builder:run-query:keepalive', requestId }`, for example every 30 seconds while it shows a consent dialog: each keepalive restarts the 2-minute wait, it doesn't pause it;
+-   a call still times out 60 minutes after it was posted, however often it is kept alive, so a parent that never answers can't hold it forever;
+-   the frame accepts a response or keepalive only from its parent window and, when the call was posted to an exact origin, only from that origin.
 
 ## Package output
 
