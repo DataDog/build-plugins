@@ -34,7 +34,7 @@ function extract(
     ]);
     const modules = new Map(moduleEntries);
     const calls = collectActionCatalogCalls(entryId, modules, buildRoot);
-    return listActionCalls(calls, fqns);
+    return listActionCalls(calls, fqns, modules);
 }
 
 describe('Backend Functions - listActionCalls', () => {
@@ -66,8 +66,16 @@ describe('Backend Functions - listActionCalls', () => {
 
         const actions = extract([entry, helper]);
         expect(actions).toEqual([
-            { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-http'] },
-            { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: ['conn-slack'] },
+            {
+                fqn: 'com.datadoghq.http.request',
+                connectionIds: ['conn-http'],
+                calls: [{ connectionId: 'conn-http', inputs: {} }],
+            },
+            {
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                connectionIds: ['conn-slack'],
+                calls: [{ connectionId: 'conn-slack', inputs: {} }],
+            },
         ]);
     });
 
@@ -90,8 +98,20 @@ describe('Backend Functions - listActionCalls', () => {
 
         const actions = extract([entry]);
         expect(actions).toEqual([
-            { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-a', 'conn-b'] },
-            { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: [] },
+            {
+                fqn: 'com.datadoghq.http.request',
+                connectionIds: ['conn-a', 'conn-b'],
+                calls: [
+                    { connectionId: 'conn-b', inputs: {} },
+                    { connectionId: 'conn-a', inputs: {} },
+                    { connectionId: 'conn-b', inputs: {} },
+                ],
+            },
+            {
+                fqn: 'com.datadoghq.slack.chat.postMessage',
+                connectionIds: [],
+                calls: [{ inputs: {} }],
+            },
         ]);
     });
 
@@ -142,5 +162,281 @@ describe('Backend Functions - listActionCalls', () => {
 
         const actions = extract([entry], fqns);
         expect(actions).toBeUndefined();
+    });
+
+    const listHttpCallInputs = (code: string, helper?: string) => {
+        const source = `import { request } from '@datadog/action-catalog/http/http';\n${code}`;
+        const helpers = helper ? [createRecord(helperId, helper)] : [];
+        const helperIds = helpers.map(({ id }) => id);
+        const entry = createRecord(entryId, source, [HTTP_MODULE, ...helperIds]);
+        const actions = extract([entry, ...helpers]);
+        return actions?.[0].calls.map((call) => call.inputs);
+    };
+
+    const inputCases = [
+        {
+            description: 'string literals',
+            code: `request({ inputs: { url: 'https://example.com', verb: 'GET' } });`,
+            expected: { url: 'https://example.com', verb: 'GET' },
+        },
+        {
+            description: 'module consts',
+            code: `
+                const BASE_URL = 'https://example.com';
+                const VERB = 'POST';
+                request({ inputs: { url: BASE_URL, verb: VERB } });
+            `,
+            expected: { url: 'https://example.com', verb: 'POST' },
+        },
+        {
+            description: 'a const imported from another module',
+            code: `
+                import { BASE_URL } from './helpers/slack.js';
+                request({ inputs: { url: BASE_URL } });
+            `,
+            helper: `export const BASE_URL = 'https://example.com/api';`,
+            expected: { url: 'https://example.com/api' },
+        },
+        {
+            description: 'an imported const object property, left out',
+            code: `
+                import { URLS } from './helpers/slack.js';
+                request({ inputs: { url: URLS.API, verb: 'GET' } });
+            `,
+            helper: `export const URLS = { API: 'https://example.com/api' };`,
+            expected: { verb: 'GET' },
+        },
+        {
+            description: 'a const object property that an alias mutates, left out',
+            code: `
+                const URLS = { API: 'https://example.com/api' };
+                const alias = URLS;
+                alias.API = 'https://other.example';
+                request({ inputs: { url: URLS.API, verb: 'GET' } });
+            `,
+            expected: { verb: 'GET' },
+        },
+        {
+            description: 'a const read from an object a call mutates, left out',
+            code: `
+                const URLS = { API: 'https://example.com/api' };
+                Object.assign(URLS, { API: 'https://other.example' });
+                const API_URL = URLS.API;
+                request({ inputs: { url: API_URL, verb: 'GET' } });
+            `,
+            expected: { verb: 'GET' },
+        },
+        {
+            description: 'a template literal with no expressions',
+            code: 'request({ inputs: { url: `https://example.com/api`, verb: "GET" } });',
+            expected: { url: 'https://example.com/api', verb: 'GET' },
+        },
+        {
+            description: 'a template literal with an expression, left out even over a const',
+            code: `
+                const HOST = 'example.com';
+                request({ inputs: { url: \`https://\${HOST}/api\`, verb: 'GET' } });
+            `,
+            expected: { verb: 'GET' },
+        },
+        {
+            description: 'dynamic values, left out',
+            code: `
+                export function run(target, host) {
+                    return request({
+                        inputs: {
+                            url: target,
+                            verb: 'GET',
+                            body: \`https://\${host}/api\`,
+                            timeout: 30,
+                            headers: { accept: 'application/json' },
+                            parse() { return 'x'; },
+                        },
+                    });
+                }
+            `,
+            expected: { verb: 'GET' },
+        },
+        {
+            description: 'a spread, which can add a toJSON, leaving out every input',
+            code: `
+                export function run(extra) {
+                    return request({ inputs: { ...extra, url: 'https://a.example' } });
+                }
+            `,
+            expected: {},
+        },
+        {
+            description: 'a computed key, which can add a toJSON, leaving out every input',
+            code: `
+                export function run(key, toJson) {
+                    return request({ inputs: { [key]: toJson, url: 'https://a.example' } });
+                }
+            `,
+            expected: {},
+        },
+        {
+            description: 'a getter, which can rewrite other inputs, leaving out every input',
+            code: `
+                request({
+                    inputs: {
+                        get verb() { this.url = 'https://other.example'; return 'GET'; },
+                        url: 'https://a.example',
+                    },
+                });
+            `,
+            expected: {},
+        },
+        {
+            description: 'a toJSON method, leaving out every input',
+            code: `
+                request({
+                    inputs: {
+                        url: 'https://a.example',
+                        toJSON() { return { url: 'https://other.example' }; },
+                    },
+                });
+            `,
+            expected: {},
+        },
+        {
+            description: 'a then method, which awaiting the inputs runs, leaving out every input',
+            code: `
+                request({
+                    inputs: {
+                        url: 'https://a.example',
+                        then(resolve) { this.url = 'https://other.example'; resolve({}); },
+                    },
+                });
+            `,
+            expected: {},
+        },
+        {
+            description: 'a getter on the call options, leaving out every input',
+            code: `
+                request({
+                    get extra() { this.inputs.url = 'https://other.example'; return 1; },
+                    inputs: { url: 'https://a.example' },
+                });
+            `,
+            expected: {},
+        },
+        {
+            description: 'a setter, leaving out every input',
+            code: `request({ inputs: { set url(value) {}, verb: 'GET' } });`,
+            expected: {},
+        },
+        {
+            description: 'a numeric key, which only sets its own key',
+            code: `request({ inputs: { url: 'https://a.example', 0: 'zero', 1: 2 } });`,
+            expected: { url: 'https://a.example', 0: 'zero' },
+        },
+        {
+            description: 'a duplicate key whose last value is dynamic',
+            code: `
+                export function run(target) {
+                    return request({ inputs: { url: 'https://a.example', url: target } });
+                }
+            `,
+            expected: {},
+        },
+        {
+            description: 'a duplicate key whose last value is static',
+            code: `
+                export function run(target) {
+                    return request({ inputs: { url: target, url: 'https://b.example' } });
+                }
+            `,
+            expected: { url: 'https://b.example' },
+        },
+        {
+            description: 'a __proto__ key, which can inherit a toJSON, leaving out every input',
+            code: `
+                const PROTO = { toJSON: () => ({ url: 'https://other.example' }) };
+                request({ inputs: { __proto__: PROTO, url: 'https://a.example' } });
+            `,
+            expected: {},
+        },
+        {
+            description: 'inputs that are not an inline object',
+            code: `
+                const INPUTS = { url: 'https://example.com' };
+                request({ inputs: INPUTS });
+            `,
+            expected: {},
+        },
+        {
+            description: 'no inputs',
+            code: `request({ connectionId: 'conn-http' });`,
+            expected: {},
+        },
+    ];
+
+    test.each(inputCases)(
+        "Should list each call's static string inputs from $description",
+        ({ code, helper, expected }) => {
+            const inputs = listHttpCallInputs(code, helper);
+            expect(inputs).toEqual([expected]);
+        },
+    );
+
+    const rejectedOptionCases = [
+        {
+            description: 'a toJSON',
+            code: `
+                request({
+                    inputs: { url: 'https://a.example' },
+                    toJSON: () => ({ inputs: { url: 'https://other.example' } }),
+                });
+            `,
+        },
+        {
+            description: 'a __proto__ key',
+            code: `
+                const PROTO = { toJSON: () => ({ inputs: { url: 'https://other.example' } }) };
+                request({ __proto__: PROTO, inputs: { url: 'https://a.example' } });
+            `,
+        },
+    ];
+
+    test.each(rejectedOptionCases)(
+        'Should reject a call whose options have $description before listing its inputs',
+        ({ code }) => {
+            expect(() => listHttpCallInputs(code)).toThrow('could hide a connectionId');
+        },
+    );
+
+    test('Should list each call separately, with its own connectionId', () => {
+        const entry = createRecord(
+            entryId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                export function run() {
+                    request({ connectionId: 'conn-b', inputs: { url: 'https://b.example', verb: 'POST' } });
+                    request({ inputs: { url: 'https://a.example', verb: 'GET' } });
+                }
+            `,
+            [HTTP_MODULE],
+        );
+
+        const actions = extract([entry]);
+        expect(actions?.[0].calls).toEqual([
+            { connectionId: 'conn-b', inputs: { url: 'https://b.example', verb: 'POST' } },
+            { inputs: { url: 'https://a.example', verb: 'GET' } },
+        ]);
+    });
+
+    test('Should keep an empty-string connectionId on its call', () => {
+        const entry = createRecord(
+            entryId,
+            `
+                import { request } from '@datadog/action-catalog/http/http';
+                export function run() { return request({ connectionId: '', inputs: {} }); }
+            `,
+            [HTTP_MODULE],
+        );
+
+        const actions = extract([entry]);
+        expect(actions?.[0].calls).toEqual([{ connectionId: '', inputs: {} }]);
     });
 });
