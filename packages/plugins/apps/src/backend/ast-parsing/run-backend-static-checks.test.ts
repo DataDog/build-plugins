@@ -6,6 +6,7 @@ import { analyzeModuleScope } from '@dd/apps-plugin/backend/ast-parsing/module-s
 import { NODE_REPLACEMENT_HINTS } from '@dd/apps-plugin/backend/ast-parsing/reject-globals-missing-from-node';
 import { runBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '@dd/apps-plugin/backend/ast-parsing/type-guards';
+import { resetEnvReadWarnings } from '@dd/apps-plugin/backend/ast-parsing/warn-env-reads';
 import { NODE_BACKEND_RUNTIME } from '@dd/apps-plugin/constants';
 import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -23,6 +24,7 @@ function check(code: string): void {
 describe('Backend Functions - runBackendStaticChecks', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        resetEnvReadWarnings();
     });
 
     test.each([
@@ -81,5 +83,13 @@ describe('Backend Functions - runBackendStaticChecks', () => {
         check('export function run() { return [crypto.randomUUID(), new Intl.Locale("en")]; }');
 
         expect(mockLogFn).not.toHaveBeenCalled();
+    });
+
+    test('should warn about a process.env read', () => {
+        check('export function run() { return process.env.STRIPE_KEY; }');
+
+        const logged = mockLogFn.mock.calls.filter(([, level]) => level === 'warn');
+        const messages = logged.map(([message]) => message);
+        expect(messages).toEqual([expect.stringContaining('process.env.STRIPE_KEY')]);
     });
 });
