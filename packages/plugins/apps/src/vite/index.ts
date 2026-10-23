@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rm } from '@dd/core/helpers/fs';
+import { readFile, rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import path from 'path';
@@ -114,6 +114,12 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+export const APPS_DEV_CLIENT_PATH = path.join(__dirname, './apps-dev-client.mjs');
+export const DEV_CLIENT_MODULE_ID = 'virtual:dd-apps-dev-client';
+// The `\0` prefix is Vite's virtual-module convention, which most plugins' id filters skip.
+export const DEV_CLIENT_RESOLVED_ID = `\0${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_SRC = `/@id/${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_RESOLVED_RE = new RegExp(`^${DEV_CLIENT_RESOLVED_ID}$`);
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
@@ -250,7 +256,12 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // Top-level guard (not folded into each branch) so any future branch added below
+                if (source === DEV_CLIENT_MODULE_ID) {
+                    return devServerActive && resolveOptions.ssr !== true
+                        ? DEV_CLIENT_RESOLVED_ID
+                        : null;
+                }
+                // Guard (not folded into each branch) so any future local-execution branch below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.
                 if (resolveOptions.ssr !== true) {
@@ -457,6 +468,40 @@ export const getVitePlugin = ({
                     await rm(backendOutDir);
                 }
             }
+        },
+        transformIndexHtml: {
+            // Before Vite's own HTML rewrite, which prefixes the dev client's src with the configured `base`.
+            order: 'pre',
+            handler(_html, ctx) {
+                if (!ctx.server) {
+                    return [];
+                }
+                return [
+                    {
+                        tag: 'script',
+                        attrs: { type: 'module', src: DEV_CLIENT_SRC },
+                        injectTo: 'head-prepend',
+                    },
+                ];
+            },
+        },
+        load: {
+            // Ahead of other plugins' load hooks, which may claim any id.
+            order: 'pre',
+            filter: { id: DEV_CLIENT_RESOLVED_RE },
+            async handler(id) {
+                if (id !== DEV_CLIENT_RESOLVED_ID) {
+                    return null;
+                }
+                try {
+                    return await readFile(APPS_DEV_CLIENT_PATH);
+                } catch (error: unknown) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    throw new Error(
+                        `Framed backend calls won't carry their bundle, the dev client didn't load: ${errorMessage}`,
+                    );
+                }
+            },
         },
         configureServer(server) {
             devServerActive = true;
