@@ -13,7 +13,7 @@ import {
     formatRef,
     getRetryDelay,
 } from '@dd/apps-plugin/vite/dev-server';
-import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
+import { DEFAULT_TIMEOUT_MS, withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -286,6 +286,7 @@ function createTestMiddleware(
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
         isHostAllowed?: CreateDevServerMiddlewareArgs[10];
+        executeLocally?: CreateDevServerMiddlewareArgs[11];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -302,6 +303,7 @@ function createTestMiddleware(
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
+        overrides.executeLocally,
     );
 }
 
@@ -1175,6 +1177,33 @@ describe('Dev Server Middleware', () => {
             await res.done;
 
             expect(res.statusCode).toBe(404);
+        });
+
+        describe('with a child process executor', () => {
+            test('Should hand the call to the executor instead of loading it in-process', async () => {
+                const executeLocally = jest.fn().mockResolvedValue({ data: 'from child' });
+                const childMiddleware = createTestMiddleware({ executeLocally });
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [21],
+                });
+                const res = createMockResponse();
+
+                childMiddleware(req, res, jest.fn());
+                await res.done;
+
+                expect(res.statusCode).toBe(200);
+                expect(JSON.parse(res.getBody()).result).toEqual({ data: 'from child' });
+                expect(executeLocally).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        func: mockFunctions[0],
+                        args: [21],
+                        timeoutMs: DEFAULT_TIMEOUT_MS,
+                        longPolling: mockLongPolling,
+                    }),
+                );
+                expect(mockLoadModule).not.toHaveBeenCalled();
+            });
         });
 
         test('Should hydrate context, run the function directly in-process, and return its result without bundling', async () => {

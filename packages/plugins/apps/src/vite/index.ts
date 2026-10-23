@@ -43,6 +43,15 @@ import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
+import { getLocalExecutionChildPath } from './local-execution-child-path';
+import type { ChildProcessExecutor, LocalExecutor } from './local-execution-process';
+import {
+    createChildProcessExecutor,
+    isYarnPnpRuntime,
+    MODULE_RUNNER_UNRESOLVED_WARNING,
+    resolveViteModuleRunner,
+    YARN_PNP_WARNING,
+} from './local-execution-process';
 import { localExecutionResolutionContext } from './local-execution';
 import {
     exemptFetchFromBlockedScope,
@@ -477,7 +486,47 @@ export const getVitePlugin = ({
                 );
             }
             // Without auth nothing executes, and dev-verify sends every execution to the cloud.
-            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
+            const runsLocally = doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE;
+            const invokeChannel = server.environments?.ssr?.hot;
+            const usesYarnPnp = isYarnPnpRuntime();
+            const moduleRunnerPath =
+                runsLocally && !usesYarnPnp && resolveViteModuleRunner(context.buildRoot);
+            // Vite 5 has no module runner transport, so it keeps running backend functions in-process.
+            const childExecutor: ChildProcessExecutor | undefined =
+                typeof invokeChannel?.handleInvoke === 'function' && moduleRunnerPath
+                    ? createChildProcessExecutor({
+                          invokeChannel,
+                          projectRoot: context.buildRoot,
+                          childEntryPath: getLocalExecutionChildPath(),
+                          moduleRunnerPath,
+                          log,
+                      })
+                    : undefined;
+            if (childExecutor) {
+                // A restart starts the new server before closing this one, so each server ends only its own calls.
+                const closeServer = server.close.bind(server);
+                server.close = async () => {
+                    childExecutor.close();
+                    await closeServer();
+                };
+            }
+            const executeLocally: LocalExecutor | undefined = childExecutor;
+            if (
+                runsLocally &&
+                typeof invokeChannel?.handleInvoke === 'function' &&
+                !executeLocally
+            ) {
+                log.warn(usesYarnPnp ? YARN_PNP_WARNING : MODULE_RUNNER_UNRESOLVED_WARNING);
+            }
+            if (runsLocally) {
+                // Started here so an unusable Vite is reported at startup; each execution reuses
+                // this load, or retries it after a failure.
+                loadViteParseAst().catch((error: unknown) => {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    log.warn(`Local execution can't parse backend modules: ${reason}`);
+                });
+            }
+            if (runsLocally && !executeLocally) {
                 // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
                 // predate it. A failure must not stop the server: each execution installs again, failing closed.
                 try {
@@ -491,12 +540,6 @@ export const getVitePlugin = ({
                 if (gracefulFsPredatesGuards()) {
                     log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
                 }
-                // Started here so an unusable Vite is reported at startup; each execution reuses
-                // this load, or retries it after a failure.
-                loadViteParseAst().catch((error: unknown) => {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(`Local execution can't parse backend modules: ${reason}`);
-                });
                 const ssrEnvironment = server.environments?.ssr;
                 if (ssrEnvironment) {
                     const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
@@ -518,6 +561,7 @@ export const getVitePlugin = ({
                     context.buildRoot,
                     log,
                     parseAst,
+                    !executeLocally,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
@@ -534,6 +578,7 @@ export const getVitePlugin = ({
                 log,
                 server.config.mode,
                 isHostAllowed,
+                executeLocally,
             );
             server.middlewares.use(middleware);
         },

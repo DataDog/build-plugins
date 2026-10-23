@@ -43,6 +43,8 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import * as devServer from './dev-server';
+import * as localExecutionProcess from './local-execution-process';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
 
@@ -92,8 +94,16 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
+    close?: () => Promise<void>;
     config: { mode: string } & HostCheckConfig;
     pluginContainer?: object;
+    environments?: {
+        ssr: {
+            hot: { handleInvoke?: () => Promise<unknown> };
+            config: { dev: object };
+            fetchModule: () => Promise<unknown>;
+        };
+    };
 };
 
 function fakeServerConfig(mode: string): FakeViteDevServer['config'] {
@@ -1216,6 +1226,101 @@ describe('Backend Functions - getVitePlugin', () => {
             } finally {
                 restoreEnv();
                 installGuards.mockRestore();
+            }
+        },
+    );
+
+    // Vite 5 has no environment API, and an environment without handleInvoke has no module runner transport.
+    test.each([
+        {
+            scenario: 'Vite 6+',
+            handleInvoke: true,
+            runnerPath: '/project/node_modules/vite/dist/node/module-runner.js',
+            pnp: false,
+            runsInChild: true,
+            warning: undefined,
+        },
+        {
+            scenario: 'Vite 6+ with no module runner resolvable from the project',
+            handleInvoke: true,
+            runnerPath: undefined,
+            pnp: false,
+            runsInChild: false,
+            warning: localExecutionProcess.MODULE_RUNNER_UNRESOLVED_WARNING,
+        },
+        {
+            scenario: "Vite 6+ in a Yarn Plug'n'Play project",
+            handleInvoke: true,
+            runnerPath: '/project/node_modules/vite/dist/node/module-runner.js',
+            pnp: true,
+            runsInChild: false,
+            warning: localExecutionProcess.YARN_PNP_WARNING,
+        },
+        {
+            scenario: 'Vite 5',
+            handleInvoke: false,
+            runnerPath: '/project/node_modules/vite/dist/node/module-runner.js',
+            pnp: false,
+            runsInChild: false,
+            warning: undefined,
+        },
+    ])(
+        'Should run backend functions in child processes only with a module runner transport ($scenario)',
+        ({ handleInvoke, runnerPath, pnp, runsInChild, warning }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            const installGuards = jest
+                .spyOn(networkGuard, 'installGuards')
+                .mockImplementation(() => undefined);
+            const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
+            const resolveRunner = jest
+                .spyOn(localExecutionProcess, 'resolveViteModuleRunner')
+                .mockReturnValue(runnerPath);
+            const isYarnPnp = jest
+                .spyOn(localExecutionProcess, 'isYarnPnpRuntime')
+                .mockReturnValue(pnp);
+            const fetchModule = jest.fn();
+            const configureServer = getConfigureServer(plugin);
+            const restoreEnv = clearDatadogEnv();
+            process.env.DD_API_KEY = 'test-api-key';
+            process.env.DD_APP_KEY = 'test-app-key';
+
+            try {
+                configureServer({
+                    middlewares: { use: jest.fn() },
+                    ssrLoadModule: jest.fn(),
+                    close: jest.fn(),
+                    config: fakeServerConfig('development'),
+                    environments: handleInvoke
+                        ? {
+                              ssr: {
+                                  hot: { handleInvoke: jest.fn() },
+                                  config: { dev: {} },
+                                  fetchModule,
+                              },
+                          }
+                        : undefined,
+                });
+
+                const executeLocally = createMiddleware.mock.calls[0]?.[11];
+                expect(typeof executeLocally).toBe(runsInChild ? 'function' : 'undefined');
+                // The dev server's own fs and subprocess APIs stay unpatched once calls run elsewhere.
+                expect(installGuards).toHaveBeenCalledTimes(runsInChild ? 0 : 1);
+                const warnings = mockLogFn.mock.calls
+                    .filter(([, level]) => level === 'warn')
+                    .map(([text]) => text);
+                const fallbackWarnings = [
+                    localExecutionProcess.MODULE_RUNNER_UNRESOLVED_WARNING,
+                    localExecutionProcess.YARN_PNP_WARNING,
+                ];
+                expect(warnings.filter((text) => fallbackWarnings.includes(text))).toEqual(
+                    warning === undefined ? [] : [warning],
+                );
+            } finally {
+                restoreEnv();
+                installGuards.mockRestore();
+                createMiddleware.mockRestore();
+                resolveRunner.mockRestore();
+                isYarnPnp.mockRestore();
             }
         },
     );

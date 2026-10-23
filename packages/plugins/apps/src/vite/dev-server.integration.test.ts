@@ -28,6 +28,7 @@ import {
     getContextMock,
     getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import nock from 'nock';
@@ -40,12 +41,21 @@ import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extr
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 
+import {
+    buildLocalExecutionChild,
+    removeLocalExecutionChild,
+} from './local-execution-process.fixtures';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
 // Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
 // entry and no `parseAst`; the published build keeps the real import.
 jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
+}));
+
+let mockChildEntryPath = '';
+jest.mock('@dd/apps-plugin/vite/local-execution-child-path', () => ({
+    getLocalExecutionChildPath: () => mockChildEntryPath,
 }));
 
 const FIXTURE_ROOT = path.resolve(
@@ -153,6 +163,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
     beforeAll(async () => {
+        mockChildEntryPath = await buildLocalExecutionChild();
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
@@ -180,6 +191,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
 
     afterAll(async () => {
         await server.close();
+        removeLocalExecutionChild();
     });
 
     beforeEach(() => {
@@ -332,6 +344,41 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const body = JSON.parse(res.getBody());
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { value: 'real-middleware-value' } });
+    }, 30000);
+
+    test('Should run each call through the real configureServer-installed middleware in its own fresh child process', async () => {
+        const countCallsFunc: BackendFunction = {
+            relativePath: 'childState',
+            name: 'countCalls',
+            absolutePath: path.join(FIXTURE_ROOT, 'childState.backend.ts'),
+            allowedConnectionIds: [],
+        };
+        await server.ssrLoadModule(countCallsFunc.absolutePath);
+
+        const results = [];
+        for (let i = 0; i < 2; i++) {
+            // beforeEach mocks the first call's hydration.
+            if (i > 0) {
+                mockRuntimeContextHydration();
+            }
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(countCallsFunc),
+                args: [0],
+            });
+            const res = createMockResponse();
+            server.middlewares(req, res, jest.fn());
+            // eslint-disable-next-line no-await-in-loop
+            await res.done;
+            expect(res.statusCode).toBe(200);
+            results.push(JSON.parse(res.getBody()).result.data);
+        }
+
+        expect(results).toEqual([
+            expect.objectContaining({ calls: 1, globalCalls: 1 }),
+            expect.objectContaining({ calls: 1, globalCalls: 1 }),
+        ]);
+        expect(results[0].pid).not.toBe(process.pid);
+        expect(results[0].pid).not.toBe(results[1].pid);
     }, 30000);
 
     // Uses noSdkFunc since every other function here already has a warm moduleGraph node from
@@ -1166,4 +1213,113 @@ describe('Dev Server Middleware — request origin and host checks over real HTT
         },
         30000,
     );
+});
+
+describe('Dev Server Middleware — calls in flight when the dev server closes or restarts', () => {
+    const spinForeverFunc: BackendFunction = {
+        relativePath: 'childState',
+        name: 'spinForever',
+        absolutePath: path.join(FIXTURE_ROOT, 'childState.backend.ts'),
+        allowedConnectionIds: [],
+    };
+    const countCallsFunc: BackendFunction = { ...spinForeverFunc, name: 'countCalls' };
+    // Under the call timeout, so only the server's own shutdown can end the call this fast.
+    const SHUTDOWN_DEADLINE_MS = 5000;
+
+    const createAppServer = () =>
+        createServer({
+            configFile: false,
+            root: FIXTURE_ROOT,
+            logLevel: 'silent',
+            server: { middlewareMode: true, hmr: false },
+            plugins: [
+                {
+                    name: 'dd-apps-test',
+                    ...getVitePlugin({
+                        bundler: { build },
+                        context: getContextMock({ buildRoot: FIXTURE_ROOT }),
+                        options: { include: [], tags: [], longPolling: mockLongPolling },
+                    }),
+                },
+            ],
+            optimizeDeps: { noDiscovery: true },
+        });
+
+    const callChildPids = () => {
+        try {
+            const pgrepArgs = ['-P', String(process.pid), '-f', 'local-execution-child'];
+            const output = execFileSync('pgrep', pgrepArgs, { encoding: 'utf8' });
+            return output.split('\n').filter(Boolean);
+        } catch {
+            return [];
+        }
+    };
+
+    const call = (server: ViteDevServer, func: BackendFunction, args: unknown[]) => {
+        mockRuntimeContextHydration();
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(func),
+            args,
+        });
+        const res = createMockResponse();
+        server.middlewares(req, res, jest.fn());
+        return res;
+    };
+
+    const startSpinningCall = async (server: ViteDevServer) => {
+        await server.ssrLoadModule(spinForeverFunc.absolutePath);
+        const res = call(server, spinForeverFunc, []);
+        while (callChildPids().length === 0) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        return res;
+    };
+
+    const settlesWithin = (done: Promise<void>, timeoutMs: number) => {
+        const deadline = new Promise((resolve) => setTimeout(resolve, timeoutMs, 'still running'));
+        const settled = done.then(() => 'settled');
+        return Promise.race([settled, deadline]);
+    };
+
+    beforeAll(async () => {
+        mockChildEntryPath = await buildLocalExecutionChild();
+    });
+
+    afterAll(() => {
+        removeLocalExecutionChild();
+    });
+
+    afterEach(() => {
+        nock.cleanAll();
+    });
+
+    test('Should end a call still in flight when its dev server closes', async () => {
+        const server = await createAppServer();
+        const res = await startSpinningCall(server);
+
+        await server.close();
+
+        await expect(settlesWithin(res.done, SHUTDOWN_DEADLINE_MS)).resolves.toBe('settled');
+        expect(res.statusCode).toBe(500);
+        expect(callChildPids()).toEqual([]);
+    }, 30000);
+
+    test("Should end the old server's calls on restart and keep serving new ones", async () => {
+        const server = await createAppServer();
+        try {
+            const res = await startSpinningCall(server);
+
+            await server.restart();
+
+            await expect(settlesWithin(res.done, SHUTDOWN_DEADLINE_MS)).resolves.toBe('settled');
+            expect(res.statusCode).toBe(500);
+            await server.ssrLoadModule(countCallsFunc.absolutePath);
+            const next = call(server, countCallsFunc, [0]);
+            await next.done;
+            expect(next.statusCode).toBe(200);
+        } finally {
+            await server.close();
+        }
+    }, 30000);
 });

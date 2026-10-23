@@ -246,7 +246,7 @@ async function invokeAction(
 /** Serializes local executions — a customer function deleting `globalThis.$` mid-flight would otherwise break `$` access for any other execution concurrently in progress (see `ensureDollarAccessorInstalled`). */
 let queueTail: Promise<unknown> = Promise.resolve();
 
-function enqueue<T>(run: () => Promise<T>): Promise<T> {
+export function enqueue<T>(run: () => Promise<T>): Promise<T> {
     const result = queueTail.then(run);
     queueTail = result.then(
         () => undefined,

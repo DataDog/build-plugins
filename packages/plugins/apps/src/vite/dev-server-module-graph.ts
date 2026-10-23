@@ -36,9 +36,14 @@ export async function collectModuleGraphFromServer(
     buildRoot: string,
     log: Logger,
     parse: typeof parseAst,
+    // Off for child processes: they never reuse the dev server's evaluations, and un-caching
+    // while another call's child loads a module makes that child run it twice.
+    uncachePrimedStaleModules = true,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
-    const staleAppModules = trackStaleAppModules(server, buildRoot);
+    const staleAppModules = uncachePrimedStaleModules
+        ? trackStaleAppModules(server, buildRoot)
+        : { record: () => {}, uncache: () => {} };
     try {
         await walkModuleGraph(
             server,

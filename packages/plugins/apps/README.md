@@ -11,6 +11,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Configuration](#configuration)
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
+-   [Local execution](#local-execution)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -57,6 +58,19 @@ The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/execu
 -   its body is sent with `Content-Type: application/json`.
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
+
+## Local execution
+
+On Vite 6.0.4 or later, `/__dd/executeAction` runs each backend function call the way production does: in a fresh Node process of its own. Calls run one at a time.
+
+-   **Fresh state**: module-level variables and globals start over on every call.
+-   **Timeout**: a call that runs past its time budget is killed, even inside a synchronous loop.
+-   **Guards**: in-process guards refuse writes outside the call's own temp dir (`os.tmpdir()`, also its working directory) and `/tmp`, subprocesses and worker threads, from the module's top-level code on. The heap is capped at 256 MB.
+-   **Environment**: a call sees no variables from the dev server's environment, keys included, except Node's TLS and time zone settings (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `TZ`), and no Node options from `NODE_OPTIONS`. `$.Actions` calls go back to the dev server, which holds the credentials and checks each call's connection against the function's allowed connections.
+-   **Logs**: a call's `stdout` and `stderr` reach the dev server's terminal line by line, as each line ends.
+-   **Debugging**: when the dev server runs under a debugger (`--inspect`), each call's process listens on a random local port and prints its `Debugger listening on ws://…` URL. Attach to that URL to debug the call; calls don't time out while the dev server is under a debugger.
+
+Vite 5 has no module runner transport, so there each call runs inside the dev server's process. Vite 6.0.0 to 6.0.3, whose dev server answers the module runner in an older shape, do the same with a warning at startup, as do a Yarn Plug'n'Play project, whose packages load through hooks a call's process doesn't get, and any Vite 6+ project where `vite/module-runner` can't be resolved.
 
 ## Package output
 
