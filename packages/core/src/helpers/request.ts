@@ -74,10 +74,17 @@ export const createRequestData = async (options: {
     // Node.js pipe() immediately puts the source into flowing mode (starts reading blobs
     // via process.nextTick), which races with cleanup of file-backed blobs after the
     // request completes. Web Streams only start reading when the output is consumed.
-    const data = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
+    const rawStream = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
+
+    // Materialize the payload in memory before opening the HTTP request so disk I/O and
+    // gzip compression do not stall an already-open request stream against intake's
+    // 30s/60s body-receive deadlines.
+    const bodyBuffer = new Uint8Array(await new Response(rawStream).arrayBuffer());
+    const data = new Blob([bodyBuffer]).stream();
 
     const headers = {
         'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
+        'Content-Length': String(bodyBuffer.byteLength),
         ...defaultHeaders,
         ...Object.fromEntries(req.headers.entries()),
     };
@@ -87,6 +94,48 @@ export const createRequestData = async (options: {
 
 export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
+
+const RETRIABLE_NETWORK_ERROR_CODES = new Set([
+    'ECONNRESET',
+    'EPIPE',
+    'ETIMEDOUT',
+    'ECONNREFUSED',
+    'ECONNABORTED',
+    'EHOSTUNREACH',
+    'ENETUNREACH',
+    'EAI_AGAIN',
+]);
+
+const hasRetriableErrorCode = (err: unknown): boolean => {
+    if (err === null || typeof err !== 'object') {
+        return false;
+    }
+    const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined;
+    if (!code) {
+        return false;
+    }
+    return RETRIABLE_NETWORK_ERROR_CODES.has(code) || code.startsWith('UND_ERR_');
+};
+
+export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boolean => {
+    if (signal?.aborted) {
+        return false;
+    }
+    if (error === null || typeof error !== 'object') {
+        return false;
+    }
+    if ('name' in error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+        return false;
+    }
+    const cause = 'cause' in error ? error.cause : undefined;
+    if (hasRetriableErrorCode(error) || hasRetriableErrorCode(cause)) {
+        return true;
+    }
+    if ('message' in error && error.message === 'fetch failed') {
+        return true;
+    }
+    return false;
+};
 
 // Do a retriable fetch.
 export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
@@ -109,15 +158,17 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
 
     return retry(async (bail: (e: Error) => void, attempt: number) => {
         let response: Response;
+        let requestInit: RequestInit;
+        let requestHeaders: RequestInit['headers'];
         try {
-            const requestInit: RequestInit = {
+            requestInit = {
                 method,
                 // This is needed for sending body in NodeJS' Fetch.
                 // https://github.com/nodejs/node/issues/46221
                 duplex: 'half',
                 signal,
             };
-            let requestHeaders: RequestInit['headers'] = {
+            requestHeaders = {
                 'X-Datadog-Origin': 'build-plugins',
             };
 
@@ -141,10 +192,20 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
                 requestInit.body = data;
                 requestHeaders = { ...requestHeaders, ...headers };
             }
-
-            response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
         } catch (error: any) {
             // We don't want to retry if there is a non-fetch related error.
+            bail(error);
+            // bail(error) throws so the return is never executed.
+            return {} as T;
+        }
+
+        try {
+            response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
+        } catch (error: any) {
+            if (isRetriableFetchError(error, signal)) {
+                throw error;
+            }
+            // Bail on non-retriable fetch errors (e.g. locked stream, AbortSignal timeout).
             bail(error);
             // bail(error) throws so the return is never executed.
             return {} as T;
