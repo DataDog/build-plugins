@@ -219,6 +219,40 @@ describe('Error Tracking Sourcemaps', () => {
         }
     });
 
+    test.each(BUNDLERS)(
+        'Should keep a path-only minified URL independent of the build platform for $name',
+        async ({ name, config, run, plugin }) => {
+            const datadogPlugin = plugin({
+                auth: { apiKey: '123' },
+                enableGit: false,
+                errorTracking: {
+                    sourcemaps: {
+                        service: 'test-service',
+                        releaseVersion: '1.0.0',
+                        minifiedPathPrefix: '/static/js',
+                        dryRun: true,
+                    },
+                },
+            });
+            const outDir = path.join(workingDir, `dist-path-prefix-${name}`);
+            const configuration = config({
+                workingDir,
+                outDir,
+                entry: { main: easyProjectEntry },
+                plugins: [datadogPlugin],
+            });
+            const { errors } = await run(workingDir, configuration);
+
+            expect(errors).toEqual([]);
+            expect(mockSendSourcemaps).toHaveBeenCalledTimes(1);
+            const sourcemaps = mockSendSourcemaps.mock.calls[0][0];
+            const expectedSourcemap = expect.objectContaining({
+                minifiedUrl: '/static/js/main.js',
+            });
+            expect(sourcemaps).toEqual([expectedSourcemap]);
+        },
+    );
+
     test.each(useCases)(
         'Should handle sourcemaps for $description',
         async ({ bundler, config, prefix, expectedOutputs }) => {
