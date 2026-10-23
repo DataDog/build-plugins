@@ -2,13 +2,12 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 import type { Plugin, Rollup } from 'vite';
 
 import type { ParsedModuleRecord } from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import { isBackendSourceModule } from '../backend/backend-sources';
 
@@ -24,7 +23,7 @@ function unsupportedStaticChecksSource(filePath: string, unsupported: string): E
 // Re-runs the static checks against every backend source module (app code or an opted-in package's code) the nested backend build resolves, not just the `.backend.ts` entry, so an imported helper module is also checked. MUST be registered after the connection-ID collector's plugin so `getModuleRecords` is populated (falls back to a local parse if a module is missing from it).
 export function createBackendStaticChecksPlugin(
     buildRoot: string,
-    log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
     getModuleRecords: () => ReadonlyMap<string, ParsedModuleRecord>,
 ): Plugin {
     return {
@@ -59,7 +58,7 @@ export function createBackendStaticChecksPlugin(
                 scopeAnalysis = analyzeModuleScope(program);
             }
 
-            runBackendStaticChecks(ast, moduleId, log, scopeAnalysis);
+            runStaticChecks(ast, moduleId, scopeAnalysis);
         },
     };
 }

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { createBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { existsSync, outputFileSync, readFileSync, rm, rmSync } from '@dd/core/helpers/fs';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
@@ -55,6 +56,7 @@ describe('buildBackendFunctions', () => {
                 [func],
                 '/project',
                 mockLogger,
+                createBackendStaticChecks(mockLogger),
             ),
         ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -78,6 +80,7 @@ describe('buildBackendFunctions', () => {
                 [func],
                 '/project',
                 logger,
+                createBackendStaticChecks(logger),
             ),
         ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -102,6 +105,7 @@ describe('buildBackendFunctions', () => {
                     [func],
                     '/project',
                     mockLogger,
+                    createBackendStaticChecks(mockLogger),
                 ),
             ).rejects.toThrow('static check rejected a reachable helper module');
 
@@ -139,7 +143,13 @@ describe('buildBackendFunctions', () => {
                 allowedConnectionIds: [],
             };
 
-            const result = await buildBackendFunctions(build, [namesFunc], workingDir, mockLogger);
+            const result = await buildBackendFunctions(
+                build,
+                [namesFunc],
+                workingDir,
+                mockLogger,
+                createBackendStaticChecks(mockLogger),
+            );
             outDir = result.outDir;
             const [bundlePath] = [...result.outputs.values()];
             const bundleCode = readFileSync(bundlePath);
