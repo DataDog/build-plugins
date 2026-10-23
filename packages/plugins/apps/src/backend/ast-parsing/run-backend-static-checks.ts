@@ -7,6 +7,7 @@ import type { BaseNode } from 'estree';
 
 import type { ModuleScopeAnalysis } from './module-scope';
 import { rejectGlobalsMissingFromNode } from './reject-globals-missing-from-node';
+import { warnAboutEnvReads } from './warn-env-reads';
 
 /** Runs every static check against a single module; shared by every call site so the checks can't drift. */
 export function runBackendStaticChecks(
@@ -16,4 +17,5 @@ export function runBackendStaticChecks(
     scopeAnalysis: ModuleScopeAnalysis,
 ): void {
     rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+    warnAboutEnvReads(ast, filePath, log, scopeAnalysis);
 }
