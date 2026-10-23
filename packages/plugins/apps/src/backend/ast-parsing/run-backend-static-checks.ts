@@ -7,13 +7,19 @@ import type { BaseNode } from 'estree';
 
 import type { ModuleScopeAnalysis } from './module-scope';
 import { rejectGlobalsMissingFromNode } from './reject-globals-missing-from-node';
+import { type WarnedEnvReads, warnAboutEnvReads } from './warn-env-reads';
 
-/** Runs every static check against a single module; shared by every call site so the checks can't drift. */
-export function runBackendStaticChecks(
+export type RunBackendStaticChecks = (
     ast: BaseNode,
     filePath: string,
-    log: Logger,
     scopeAnalysis: ModuleScopeAnalysis,
-): void {
-    rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+) => void;
+
+/** Create one per plugin instance and share it across call sites, so the checks can't drift and each warning shows once. */
+export function createBackendStaticChecks(log: Logger): RunBackendStaticChecks {
+    const warnedEnvReads: WarnedEnvReads = new Map();
+    return (ast, filePath, scopeAnalysis) => {
+        rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+        warnAboutEnvReads(ast, filePath, log, scopeAnalysis, warnedEnvReads);
+    };
 }

@@ -2,7 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import {
+    createBackendStaticChecks,
+    type RunBackendStaticChecks,
+} from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
+import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -53,13 +57,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
     test('Should fail closed, not fall back to the raw specifier, when resolveId fails to resolve a static import', async () => {
         const server = makeFakeServer(async () => null);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -72,13 +76,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         const resolvedPath = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
         const server = makeFakeServer(async () => ({ id: resolvedPath }));
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -94,13 +98,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => null, entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -129,13 +133,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             };
             const server = makeFakeServer(async () => null, entryNode);
 
-            const log = getMockLogger();
+            const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
             const collecting = collectModuleGraphFromServer(
                 server,
                 ENTRY_ID,
                 FIXTURE_ROOT,
-                log,
+                runStaticChecks,
                 parseAst,
             );
 
@@ -157,13 +161,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: rawImportPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -192,13 +196,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: sharedFile }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -218,13 +222,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         entryNode.importedModules.add(entryNode);
         const server = makeFakeServer(async () => ({ id: resolvedPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -249,18 +253,108 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: denoHelperPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
         await expect(collecting).rejects.toThrow(
             `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
+    });
+
+    describe('warning on process.env reads', () => {
+        let tempDir: string;
+        let envReadingFile: string;
+
+        beforeAll(() => {
+            const osTempDir = tmpdir();
+            const tempDirPrefix = path.join(osTempDir, 'dev-server-module-graph-env-');
+            tempDir = mkdtempSync(tempDirPrefix);
+            envReadingFile = path.join(tempDir, 'charge.ts');
+            writeFileSync(
+                envReadingFile,
+                'export function charge(): string | undefined { return process.env.STRIPE_KEY; }',
+            );
+        });
+
+        afterAll(() => {
+            rmSync(tempDir, { recursive: true, force: true });
+        });
+
+        let runStaticChecks: RunBackendStaticChecks;
+
+        beforeEach(() => {
+            runStaticChecks = createBackendStaticChecks(getMockLogger());
+        });
+
+        const collectEnvReadingEntry = () => {
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+            return collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                runStaticChecks,
+                parseAst,
+            );
+        };
+
+        const warnLogs = () =>
+            mockLogFn.mock.calls
+                .filter(([, level]) => level === 'warn')
+                .map(([message]) => String(message));
+
+        test('Should warn about a process.env read once', async () => {
+            await collectEnvReadingEntry();
+
+            const warnings = warnLogs();
+            expect(warnings).toEqual([expect.stringContaining('process.env.STRIPE_KEY')]);
+        });
+
+        test('Should not warn about a node_modules dependency that reads process.env', async () => {
+            const cleanEntryFile = path.join(tempDir, 'entry.ts');
+            writeFileSync(cleanEntryFile, 'export function entry(): number { return 1; }');
+            const dependencyId = path.join(FIXTURE_ROOT, 'node_modules/stripe-config/index.ts');
+            const dependencyNode: FakeModuleNode = {
+                id: dependencyId,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: cleanEntryFile,
+                importedModules: new Set([dependencyNode]),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+
+            await collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                runStaticChecks,
+                parseAst,
+            );
+
+            const warnings = warnLogs();
+            expect(warnings).toEqual([]);
+        });
+
+        test('Should not warn again when a later local run collects the same module', async () => {
+            await collectEnvReadingEntry();
+            await collectEnvReadingEntry();
+
+            const warnings = warnLogs();
+            expect(warnings).toHaveLength(1);
+        });
     });
 });

@@ -19,7 +19,7 @@ import {
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { createBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
@@ -234,6 +234,7 @@ export const getVitePlugin = ({
     options,
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
+    const runStaticChecks = createBackendStaticChecks(log);
     const { auth } = context;
 
     context.inject({
@@ -515,7 +516,7 @@ export const getVitePlugin = ({
                 const program = ensureProgram(ast, normalizedId);
                 const scopeAnalysis = analyzeModuleScope(program);
                 // Runs even for a file with zero exports, to catch a restricted global as soon as it's written.
-                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
+                runStaticChecks(ast, normalizedId, scopeAnalysis);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
                     // Only a genuinely no-query id can be trusted as a real re-transform of this
@@ -634,6 +635,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context.buildRoot,
                     log,
+                    runStaticChecks,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
@@ -739,7 +741,7 @@ export const getVitePlugin = ({
                     server,
                     entryId,
                     context.buildRoot,
-                    log,
+                    runStaticChecks,
                     parseAst,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
@@ -754,6 +756,7 @@ export const getVitePlugin = ({
                 options.longPolling,
                 context.buildRoot,
                 log,
+                runStaticChecks,
                 server.config.mode,
                 isHostAllowed,
                 bundler.defaultServerConditions,
