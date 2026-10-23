@@ -7,6 +7,7 @@ import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs';
 import http from 'http';
 import { type ChildProcess, fork } from 'node:child_process';
+import nodeModule from 'node:module';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -31,6 +32,7 @@ import {
 import {
     CHILD_MAX_OLD_SPACE_MB,
     createChildProcessExecutor,
+    IMPORT_META_RESOLVE_UNAVAILABLE_MESSAGE,
     killLocalExecutionChildren,
     type ChildProcessExecutorOptions,
     type LocalExecutionRequest,
@@ -38,6 +40,7 @@ import {
     resolveViteModuleRunner,
 } from './local-execution-process';
 import type { ChildStartConfig } from './local-execution-protocol';
+import { DENIED_MODULE_REASON, OUTSIDE_READ_ROOTS_REASON } from './local-execution-sandbox';
 import { isIndexableRecord } from './local-execution-shared';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
@@ -100,6 +103,9 @@ const waitUntilGone = async (pid: number, deadline = Date.now() + 5000): Promise
     await new Promise((resolve) => setTimeout(resolve, 50));
     return waitUntilGone(pid, deadline);
 };
+
+const requestedUrlOf = (payload: HotPayload): unknown =>
+    payload.type === 'custom' ? payload.data?.data?.[0] : undefined;
 
 const childPidFrom = (debugLines: string[]) => {
     const match = debugLines.join('\n').match(/\(pid (\d+),/);
@@ -169,6 +175,11 @@ describe('Local execution in a child process', () => {
             projectRoot: FIXTURE_ROOT,
             childEntryPath,
             moduleRunnerPath,
+            readRoots: server.config.server.fs.allow,
+            denyPatterns: server.config.server.fs.deny,
+            restrictModuleLoads: true,
+            resolveModule: async (url, importer) =>
+                (await server.environments.ssr.pluginContainer.resolveId(url, importer))?.id,
             log: getMockLogger(),
             writeOutput: () => {},
             ...overrides,
@@ -592,6 +603,7 @@ describe('Local execution in a child process', () => {
                     runtimeContext: previewRuntimeContext,
                     actionCatalogInstalled: false,
                     appsBackendInstalled: false,
+                    installGuards: false,
                     flushTimeoutMs: 1000,
                 };
                 const child = fork(childEntryPath, [], {
@@ -687,7 +699,9 @@ describe('Local execution in a child process', () => {
         );
     });
 
-    describe('Guards', () => {
+    describe('Sandbox', () => {
+        const withoutAllowInspector = new Set(process.allowedNodeEnvironmentFlags);
+        withoutAllowInspector.delete('--allow-inspector');
         let fetchServer: http.Server;
         let fetchUrl: string;
         let projectFile: string;
@@ -720,9 +734,38 @@ describe('Local execution in a child process', () => {
         });
 
         test(
-            'Should refuse project writes, subprocesses and workers with the in-process guards, and allow temp writes and fetch',
+            'Should refuse project writes, subprocesses and workers, and allow temp writes and fetch',
             async () => {
                 const execute = makeExecutor();
+                const result = await execute(
+                    makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
+                        projectFile,
+                        fetchUrl,
+                        sharedTmpFile,
+                    ]),
+                );
+                expect(result.data).toEqual({
+                    sharedTmpWrite: 'ok: written',
+                    projectWrite: 'refused: ERR_ACCESS_DENIED',
+                    tempWrite: 'ok: x',
+                    spawn: 'refused: ERR_ACCESS_DENIED',
+                    worker: 'refused: ERR_ACCESS_DENIED',
+                    fetch: 'ok: 200 pong',
+                });
+                expect(fs.existsSync(projectFile)).toBe(false);
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should fall back to the in-process guards while debugging on a Node without --allow-inspector',
+            async () => {
+                const lines: string[] = [];
+                const execute = makeExecutor({
+                    nodeFlags: withoutAllowInspector,
+                    isInspectorActive: () => true,
+                    writeOutput: (_stream, line) => lines.push(line),
+                });
                 const result = await execute(
                     makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
                         projectFile,
@@ -739,14 +782,18 @@ describe('Local execution in a child process', () => {
                     fetch: 'ok: 200 pong',
                 });
                 expect(fs.existsSync(projectFile)).toBe(false);
+                expect(lines.join('\n')).toContain('Debugger listening on ws://127.0.0.1:');
             },
             CALL_TIMEOUT_MS,
         );
 
         test(
-            "Should guard a module's top-level code too",
+            "Should guard a module's top-level code too while debugging on a Node without --allow-inspector",
             async () => {
-                const execute = makeExecutor();
+                const execute = makeExecutor({
+                    nodeFlags: withoutAllowInspector,
+                    isInspectorActive: () => true,
+                });
                 await expect(
                     execute(
                         makeRequest(
@@ -800,8 +847,169 @@ describe('Local execution in a child process', () => {
             CALL_TIMEOUT_MS,
         );
     });
+
     describe('Module loading over IPC', () => {
         const loadOverIpc = fixtureFunction('childSandbox', 'loadOverIpc');
+        // Files these tests create live in their own readable folder: other suites copy the shared fixture project.
+        let readableDir = '';
+        const makeReadingExecutor = (overrides: Partial<ChildProcessExecutorOptions> = {}) =>
+            makeExecutor({
+                readRoots: [...server.config.server.fs.allow, readableDir],
+                ...overrides,
+            });
+
+        beforeAll(() => {
+            const createdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-readable-'));
+            readableDir = fs.realpathSync.native(createdDir);
+            fs.writeFileSync(path.join(readableDir, '.env'), 'DD_API_KEY=from-dotenv\n');
+        });
+
+        afterAll(() => {
+            fs.rmSync(readableDir, { recursive: true, force: true });
+        });
+        const outsideFile = process.platform === 'win32' ? 'C:\\Windows\\win.ini' : '/etc/hosts';
+
+        test.each([
+            {
+                description: 'an absolute path',
+                url: () => `${outsideFile}?raw`,
+                importer: undefined,
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+            {
+                description: 'a /@fs/ path',
+                url: () => `/@fs${outsideFile}?raw`,
+                importer: undefined,
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+            {
+                description: 'a .env file in a readable folder',
+                url: () => `${path.join(readableDir, '.env')}?raw`,
+                importer: undefined,
+                reason: DENIED_MODULE_REASON,
+            },
+            {
+                description: 'a relative path climbing out of the project',
+                url: () =>
+                    `${path.relative(FIXTURE_ROOT, outsideFile)}?raw`.replace(/^(?!\.)/, './'),
+                importer: path.join(FIXTURE_ROOT, 'childSandbox.backend.ts'),
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+        ])(
+            'Should refuse a module named by $description, without reading it',
+            async ({ url: urlOf, importer, reason }) => {
+                const url = urlOf();
+                const requestedUrls: unknown[] = [];
+                const { hot } = server.environments.ssr;
+                const execute = makeReadingExecutor({
+                    invokeChannel: {
+                        handleInvoke: (payload: HotPayload) => {
+                            requestedUrls.push(requestedUrlOf(payload));
+                            return hot.handleInvoke(payload);
+                        },
+                    },
+                });
+                const result = await execute(makeRequest(loadOverIpc, [url, importer]));
+                expect(requestedUrls).not.toContain(url);
+                expect(JSON.stringify(result.data)).toContain(`: ${reason}.`);
+                expect(result.data).toEqual({
+                    error: {
+                        name: 'Error',
+                        message: expect.stringMatching(/^Local execution can't load ".+": /),
+                    },
+                });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should refuse an extensionless path to a module outside the readable folders, without reading it',
+            async () => {
+                const outsideDir = fs.realpathSync(
+                    fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-outside-')),
+                );
+                const requestedUrls: unknown[] = [];
+                const { hot } = server.environments.ssr;
+                try {
+                    fs.writeFileSync(path.join(outsideDir, 'mod.js'), 'export const secret = 1;');
+                    const url = path.join(outsideDir, 'mod');
+                    const execute = makeExecutor({
+                        invokeChannel: {
+                            handleInvoke: (payload: HotPayload) => {
+                                requestedUrls.push(requestedUrlOf(payload));
+                                return hot.handleInvoke(payload);
+                            },
+                        },
+                    });
+                    const result = await execute(makeRequest(loadOverIpc, [url]));
+                    expect(requestedUrls).not.toContain(url);
+                    expect(JSON.stringify(result.data)).toContain(OUTSIDE_READ_ROOTS_REASON);
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            "Should refuse a module matching the project's own server.fs.deny",
+            async () => {
+                const secretsDir = path.join(readableDir, 'secrets');
+                const secretFile = path.join(secretsDir, 'prod.json');
+                try {
+                    fs.mkdirSync(secretsDir, { recursive: true });
+                    fs.writeFileSync(secretFile, '{"token":"x"}');
+                    const execute = makeReadingExecutor({
+                        denyPatterns: [...server.config.server.fs.deny, '**/secrets/**'],
+                    });
+                    const result = await execute(makeRequest(loadOverIpc, [`${secretFile}?raw`]));
+                    expect(JSON.stringify(result.data)).toContain(DENIED_MODULE_REASON);
+                } finally {
+                    fs.rmSync(secretsDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should refuse a denied name even when it links to a file with an allowed name',
+            async () => {
+                const targetDir = path.join(readableDir, 'linked-secret');
+                const target = path.join(targetDir, 'dev.secrets');
+                const link = path.join(targetDir, '.env.linked');
+                try {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                    fs.writeFileSync(target, 'TOKEN=x');
+                    fs.symlinkSync(target, link);
+                    const execute = makeReadingExecutor();
+                    const result = await execute(makeRequest(loadOverIpc, [`${link}?raw`]));
+                    expect(JSON.stringify(result.data)).toContain(DENIED_MODULE_REASON);
+                } finally {
+                    fs.rmSync(targetDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should load a module outside the readable folders when server.fs.strict is off',
+            async () => {
+                const outsideDir = fs.realpathSync(
+                    fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-loose-')),
+                );
+                try {
+                    const looseFile = path.join(outsideDir, 'mod.js');
+                    fs.writeFileSync(looseFile, 'export const loose = true;');
+                    const execute = makeExecutor({ restrictModuleLoads: false });
+                    const result = await execute(makeRequest(loadOverIpc, [looseFile]));
+                    expect(JSON.stringify(result.data)).not.toContain(OUTSIDE_READ_ROOTS_REASON);
+                    expect(JSON.stringify(result.data)).toContain('loose');
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
 
         test(
             "Should load a plugin's virtual module",
@@ -811,6 +1019,18 @@ describe('Local execution in a child process', () => {
                     makeRequest(fixtureFunction('childVirtual', 'readVirtualModule'), []),
                 );
                 expect(result.data).toEqual({ virtualValue: 42, slashValue: 7 });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should report a module that does not exist yet as missing, not as outside the readable folders',
+            async () => {
+                const execute = makeExecutor();
+                const missing = execute(
+                    makeRequest(fixtureFunction('childLaterImport', 'importLater'), []),
+                );
+                await expect(missing).rejects.toThrow('Does the file exist?');
             },
             CALL_TIMEOUT_MS,
         );
@@ -867,15 +1087,108 @@ export class ModuleRunner {
 `;
 
             test(
-                'Should give a backend function a working import.meta.resolve',
+                'Should give a backend function a working import.meta.resolve on a Node without the permission model',
                 async () => {
                     const fakeRunnerPath = path.join(runnerDir, 'module-runner.mjs');
                     fs.writeFileSync(fakeRunnerPath, FAKE_VITE_7_RUNNER);
-                    const execute = makeExecutor({ moduleRunnerPath: fakeRunnerPath });
+                    const execute = makeExecutor({
+                        moduleRunnerPath: fakeRunnerPath,
+                        nodeFlags: new Set(),
+                    });
                     const func = fixtureFunction('childImportMeta', 'resolveSibling');
                     const result = await execute(makeRequest(func, []));
                     const siblingUrl = String(result.data);
                     expect(fileURLToPath(siblingUrl)).toBe(path.join(FIXTURE_ROOT, 'sibling.js'));
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            // Like Vite's, it falls back to `module.register`, whose hooks thread the permission model refuses.
+            const FAKE_VITE_7_RUNNER_WITH_HOOKS = `
+import nodeModule from 'node:module';
+import { pathToFileURL } from 'node:url';
+const createDefaultImportMeta = (modulePath) => ({
+    url: pathToFileURL(modulePath).href,
+    resolve() {
+        throw new Error('[module runner] "import.meta.resolve" is not supported.');
+    },
+});
+export const createNodeImportMeta = async (modulePath) => {
+    if (typeof nodeModule.registerHooks !== 'function') {
+        nodeModule.register('data:text/javascript,export const resolve = (s, c, next) => next(s, c);');
+    }
+    return {
+        ...createDefaultImportMeta(modulePath),
+        resolve: (specifier) => new URL(specifier, pathToFileURL(modulePath)).href,
+    };
+};
+export class ESModulesEvaluator {}
+export class ModuleRunner {
+    constructor(options) {
+        this.options = options;
+    }
+    async import(url) {
+        const createImportMeta = this.options.createImportMeta ?? createDefaultImportMeta;
+        const meta = await createImportMeta(url.split('?')[0]);
+        const resolveSibling = () => {
+            try {
+                return meta.resolve('./sibling.js');
+            } catch (error) {
+                return error.message;
+            }
+        };
+        return { resolveSibling };
+    }
+}
+`;
+
+            test(
+                'Should still load modules where import.meta.resolve needs a hooks thread',
+                async () => {
+                    const fakeRunnerPath = path.join(runnerDir, 'module-runner-hooks.mjs');
+                    fs.writeFileSync(fakeRunnerPath, FAKE_VITE_7_RUNNER_WITH_HOOKS);
+                    const execute = makeExecutor({ moduleRunnerPath: fakeRunnerPath });
+                    const func = fixtureFunction('childImportMeta', 'resolveSibling');
+                    const result = await execute(makeRequest(func, []));
+                    const hasRegisterHooks = 'registerHooks' in nodeModule;
+                    expect(String(result.data)).toMatch(
+                        hasRegisterHooks
+                            ? /\/sibling\.js$/
+                            : /"import\.meta\.resolve" is not supported/,
+                    );
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test.each([
+                {
+                    setup: 'without module.registerHooks under the sandbox',
+                    overrides: { hasRegisterHooks: false },
+                    warnings: 1,
+                },
+                {
+                    setup: 'with module.registerHooks under the sandbox',
+                    overrides: { hasRegisterHooks: true },
+                    warnings: 0,
+                },
+                {
+                    setup: 'without module.registerHooks or the sandbox',
+                    overrides: { hasRegisterHooks: false, nodeFlags: new Set<string>() },
+                    warnings: 0,
+                },
+            ])(
+                'Should warn about import.meta.resolve $warnings time(s) across calls $setup',
+                async ({ overrides, warnings }) => {
+                    const warn = jest.fn();
+                    const execute = makeExecutor({ ...overrides, log: getMockLogger({ warn }) });
+                    const countCalls = fixtureFunction('childState', 'countCalls');
+                    await execute(makeRequest(countCalls, [0]));
+                    await execute(makeRequest(countCalls, [0]));
+                    expect(warn.mock.calls).toEqual(
+                        Array.from({ length: warnings }, () => [
+                            IMPORT_META_RESOLVE_UNAVAILABLE_MESSAGE,
+                        ]),
+                    );
                 },
                 CALL_TIMEOUT_MS,
             );

@@ -182,6 +182,11 @@ const makeChildExecutor = (devServer: ViteDevServer) => {
         projectRoot: FIXTURE_ROOT,
         childEntryPath: mockChildEntryPath,
         moduleRunnerPath,
+        readRoots: devServer.config.server.fs.allow,
+        denyPatterns: devServer.config.server.fs.deny,
+        restrictModuleLoads: true,
+        resolveModule: async (url, importer) =>
+            (await devServer.environments.ssr.pluginContainer.resolveId(url, importer))?.id,
         log: getMockLogger(),
         writeOutput: () => {},
     });

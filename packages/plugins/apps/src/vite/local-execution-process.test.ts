@@ -84,6 +84,10 @@ describe('Local execution process helpers', () => {
                     projectRoot: '/project',
                     childEntryPath: '/unused/local-execution-child.mjs',
                     moduleRunnerPath,
+                    readRoots: [],
+                    denyPatterns: [],
+                    restrictModuleLoads: true,
+                    resolveModule: async () => undefined,
                     log,
                 });
                 const call = () =>
