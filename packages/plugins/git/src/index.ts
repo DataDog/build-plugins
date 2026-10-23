@@ -30,11 +30,15 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
 
             const repositoryData = await getRepositoryData(git, repositoryUrl);
             context.git = repositoryData;
+            // Let plugins that wait for git data continue without waiting for the hook's handlers.
+            context.markGitReady();
 
             timeGit.end();
             await context.asyncHook('git', context.git);
         } catch (e: any) {
             log.error(`Could not get git information: ${e.message}`);
+        } finally {
+            context.markGitReady();
         }
     };
 
@@ -59,6 +63,7 @@ export const getGitPlugins: GetInternalPlugins = (arg: GetPluginsArg) => {
 
                     // buildRoot hook is sync because xpack can't make it async.
                     // So we queue the async part of the plugin.
+                    context.markGitPending();
                     context.queue(processGit(gitDir));
                 } catch (e: any) {
                     // We don't want to have the build fail for this.

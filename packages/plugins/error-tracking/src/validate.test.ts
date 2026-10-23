@@ -58,7 +58,7 @@ describe('Error Tracking Plugins validate', () => {
             expect(errors).toHaveLength(3);
             const expectedErrors = [
                 'sourcemaps.releaseVersion is required (set it directly or via metadata.version).',
-                'sourcemaps.service is required.',
+                'sourcemaps.service is required (set it directly or via metadata.service).',
                 'sourcemaps.minifiedPathPrefix is required.',
             ];
             expect(errors.map(stripAnsi)).toEqual(expectedErrors);
@@ -245,6 +245,34 @@ describe('Error Tracking Plugins validate', () => {
             expect(stripAnsi(errors[0])).toBe(
                 'sourcemaps.releaseVersion is required (set it directly or via metadata.version).',
             );
+        });
+
+        test('Should fall back to metadata.service when sourcemaps.service is unset', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                metadata: { service: 'checkout' },
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        service: undefined,
+                    }),
+                },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual(expect.objectContaining({ service: 'checkout' }));
+        });
+
+        test('Should prefer an explicit sourcemaps.service over metadata.service', () => {
+            const { config, errors } = validateSourcemapsOptions({
+                metadata: { service: 'checkout' },
+                errorTracking: {
+                    sourcemaps: getMinimalSourcemapsConfiguration({
+                        service: 'cart',
+                    }),
+                },
+            });
+
+            expect(errors).toHaveLength(0);
+            expect(config).toEqual(expect.objectContaining({ service: 'cart' }));
         });
 
         test('Should return an error with a bad minifiedPathPrefix', () => {

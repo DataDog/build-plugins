@@ -6,7 +6,7 @@ import { outputJson, readFile } from '@dd/core/helpers/fs';
 import type { BuildReport, GlobalContext, Logger, Output, PluginOptions } from '@dd/core/types';
 import path from 'path';
 
-import { SYMBOL_TABLE_PATH_ENV } from '../constants';
+import { SYMBOL_TABLE_MAX_PART_BYTES, SYMBOL_TABLE_PATH_ENV } from '../constants';
 import type { LiveDebuggerOptionsWithDefaults } from '../types';
 
 import { createBuildModeTracker } from './build-mode';
@@ -17,6 +17,7 @@ import type { SymbolTablePayload } from './serialize';
 import { serializeSymbolTable } from './serialize';
 import { buildSymbolTable } from './table';
 import type { ChunkFunction, ChunkFunctions, SymbolTable } from './types';
+import { uploadSymbolTable } from './upload';
 
 const LOG_PREFIX = 'Live Debugger symbols';
 const JS_OUTPUT_TYPES = new Set(['js', 'mjs', 'cjs']);
@@ -135,9 +136,46 @@ export const writeSymbolTable = async (
     log.info(`${LOG_PREFIX}: wrote ${payload.scopes.length} file(s) to "${absoluteDumpPath}".`);
 };
 
+type UploadSettings = {
+    apiKey: string;
+    site: string;
+    service: string;
+    version: string;
+};
+
+type UploadSetup = { settings: UploadSettings } | { skipReason: string };
+
+// What the upload needs from the configuration. Git data is only known later in the build.
+export const getUploadSetup = (
+    pluginOptions: LiveDebuggerOptionsWithDefaults,
+    context: GlobalContext,
+): UploadSetup => {
+    const { apiKey, site } = context.auth;
+    const { service, version, enableGit } = pluginOptions;
+
+    if (!apiKey) {
+        return { skipReason: 'no API key is configured' };
+    }
+    if (!service) {
+        return {
+            skipReason: 'no service is configured. Set "metadata.service"',
+        };
+    }
+    if (!version) {
+        return { skipReason: 'no version is configured. Set "metadata.version"' };
+    }
+    if (!enableGit) {
+        return { skipReason: 'git is disabled with "enableGit: false"' };
+    }
+
+    return { settings: { apiKey, site, service, version } };
+};
+
 /**
- * Hooks that generate the symbol table after one-off builds. They're only added when something
- * consumes the table, so other builds don't do any extra work. The table never fails the build.
+ * Hooks that generate the symbol table after one-off builds and upload it to SymDB. Live Debugger
+ * needs the table to create probes, so the upload is on by default. When the table can't be
+ * uploaded, it's only generated for the opt-in debug dump, so other builds don't do any extra work.
+ * The table never fails the build.
  */
 export const getSymbolTableHooks = (
     pluginOptions: LiveDebuggerOptionsWithDefaults,
@@ -145,30 +183,82 @@ export const getSymbolTableHooks = (
     log: Logger,
 ): Partial<PluginOptions> => {
     const dumpPath = process.env[SYMBOL_TABLE_PATH_ENV];
-    if (!dumpPath) {
-        return {};
-    }
-
+    const uploadSetup = getUploadSetup(pluginOptions, context);
     const buildMode = createBuildModeTracker();
+
+    const upload = async (
+        payload: SymbolTablePayload,
+        functionCount: number,
+        settings: UploadSettings,
+    ) => {
+        // The git plugin collects git data while the build runs.
+        await context.gitReady;
+        const repositoryData = context.git;
+        if (!repositoryData) {
+            log.warn(
+                `Not uploading ${LOG_PREFIX}: no git repository data, for instance because the repository has no remote.`,
+            );
+            return;
+        }
+
+        const timer = log.time('upload symbol table');
+        try {
+            await uploadSymbolTable(
+                payload,
+                {
+                    ...settings,
+                    repositoryUrl: repositoryData.remote,
+                    commitSha: repositoryData.hash,
+                    bundlerName: context.bundler.name,
+                    pluginVersion: context.version,
+                },
+                SYMBOL_TABLE_MAX_PART_BYTES,
+                log,
+            );
+            log.info(
+                `${LOG_PREFIX}: uploaded ${functionCount} function(s) from ${payload.scopes.length} file(s).`,
+            );
+        } catch (error) {
+            log.warn(`Could not upload ${LOG_PREFIX}: ${error}`);
+        } finally {
+            timer.end();
+        }
+    };
 
     const handleSymbolTable = async (report: BuildReport) => {
         // Wait for the injection plugin to finish rewriting esbuild's output.
         await context.artifactsReady;
+
         const timer = log.time('generate symbol table');
+        let table: SymbolTable | undefined;
+        let payload: SymbolTablePayload | undefined;
         try {
-            const table = await generateSymbolTable({
+            table = await generateSymbolTable({
                 outputs: report.outputs ?? [],
                 buildRoot: context.buildRoot,
                 log,
             });
-            if (table) {
-                const payload = serializeSymbolTable(table, pluginOptions.version);
-                await writeSymbolTable(payload, dumpPath, context.bundler.outDir, log);
-            }
+            payload = table && serializeSymbolTable(table, pluginOptions.version);
         } catch (error) {
             log.warn(`Could not collect ${LOG_PREFIX}: ${error}`);
         } finally {
             timer.end();
+        }
+
+        if (!table || !payload) {
+            return;
+        }
+
+        if (dumpPath) {
+            try {
+                await writeSymbolTable(payload, dumpPath, context.bundler.outDir, log);
+            } catch (error) {
+                log.warn(`Could not write ${LOG_PREFIX}: ${error}`);
+            }
+        }
+
+        if ('settings' in uploadSetup) {
+            await upload(payload, table.entries.length, uploadSetup.settings);
         }
     };
 
@@ -179,8 +269,16 @@ export const getSymbolTableHooks = (
                 return;
             }
 
+            if ('skipReason' in uploadSetup) {
+                log.warn(`Not uploading ${LOG_PREFIX}: ${uploadSetup.skipReason}.`);
+                if (!dumpPath) {
+                    return;
+                }
+            }
+
+            // Let the bundler finish while the output or the git data is still in progress.
             const handling = handleSymbolTable(report);
-            if (context.artifactsPending) {
+            if (context.artifactsPending || context.gitPending) {
                 context.queue(handling);
                 return;
             }

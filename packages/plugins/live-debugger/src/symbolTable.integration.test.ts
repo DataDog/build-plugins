@@ -10,8 +10,10 @@ import { getOutDir, getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import { defaultPluginOptions } from '@dd/tests/_jest/helpers/mocks';
 import { BUNDLERS, getBundlerConfig } from '@dd/tests/_jest/helpers/runBundlers';
 import { buildWithRspack, buildWithWebpack, configRspack, configWebpack } from '@dd/tools/bundlers';
+import { execFileSync } from 'child_process';
 import fsp from 'fs/promises';
 import { glob } from 'glob';
+import nock from 'nock';
 import path from 'path';
 
 import { SYMBOL_TABLE_PATH_ENV } from './constants';
@@ -121,6 +123,33 @@ const createFixture = async (workingDir: string) => {
     // The symbol table only needs the repository root, which the `.git` entry marks.
     const gitDir = path.resolve(workingDir, '.git');
     await mkdir(gitDir);
+};
+
+// Turn the fixture into a git repository with a remote, for the upload.
+const REPOSITORY_URL = 'https://github.com/DataDog/symbol-table-fixture';
+const initGitRepository = (workingDir: string) => {
+    const commands = [
+        ['init', '-q'],
+        ['remote', 'add', 'origin', REPOSITORY_URL],
+        ['add', '-A'],
+        [
+            '-c',
+            'user.name=fixture',
+            '-c',
+            'user.email=fixture@example.com',
+            'commit',
+            '-q',
+            '-m',
+            'init',
+        ],
+    ];
+    for (const args of commands) {
+        execFileSync('git', args, { cwd: workingDir });
+    }
+    const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: workingDir });
+    // Git configuration can rewrite remote URLs (`insteadOf`), so read it back like the git plugin.
+    const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: workingDir });
+    return { commitSha: commitSha.toString().trim(), remoteUrl: remoteUrl.toString().trim() };
 };
 
 // Build with the symbol table dump enabled, and return the dump.
@@ -402,6 +431,77 @@ describe('Live Debugger symbol table', () => {
             expect(triple?.startLine).toBe(9);
             expect(triple?.endLine).toBeGreaterThanOrEqual(9);
             expect(triple?.endLine).toBeLessThanOrEqual(10);
+        });
+    });
+    describe('upload', () => {
+        type UploadRequest = { path: string; apiKey: string | string[] | undefined };
+        const uploads: Partial<Record<BundlerName, UploadRequest[]>> = {};
+        const buildErrors: string[] = [];
+        let uploadDir: string;
+        let repository: { commitSha: string; remoteUrl: string };
+
+        beforeAll(async () => {
+            const seed = `${Math.abs(jest.getSeed())}.symbol-table-upload`;
+            uploadDir = getTempWorkingDir(seed);
+            await createFixture(uploadDir);
+            repository = initGitRepository(uploadDir);
+            const buildRoot = path.resolve(uploadDir, APP_DIR);
+
+            let requests: UploadRequest[] = [];
+            nock('https://debugger-intake.datadoghq.com')
+                .persist()
+                .post('/api/v2/debugger')
+                .query(true)
+                .reply(function recordUpload() {
+                    requests.push({ path: this.req.path, apiKey: this.req.headers['dd-api-key'] });
+                    return [202, '{}'];
+                });
+
+            // Run the builds sequentially to ease the resources usage.
+            for (const { name: bundlerName, run } of BUNDLERS) {
+                const isXpack = XPACK_BUNDLERS.includes(bundlerName);
+                const entry = { main: isXpack ? './src/main-xpack.js' : './src/main.js' };
+                const plugins = isXpack ? [sourceMapLoaderPlugin] : [];
+                const config = getBundlerConfig(
+                    bundlerName,
+                    buildRoot,
+                    {
+                        ...PLUGIN_OVERRIDES,
+                        enableGit: true,
+                        metadata: { version: '1.0.0', service: 'fixture-service' },
+                    },
+                    { entry, plugins },
+                );
+                // eslint-disable-next-line no-await-in-loop
+                const { errors } = await run(buildRoot, config);
+                buildErrors.push(...errors);
+                uploads[bundlerName] = requests;
+                requests = [];
+            }
+        }, 200000);
+
+        afterAll(async () => {
+            nock.cleanAll();
+            if (!process.env.NO_CLEANUP) {
+                await rm(uploadDir);
+            }
+        });
+
+        test('Should build without errors.', () => {
+            expect(buildErrors).toEqual([]);
+        });
+
+        test.each(BUNDLERS)('Should upload the table once with $name.', ({ name: bundlerName }) => {
+            const requests = uploads[bundlerName] ?? [];
+            const [request] = requests;
+
+            expect(requests).toHaveLength(1);
+            expect(request.apiKey).toBe(defaultPluginOptions.auth.apiKey);
+
+            const url = new URL(request.path, 'https://debugger-intake.datadoghq.com');
+            expect(url.searchParams.get('ddtags')).toBe(
+                `git.repository_url:${repository.remoteUrl},git.commit.sha:${repository.commitSha}`,
+            );
         });
     });
 });
