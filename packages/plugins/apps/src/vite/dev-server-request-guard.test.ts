@@ -7,6 +7,7 @@ import {
     checkDevServerRequest,
     createViteHostCheck,
     MISSING_HOST_MESSAGE,
+    ORIGIN_MISMATCH_MESSAGE,
 } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import type { IncomingHttpHeaders } from 'http';
 
@@ -390,5 +391,171 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         );
 
         expect(rejection?.statusCode).toBe(403);
+    });
+});
+
+describe('dev-server-request-guard — checkDevServerRequest behind a Host-rewriting proxy', () => {
+    const noAllowedHosts = withServer({ allowedHosts: [] });
+    const isHostAllowed = createViteHostCheck(noAllowedHosts);
+    const publicOrigin = `https://${PREVIEW_HOST}`;
+    const proxied = (overrides: IncomingHttpHeaders = {}): IncomingHttpHeaders => ({
+        host: 'localhost:5173',
+        'x-forwarded-host': PREVIEW_HOST,
+        origin: publicOrigin,
+        'content-type': 'application/json',
+        'sec-fetch-site': 'same-origin',
+        ...overrides,
+    });
+    const localForwardedHosts: { forwardedHost: string; origin: string; label?: string }[] = [
+        { forwardedHost: 'localhost:3000', origin: 'http://localhost:3000' },
+        { forwardedHost: 'other.localhost:3000', origin: 'http://other.localhost:3000' },
+        { forwardedHost: '127.1:3000', origin: 'http://127.0.0.1:3000' },
+        { forwardedHost: '2130706433:3000', origin: 'http://127.0.0.1:3000' },
+        { forwardedHost: '[0:0::1]:3000', origin: 'http://[::1]:3000' },
+        { forwardedHost: '[::ffff:127.0.0.1]:3000', origin: 'http://[::ffff:7f00:1]:3000' },
+        {
+            forwardedHost: 'local\u00adhost:3000',
+            origin: 'http://localhost:3000',
+            label: 'localhost with a soft hyphen',
+        },
+        { forwardedHost: 'LOCALHOST.:3000', origin: 'http://localhost.:3000' },
+        { forwardedHost: 'localhost..:3000', origin: 'http://localhost..:3000' },
+        { forwardedHost: '0.0.0.0:3000', origin: 'http://0.0.0.0:3000' },
+        { forwardedHost: '0:3000', origin: 'http://0.0.0.0:3000' },
+        { forwardedHost: '[::]:3000', origin: 'http://[::]:3000' },
+    ];
+
+    const cases: {
+        description: string;
+        headers: IncomingHttpHeaders;
+        expectedStatus: number | undefined;
+    }[] = [
+        {
+            description:
+                'accept a same-origin public Origin when Host is localhost and X-Forwarded-Host names the public host',
+            headers: proxied(),
+            expectedStatus: undefined,
+        },
+        {
+            description: 'accept the public Origin behind an IPv4 loopback Host',
+            headers: proxied({ host: '127.0.0.1:5173' }),
+            expectedStatus: undefined,
+        },
+        {
+            description: 'accept the public Origin behind an IPv6 loopback Host',
+            headers: proxied({ host: '[::1]:5173' }),
+            expectedStatus: undefined,
+        },
+        {
+            description: 'accept the public Origin behind a non-canonical IPv6 loopback Host',
+            headers: proxied({ host: '[0:0::1]:5173' }),
+            expectedStatus: undefined,
+        },
+        ...['cross-site', 'same-site', 'none', 'SAME-ORIGIN', 'same-origin, same-origin'].map(
+            (secFetchSite) => ({
+                description: `reject the public Origin when Sec-Fetch-Site is ${JSON.stringify(secFetchSite)}`,
+                headers: proxied({ 'sec-fetch-site': secFetchSite }),
+                expectedStatus: 403,
+            }),
+        ),
+        {
+            description: 'reject the public Origin when no Sec-Fetch-Site is sent',
+            headers: proxied({ 'sec-fetch-site': undefined }),
+            expectedStatus: 403,
+        },
+        {
+            description:
+                'reject a cross-site Origin that X-Forwarded-Host repeats, as an older Vite default CORS policy lets through',
+            headers: proxied({
+                'x-forwarded-host': 'evil.example',
+                origin: 'https://evil.example',
+                'sec-fetch-site': 'cross-site',
+            }),
+            expectedStatus: 403,
+        },
+        {
+            description:
+                'reject the public Origin when the last X-Forwarded-Host of a list is empty',
+            headers: proxied({ 'x-forwarded-host': `${PREVIEW_HOST}, ` }),
+            expectedStatus: 403,
+        },
+        {
+            description: 'compare the Origin with the last X-Forwarded-Host of a list',
+            headers: proxied({ 'x-forwarded-host': `client-claimed.example, ${PREVIEW_HOST}` }),
+            expectedStatus: undefined,
+        },
+        {
+            description: 'reject an Origin that matches only an earlier X-Forwarded-Host of a list',
+            headers: proxied({ 'x-forwarded-host': `${PREVIEW_HOST}, proxy.internal.example` }),
+            expectedStatus: 403,
+        },
+        {
+            description: 'reject a sibling preview Origin',
+            headers: proxied({ origin: `https://app-5174${PREVIEW_SUFFIX}` }),
+            expectedStatus: 403,
+        },
+        {
+            description: 'reject the public Origin when no X-Forwarded-Host is sent',
+            headers: proxied({ 'x-forwarded-host': undefined }),
+            expectedStatus: 403,
+        },
+        {
+            description:
+                'reject the public Origin when X-Forwarded-Host is an array instead of the comma-joined string Node produces',
+            headers: proxied({ 'x-forwarded-host': [PREVIEW_HOST] }),
+            expectedStatus: 403,
+        },
+        {
+            description:
+                'accept an Origin that matches Host when a public X-Forwarded-Host is sent',
+            headers: proxied({ origin: 'http://localhost:5173' }),
+            expectedStatus: undefined,
+        },
+        ...localForwardedHosts.map(({ forwardedHost, origin, label }) => ({
+            description: `ignore the local X-Forwarded-Host ${label ?? JSON.stringify(forwardedHost)}, so another local port stays rejected`,
+            headers: proxied({ 'x-forwarded-host': forwardedHost, origin }),
+            expectedStatus: 403,
+        })),
+        {
+            description:
+                'reject an X-Forwarded-Host whose userinfo would make it parse as the Origin host',
+            headers: proxied({ 'x-forwarded-host': `attacker.example@${PREVIEW_HOST}` }),
+            expectedStatus: 403,
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ headers, expectedStatus }) => {
+        const rejection = checkDevServerRequest(headers, isHostAllowed);
+
+        expect(rejection?.statusCode).toBe(expectedStatus);
+        expect(rejection?.message).toBe(
+            expectedStatus === 403 ? ORIGIN_MISMATCH_MESSAGE : undefined,
+        );
+    });
+
+    test.each([
+        'evil.example@localhost:5173',
+        'localhost:5173/path',
+        '[::1:5173',
+        'local host:5173',
+    ])('Should ignore X-Forwarded-Host when the Host %j is not a plain local name', (host) => {
+        const allowAnyHost = () => true;
+        const headers = proxied({ host });
+        const rejection = checkDevServerRequest(headers, allowAnyHost);
+
+        expect(rejection?.message).toBe(ORIGIN_MISMATCH_MESSAGE);
+    });
+
+    test('Should ignore X-Forwarded-Host when the Host is not a local name', () => {
+        const previewAllowed = withServer({ allowedHosts: [PREVIEW_SUFFIX] });
+        const allowPreview = createViteHostCheck(previewAllowed);
+        const headers = proxied({
+            host: PREVIEW_HOST,
+            'x-forwarded-host': 'attacker.example',
+            origin: 'https://attacker.example',
+        });
+        const rejection = checkDevServerRequest(headers, allowPreview);
+
+        expect(rejection?.message).toBe(ORIGIN_MISMATCH_MESSAGE);
     });
 });

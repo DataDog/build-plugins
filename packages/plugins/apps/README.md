@@ -53,8 +53,16 @@ you to start it with `datadog-apps dev`.
 The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/executeActionViaCloud` and `/__dd/debugBundle`) accept a `POST` only when:
 
 -   its `Host` passes Vite's [`server.allowedHosts`](https://vite.dev/config/server-options#server-allowedhosts) check, which Vite skips when `server.https` is set or `server.allowedHosts` is `true`;
--   its `Origin`, when sent, names the same host and port as its `Host`;
+-   its `Origin`, when sent, names the same host and port as its `Host` or, behind a proxy that rewrites `Host` (see below), as the last `X-Forwarded-Host` value;
 -   its body is sent with `Content-Type: application/json`.
+
+The `Origin` is also compared with the last `X-Forwarded-Host` value only when all of these hold:
+
+-   `Host` is a local name: `localhost`, a `.localhost` name, an address in `127.0.0.0/8`, `0.0.0.0`, `[::1]` or `[::]` (IPv4-mapped IPv6 forms included);
+-   the request carries `Sec-Fetch-Site: same-origin`;
+-   that `X-Forwarded-Host` value is not a local name.
+
+Browsers send [`Sec-Fetch-Site`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Site) only to HTTPS URLs and to loopback or `.localhost` hosts, and page scripts can't change it. A cross-site page therefore can't pass the `Origin` check by sending its own host in `X-Forwarded-Host`. Behind a plain-HTTP proxy on any other host, a proxy that drops that header, or in a browser that doesn't send it, the `Origin` is compared with `Host` only.
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
