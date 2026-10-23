@@ -14,11 +14,17 @@ import type {
     Super,
     TemplateLiteral,
     VariableDeclaration,
-    VariableDeclarator,
 } from 'estree';
 
-import type { ParsedModuleRecord } from './module-graph';
-import { isImportVariable, resolveIdentifier } from './module-scope';
+import {
+    BINDING_PATTERN_EXPORT_REASON,
+    getAliasSourceRoots,
+    getMutatedCallTargets,
+    getObjectRoots,
+    type ObjectRoot,
+    type ParsedModuleRecord,
+} from './module-graph';
+import { getModuleVariable, isImportVariable, resolveIdentifier } from './module-scope';
 import {
     resolveStaticDefinitionForIdentifier,
     type UnsupportedStaticDefinition,
@@ -171,6 +177,19 @@ interface ImportedObjectMutationState {
     modules: ReadonlyMap<string, ParsedModuleRecord>;
     mutatedVariables: Set<eslintScope.Variable>;
     record: ParsedModuleRecord;
+    // The write kinds each variable was already followed to its alias sources for.
+    expandedAliases: Map<eslintScope.Variable, Set<string>>;
+}
+
+interface PendingImportedAlias extends ObjectRoot {
+    record: ParsedModuleRecord;
+    isPastImport: boolean;
+}
+
+interface ResolvedImportedAlias {
+    record: ParsedModuleRecord;
+    variable: eslintScope.Variable;
+    isPastImport: boolean;
 }
 
 interface ResolvedStaticExpression {
@@ -201,11 +220,14 @@ export function resolveStaticStringValue(
     modules: ReadonlyMap<string, ParsedModuleRecord>,
     moduleId: string,
     expression: Expression,
+    mutatedImportedObjectVariables: ReadonlySet<eslintScope.Variable> = collectMutatedImportedObjectVariables(
+        modules,
+    ),
 ): StaticStringValueResolution {
     return resolveExpression(
         {
             modules,
-            mutatedImportedObjectVariables: collectMutatedImportedObjectVariables(modules),
+            mutatedImportedObjectVariables,
             seenVariables: new Set(),
         },
         moduleId,
@@ -456,15 +478,16 @@ function hasExpressionValue(property: Property): property is Property & { value:
     );
 }
 
-function collectMutatedImportedObjectVariables(
+export function collectMutatedImportedObjectVariables(
     modules: ReadonlyMap<string, ParsedModuleRecord>,
 ): Set<eslintScope.Variable> {
     const mutatedVariables = new Set<eslintScope.Variable>();
+    const expandedAliases = new Map<eslintScope.Variable, Set<string>>();
 
     for (const record of modules.values()) {
         walkAst(
             record.ast,
-            { modules, mutatedVariables, record },
+            { modules, mutatedVariables, record, expandedAliases },
             {
                 AssignmentExpression(node, { state }) {
                     markMutatedImportedPattern(node.left, state);
@@ -475,6 +498,11 @@ function collectMutatedImportedObjectVariables(
                 UnaryExpression(node, { state }) {
                     if (node.operator === 'delete') {
                         markMutatedImportedPattern(node.argument, state);
+                    }
+                },
+                CallExpression(node, { state }) {
+                    for (const target of getMutatedCallTargets(node, state.record.scopeAnalysis)) {
+                        markMutatedImportedObject(target, state);
                     }
                 },
                 ForInStatement(node, { state }) {
@@ -504,15 +532,16 @@ function markMutatedImportedPattern(
     state: ImportedObjectMutationState,
 ): void {
     if (pattern.type === 'Identifier') {
-        markMutatedImportedIdentifier(pattern, state);
+        // Rebinding a local name leaves the object it held unchanged; only an import's own binding counts.
+        const variable = resolveIdentifier(pattern, state.record.scopeAnalysis);
+        if (variable && isImportVariable(variable)) {
+            markMutatedImportedObject(pattern, state);
+        }
         return;
     }
 
     if (pattern.type === 'MemberExpression') {
-        const root = getMemberExpressionRoot(pattern);
-        if (root) {
-            markMutatedImportedIdentifier(root, state);
-        }
+        markMutatedImportedObject(pattern.object, state);
         return;
     }
 
@@ -545,77 +574,82 @@ function markMutatedImportedPattern(
     }
 }
 
-function markMutatedImportedIdentifier(
-    identifier: Identifier,
+// Marks the imported objects `writtenObject` may alias. Past an import, the definition module's
+// own aliases of the object (e.g. `export const ALIAS = CONN`) are marked too.
+function markMutatedImportedObject(
+    writtenObject: unknown,
     state: ImportedObjectMutationState,
 ): void {
-    const variable = resolveImportedObjectAlias(state, identifier, new Set());
-    if (variable) {
-        state.mutatedVariables.add(variable);
-    }
-}
-
-function resolveImportedObjectAlias(
-    state: ImportedObjectMutationState,
-    identifier: Identifier,
-    seenVariables: Set<eslintScope.Variable>,
-): eslintScope.Variable | undefined {
-    const variable = resolveIdentifier(identifier, state.record.scopeAnalysis);
-    if (!variable || seenVariables.has(variable)) {
-        return undefined;
-    }
-    seenVariables.add(variable);
-
-    if (isImportVariable(variable)) {
-        const definition = resolveStaticDefinitionForIdentifier(
-            state.modules,
-            state.record.id,
-            identifier,
-        );
-        return definition.kind === 'local' ? definition.variable : undefined;
-    }
-
-    const initializer = getVariableInitializer(variable);
-    if (!initializer) {
-        return undefined;
-    }
-
-    const root = getImportedObjectAliasRoot(initializer);
-    if (!root) {
-        return undefined;
-    }
-
-    return resolveImportedObjectAlias(state, root, seenVariables);
-}
-
-function getVariableInitializer(variable: eslintScope.Variable): Expression | undefined {
-    for (const definition of variable.defs) {
-        const node = definition.node as VariableDeclarator;
-        if (node.type === 'VariableDeclarator' && node.init) {
-            return node.init;
+    const pending: PendingImportedAlias[] = getObjectRoots(writtenObject).map((root) => ({
+        ...root,
+        record: state.record,
+        isPastImport: false,
+    }));
+    for (let alias = pending.pop(); alias; alias = pending.pop()) {
+        const resolved = resolveImportedAlias(state, alias);
+        if (!resolved) {
+            continue;
+        }
+        if (resolved.isPastImport) {
+            state.mutatedVariables.add(resolved.variable);
+        }
+        const expanded = state.expandedAliases.get(resolved.variable) ?? new Set<string>();
+        const writeKind = `${alias.isMember}:${resolved.isPastImport}`;
+        if (expanded.has(writeKind)) {
+            continue;
+        }
+        expanded.add(writeKind);
+        state.expandedAliases.set(resolved.variable, expanded);
+        for (const root of getAliasSourceRoots(
+            resolved.variable,
+            resolved.record.ast,
+            alias.isMember,
+        )) {
+            pending.push({ ...root, record: resolved.record, isPastImport: resolved.isPastImport });
         }
     }
-
-    return undefined;
 }
 
-function getImportedObjectAliasRoot(rawExpression: Expression): Identifier | undefined {
-    const expression = unwrapStaticExpression(rawExpression);
-    if (expression.type === 'Identifier') {
-        return expression;
+function resolveImportedAlias(
+    state: ImportedObjectMutationState,
+    { record, identifier, isPastImport }: PendingImportedAlias,
+): ResolvedImportedAlias | undefined {
+    const variable = resolveIdentifier(identifier, record.scopeAnalysis);
+    if (!variable) {
+        return undefined;
     }
-    if (expression.type === 'MemberExpression') {
-        return getMemberExpressionRoot(expression);
+    if (!isImportVariable(variable)) {
+        return { record, variable, isPastImport };
     }
-    return undefined;
+
+    const definition = resolveStaticDefinitionForIdentifier(state.modules, record.id, identifier);
+    const definitionRecord = state.modules.get(definition.moduleId);
+    const definitionVariable =
+        definition.kind === 'local'
+            ? definition.variable
+            : getAliasVariable(definition, definitionRecord);
+    return definitionRecord && definitionVariable
+        ? { record: definitionRecord, variable: definitionVariable, isPastImport: true }
+        : undefined;
 }
 
-function getMemberExpressionRoot(node: Expression | Super): Identifier | undefined {
-    if (node.type === 'Identifier') {
-        return node;
+// An exported top-level `let`, `var` or destructured declaration is not a static definition, but
+// a write through it still reaches the object it was assigned from.
+function getAliasVariable(
+    definition: UnsupportedStaticDefinition,
+    record: ParsedModuleRecord | undefined,
+): eslintScope.Variable | undefined {
+    if (!record) {
+        return undefined;
     }
-    if (node.type === 'MemberExpression') {
-        return getMemberExpressionRoot(node.object);
+    if (definition.reason === 'mutable-binding' || definition.reason === 'unsupported-binding') {
+        return getModuleVariable(definition.variableName, record.scopeAnalysis);
+    }
+    if (
+        definition.reason === 'unsupported-export' &&
+        definition.exportReason === BINDING_PATTERN_EXPORT_REASON
+    ) {
+        return getModuleVariable(definition.exportName, record.scopeAnalysis);
     }
     return undefined;
 }

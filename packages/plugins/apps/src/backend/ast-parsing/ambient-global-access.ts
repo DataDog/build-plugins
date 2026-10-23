@@ -109,7 +109,7 @@ function resolvesToAmbientGlobal(
     return false;
 }
 
-function staticMemberName(
+export function staticMemberName(
     node: MemberExpression,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
