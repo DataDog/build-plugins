@@ -2,11 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
+import type {
+    HostCheckConfig,
+    RequestRejection,
+} from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
+    ALLOWED_HOSTS_HINT,
     checkDevServerRequest,
     createViteHostCheck,
     MISSING_HOST_MESSAGE,
+    VITE_UPGRADE_HINT,
 } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import type { IncomingHttpHeaders } from 'http';
 
@@ -371,6 +376,56 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         );
 
         expect(rejection?.message).toContain('"[fe80::zz]"');
+    });
+
+    const reasonCases: {
+        description: string;
+        headers: IncomingHttpHeaders;
+        expectedReason: RequestRejection['reason'];
+    }[] = [
+        {
+            description: 'a missing Host',
+            headers: { 'content-type': json },
+            expectedReason: 'missing-host',
+        },
+        {
+            description: 'a host Vite would not serve',
+            headers: { host: 'tunnel.example:5173', 'content-type': json },
+            expectedReason: 'host',
+        },
+        {
+            description: 'a cross-site Origin',
+            headers: {
+                host: 'localhost:5173',
+                origin: 'https://attacker.example',
+                'content-type': json,
+            },
+            expectedReason: 'origin',
+        },
+        {
+            description: 'a non-JSON body',
+            headers: { host: 'localhost:5173', 'content-type': 'text/plain' },
+            expectedReason: 'content-type',
+        },
+    ];
+
+    test.each(reasonCases)(
+        'Should give $description the $expectedReason reason',
+        ({ headers, expectedReason }) => {
+            const rejection = checkDevServerRequest(headers, isHostAllowed);
+
+            expect(rejection?.reason).toBe(expectedReason);
+        },
+    );
+
+    test('Should offer allowedHosts for a trusted host and an upgrade for older Vite', () => {
+        const rejection = checkDevServerRequest(
+            { host: 'tunnel.example:5173', 'content-type': json },
+            isHostAllowed,
+        );
+
+        expect(rejection?.message).toContain(ALLOWED_HOSTS_HINT);
+        expect(rejection?.message).toContain(VITE_UPGRADE_HINT);
     });
 
     test('Should treat an empty Host header as missing, even under a "." allowedHosts entry', () => {
