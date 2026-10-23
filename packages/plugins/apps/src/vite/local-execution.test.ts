@@ -7,6 +7,7 @@
 import { rmSync } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { mockLogFn, mockLogger, moduleResolverFor } from '@dd/tests/_jest/helpers/mocks';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -28,8 +29,7 @@ import {
     deriveActionTimeouts,
     executeScriptLocally as executeScriptLocallyWithRuntimeContext,
 } from './local-execution';
-import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
-import { ALREADY_GUARDED, FOREIGN_GUARD_MESSAGE, FS_WRITE_BLOCKED_MESSAGE } from './network-guard';
+import { makeProbeDirOutsideTmp } from './probe-dir.fixtures';
 
 const funcWithConnection: BackendFunction = { ...func, allowedConnectionIds: ['conn-1'] };
 
@@ -80,7 +80,7 @@ function executeScriptLocally(
     );
 }
 
-// Per-run directory, so leftover probe files from a regressed guard can't collide across runs or workers.
+// Per-run directory, so leftover probe files can't collide across runs or workers.
 let probeDir: string;
 beforeAll(() => {
     probeDir = makeProbeDirOutsideTmp('dd-local-execution-probes-');
@@ -975,57 +975,6 @@ describe('local-execution — executeScriptLocally', () => {
         ).rejects.toThrow(/timed out after 50ms/);
     });
 
-    test("Should keep a hung function's own late continuation blocked after timeout, while a fresh execution afterward still works normally", async () => {
-        const probePath = path.join(probeDir, 'late.txt');
-        let lateWriteAttempt: Promise<unknown> | undefined;
-
-        await expect(
-            executeScriptLocally(
-                func,
-                TEST_PROJECT_ROOT,
-                [],
-                stubExecuteAction,
-                loadModuleReturning({
-                    example: () =>
-                        new Promise(() => {
-                            // Scheduled, not awaited, so `example` never settles and the race
-                            // below times out normally — fires after that 50ms timeout, not before.
-                            setTimeout(() => {
-                                lateWriteAttempt = fs.promises.writeFile(probePath, 'data');
-                                lateWriteAttempt.catch(() => undefined);
-                            }, 100);
-                        }),
-                }),
-                mockLogger,
-                50,
-            ),
-        ).rejects.toThrow(/timed out after 50ms/);
-
-        // Lets the hung function's own delayed continuation fire, well after the timeout above.
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // The abandoned continuation's own async chain stays permanently blocked (by design), so
-        // its late write attempt must still be rejected — an identity check on the guarded
-        // property can't verify this, since the wrapper never changes identity either way.
-        expect(lateWriteAttempt).toBeDefined();
-        await expect(lateWriteAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
-
-        // A fresh execution afterward must still work normally — the abandoned scope above must
-        // not permanently wedge fs/action access for everything that runs after it.
-        const result = await executeScriptLocally(
-            func,
-            TEST_PROJECT_ROOT,
-            [],
-            stubExecuteAction,
-            loadModuleReturning({
-                example: () =>
-                    testDollar().Actions.slack.chat.postMessage({ inputs: { text: 'hi' } }),
-            }),
-            mockLogger,
-        );
-        expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
-    });
-
     test('Should preserve preview context fields while overriding invocation-owned args and Actions', async () => {
         const getRuntimeContext = async () => ({
             ...makePreviewRuntimeContext(),
@@ -1700,64 +1649,6 @@ describe('local-execution — executeScriptLocally', () => {
             expect(executeAction).not.toHaveBeenCalled();
         });
 
-        // Mirrors the raw $.Actions path's malicious-toJSON() test: the action-catalog typed-wrapper
-        // path doesn't share code with makeActionsProxy, so it needs the same coverage separately.
-        test("Should block a malicious toJSON() on an action-catalog typed-wrapper call's request from making a real fs write", async () => {
-            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
-            let registeredImpl:
-                | ((actionId: string, request: unknown) => Promise<unknown>)
-                | undefined;
-            const probePath = path.join(probeDir, 'toJSON-catalog.txt');
-            let writeAttempt: Promise<unknown> | undefined;
-            const maliciousRequest = {
-                inputs: {
-                    text: 'hi',
-                    toJSON() {
-                        writeAttempt = fs.promises.writeFile(probePath, 'exfiltrated');
-                        return { text: 'hi' };
-                    },
-                },
-                connectionId: 'conn-1',
-            };
-
-            const loadModule: LoadModule = async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    return {
-                        example: async () =>
-                            registeredImpl?.(
-                                'com.datadoghq.slack.chat.postMessage',
-                                maliciousRequest,
-                            ),
-                    };
-                }
-                if (specifier === '@datadog/action-catalog/action-execution') {
-                    return {
-                        setExecuteActionImplementation: (
-                            impl: (actionId: string, request: unknown) => Promise<unknown>,
-                        ) => {
-                            registeredImpl = impl;
-                        },
-                    };
-                }
-                const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
-                error.code = 'MODULE_NOT_FOUND';
-                throw error;
-            };
-
-            const result = await executeScriptLocally(
-                funcWithConnection,
-                TEST_PROJECT_ROOT,
-                [],
-                stubExecuteAction,
-                loadModule,
-                mockLogger,
-            );
-
-            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
-            expect(writeAttempt).toBeDefined();
-            await expect(writeAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
-        });
-
         // Mirrors the action-catalog abandonment test — apps-backend's setBackend has the same shared-module-level-setter hazard.
         test("Should reject an abandoned execution's apps-backend accessor call once concluded", async () => {
             jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
@@ -2196,117 +2087,26 @@ describe('local-execution — executeScriptLocally', () => {
         });
     });
 
-    describe('fs write/subprocess guard', () => {
-        test('Should reject when the customer function tries a raw fs write', async () => {
-            const probePath = path.join(probeDir, 'raw-write.txt');
-            await expect(
-                executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModuleReturning({
-                        example: () => {
-                            // eslint-disable-next-line @typescript-eslint/no-require-imports
-                            const rawFs = require('fs');
-                            return rawFs.promises.writeFile(probePath, 'data');
-                        },
-                    }),
-                    mockLogger,
-                ),
-            ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
-        });
-
-        test('Should reject when the customer function tries to spawn a subprocess', async () => {
-            await expect(
-                executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModuleReturning({
-                        example: () => {
-                            // eslint-disable-next-line @typescript-eslint/no-require-imports
-                            const child_process = require('child_process');
-                            return child_process.execSync('curl https://example.com');
-                        },
-                    }),
-                    mockLogger,
-                ),
-            ).rejects.toThrow(/Spawning a subprocess is not allowed/);
-        });
-
-        test('Should still let a real $.Actions call through while the rest of the function is blocked', async () => {
-            const probePath = path.join(probeDir, 'after-action.txt');
-            const executeAction = jest.fn().mockResolvedValue({ ok: true });
+    describe('file system and subprocess access', () => {
+        test("Should run the function unrestricted in the dev server's process", async () => {
+            const probePath = path.join(probeDir, 'unrestricted.txt');
             const result = await executeScriptLocally(
                 func,
                 TEST_PROJECT_ROOT,
                 [],
-                executeAction,
+                stubExecuteAction,
                 loadModuleReturning({
                     example: async () => {
-                        const actionResult = await testDollar().Actions.slack.chat.postMessage({
-                            inputs: { text: 'hi' },
-                        });
-                        // A write right after a $.Actions call must still be blocked.
-                        const blockedWrite = fs.promises.writeFile(probePath, 'data');
-                        await expect(blockedWrite).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
-                        return actionResult;
+                        await fs.promises.writeFile(probePath, 'written');
+                        const output = execFileSync('echo', ['hi']);
+                        return String(output).trim();
                     },
                 }),
                 mockLogger,
             );
-            expect(result).toEqual({ data: { ok: true } });
-            expect(executeAction).toHaveBeenCalledWith(
-                'com.datadoghq.slack.chat.postMessage',
-                { text: 'hi' },
-                undefined,
-            );
-        });
 
-        test('Should refuse path writes from an execution abandoned by its timeout', async () => {
-            const workPrefix = path.join(os.tmpdir(), 'dd-local-execution-abandoned-');
-            const workDir = fs.mkdtempSync(workPrefix);
-            const lateFile = path.join(workDir, 'late.txt');
-            let lateWriteError: unknown;
-            let lateWriteDone: (() => void) | undefined;
-            const lateWriteFinished = new Promise<void>((resolve) => {
-                lateWriteDone = resolve;
-            });
-            const loadModule = loadModuleReturning({
-                example: async () => {
-                    setTimeout(() => {
-                        try {
-                            fs.writeFileSync(lateFile, 'data');
-                        } catch (err) {
-                            lateWriteError = err;
-                        }
-                        lateWriteDone?.();
-                    }, 60);
-                    await new Promise<never>(() => {});
-                },
-            });
-            try {
-                const abandoned = executeScriptLocally(
-                    func,
-                    TEST_PROJECT_ROOT,
-                    [],
-                    stubExecuteAction,
-                    loadModule,
-                    mockLogger,
-                    20,
-                );
-
-                await expect(abandoned).rejects.toThrow(/timed out after 20ms/);
-                await lateWriteFinished;
-                const written = fs.existsSync(lateFile);
-
-                expect(lateWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
-                expect(written).toBe(false);
-            } finally {
-                rmSync(workDir);
-            }
+            expect(result).toEqual({ data: 'hi' });
+            expect(fs.readFileSync(probePath, 'utf8')).toBe('written');
         });
 
         test('Should let the function write and read a file under os.tmpdir()', async () => {
@@ -2334,116 +2134,6 @@ describe('local-execution — executeScriptLocally', () => {
             } finally {
                 rmSync(tmpFile);
             }
-        });
-
-        // The dispatch reaches code the customer can replace, like globalThis.fetch.
-        test("Should keep the $.Actions dispatch inside the function's blocked scope", async () => {
-            const dispatchWritePath = path.join(probeDir, 'dispatch-write.txt');
-            let dispatchWriteError: unknown;
-            const executeAction: ExecuteAction = async () => {
-                try {
-                    fs.writeFileSync(dispatchWritePath, 'cached');
-                } catch (err) {
-                    dispatchWriteError = err;
-                }
-                return { ok: true };
-            };
-            const loadModule = loadModuleReturning({
-                example: () =>
-                    testDollar().Actions.slack.chat.postMessage({ inputs: { text: 'hi' } }),
-            });
-            const result = await executeScriptLocally(
-                func,
-                TEST_PROJECT_ROOT,
-                [],
-                executeAction,
-                loadModule,
-                mockLogger,
-            );
-            const dispatchWritten = fs.existsSync(dispatchWritePath);
-
-            expect(result).toEqual({ data: { ok: true } });
-            expect(dispatchWriteError).toMatchObject({ message: FS_WRITE_BLOCKED_MESSAGE });
-            expect(dispatchWritten).toBe(false);
-        });
-
-        test('Should block a malicious toJSON() on $.Actions inputs from making a real fs write', async () => {
-            // toJSON() must be synchronous, so its write attempt can't be awaited there — capture the outcome and assert once the whole execution settles.
-            const probePath = path.join(probeDir, 'toJSON.txt');
-            let writeAttempt: Promise<unknown> | undefined;
-            const maliciousInputs = {
-                text: 'hi',
-                toJSON() {
-                    writeAttempt = fs.promises.writeFile(probePath, 'exfiltrated');
-                    return { text: 'hi' };
-                },
-            };
-
-            const result = await executeScriptLocally(
-                func,
-                TEST_PROJECT_ROOT,
-                [],
-                stubExecuteAction,
-                loadModuleReturning({
-                    example: () =>
-                        testDollar().Actions.slack.chat.postMessage({
-                            inputs: maliciousInputs,
-                        }),
-                }),
-                mockLogger,
-            );
-
-            expect(result).toEqual({ data: { data: null, stub: true, fqn: expect.any(String) } });
-            expect(writeAttempt).toBeDefined();
-            await expect(writeAttempt).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
-        });
-
-        test('Should restore fs write access after execution, for whatever the dev server itself does next', async () => {
-            await executeScriptLocally(
-                func,
-                TEST_PROJECT_ROOT,
-                [],
-                stubExecuteAction,
-                loadModuleReturning({ example: () => 'fine' }),
-                mockLogger,
-            );
-            const afterPath = path.join(probeDir, 'after.txt');
-            fs.writeFileSync(afterPath, 'written');
-            const content = fs.readFileSync(afterPath, 'utf8');
-            expect(content).toBe('written');
-        });
-
-        // Adapter resolution goes through Vite's own module loader, which can write caches.
-        test("Should not block fs writes while loading the action-catalog adapter, since that's Vite's own module resolution, not customer code", async () => {
-            jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
-            const cachePath = path.join(probeDir, 'vite-dep-cache.json');
-            const loadModule: LoadModule = async (specifier: string) => {
-                if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-                    return { example: () => 'fine' };
-                }
-                if (specifier === '@datadog/action-catalog/action-execution') {
-                    await fs.promises.writeFile(cachePath, '{}');
-                    return { setExecuteActionImplementation: () => {} };
-                }
-                const notFoundError: NodeJS.ErrnoException = new Error(
-                    `Cannot find module '${specifier}'`,
-                );
-                notFoundError.code = 'MODULE_NOT_FOUND';
-                throw notFoundError;
-            };
-
-            const result = await executeScriptLocally(
-                func,
-                TEST_PROJECT_ROOT,
-                [],
-                stubExecuteAction,
-                loadModule,
-                mockLogger,
-            );
-            const cacheWritten = fs.existsSync(cachePath);
-
-            expect(result).toEqual({ data: 'fine' });
-            expect(cacheWritten).toBe(true);
         });
 
         test('Should not load the adapter packages for an execution already abandoned while its own module was still loading', async () => {
@@ -2480,74 +2170,6 @@ describe('local-execution — executeScriptLocally', () => {
 
             expect(gaveUp).toBe(true);
             expect(requestedSpecifiers).toEqual([func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX]);
-        });
-    });
-
-    describe('loadCustomerModuleEntry', () => {
-        // The guards must be installed before customer top-level code runs, or it could keep raw
-        // fs/child_process references. Isolated modules keep an earlier test's install from satisfying it.
-        test("Should install the guards before evaluating the customer module's top-level code", async () => {
-            const calls: string[] = [];
-
-            await jest
-                .isolateModulesAsync(async () => {
-                    jest.doMock('./network-guard', () => ({
-                        assertNoForeignGuard: () => undefined,
-                        installGuards: () => {
-                            calls.push('guards-installed');
-                        },
-                        runBlocked: async (fn: () => Promise<unknown>) => fn(),
-                    }));
-
-                    const {
-                        loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
-                    } = require('./local-execution');
-
-                    const loadModule: LoadModule = async () => {
-                        calls.push('customer-module-loaded');
-                        return { example: () => 'done' };
-                    };
-
-                    const mod = await isolatedLoadCustomerModuleEntry(
-                        loadModule,
-                        func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
-                    );
-                    expect(mod).toEqual({ example: expect.any(Function) });
-                })
-                .finally(() => {
-                    jest.dontMock('./network-guard');
-                });
-
-            expect(calls).toEqual(['guards-installed', 'customer-module-loaded']);
-        });
-
-        test("Should refuse before evaluating the customer module when another release's guard is installed", async () => {
-            const loadModule = jest.fn<ReturnType<LoadModule>, Parameters<LoadModule>>();
-
-            await jest.isolateModulesAsync(async () => {
-                const isolatedGuard: typeof import('./network-guard') = require('./network-guard');
-                const foreignGetter = () => () => 'real';
-                Object.defineProperty(foreignGetter, ALREADY_GUARDED, { value: true });
-                const target = {};
-                Object.defineProperty(target, 'value', { get: foreignGetter, configurable: true });
-                isolatedGuard.installGuardedProperty(
-                    target,
-                    'value',
-                    (getReal: () => unknown) => getReal,
-                );
-                const {
-                    loadCustomerModuleEntry: isolatedLoadCustomerModuleEntry,
-                } = require('./local-execution');
-
-                const loading = isolatedLoadCustomerModuleEntry(
-                    loadModule,
-                    func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
-                );
-
-                await expect(loading).rejects.toThrow(FOREIGN_GUARD_MESSAGE);
-            });
-
-            expect(loadModule).not.toHaveBeenCalled();
         });
     });
 

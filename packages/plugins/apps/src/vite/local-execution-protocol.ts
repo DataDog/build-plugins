@@ -15,7 +15,6 @@ export interface ChildStartConfig {
     runtimeContext: Record<string, unknown>;
     actionCatalogInstalled: boolean;
     appsBackendInstalled: boolean;
-    installGuards: boolean;
     flushTimeoutMs: number;
 }
 

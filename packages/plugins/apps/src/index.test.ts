@@ -28,8 +28,6 @@ import type { AppsOptionsWithDefaults } from './types';
 import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
 import { buildAppPackage, MANIFEST_DIR_PREFIX } from './vite/build-package';
 
-// Another test file in this Jest worker can install the guards, which makes fs.promises.mkdtemp
-// non-configurable for jest.spyOn, so the mock comes from the module registry instead.
 jest.mock('fs/promises', () => {
     const actual = jest.requireActual<typeof import('fs/promises')>('fs/promises');
     return { ...actual, mkdtemp: jest.fn(actual.mkdtemp) };

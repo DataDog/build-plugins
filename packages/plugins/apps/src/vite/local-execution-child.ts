@@ -9,6 +9,7 @@
 
 import type { Writable } from 'node:stream';
 
+import { withPermissionHint } from './local-execution-limits';
 import type { ChildMessage, ChildStartConfig, ParentMessage } from './local-execution-protocol';
 import { isParentMessage } from './local-execution-protocol';
 import type { ActionCallArgs } from './local-execution-shared';
@@ -23,7 +24,6 @@ import {
     serializeActionInputs,
     validateActionCallShape,
 } from './local-execution-shared';
-import { installGuards, runBlocked } from './network-guard';
 
 type ModuleRunnerInstance = { import(url: string): Promise<Record<string, unknown>> };
 type ModuleRunnerOptions = {
@@ -190,30 +190,28 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     Reflect.set(globalThis, '$', $);
     await registerSdkAdapters(runner, config, $);
     await sendMessage({ type: 'loaded' });
-    const returned = await callBackendFunction(() => fn(...config.args));
+    const returned = await callBackendFunction(async () => {
+        try {
+            return await fn(...config.args);
+        } catch (error) {
+            throw withPermissionHint(error);
+        }
+    });
     const subject = returnValueSubject(config.functionName);
     return assertJsonRoundTrippable(returned, subject);
-}
-
-// Without the permission model, the guards cover the module's top-level code as well as the call.
-function execute(config: ChildStartConfig): Promise<unknown> {
-    if (!config.installGuards) {
-        return load(config);
-    }
-    installGuards();
-    return runBlocked(() => load(config));
 }
 
 async function run(config: ChildStartConfig): Promise<void> {
     let outcome: ChildMessage;
     try {
-        const data = await execute(config);
+        const data = await load(config);
         outcome = { type: 'result', data };
     } catch (error) {
+        const failure = withPermissionHint(error);
         outcome = {
             type: 'error',
-            message: error instanceof Error ? error.message : String(error),
-            ...(error instanceof FunctionThrewError && { detail: error.detail }),
+            message: failure instanceof Error ? failure.message : String(failure),
+            ...(failure instanceof FunctionThrewError && { detail: failure.detail }),
         };
     }
     const stdoutFlushed = flush(process.stdout, writeStdout, config.flushTimeoutMs);

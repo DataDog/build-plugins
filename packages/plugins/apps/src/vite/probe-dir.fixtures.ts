@@ -6,7 +6,7 @@ import { mkdirSync } from '@dd/core/helpers/fs';
 import fs from 'fs';
 import path from 'path';
 
-// A run may write anywhere under the OS temp dir, so a probe that must be refused lives outside it,
+// A call may write anywhere under the OS temp dir, so a probe that must be refused lives outside it,
 // in the gitignored node_modules/.cache.
 export function makeProbeDirOutsideTmp(prefix: string): string {
     const jestPackageJson = require.resolve('jest/package.json');

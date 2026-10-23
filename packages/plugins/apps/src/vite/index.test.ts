@@ -11,7 +11,6 @@ import {
 } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
-import { rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
@@ -22,7 +21,6 @@ import {
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
-import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 import path from 'path';
@@ -51,9 +49,8 @@ import {
 
 import * as buildPackage from './build-package';
 import * as devServer from './dev-server';
+import { UNRESTRICTED_LOCAL_EXECUTION_WARNING } from './local-execution-limits';
 import * as localExecutionProcess from './local-execution-process';
-import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
-import * as networkGuard from './network-guard';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
 
@@ -1222,12 +1219,9 @@ describe('Backend Functions - getVitePlugin', () => {
         { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, runsLocally: false },
         { scenario: 'local execution', mode: 'development', withAuth: true, runsLocally: true },
     ])(
-        'Should install the sandbox guards and check local Node only when local execution can run ($scenario)',
+        'Should warn about unrestricted calls and check local Node only when local execution can run ($scenario)',
         ({ mode, withAuth, runsLocally }) => {
             const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
             const configureServer = getConfigureServer(plugin);
             const realVersion = Object.getOwnPropertyDescriptor(process.versions, 'node');
             const restoreEnv = clearDatadogEnv();
@@ -1247,15 +1241,14 @@ describe('Backend Functions - getVitePlugin', () => {
                     config: fakeServerConfig(mode),
                 });
 
-                const warning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
-                const warnings = mockLogFn.mock.calls.filter(([message]) => message === warning);
-                const installs = runsLocally ? 1 : 0;
-                const expectedWarnings = runsLocally ? [[warning, 'warn']] : [];
-                expect(installGuards).toHaveBeenCalledTimes(installs);
-                expect(warnings).toEqual(expectedWarnings);
+                const nodeWarning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
+                const expected = [nodeWarning, UNRESTRICTED_LOCAL_EXECUTION_WARNING];
+                const warnings = mockLogFn.mock.calls
+                    .filter(([message, level]) => level === 'warn' && expected.includes(message))
+                    .map(([message]) => message);
+                expect(warnings).toEqual(runsLocally ? expected : []);
             } finally {
                 restoreEnv();
-                installGuards.mockRestore();
                 if (realVersion) {
                     Object.defineProperty(process.versions, 'node', realVersion);
                 }
@@ -1301,9 +1294,6 @@ describe('Backend Functions - getVitePlugin', () => {
         'Should run backend functions in child processes only with a module runner transport ($scenario)',
         ({ handleInvoke, runnerPath, pnp, runsInChild, warning }) => {
             const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
             const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
             const resolveRunner = jest
                 .spyOn(localExecutionProcess, 'resolveViteModuleRunner')
@@ -1336,21 +1326,20 @@ describe('Backend Functions - getVitePlugin', () => {
 
                 const executeLocally = createMiddleware.mock.calls[0]?.[11];
                 expect(typeof executeLocally).toBe(runsInChild ? 'function' : 'undefined');
-                // The dev server's own fs and subprocess APIs stay unpatched once calls run elsewhere.
-                expect(installGuards).toHaveBeenCalledTimes(runsInChild ? 0 : 1);
                 const warnings = mockLogFn.mock.calls
                     .filter(([, level]) => level === 'warn')
                     .map(([text]) => text);
                 const fallbackWarnings = [
                     localExecutionProcess.MODULE_RUNNER_UNRESOLVED_WARNING,
                     localExecutionProcess.YARN_PNP_WARNING,
+                    UNRESTRICTED_LOCAL_EXECUTION_WARNING,
                 ];
+                const fallback = warning === undefined ? [] : [warning];
                 expect(warnings.filter((text) => fallbackWarnings.includes(text))).toEqual(
-                    warning === undefined ? [] : [warning],
+                    runsInChild ? fallback : [...fallback, UNRESTRICTED_LOCAL_EXECUTION_WARNING],
                 );
             } finally {
                 restoreEnv();
-                installGuards.mockRestore();
                 createMiddleware.mockRestore();
                 resolveRunner.mockRestore();
                 isYarnPnp.mockRestore();
@@ -1404,134 +1393,6 @@ describe('Backend Functions - getVitePlugin', () => {
             if (realVersion) {
                 Object.defineProperty(process.versions, 'node', realVersion);
             }
-        }
-    });
-
-    test.each([
-        { predates: true, warns: true },
-        { predates: false, warns: false },
-    ])(
-        'Should warn that fs-extra/graceful-fs loaded before the dev server is unguarded (predates: $predates)',
-        ({ predates, warns }) => {
-            const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
-            const gracefulFsPredatesGuards = jest
-                .spyOn(networkGuard, 'gracefulFsPredatesGuards')
-                .mockReturnValue(predates);
-            const configureServer = getConfigureServer(plugin);
-            const restoreEnv = clearDatadogEnv();
-            process.env.DD_API_KEY = 'test-api-key';
-            process.env.DD_APP_KEY = 'test-app-key';
-
-            try {
-                configureServer({
-                    middlewares: { use: jest.fn() },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                });
-                const warned = mockLogFn.mock.calls.some(
-                    ([text, level]) =>
-                        level === 'warn' && text === networkGuard.GRACEFUL_FS_UNGUARDED_WARNING,
-                );
-
-                expect(warned).toBe(warns);
-            } finally {
-                restoreEnv();
-                installGuards.mockRestore();
-                gracefulFsPredatesGuards.mockRestore();
-            }
-        },
-    );
-
-    // Each local execution installs again and fails closed, so the server itself must still start.
-    test('Should keep the dev server starting when installing the sandbox guards throws', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const installGuards = jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => {
-            throw new Error('Cannot redefine property: cpSync');
-        });
-        const use = jest.fn();
-        const configureServer = getConfigureServer(plugin);
-        const restoreEnv = clearDatadogEnv();
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-
-        try {
-            expect(() =>
-                configureServer({
-                    middlewares: { use },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                }),
-            ).not.toThrow();
-            expect(installGuards).toHaveBeenCalled();
-            expect(use).toHaveBeenCalledTimes(1);
-        } finally {
-            restoreEnv();
-            installGuards.mockRestore();
-        }
-    });
-
-    // Vite 5 has no environment API, so a run's dynamic import calls the plugin container directly.
-    test("Should run a Vite 5 plugin container's resolveId, load and transform outside a run's blocked scope", async () => {
-        const cacheDir = makeProbeDirOutsideTmp('dd-vite5-container-');
-        // A class, like Vite 5.4's PluginContainer, so the methods live on the prototype and use `this`.
-        class FakePluginContainer {
-            readonly calls: unknown[][] = [];
-            async resolveId(...args: unknown[]) {
-                return this.record('resolveId', args);
-            }
-            async load(...args: unknown[]) {
-                return this.record('load', args);
-            }
-            async transform(...args: unknown[]) {
-                return this.record('transform', args);
-            }
-            record(method: string, args: unknown[]) {
-                const cacheFile = path.join(cacheDir, `${method}.json`);
-                fs.writeFileSync(cacheFile, '{}');
-                this.calls.push([method, ...args]);
-                return method;
-            }
-        }
-        const pluginContainer = new FakePluginContainer();
-        const plugin = getVitePlugin(defaultOptions);
-        const configureServer = getConfigureServer(plugin);
-        const restoreEnv = clearDatadogEnv();
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-
-        try {
-            configureServer({
-                middlewares: { use: jest.fn() },
-                ssrLoadModule: jest.fn(),
-                config: fakeServerConfig('development'),
-                pluginContainer,
-            });
-            const inRunPath = path.join(cacheDir, 'in-run.txt');
-            const results = await networkGuard.runBlocked(async () => {
-                const ssr = { ssr: true };
-                const resolved = await pluginContainer.resolveId('/src/lazy.ts', undefined, ssr);
-                const loaded = await pluginContainer.load('/src/lazy.ts', ssr);
-                const transformed = await pluginContainer.transform('code', '/src/lazy.ts', ssr);
-                expect(() => fs.writeFileSync(inRunPath, 'data')).toThrow(
-                    networkGuard.FS_WRITE_BLOCKED_MESSAGE,
-                );
-                return [resolved, loaded, transformed];
-            });
-            const cacheFiles = fs.readdirSync(cacheDir).sort();
-
-            expect(results).toEqual(['resolveId', 'load', 'transform']);
-            expect(pluginContainer.calls).toEqual([
-                ['resolveId', '/src/lazy.ts', undefined, { ssr: true }],
-                ['load', '/src/lazy.ts', { ssr: true }],
-                ['transform', 'code', '/src/lazy.ts', { ssr: true }],
-            ]);
-            expect(cacheFiles).toEqual(['load.json', 'resolveId.json', 'transform.json']);
-        } finally {
-            restoreEnv();
-            rmSync(cacheDir);
         }
     });
 
