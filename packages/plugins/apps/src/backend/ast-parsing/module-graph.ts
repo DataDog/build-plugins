@@ -15,12 +15,12 @@ import type {
     Pattern,
     Program,
     SimpleCallExpression,
-    Super,
     VariableDeclaration,
 } from 'estree';
 
 import { importsBackendFunctionPackage, isBackendSourceModule } from '../backend-sources';
 
+import { staticMemberName } from './ambient-global-access';
 import {
     analyzeModuleScope,
     getModuleVariable,
@@ -28,7 +28,7 @@ import {
     type ModuleScopeAnalysis,
     resolveIdentifier,
 } from './module-scope';
-import { ensureProgram, isStringLiteral } from './type-guards';
+import { ensureProgram, isNodeOfType, isStringLiteral } from './type-guards';
 import { walkAst } from './walk-ast';
 
 /**
@@ -378,7 +378,7 @@ function collectDeclarationExportBindings(
                 for (const variable of variables) {
                     exportsByName.set(variable.name, {
                         kind: 'unsupported',
-                        reason: 'binding pattern export',
+                        reason: BINDING_PATTERN_EXPORT_REASON,
                     });
                 }
                 continue;
@@ -514,61 +514,70 @@ function collectVariableDeclarationBindings(
     }
 }
 
+interface BindingWriteState {
+    ast: Program;
+    scopeAnalysis: ModuleScopeAnalysis;
+    bindings: Map<eslintScope.Variable, StaticBinding>;
+    // Variables already followed to their alias sources, for writes to the object and to its members.
+    expandedObjectWrites: Set<eslintScope.Variable>;
+    expandedMemberWrites: Set<eslintScope.Variable>;
+}
+
 function markReassignedTopLevelBindings(
     ast: Program,
     scopeAnalysis: ModuleScopeAnalysis,
     bindings: Map<eslintScope.Variable, StaticBinding>,
 ): void {
-    walkAst(
+    const writeState: BindingWriteState = {
         ast,
-        { scopeAnalysis, bindings },
-        {
-            AssignmentExpression(node, { state }) {
-                markAssignedPattern(node.left, state.scopeAnalysis, state.bindings);
-            },
-            UpdateExpression(node, { state }) {
-                markAssignedPattern(node.argument, state.scopeAnalysis, state.bindings);
-            },
-            UnaryExpression(node, { state }) {
-                if (node.operator === 'delete') {
-                    markAssignedPattern(node.argument, state.scopeAnalysis, state.bindings);
-                }
-            },
-            ForInStatement(node, { state }) {
-                markForIterationTarget(node.left, state.scopeAnalysis, state.bindings);
-            },
-            ForOfStatement(node, { state }) {
-                markForIterationTarget(node.left, state.scopeAnalysis, state.bindings);
-            },
+        scopeAnalysis,
+        bindings,
+        expandedObjectWrites: new Set(),
+        expandedMemberWrites: new Set(),
+    };
+    walkAst(ast, writeState, {
+        AssignmentExpression(node, { state }) {
+            markAssignedPattern(node.left, state);
         },
-    );
+        UpdateExpression(node, { state }) {
+            markAssignedPattern(node.argument, state);
+        },
+        UnaryExpression(node, { state }) {
+            if (node.operator === 'delete') {
+                markAssignedPattern(node.argument, state);
+            }
+        },
+        CallExpression(node, { state }) {
+            for (const target of getMutatedCallTargets(node, state.scopeAnalysis)) {
+                markMutatedObject(target, state);
+            }
+        },
+        ForInStatement(node, { state }) {
+            markForIterationTarget(node.left, state);
+        },
+        ForOfStatement(node, { state }) {
+            markForIterationTarget(node.left, state);
+        },
+    });
 }
 
 function markForIterationTarget(
     left: Pattern | VariableDeclaration,
-    scopeAnalysis: ModuleScopeAnalysis,
-    bindings: Map<eslintScope.Variable, StaticBinding>,
+    state: BindingWriteState,
 ): void {
     if (left.type !== 'VariableDeclaration') {
-        markAssignedPattern(left, scopeAnalysis, bindings);
+        markAssignedPattern(left, state);
     }
 }
 
-function markAssignedPattern(
-    pattern: Pattern | Expression,
-    scopeAnalysis: ModuleScopeAnalysis,
-    bindings: Map<eslintScope.Variable, StaticBinding>,
-): void {
+function markAssignedPattern(pattern: Pattern | Expression, state: BindingWriteState): void {
     if (pattern.type === 'Identifier') {
-        markAssignedVariable(pattern, scopeAnalysis, bindings, 'reassigned binding');
+        markAssignedVariable(pattern, state.scopeAnalysis, state.bindings, 'reassigned binding');
         return;
     }
 
     if (pattern.type === 'MemberExpression') {
-        const root = getMemberExpressionRoot(pattern);
-        if (root) {
-            markAssignedVariable(root, scopeAnalysis, bindings, 'mutated object binding');
-        }
+        markMutatedObject(pattern.object, state);
         return;
     }
 
@@ -576,8 +585,7 @@ function markAssignedPattern(
         for (const property of pattern.properties) {
             markAssignedPattern(
                 property.type === 'RestElement' ? property.argument : property.value,
-                scopeAnalysis,
-                bindings,
+                state,
             );
         }
         return;
@@ -586,19 +594,188 @@ function markAssignedPattern(
     if (pattern.type === 'ArrayPattern') {
         for (const element of pattern.elements) {
             if (element) {
-                markAssignedPattern(element, scopeAnalysis, bindings);
+                markAssignedPattern(element, state);
             }
         }
         return;
     }
 
     if (pattern.type === 'RestElement') {
-        markAssignedPattern(pattern.argument, scopeAnalysis, bindings);
+        markAssignedPattern(pattern.argument, state);
         return;
     }
 
     if (pattern.type === 'AssignmentPattern') {
-        markAssignedPattern(pattern.left, scopeAnalysis, bindings);
+        markAssignedPattern(pattern.left, state);
+    }
+}
+
+export const BINDING_PATTERN_EXPORT_REASON = 'binding pattern export';
+
+const OBJECT_MUTATORS = new Map<string, ReadonlySet<string>>([
+    ['Object', new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf'])],
+    ['Reflect', new Set(['set', 'defineProperty', 'deleteProperty', 'setPrototypeOf'])],
+]);
+
+/** Returns the objects that a call such as `Object.assign(target, ...)` writes to. */
+export function getMutatedCallTargets(
+    call: SimpleCallExpression,
+    scopeAnalysis: ModuleScopeAnalysis,
+): Expression[] {
+    const { callee } = call;
+    if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') {
+        return [];
+    }
+    const methodName = staticMemberName(callee, scopeAnalysis);
+    if (
+        methodName === undefined ||
+        !OBJECT_MUTATORS.get(callee.object.name)?.has(methodName) ||
+        resolveIdentifier(callee.object, scopeAnalysis)
+    ) {
+        return [];
+    }
+    // `Reflect.set` writes to its receiver, the fourth argument, when one is given. With a spread
+    // among the first four, both the first and fourth are marked, but not one shifted into place.
+    const [target, , , receiver] = call.arguments;
+    const isReflectSet = callee.object.name === 'Reflect' && methodName === 'set';
+    const hasSpread = call.arguments.slice(0, 4).some((arg) => arg.type === 'SpreadElement');
+    let targets = [target];
+    if (isReflectSet) {
+        targets = hasSpread ? [target, receiver] : [receiver ?? target];
+    }
+    return targets.filter(
+        (argument): argument is Expression =>
+            argument !== undefined && argument.type !== 'SpreadElement',
+    );
+}
+
+/** A variable whose object an expression may evaluate to, or reach a member of. */
+export interface ObjectRoot {
+    identifier: Identifier;
+    isMember: boolean;
+}
+
+/** Lists the roots of expressions such as `CONN`, `CONN.gh`, `CONN?.gh`, `CONN.gh || {}` or `a = CONN`. */
+export function getObjectRoots(node: unknown, isMember = false): ObjectRoot[] {
+    if (isNodeOfType(node, 'Identifier')) {
+        return [{ identifier: node, isMember }];
+    }
+    if (isNodeOfType(node, 'MemberExpression')) {
+        return getObjectRoots(node.object, true);
+    }
+    if (isNodeOfType(node, 'ChainExpression')) {
+        return getObjectRoots(node.expression, isMember);
+    }
+    if (isNodeOfType(node, 'AssignmentExpression')) {
+        // `a ||= b` and `a ??= b` yield `a` when it already holds an object.
+        const rightRoots = getObjectRoots(node.right, isMember);
+        return node.operator === '||=' || node.operator === '??='
+            ? [...getObjectRoots(node.left, isMember), ...rightRoots]
+            : rightRoots;
+    }
+    if (isNodeOfType(node, 'SequenceExpression')) {
+        const lastExpression = node.expressions.at(-1);
+        return getObjectRoots(lastExpression, isMember);
+    }
+    if (isNodeOfType(node, 'LogicalExpression')) {
+        // `a && b` only yields `a` when it is falsy, which no object is.
+        const rightRoots = getObjectRoots(node.right, isMember);
+        return node.operator === '&&'
+            ? rightRoots
+            : [...getObjectRoots(node.left, isMember), ...rightRoots];
+    }
+    if (isNodeOfType(node, 'ConditionalExpression')) {
+        return [
+            ...getObjectRoots(node.consequent, isMember),
+            ...getObjectRoots(node.alternate, isMember),
+        ];
+    }
+    return [];
+}
+
+type PatternTargetKind = 'member' | 'rest';
+
+const patternTargetsByProgram = new WeakMap<Program, Map<unknown, PatternTargetKind>>();
+
+// Identifiers bound by destructuring: a rest element gets a new object, any other target a member.
+function getPatternTargets(ast: Program): Map<unknown, PatternTargetKind> {
+    let targets = patternTargetsByProgram.get(ast);
+    if (!targets) {
+        targets = new Map();
+        walkAst(ast, targets, {
+            ObjectPattern(node, { state }) {
+                for (const property of node.properties) {
+                    if (property.type === 'Property') {
+                        markMemberTarget(property.value, state);
+                    }
+                }
+            },
+            ArrayPattern(node, { state }) {
+                for (const element of node.elements) {
+                    markMemberTarget(element, state);
+                }
+            },
+            RestElement(node, { state }) {
+                state.set(node.argument, 'rest');
+            },
+        });
+        patternTargetsByProgram.set(ast, targets);
+    }
+    return targets;
+}
+
+function markMemberTarget(node: Pattern | null, targets: Map<unknown, PatternTargetKind>): void {
+    const target = node?.type === 'AssignmentPattern' ? node.left : node;
+    if (target?.type === 'Identifier' && !targets.has(target)) {
+        targets.set(target, 'member');
+    }
+}
+
+/**
+ * Lists the roots `variable`, declared in `ast`, was assigned from. A rest element copies only
+ * its source's top-level properties, so it is followed only for a write to one of its members.
+ */
+export function getAliasSourceRoots(
+    variable: eslintScope.Variable,
+    ast: Program,
+    isMember: boolean,
+): ObjectRoot[] {
+    const patternTargets = getPatternTargets(ast);
+    const roots: ObjectRoot[] = [];
+    for (const reference of variable.references) {
+        const targetKind = patternTargets.get(reference.identifier);
+        if (!reference.writeExpr || (!isMember && targetKind === 'rest')) {
+            continue;
+        }
+        const isSourceMember = isMember || targetKind === 'member';
+        for (const root of getObjectRoots(reference.writeExpr)) {
+            roots.push({ identifier: root.identifier, isMember: isSourceMember || root.isMember });
+        }
+    }
+    return roots;
+}
+
+// A write through an alias such as `const gh = CONN.gh` or `gh = CONN.gh` also changes the object it aliases.
+function markMutatedObject(writtenObject: unknown, state: BindingWriteState): void {
+    const pending = getObjectRoots(writtenObject);
+    for (let root = pending.pop(); root; root = pending.pop()) {
+        markAssignedVariable(
+            root.identifier,
+            state.scopeAnalysis,
+            state.bindings,
+            'mutated object binding',
+        );
+
+        const variable = resolveIdentifier(root.identifier, state.scopeAnalysis);
+        const expanded = root.isMember ? state.expandedMemberWrites : state.expandedObjectWrites;
+        if (!variable || expanded.has(variable)) {
+            continue;
+        }
+        expanded.add(variable);
+        const sourceRoots = getAliasSourceRoots(variable, state.ast, root.isMember);
+        for (const sourceRoot of sourceRoots) {
+            pending.push(sourceRoot);
+        }
     }
 }
 
@@ -618,16 +795,6 @@ function markAssignedVariable(
         return;
     }
     bindings.set(variable, { kind: 'unsupported', reason });
-}
-
-function getMemberExpressionRoot(node: Expression | Super): Identifier | undefined {
-    if (node.type === 'Identifier') {
-        return node;
-    }
-    if (node.type === 'MemberExpression') {
-        return getMemberExpressionRoot(node.object);
-    }
-    return undefined;
 }
 
 function getModuleExportName(node: ModuleExportName): string {
