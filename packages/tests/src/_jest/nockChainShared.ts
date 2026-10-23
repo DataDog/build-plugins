@@ -5,8 +5,6 @@
 import https from 'https';
 import nock from 'nock';
 
-export const CHAIN_FILE_COUNT = 3;
-
 // Each nockChain fixture file mocks and makes one request, so running them in one worker shows
 // whether an earlier file's nock still patches the shared https module.
 export const getMockedReply = (name: string) => {

@@ -2,13 +2,23 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
+import { isDeepStrictEqual } from 'util';
 
+import {
+    CLEANUP_MARKER,
+    ORPHAN_CLEANUP_MARKER,
+    ORPHAN_REGISTERED_MARKER,
+    WORKING_DIR_NAME,
+} from './cleanupFixtureShared';
 import { ENV_OVERRIDE_VARIABLES } from './helpers/datadogEnv';
 import type { JestJsonReport } from './helpers/spawnJestFixture';
 import {
     FIXTURE_TEST_TIMEOUT_MS,
     NOOP_SETUP_PATH,
+    PATH_ORDER_SEQUENCER_PATH,
     parseJestReport,
     spawnJestFixture,
 } from './helpers/spawnJestFixture';
@@ -21,6 +31,9 @@ import {
     TEARDOWN_SCOPE,
     getExposureLabel,
 } from './setupAfterEnvFixtureLabels';
+
+const { existsSync, rmSync } =
+    jest.requireActual<typeof import('@dd/core/helpers/fs')>('@dd/core/helpers/fs');
 
 const NAMED_SECRETS = [...ENV_OVERRIDE_VARIABLES, 'GITHUB_TOKEN'];
 const namedSecretEntries: [string, string][] = NAMED_SECRETS.map((name) => [name, `fake-${name}`]);
@@ -167,6 +180,82 @@ describe('Test env scrub', () => {
             expect(ranInWorker).toBe(run.inWorker);
             expect(isFixtureFileClean).toBe(expectedExposures.length === 0);
             expect(exposures).toEqual(expectedExposures);
+        },
+        FIXTURE_TEST_TIMEOUT_MS,
+    );
+});
+
+type CleanupRun = { existingFiles: string[]; status: number | null; output: string };
+
+// Gives the fixture files a fresh directory to write in, and reports which of the cleanup
+// fixtures' files are left in it once they ran.
+const runCleanupFixtures = (testMatch: string, setupFilesAfterEnvPath: string): CleanupRun => {
+    const tmpDir = os.tmpdir();
+    const markerDirPrefix = path.join(tmpDir, 'cleanup-fixture-');
+    const markerDir = fs.mkdtempSync(markerDirPrefix);
+    const fixtureGlobals = JSON.stringify({ CLEANUP_MARKER_DIR: markerDir });
+    try {
+        const run = spawnJestFixture(
+            testMatch,
+            [
+                '--setupFilesAfterEnv',
+                setupFilesAfterEnvPath,
+                '--testSequencer',
+                PATH_ORDER_SEQUENCER_PATH,
+                '--globals',
+                fixtureGlobals,
+            ],
+            {},
+        );
+        const fileNames = [
+            WORKING_DIR_NAME,
+            CLEANUP_MARKER,
+            ORPHAN_REGISTERED_MARKER,
+            ORPHAN_CLEANUP_MARKER,
+        ];
+        const existingFiles = fileNames.filter((name) => {
+            const filePath = path.join(markerDir, name);
+            return existsSync(filePath);
+        });
+        return { existingFiles, status: run.status, output: run.output };
+    } finally {
+        rmSync(markerDir);
+    }
+};
+
+describe('runBundlers cleanup', () => {
+    const cases = [
+        {
+            description: 'run a cleanup that a copy loaded after jest.resetModules() registered',
+            testMatch: '**/cleanupReset.fixture.ts',
+            setupFilesAfterEnvPath: SETUP_AFTER_ENV_PATH,
+            existingFiles: [CLEANUP_MARKER],
+        },
+        {
+            description: 'run no cleanup without setupAfterEnv, as a positive control',
+            testMatch: '**/cleanupReset.fixture.ts',
+            setupFilesAfterEnvPath: NOOP_SETUP_PATH,
+            existingFiles: [WORKING_DIR_NAME],
+        },
+        {
+            description: 'not run a cleanup that an earlier file registered after its own cleanup',
+            testMatch: '**/cleanupOrphan?.fixture.ts',
+            setupFilesAfterEnvPath: SETUP_AFTER_ENV_PATH,
+            existingFiles: [ORPHAN_REGISTERED_MARKER],
+        },
+    ];
+
+    test.each(cases)(
+        'Should $description',
+        ({ testMatch, setupFilesAfterEnvPath, existingFiles }) => {
+            const run = runCleanupFixtures(testMatch, setupFilesAfterEnvPath);
+            const actual = { status: run.status, existingFiles: run.existingFiles };
+            const expected = { status: 0, existingFiles };
+            if (!isDeepStrictEqual(actual, expected)) {
+                const actualText = JSON.stringify(actual);
+                throw new Error(`Unexpected fixture run ${actualText}\n${run.output}`);
+            }
+            expect(actual).toEqual(expected);
         },
         FIXTURE_TEST_TIMEOUT_MS,
     );
