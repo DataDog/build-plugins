@@ -59,7 +59,6 @@ import {
 import * as buildPackage from './build-package';
 import * as devServer from './dev-server';
 import * as localExecutionProcess from './local-execution-process';
-import * as networkGuard from './network-guard';
 import { MIN_VITE_VERSION, unsupportedViteMessage } from './vite-version';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
@@ -1488,7 +1487,6 @@ describe('Backend Functions - getVitePlugin', () => {
         'Should run backend functions in child processes and check local Node only when local execution can run ($scenario)',
         ({ mode, withAuth, runsLocally }) => {
             const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest.spyOn(networkGuard, 'installGuards');
             const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
             const createExecutor = jest.spyOn(localExecutionProcess, 'createChildProcessExecutor');
             const runnerPath = '/build/node_modules/vite/dist/node/module-runner.js';
@@ -1524,14 +1522,11 @@ describe('Backend Functions - getVitePlugin', () => {
                 }));
                 const expectedOptions = { invokeChannel: hot, moduleRunnerPath: runnerPath };
                 expect(executorOptions).toEqual(runsLocally ? [expectedOptions] : []);
-                // The dev server's own fs and subprocess APIs stay unpatched: calls run elsewhere.
-                expect(installGuards).not.toHaveBeenCalled();
                 const warning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
                 const warnings = mockLogFn.mock.calls.filter(([message]) => message === warning);
                 expect(warnings).toEqual(runsLocally ? [[warning, 'warn']] : []);
             } finally {
                 restoreEnv();
-                installGuards.mockRestore();
                 createMiddleware.mockRestore();
                 createExecutor.mockRestore();
                 resolveRunner.mockRestore();

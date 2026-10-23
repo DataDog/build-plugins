@@ -10,6 +10,7 @@
 import nodeModule from 'node:module';
 import type { Writable } from 'node:stream';
 
+import { withPermissionHint } from './local-execution-limits';
 import type { ChildMessage, ChildStartConfig, ParentMessage } from './local-execution-protocol';
 import { isParentMessage } from './local-execution-protocol';
 import type { ActionCallArgs } from './local-execution-shared';
@@ -25,7 +26,6 @@ import {
     serializeActionInputs,
     validateActionCallShape,
 } from './local-execution-shared';
-import { installGuards, runBlocked } from './network-guard';
 
 type ModuleRunnerInstance = { import(url: string): Promise<Record<string, unknown>> };
 type CreateImportMeta = (modulePath: string) => unknown;
@@ -172,7 +172,7 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     Reflect.set(globalThis, '$', undefined);
     const evaluator = new ESModulesEvaluator();
     // Without `module.registerHooks`, Vite resolves it on a hooks thread, which the permission model refuses.
-    const resolvesImportMeta = config.installGuards || 'registerHooks' in nodeModule;
+    const resolvesImportMeta = !('permission' in process) || 'registerHooks' in nodeModule;
     // Without it, Vite's runner gives modules an import.meta.resolve that always throws.
     const runnerOptions: ModuleRunnerOptions = {
         transport: { invoke },
@@ -195,30 +195,28 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     Reflect.set(globalThis, '$', $);
     await registerSdkAdapters(runner, config, $);
     await sendMessage({ type: 'loaded' });
-    const returned = await callBackendFunction(() => fn(...config.args));
+    const returned = await callBackendFunction(async () => {
+        try {
+            return await fn(...config.args);
+        } catch (error) {
+            throw withPermissionHint(error);
+        }
+    });
     const subject = returnValueSubject(config.functionName);
     return assertJsonRoundTrippable(returned, subject);
-}
-
-// Without the permission model, the guards cover the module's top-level code as well as the call.
-function execute(config: ChildStartConfig): Promise<unknown> {
-    if (!config.installGuards) {
-        return load(config);
-    }
-    installGuards();
-    return runBlocked(() => load(config));
 }
 
 async function run(config: ChildStartConfig): Promise<void> {
     let outcome: ChildMessage;
     try {
-        const data = await execute(config);
+        const data = await load(config);
         outcome = { type: 'result', data };
     } catch (error) {
+        const failure = withPermissionHint(error);
         outcome = {
             type: 'error',
-            message: describeError(error),
-            ...(error instanceof FunctionThrewError && { detail: error.detail }),
+            message: describeError(failure),
+            ...(failure instanceof FunctionThrewError && { detail: failure.detail }),
         };
     }
     const stdoutFlushed = flush(process.stdout, writeStdout, config.flushTimeoutMs);
