@@ -12,6 +12,7 @@ import type { SourceMapCompact, UnpluginBuildContext } from 'unplugin';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { createFileExtensionPattern, createFileFilter } from './filter';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
+import { getSymbolTableHooks } from './symbol-table';
 import { transformCode } from './transform';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
@@ -116,6 +117,7 @@ export const getLiveDebuggerPlugin = (
                 }
             },
         },
+        ...getSymbolTableHooks(pluginOptions, context, log),
         buildEnd: () => {
             if (totalFunctions > 0) {
                 log.info(
