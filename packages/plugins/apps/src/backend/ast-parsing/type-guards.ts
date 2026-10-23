@@ -4,8 +4,10 @@
 
 import type {
     BaseNode,
+    Expression,
     Node,
     Program,
+    Property,
     SimpleLiteral,
     TemplateLiteral,
     VariableDeclarator,
@@ -40,6 +42,31 @@ function hasNodeType<T extends string>(node: unknown, type: T): node is { type: 
 
 export function isStringLiteral(node: unknown): node is StringLiteral {
     return hasNodeType(node, 'Literal') && 'value' in node && typeof node.value === 'string';
+}
+
+export function getStaticPropertyKey(property: Property): string | undefined {
+    if (property.key.type === 'Identifier') {
+        return property.key.name;
+    }
+    if (property.key.type === 'Literal' && typeof property.key.value === 'string') {
+        return property.key.value;
+    }
+    if (property.key.type === 'Literal' && typeof property.key.value === 'number') {
+        return String(property.key.value);
+    }
+    return undefined;
+}
+
+export function hasExpressionValue(
+    property: Property,
+): property is Property & { value: Expression } {
+    const { value } = property;
+    return (
+        value.type !== 'ObjectPattern' &&
+        value.type !== 'ArrayPattern' &&
+        value.type !== 'RestElement' &&
+        value.type !== 'AssignmentPattern'
+    );
 }
 
 export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
