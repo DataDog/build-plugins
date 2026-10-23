@@ -5,6 +5,7 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
@@ -12,8 +13,10 @@ import {
     DEV_SERVER_ROUTES,
     formatRef,
     getRetryDelay,
+    oversizedBundleMessage,
 } from '@dd/apps-plugin/vite/dev-server';
 import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
+import { rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
     createMockRequest,
@@ -25,6 +28,7 @@ import {
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
+import type { InlineConfig } from 'vite';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -286,6 +290,7 @@ function createTestMiddleware(
         log?: CreateDevServerMiddlewareArgs[8];
         mode?: CreateDevServerMiddlewareArgs[9];
         isHostAllowed?: CreateDevServerMiddlewareArgs[10];
+        serverConditions?: CreateDevServerMiddlewareArgs[11];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -302,6 +307,7 @@ function createTestMiddleware(
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
+        overrides.serverConditions,
     );
 }
 
@@ -647,10 +653,49 @@ describe('Dev Server Middleware', () => {
                     logLevel: 'silent',
                     build: expect.objectContaining({
                         write: false,
-                        minify: false,
                     }),
                 }),
             );
+        });
+
+        test('Should bundle with the minify and keepNames settings an upload uses', async () => {
+            const [func] = mockFunctions;
+            const uploadBuild = jest.fn();
+            uploadBuild.mockImplementation(async (config) => {
+                const source = `export function ${func.name}() { return null; }`;
+                await emitModuleParsed(config, func.absolutePath, source);
+                return { output: [] };
+            });
+            const upload = await buildBackendFunctions(uploadBuild, [func], '/project', mockLog);
+            rmSync(upload.outDir);
+            mockBuildWithParsedBackend();
+            const functionName = encodeQueryName(func);
+            const req = createMockRequest('/__dd/debugBundle', { functionName });
+            const res = createMockResponse();
+            const next = jest.fn();
+
+            middleware(req, res, next);
+            await res.done;
+
+            const [[uploadConfig]] = uploadBuild.mock.calls;
+            const [[devConfig]] = mockViteBuild.mock.calls;
+            const minifySettings = (config: InlineConfig) => {
+                const output = config.build?.rollupOptions?.output;
+                const hasKeepNames = output && !Array.isArray(output) && 'keepNames' in output;
+                return {
+                    esbuildKeepNames: config.esbuild ? config.esbuild.keepNames : undefined,
+                    minify: config.build?.minify,
+                    outputKeepNames: hasKeepNames ? output.keepNames : undefined,
+                };
+            };
+            const devSettings = minifySettings(devConfig);
+            const uploadSettings = minifySettings(uploadConfig);
+            expect(devSettings).toEqual(uploadSettings);
+            expect(devSettings).toEqual({
+                esbuildKeepNames: true,
+                minify: true,
+                outputKeepNames: true,
+            });
         });
     });
 
@@ -1148,6 +1193,156 @@ describe('Dev Server Middleware', () => {
         });
     });
 
+    describe('oversized bundle rejection', () => {
+        const BUNDLED_CODE = 'export async function main($) { return "😀"; }';
+        const BUNDLE_LENGTH = Array.from(BUNDLED_CODE).length;
+        const SCRIPT_LIMIT = BUNDLE_LENGTH - 1;
+        const SCRIPT_REJECTION = `.script: length must be <= ${SCRIPT_LIMIT}, but got ${BUNDLE_LENGTH}`;
+
+        // Staging's answer to a jsFunctionWithActions script over the limit, with its numbers swapped in.
+        function inputRejection(fieldError: string) {
+            return {
+                errors: [
+                    {
+                        status: '400',
+                        id: 'c391b376-bfec-4dd4-b415-cc9cd0fc4aa7',
+                        code: 'INVALID_INPUT_PARAMETER',
+                        title: 'error running query',
+                        detail: `input parameter validation error: 1 error occurred:\n\t* ${fieldError}\n\n`,
+                    },
+                ],
+            };
+        }
+
+        function rejectSubmit(body: ReturnType<typeof inputRejection>, times = 1) {
+            return nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async')
+                .times(times)
+                .reply(400, body);
+        }
+
+        async function callViaCloud(
+            middleware: ReturnType<typeof createDevServerMiddleware>,
+            func = mockFunctions[0],
+            url = '/__dd/executeActionViaCloud',
+        ) {
+            const functionName = encodeQueryName(func);
+            const req = createMockRequest(url, { functionName, args: [] });
+            const res = createMockResponse();
+            const next = jest.fn();
+            middleware(req, res, next);
+            await res.done;
+            const responseBody = res.getBody();
+            const body = JSON.parse(responseBody);
+            return { statusCode: res.statusCode, body };
+        }
+
+        function getWarnings() {
+            return mockLogFn.mock.calls
+                .filter(([, level]) => level === 'warn')
+                .map(([text]) => text);
+        }
+
+        test('Should name the function, its size, Datadog answer and how to shrink it', () => {
+            const message = oversizedBundleMessage('src/a/run', 12, SCRIPT_REJECTION);
+
+            expect(message).toContain('Backend function "src/a/run" is larger than production');
+            expect(message).toContain('its minified bundle is 12 characters');
+            expect(message).toContain(`"${SCRIPT_REJECTION}"`);
+            expect(message).toContain('splitting the function or moving large data out of it');
+        });
+
+        const routeCases = [
+            { route: '/__dd/executeActionViaCloud', mode: 'development' },
+            { route: '/__dd/executeAction', mode: DEV_VERIFY_MODE },
+        ];
+        test.each(routeCases)(
+            'Should answer $route in $mode mode with a 413 that explains the size',
+            async ({ route, mode }) => {
+                mockBuildWithParsedBackend(BUNDLED_CODE);
+                const rejection = inputRejection(SCRIPT_REJECTION);
+                const scope = rejectSubmit(rejection);
+                const middleware = createTestMiddleware({ mode });
+
+                const { statusCode, body } = await callViaCloud(
+                    middleware,
+                    mockFunctions[0],
+                    route,
+                );
+                const isDone = scope.isDone();
+
+                const displayName = formatRef(mockFunctions[0]);
+                const expected = oversizedBundleMessage(
+                    displayName,
+                    BUNDLE_LENGTH,
+                    SCRIPT_REJECTION,
+                );
+                expect(isDone).toBe(true);
+                expect(statusCode).toBe(413);
+                const warnings = getWarnings();
+                expect(body).toEqual({ success: false, error: expected });
+                expect(warnings).toEqual([expected]);
+            },
+        );
+
+        test('Should warn once per function, however often it is rejected', async () => {
+            mockBuildWithParsedBackend(BUNDLED_CODE);
+            const rejection = inputRejection(SCRIPT_REJECTION);
+            const scope = rejectSubmit(rejection, 3);
+            const middleware = createTestMiddleware();
+
+            const first = await callViaCloud(middleware, mockFunctions[0]);
+            const second = await callViaCloud(middleware, mockFunctions[0]);
+            const other = await callViaCloud(middleware, mockFunctions[1]);
+            const isDone = scope.isDone();
+            const warnings = getWarnings();
+
+            const [firstName, otherName] = mockFunctions.map(formatRef);
+            const firstWarning = oversizedBundleMessage(firstName, BUNDLE_LENGTH, SCRIPT_REJECTION);
+            const otherWarning = oversizedBundleMessage(otherName, BUNDLE_LENGTH, SCRIPT_REJECTION);
+            expect(isDone).toBe(true);
+            expect([first.statusCode, second.statusCode, other.statusCode]).toEqual([
+                413, 413, 413,
+            ]);
+            expect(warnings).toEqual([firstWarning, otherWarning]);
+        });
+
+        const passthroughCases = [
+            {
+                scenario: 'another input field is rejected',
+                body: inputRejection('.allowedConnectionIds: expected array'),
+            },
+            {
+                scenario: 'a nested field named script is rejected',
+                body: inputRejection('.context.script: expected string'),
+            },
+            {
+                scenario: 'the error code is not an input-parameter rejection',
+                body: {
+                    errors: [{ ...inputRejection(SCRIPT_REJECTION).errors[0], code: 'OTHER' }],
+                },
+            },
+        ];
+        test.each(passthroughCases)(
+            'Should pass the error on unchanged when $scenario',
+            async ({ body: rejection }) => {
+                mockBuildWithParsedBackend(BUNDLED_CODE);
+                const scope = rejectSubmit(rejection);
+                const middleware = createTestMiddleware();
+
+                const { statusCode, body } = await callViaCloud(middleware);
+                const isDone = scope.isDone();
+                const warnings = getWarnings();
+
+                expect(isDone).toBe(true);
+                expect(statusCode).toBe(500);
+                expect(body.error).toContain('HTTP 400');
+                expect(body.error).not.toContain('larger than production');
+                expect(warnings).toEqual([]);
+            },
+        );
+    });
+
     describe('executeAction handler (local)', () => {
         beforeEach(() => {
             mockRuntimeContextHydration();
@@ -1274,6 +1469,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    undefined,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1307,6 +1503,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    undefined,
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1608,6 +1805,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
+                    undefined,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {

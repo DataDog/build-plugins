@@ -21,7 +21,7 @@ import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
-import { getBaseBackendBuildConfig } from './build-config';
+import { getBaseBackendBuildConfig, withProductionSettings } from './build-config';
 import type { HostCheck } from './dev-server-request-guard';
 import { checkDevServerRequest } from './dev-server-request-guard';
 import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
@@ -135,6 +135,7 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
  */
 async function bundleBackendFunction(
     viteBuild: typeof build,
+    serverConditions: readonly string[] | undefined,
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
@@ -158,10 +159,11 @@ async function bundleBackendFunction(
         log,
         connectionIdCollector.getModuleRecords,
     );
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
+    const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
         staticChecksPlugin,
     ]);
+    const baseConfig = withProductionSettings(devBaseConfig, serverConditions);
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.
@@ -255,6 +257,35 @@ async function submitQuery(
     return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log, signal);
 }
 
+export function oversizedBundleMessage(
+    displayName: string,
+    length: number,
+    rejection: string,
+): string {
+    return `Backend function "${displayName}" is larger than production accepts: its minified bundle is ${length} characters, and Datadog answered "${rejection}". Shrink the bundle, for example by splitting the function or moving large data out of it.`;
+}
+
+// Datadog rejects a script over the action's maxLength as an invalid `script` input, the only
+// constraint on that field a string can break. doRequest's message lists each error's fields.
+function asOversizedBundleError(
+    error: unknown,
+    displayName: string,
+    script: string,
+): OversizedBundleError | undefined {
+    if (!(error instanceof Error) || !error.message.startsWith('HTTP 400 ')) {
+        return undefined;
+    }
+    const isInputRejection = error.message.includes('code: INVALID_INPUT_PARAMETER');
+    const rejection = /(?:^|\s)(\.script: [^\n]*)/.exec(error.message)?.[1];
+    if (!isInputRejection || !rejection) {
+        return undefined;
+    }
+    // Datadog counts code points, as JSON Schema's maxLength does.
+    const length = Array.from(script).length;
+    const message = oversizedBundleMessage(displayName, length, rejection);
+    return new OversizedBundleError(message, displayName);
+}
+
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
 async function executeScriptViaDatadog(
     scriptBody: string,
@@ -281,7 +312,9 @@ async function executeScriptViaDatadog(
         doAuthenticatedRequest,
         longPolling,
         log,
-    );
+    ).catch((error: unknown) => {
+        throw asOversizedBundleError(error, displayName, scriptBody) ?? error;
+    });
 
     if (typeof outputs !== 'object' || outputs === null || !('data' in outputs)) {
         throw new Error('Query execution completed without a "data" field in its outputs');
@@ -526,6 +559,15 @@ class HttpError extends Error {
     }
 }
 
+class OversizedBundleError extends HttpError {
+    constructor(
+        message: string,
+        readonly displayName: string,
+    ) {
+        super(413, message);
+    }
+}
+
 /**
  * Split out from `validateAndBundle` so `handleExecuteAction`'s no-bundling local path can
  * reuse the same parse-and-lookup step without pulling in a bundle.
@@ -649,6 +691,7 @@ async function handleExecuteActionViaCloud(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
+    oversizedFunctionsWarned: Set<string>,
 ): Promise<void> {
     try {
         const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
@@ -668,6 +711,13 @@ async function handleExecuteActionViaCloud(
 
         sendSuccess(res, result);
     } catch (error: unknown) {
+        if (
+            error instanceof OversizedBundleError &&
+            !oversizedFunctionsWarned.has(error.displayName)
+        ) {
+            oversizedFunctionsWarned.add(error.displayName);
+            log.warn(error.message);
+        }
         // Labeled by the actual URL hit, not a fixed name, since dev-verify mode also reaches this via /__dd/executeAction.
         handleHttpError(res, error, log, req.url ?? 'executeActionViaCloud');
     }
@@ -683,6 +733,7 @@ function routeToCloudHandler(
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
     log: Logger,
+    oversizedFunctionsWarned: Set<string>,
 ): void {
     guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
         handleExecuteActionViaCloud(
@@ -694,6 +745,7 @@ function routeToCloudHandler(
             authedRequest,
             longPolling,
             log,
+            oversizedFunctionsWarned,
         ),
     );
 }
@@ -722,10 +774,12 @@ export function createDevServerMiddleware(
     log: Logger,
     mode: string,
     isHostAllowed: HostCheck,
+    serverConditions: readonly string[] | undefined,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, func, projectRoot, log);
+        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -744,6 +798,7 @@ export function createDevServerMiddleware(
             doAuthenticatedRequest,
             longPolling,
             log,
+            oversizedFunctionsWarned,
         );
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
