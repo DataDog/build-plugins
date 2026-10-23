@@ -107,6 +107,74 @@ describe('postMessageTransport', () => {
         expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
     });
 
+    test("Should post only the checked fields of the dev client's action list", async () => {
+        const { posted, reply } = installFakeWindow();
+        const action = { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] };
+        const extendedActions = [{ ...action, extra: () => 'not cloneable' }];
+        const bundle = { ...BUNDLE, actions: extendedActions };
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual({
+            ...MESSAGE_WITHOUT_BUNDLE,
+            bundle: { ...BUNDLE, actions: [action] },
+        });
+    });
+
+    test("Should copy the dev client's action list without running that array's own methods", async () => {
+        const { posted, reply } = installFakeWindow();
+        const action = { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] };
+        const forgedAction = { fqn: 'com.datadoghq.forged', connectionIds: ['conn-forged'] };
+        class ForgingArray extends Array<unknown> {}
+        Reflect.defineProperty(ForgingArray, Symbol.species, {
+            get: () =>
+                function forgedArray() {
+                    return new globalThis.Proxy([forgedAction], {
+                        defineProperty: () => true,
+                        set: () => true,
+                    });
+                },
+        });
+        const actions = ForgingArray.from([action]);
+        const bundle = { ...BUNDLE, actions };
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual({
+            ...MESSAGE_WITHOUT_BUNDLE,
+            bundle: { ...BUNDLE, actions: [action] },
+        });
+    });
+
+    test('Should post the bundle without its action list when reading that list throws', async () => {
+        const { postMessage, posted, reply } = installFakeWindow();
+        const bundle = Object.defineProperty({ ...BUNDLE }, 'actions', {
+            get(): never {
+                throw new Error('unreadable');
+            },
+        });
+        const prepareCall = jest.fn().mockResolvedValue({ targetOrigin: DATADOG_PARENT, bundle });
+        Reflect.set(globalThis, DEV_CLIENT_HOOK, prepareCall);
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+
+        await expect(result).resolves.toBe('ok');
+        expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+        expect(postMessage).toHaveBeenCalledWith(message, DATADOG_PARENT);
+    });
+
     test('Should post the call without a bundle when reading the hook itself throws', async () => {
         const { postMessage, posted, reply } = installFakeWindow();
         Object.defineProperty(globalThis, DEV_CLIENT_HOOK, {

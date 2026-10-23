@@ -6,7 +6,7 @@ import type { Program } from 'estree';
 
 import { isTypeOnly } from './type-guards';
 
-const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
+export const ACTION_CATALOG_PACKAGE = '@datadog/action-catalog';
 
 export interface ActionCatalogImports {
     functions: Set<string>;

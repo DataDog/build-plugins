@@ -29,9 +29,19 @@ export const PONG = 'app-builder:pong';
 // The `globalThis` key where the dev client the dev server injects installs its call hook.
 export const DEV_CLIENT_HOOK = 'DD_APPS_PREPARE_CALL';
 
+export interface DebugBundleAction {
+    fqn: string;
+    connectionIds: string[];
+}
+
 export interface DebugBundleResponse {
     code: string;
     allowedConnectionIds: string[];
+    /**
+     * A UX hint, not a security boundary. Lists the same direct action-catalog calls as
+     * `allowedConnectionIds`, never `$.Actions` ones; absent when a call's FQN is unknown.
+     */
+    actions?: DebugBundleAction[];
 }
 
 // Asks the parent to identify itself: its pong's `event.origin` is set by the browser.

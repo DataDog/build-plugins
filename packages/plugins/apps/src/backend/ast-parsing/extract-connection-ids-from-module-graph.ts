@@ -24,6 +24,12 @@ const OPTION_HOOK_KEYS: ReadonlySet<string> = new Set(['__proto__', 'toJSON', 't
 
 type ConnectionIdProperty = Property & { value: Expression };
 
+export interface ActionCatalogCall {
+    record: ParsedModuleRecord;
+    callSite: SimpleCallExpression;
+    connectionId: string | undefined;
+}
+
 /**
  * Extracts the conservative backend-file connection ID union from module records
  * collected while the backend bundler walked the real execution graph.
@@ -33,7 +39,30 @@ export function extractConnectionIdsFromModuleGraph(
     modules: ReadonlyMap<string, ParsedModuleRecord>,
     buildRoot: string,
 ): string[] {
+    const calls = collectActionCatalogCalls(entryId, modules, buildRoot);
+    return getConnectionIds(calls);
+}
+
+export function getConnectionIds(calls: ActionCatalogCall[]): string[] {
     const connectionIds = new Set<string>();
+
+    for (const { connectionId } of calls) {
+        // `''` is a valid declared connectionId, not "none" — only the absence of a
+        // `connectionId` property (`undefined`) means no restriction to record.
+        if (connectionId !== undefined) {
+            connectionIds.add(connectionId);
+        }
+    }
+
+    return [...connectionIds].sort();
+}
+
+export function collectActionCatalogCalls(
+    entryId: string,
+    modules: ReadonlyMap<string, ParsedModuleRecord>,
+    buildRoot: string,
+): ActionCatalogCall[] {
+    const calls: ActionCatalogCall[] = [];
     let mutatedImportedObjectVariables: Set<eslintScope.Variable> | undefined;
     const getMutatedImportedObjectVariables = () => {
         mutatedImportedObjectVariables ??= collectMutatedImportedObjectVariables(modules);
@@ -54,15 +83,11 @@ export function extractConnectionIdsFromModuleGraph(
                 record,
                 getMutatedImportedObjectVariables,
             );
-            // `''` is a valid declared connectionId, not "none" — only the absence of a
-            // `connectionId` property (`undefined`) means no restriction to record.
-            if (connectionId !== undefined) {
-                connectionIds.add(connectionId);
-            }
+            calls.push({ record, callSite, connectionId });
         }
     });
 
-    return [...connectionIds].sort();
+    return calls;
 }
 
 function extractConnectionIdFromActionCall(

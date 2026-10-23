@@ -5,10 +5,11 @@
     "license": "MIT",
     "author": "Datadog",
     "type": "module",
-    "description": "Minimal local fixture standing in for the real @datadog/action-catalog package — only the pieces dev-server.integration.test.ts's connection-ID coverage actually exercises.",
+    "description": "Minimal local fixture standing in for the real @datadog/action-catalog package — only the pieces dev-server.integration.test.ts's connection-ID and action-list coverage actually exercises.",
     "main": "index.js",
     "exports": {
         ".": "./index.js",
-        "./action-execution": "./action-execution.js"
+        "./action-execution": "./action-execution.js",
+        "./http/http": "./http/http.js"
     }
 }
