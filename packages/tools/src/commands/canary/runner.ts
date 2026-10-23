@@ -12,8 +12,10 @@ import { performance } from 'perf_hooks';
 import type { Readable, Writable } from 'stream';
 import { gzipSync } from 'zlib';
 
+import { formatRunAlert } from './alert';
 import { CANARY_VARIANTS } from './types';
 import type {
+    AlertOptions,
     ArtifactMeasurement,
     ArtifactSpec,
     CanaryFailure,
@@ -24,6 +26,7 @@ import type {
     Cleanup,
     CommandResult,
     CommandSpec,
+    FailureKind,
     InterruptSignal,
     MetricComparison,
     PhaseComparison,
@@ -41,6 +44,30 @@ export class CanaryCommandError extends Error {}
 
 // Thrown for commands that are cut short or refused after an interrupt, so retries stop.
 export class CanaryInterruptedError extends Error {}
+
+// A failed phase, with the stage that failed and who most likely needs to act on it.
+export class CanaryPhaseError extends Error {
+    readonly kind: FailureKind;
+    readonly stage: string;
+
+    constructor(message: string, stage: string, kind: FailureKind) {
+        super(message);
+        this.kind = kind;
+        this.stage = stage;
+    }
+}
+
+type VariantStep = 'build' | 'output' | 'artifacts' | 'validate';
+
+// A failed variant, with the step that failed.
+class VariantStepError extends Error {
+    readonly step: VariantStep;
+
+    constructor(message: string, step: VariantStep) {
+        super(message);
+        this.step = step;
+    }
+}
 
 // Network-bound steps (fetching the target, installing its dependencies) are retried
 // after these delays. Builds and validations are never retried.
@@ -302,33 +329,68 @@ const measureVariant = async ({
     runCommand: RunCommand;
     variant: CanaryVariant;
 }): Promise<VariantReport> => {
-    const buildCommand = phase.getBuildCommand(root, variant);
-    const buildResult = await runCheckedCommand(runCommand, buildCommand);
-    phase.assertBuildOutput(buildResult, variant);
+    let step: VariantStep = 'build';
+    try {
+        const buildCommand = phase.getBuildCommand(root, variant);
+        const buildResult = await runCheckedCommand(runCommand, buildCommand);
+        step = 'output';
+        phase.assertBuildOutput(buildResult, variant);
 
-    const artifactSpec = phase.getArtifactSpec(root, variant);
-    const artifacts = await measureArtifacts(artifactSpec);
-    if (artifacts.fileCount === 0) {
-        throw new CanaryCommandError(
-            `${phase.id} ${variant} build emitted no matching JavaScript files.`,
-        );
-    }
-    if (phase.assertArtifacts) {
-        await phase.assertArtifacts(artifacts.filePaths, variant);
-    }
+        step = 'artifacts';
+        const artifactSpec = phase.getArtifactSpec(root, variant);
+        const artifacts = await measureArtifacts(artifactSpec);
+        if (artifacts.fileCount === 0) {
+            throw new CanaryCommandError(
+                `${phase.id} ${variant} build emitted no matching JavaScript files.`,
+            );
+        }
+        if (phase.assertArtifacts) {
+            await phase.assertArtifacts(artifacts.filePaths, variant);
+        }
 
-    if (phase.getValidationCommand) {
-        const validationCommand = phase.getValidationCommand(root, variant);
-        await runCheckedCommand(runCommand, validationCommand);
-    }
+        if (phase.getValidationCommand) {
+            step = 'validate';
+            const validationCommand = phase.getValidationCommand(root, variant);
+            await runCheckedCommand(runCommand, validationCommand);
+        }
 
-    return {
-        durationMs: buildResult.durationMs,
-        fileCount: artifacts.fileCount,
-        gzipBytes: artifacts.gzipBytes,
-        rawBytes: artifacts.rawBytes,
-        outputRoots: artifactSpec.roots,
-    };
+        return {
+            durationMs: buildResult.durationMs,
+            fileCount: artifacts.fileCount,
+            gzipBytes: artifacts.gzipBytes,
+            rawBytes: artifacts.rawBytes,
+            outputRoots: artifactSpec.roots,
+        };
+    } catch (error) {
+        if (error instanceof CanaryInterruptedError) {
+            throw error;
+        }
+        const normalized = normalizeError(error);
+        throw new VariantStepError(normalized.message, step);
+    }
+};
+
+// Builds control after an instrumented variant failed first, to tell a Live
+// Debugger failure from a target that doesn't build at all.
+const controlPasses = async ({
+    phase,
+    root,
+    runCommand,
+}: {
+    phase: CanaryPhase;
+    root: string;
+    runCommand: RunCommand;
+}): Promise<boolean> => {
+    console.log(`\n[Canary] Running ${phase.id} control build to classify the failure.`);
+    try {
+        await measureVariant({ phase, root, runCommand, variant: 'control' });
+        return true;
+    } catch (error) {
+        if (error instanceof CanaryInterruptedError) {
+            throw error;
+        }
+        return false;
+    }
 };
 
 const runPhase = async ({
@@ -347,12 +409,25 @@ const runPhase = async ({
 
     for (const variant of variantOrder) {
         console.log(`\n[Canary] Running ${phase.id} ${variant} build.`);
-        results[variant] = await measureVariant({
-            phase,
-            root,
-            runCommand,
-            variant,
-        });
+        try {
+            results[variant] = await measureVariant({
+                phase,
+                root,
+                runCommand,
+                variant,
+            });
+        } catch (error) {
+            if (!(error instanceof VariantStepError)) {
+                throw error;
+            }
+            const stage = `phase:${phase.id}:${variant}:${error.step}`;
+            const controlPassed =
+                variant !== 'control' &&
+                (results.control !== undefined ||
+                    (await controlPasses({ phase, root, runCommand })));
+            const kind = controlPassed ? 'plugin' : 'target';
+            throw new CanaryPhaseError(error.message, stage, kind);
+        }
     }
 
     const control = results.control;
@@ -421,12 +496,20 @@ const runCleanups = async (
     return firstError;
 };
 
+const getFailureKind = (error: Error): FailureKind => {
+    if (error instanceof CanaryInterruptedError) {
+        return 'interrupted';
+    }
+    return error instanceof CanaryPhaseError ? error.kind : 'target';
+};
+
 const writeReport = async (report: CanaryReport): Promise<void> => {
     const serialized = JSON.stringify(report, null, 2);
     await outputFile(report.reportPath, `${serialized}\n`);
 };
 
 export const runCanary = async ({
+    alert,
     buildPluginsRoot,
     cleanup,
     install,
@@ -438,6 +521,8 @@ export const runCanary = async ({
     runId,
     target,
 }: {
+    // When set, a failed run also writes an alert for the CI notify job.
+    alert: AlertOptions | undefined;
     buildPluginsRoot: string;
     // Disposable CI checkouts skip reverting the target's changes.
     cleanup: boolean;
@@ -454,8 +539,9 @@ export const runCanary = async ({
     const buildPluginsGit = await getGitState(buildPluginsRoot);
     const targetGit = await getGitState(root);
     const report: CanaryReport = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         status: 'passed',
+        failureKind: null,
         target: target.id,
         phaseSelection,
         runId,
@@ -528,8 +614,9 @@ export const runCanary = async ({
         primaryError = normalizeError(error);
         report.failures.push({
             message: primaryError.message,
-            stage,
+            stage: primaryError instanceof CanaryPhaseError ? primaryError.stage : stage,
         });
+        report.failureKind = getFailureKind(primaryError);
     } finally {
         if (cleanup) {
             const cleanupError = await runCleanups(cleanups, report.failures);
@@ -538,10 +625,18 @@ export const runCanary = async ({
             console.log(`\n[Canary] Skipping ${cleanups.length} cleanup step(s) (--no-cleanup).`);
         }
         report.status = report.failures.length === 0 ? 'passed' : 'failed';
+        // Only cleanups failed: the canary setup is broken, not the plugin.
+        if (report.status === 'failed') {
+            report.failureKind ??= 'target';
+        }
         report.generatedAt = new Date().toISOString();
 
         try {
             await writeReport(report);
+            if (alert && report.status === 'failed') {
+                const message = formatRunAlert(report, alert.links);
+                await outputFile(alert.path, message);
+            }
         } catch (error) {
             primaryError ??= normalizeError(error);
         }

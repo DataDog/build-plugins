@@ -107,6 +107,18 @@ exits unsuccessfully, no JavaScript is emitted, emitted JavaScript does not
 parse, the instrumented output lacks Live Debugger markers, or the plugin
 reports an instrumentation or source-map error.
 
+A failed run records where it failed and who most likely needs to act on it:
+
+-   `stage` names the step, for example `setup` or
+    `phase:app:all-functions:build`. A variant's steps are `build`, `output`
+    (the build log checks), `artifacts` and `validate`.
+-   `failureKind` is `plugin` when the control build passed but an instrumented
+    build failed, so Live Debugger is the suspect. It is `target` when the
+    target, its install, the canary setup or its control build failed, so Live
+    Debugger wasn't evaluated, and `interrupted` when the run was stopped. When
+    an instrumented build fails before control has run, the canary still builds
+    control to tell the two apart.
+
 ### Fresh checkouts and CI
 
 Each target declares its GitHub repository and the branch it tracks.
@@ -141,6 +153,10 @@ failures twice. `--no-cleanup` leaves the checkout's changes in place, which is
 only appropriate for a disposable checkout. `--artifacts-dir` writes the report
 to `report.json` and each command's output to a numbered file in
 `logs/canary/`, next to `canary-checkout`'s `logs/checkout/`.
+
+When either command fails with `--artifacts-dir`, it also writes
+`slack-message.txt`: the failure kind, stage, error, commits and, in GitLab,
+links to the job and pipeline. The CI notify job posts it as is.
 
 ### Excalidraw target
 
