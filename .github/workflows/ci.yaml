@@ -64,6 +64,76 @@ jobs:
           DD_TAGS: type:unit
           DD_ENV: ci
 
+  # Jest can't load Vite 7+, which ships ESM only, so this runs node:test against fresh installs.
+  apps-vite-versions:
+    timeout-minutes: 15
+
+    name: Apps local execution (Vite ${{ matrix.vite }})
+    runs-on: ubuntu-latest
+    # After the unit-test job saves the build cache, so each leg restores it instead of building.
+    needs: unit-test
+    # It installs unlocked npm dependencies, so it gets no token to federate.
+    permissions:
+      contents: read
+    if: ${{ !startsWith(github.ref_name, 'mq-working-branch-') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        vite: ["5.4.21", "6.0.5", "6.4.3", "7.3.7", "8.3.3"]
+    env:
+      FORCE_COLOR: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: "package.json"
+
+      # Restore only: this job runs unlocked npm packages, so it never writes the shared build.
+      - name: Restore build:all
+        id: cache-build
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: packages/published/**/dist
+          key: ${{ matrix.node }}-cache-build-${{ hashFiles('packages/core/**',
+            'packages/factory/**', 'packages/plugins/**',
+            'packages/published/**', 'packages/tools/src/**',
+            'yarn.lock') }}
+
+      - run: yarn install --immutable --immutable-cache
+        if: steps.cache-build.outputs.cache-hit != 'true'
+
+      - name: Build all plugins
+        if: steps.cache-build.outputs.cache-hit != 'true'
+        run: yarn build:all
+
+      - name: Pack the Vite plugin
+        run: |
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+          mv "$RUNNER_TEMP"/datadog-vite-plugin-*.tgz "$RUNNER_TEMP/datadog-vite-plugin.tgz"
+        working-directory: packages/published/vite-plugin
+
+      - run: node --test packages/tests/src/apps-vite-versions/local-execution.mjs
+        env:
+          DD_APPS_TEST_VITE_VERSION: ${{ matrix.vite }}
+          DD_APPS_TEST_PLUGIN_TGZ: ${{ runner.temp }}/datadog-vite-plugin.tgz
+
+  apps-vite-versions-result:
+    name: Apps local execution
+    runs-on: ubuntu-latest
+    needs: apps-vite-versions
+    permissions: {}
+    if: ${{ always() && !startsWith(github.ref_name, 'mq-working-branch-') }}
+    steps:
+      - name: Check matrix result
+        run: |
+          echo "Matrix result: ${{ needs.apps-vite-versions.result }}"
+          [ "${{ needs.apps-vite-versions.result }}" = "success" ]
+
   e2e:
     timeout-minutes: 30
 
