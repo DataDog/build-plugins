@@ -499,6 +499,17 @@ export const getVitePlugin = ({
                           projectRoot: context.buildRoot,
                           childEntryPath: getLocalExecutionChildPath(),
                           moduleRunnerPath,
+                          readRoots: server.config.server.fs?.allow ?? [],
+                          denyPatterns: server.config.server.fs?.deny ?? [],
+                          restrictModuleLoads: server.config.server.fs?.strict !== false,
+                          resolveModule: async (url, importer) => {
+                              const resolved =
+                                  await server.environments.ssr.pluginContainer.resolveId(
+                                      url,
+                                      importer,
+                                  );
+                              return resolved?.id;
+                          },
                           log,
                       })
                     : undefined;

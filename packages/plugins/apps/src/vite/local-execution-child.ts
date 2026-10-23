@@ -193,8 +193,11 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     return assertJsonRoundTrippable(returned, subject);
 }
 
-// The guards cover the module's top-level code as well as the call.
+// Without the permission model, the guards cover the module's top-level code as well as the call.
 function execute(config: ChildStartConfig): Promise<unknown> {
+    if (!config.installGuards) {
+        return load(config);
+    }
     installGuards();
     return runBlocked(() => load(config));
 }

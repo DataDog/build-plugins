@@ -7,6 +7,7 @@ import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { fork } from 'child_process';
 import fs from 'fs';
 import http from 'http';
+import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import { build, createServer, type HotPayload, type Plugin, type ViteDevServer } from 'vite';
@@ -30,6 +31,7 @@ import {
     resolveViteModuleRunner,
 } from './local-execution-process';
 import type { ChildStartConfig } from './local-execution-protocol';
+import { DENIED_MODULE_REASON, OUTSIDE_READ_ROOTS_REASON } from './local-execution-sandbox';
 import {
     DEFAULT_LONG_POLLING_CONFIG,
     deriveActionTimeouts,
@@ -73,6 +75,9 @@ const isProcessAlive = (pid: number) => {
         return false;
     }
 };
+
+const requestedUrlOf = (payload: HotPayload): unknown =>
+    payload.type === 'custom' ? payload.data?.data?.[0] : undefined;
 
 const childPidFrom = (debugLines: string[]) => {
     const match = debugLines.join('\n').match(/\(pid (\d+),/);
@@ -142,6 +147,11 @@ describe('Local execution in a child process', () => {
             projectRoot: FIXTURE_ROOT,
             childEntryPath,
             moduleRunnerPath,
+            readRoots: server.config.server.fs.allow,
+            denyPatterns: server.config.server.fs.deny,
+            restrictModuleLoads: true,
+            resolveModule: async (url, importer) =>
+                (await server.environments.ssr.pluginContainer.resolveId(url, importer))?.id,
             log: getMockLogger(),
             writeOutput: () => {},
             ...overrides,
@@ -502,6 +512,7 @@ describe('Local execution in a child process', () => {
                     runtimeContext: previewRuntimeContext,
                     actionCatalogInstalled: false,
                     appsBackendInstalled: false,
+                    installGuards: false,
                     flushTimeoutMs: 1000,
                 };
                 const child = fork(childEntryPath, [], {
@@ -585,7 +596,9 @@ describe('Local execution in a child process', () => {
         );
     });
 
-    describe('Guards', () => {
+    describe('Sandbox', () => {
+        const withoutAllowInspector = new Set(process.allowedNodeEnvironmentFlags);
+        withoutAllowInspector.delete('--allow-inspector');
         let fetchServer: http.Server;
         let fetchUrl: string;
         let projectFile: string;
@@ -618,9 +631,38 @@ describe('Local execution in a child process', () => {
         });
 
         test(
-            'Should refuse project writes, subprocesses and workers with the in-process guards, and allow temp writes and fetch',
+            'Should refuse project writes, subprocesses and workers, and allow temp writes and fetch',
             async () => {
                 const execute = makeExecutor();
+                const result = await execute(
+                    makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
+                        projectFile,
+                        fetchUrl,
+                        sharedTmpFile,
+                    ]),
+                );
+                expect(result.data).toEqual({
+                    sharedTmpWrite: 'ok: written',
+                    projectWrite: 'refused: ERR_ACCESS_DENIED',
+                    tempWrite: 'ok: x',
+                    spawn: 'refused: ERR_ACCESS_DENIED',
+                    worker: 'refused: ERR_ACCESS_DENIED',
+                    fetch: 'ok: 200 pong',
+                });
+                expect(fs.existsSync(projectFile)).toBe(false);
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should fall back to the in-process guards while debugging on a Node without --allow-inspector',
+            async () => {
+                const lines: string[] = [];
+                const execute = makeExecutor({
+                    nodeFlags: withoutAllowInspector,
+                    isInspectorActive: () => true,
+                    writeOutput: (_stream, line) => lines.push(line),
+                });
                 const result = await execute(
                     makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
                         projectFile,
@@ -637,14 +679,18 @@ describe('Local execution in a child process', () => {
                     fetch: 'ok: 200 pong',
                 });
                 expect(fs.existsSync(projectFile)).toBe(false);
+                expect(lines.join('\n')).toContain('Debugger listening on ws://127.0.0.1:');
             },
             CALL_TIMEOUT_MS,
         );
 
         test(
-            "Should guard a module's top-level code too",
+            "Should guard a module's top-level code too while debugging on a Node without --allow-inspector",
             async () => {
-                const execute = makeExecutor();
+                const execute = makeExecutor({
+                    nodeFlags: withoutAllowInspector,
+                    isInspectorActive: () => true,
+                });
                 await expect(
                     execute(
                         makeRequest(
@@ -698,8 +744,169 @@ describe('Local execution in a child process', () => {
             CALL_TIMEOUT_MS,
         );
     });
+
     describe('Module loading over IPC', () => {
         const loadOverIpc = fixtureFunction('childSandbox', 'loadOverIpc');
+        // Files these tests create live in their own readable folder: other suites copy the shared fixture project.
+        let readableDir = '';
+        const makeReadingExecutor = (overrides: Partial<ChildProcessExecutorOptions> = {}) =>
+            makeExecutor({
+                readRoots: [...server.config.server.fs.allow, readableDir],
+                ...overrides,
+            });
+
+        beforeAll(() => {
+            const createdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-readable-'));
+            readableDir = fs.realpathSync.native(createdDir);
+            fs.writeFileSync(path.join(readableDir, '.env'), 'DD_API_KEY=from-dotenv\n');
+        });
+
+        afterAll(() => {
+            fs.rmSync(readableDir, { recursive: true, force: true });
+        });
+        const outsideFile = process.platform === 'win32' ? 'C:\\Windows\\win.ini' : '/etc/hosts';
+
+        test.each([
+            {
+                description: 'an absolute path',
+                url: () => `${outsideFile}?raw`,
+                importer: undefined,
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+            {
+                description: 'a /@fs/ path',
+                url: () => `/@fs${outsideFile}?raw`,
+                importer: undefined,
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+            {
+                description: 'a .env file in a readable folder',
+                url: () => `${path.join(readableDir, '.env')}?raw`,
+                importer: undefined,
+                reason: DENIED_MODULE_REASON,
+            },
+            {
+                description: 'a relative path climbing out of the project',
+                url: () =>
+                    `${path.relative(FIXTURE_ROOT, outsideFile)}?raw`.replace(/^(?!\.)/, './'),
+                importer: path.join(FIXTURE_ROOT, 'childSandbox.backend.ts'),
+                reason: OUTSIDE_READ_ROOTS_REASON,
+            },
+        ])(
+            'Should refuse a module named by $description, without reading it',
+            async ({ url: urlOf, importer, reason }) => {
+                const url = urlOf();
+                const requestedUrls: unknown[] = [];
+                const { hot } = server.environments.ssr;
+                const execute = makeReadingExecutor({
+                    invokeChannel: {
+                        handleInvoke: (payload: HotPayload) => {
+                            requestedUrls.push(requestedUrlOf(payload));
+                            return hot.handleInvoke(payload);
+                        },
+                    },
+                });
+                const result = await execute(makeRequest(loadOverIpc, [url, importer]));
+                expect(requestedUrls).not.toContain(url);
+                expect(JSON.stringify(result.data)).toContain(`: ${reason}.`);
+                expect(result.data).toEqual({
+                    error: {
+                        name: 'Error',
+                        message: expect.stringMatching(/^Local execution can't load ".+": /),
+                    },
+                });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should refuse an extensionless path to a module outside the readable folders, without reading it',
+            async () => {
+                const outsideDir = fs.realpathSync(
+                    fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-outside-')),
+                );
+                const requestedUrls: unknown[] = [];
+                const { hot } = server.environments.ssr;
+                try {
+                    fs.writeFileSync(path.join(outsideDir, 'mod.js'), 'export const secret = 1;');
+                    const url = path.join(outsideDir, 'mod');
+                    const execute = makeExecutor({
+                        invokeChannel: {
+                            handleInvoke: (payload: HotPayload) => {
+                                requestedUrls.push(requestedUrlOf(payload));
+                                return hot.handleInvoke(payload);
+                            },
+                        },
+                    });
+                    const result = await execute(makeRequest(loadOverIpc, [url]));
+                    expect(requestedUrls).not.toContain(url);
+                    expect(JSON.stringify(result.data)).toContain(OUTSIDE_READ_ROOTS_REASON);
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            "Should refuse a module matching the project's own server.fs.deny",
+            async () => {
+                const secretsDir = path.join(readableDir, 'secrets');
+                const secretFile = path.join(secretsDir, 'prod.json');
+                try {
+                    fs.mkdirSync(secretsDir, { recursive: true });
+                    fs.writeFileSync(secretFile, '{"token":"x"}');
+                    const execute = makeReadingExecutor({
+                        denyPatterns: [...server.config.server.fs.deny, '**/secrets/**'],
+                    });
+                    const result = await execute(makeRequest(loadOverIpc, [`${secretFile}?raw`]));
+                    expect(JSON.stringify(result.data)).toContain(DENIED_MODULE_REASON);
+                } finally {
+                    fs.rmSync(secretsDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should refuse a denied name even when it links to a file with an allowed name',
+            async () => {
+                const targetDir = path.join(readableDir, 'linked-secret');
+                const target = path.join(targetDir, 'dev.secrets');
+                const link = path.join(targetDir, '.env.linked');
+                try {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                    fs.writeFileSync(target, 'TOKEN=x');
+                    fs.symlinkSync(target, link);
+                    const execute = makeReadingExecutor();
+                    const result = await execute(makeRequest(loadOverIpc, [`${link}?raw`]));
+                    expect(JSON.stringify(result.data)).toContain(DENIED_MODULE_REASON);
+                } finally {
+                    fs.rmSync(targetDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should load a module outside the readable folders when server.fs.strict is off',
+            async () => {
+                const outsideDir = fs.realpathSync(
+                    fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-loose-')),
+                );
+                try {
+                    const looseFile = path.join(outsideDir, 'mod.js');
+                    fs.writeFileSync(looseFile, 'export const loose = true;');
+                    const execute = makeExecutor({ restrictModuleLoads: false });
+                    const result = await execute(makeRequest(loadOverIpc, [looseFile]));
+                    expect(JSON.stringify(result.data)).not.toContain(OUTSIDE_READ_ROOTS_REASON);
+                    expect(JSON.stringify(result.data)).toContain('loose');
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
 
         test(
             "Should load a plugin's virtual module",
@@ -709,6 +916,18 @@ describe('Local execution in a child process', () => {
                     makeRequest(fixtureFunction('childVirtual', 'readVirtualModule'), []),
                 );
                 expect(result.data).toEqual({ virtualValue: 42, slashValue: 7 });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            'Should report a module that does not exist yet as missing, not as outside the readable folders',
+            async () => {
+                const execute = makeExecutor();
+                const missing = execute(
+                    makeRequest(fixtureFunction('childLaterImport', 'importLater'), []),
+                );
+                await expect(missing).rejects.toThrow('Does the file exist?');
             },
             CALL_TIMEOUT_MS,
         );
