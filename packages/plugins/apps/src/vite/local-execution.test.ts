@@ -435,7 +435,11 @@ describe('local-execution — executeScriptLocally', () => {
                 }),
                 mockLogger,
             ),
-        ).rejects.toThrow(/not in this function's allowed connections/);
+        ).rejects.toMatchObject({
+            detail: expect.stringMatching(
+                /^Action .+ not in this function's allowed connections: \[.*\]$/,
+            ),
+        });
         expect(executeAction).not.toHaveBeenCalled();
     });
 
@@ -469,7 +473,11 @@ describe('local-execution — executeScriptLocally', () => {
                 }),
                 mockLogger,
             ),
-        ).rejects.toThrow(/must have an inputs field/);
+        ).rejects.toMatchObject({
+            detail: expect.stringMatching(
+                /^First argument to action .+ must have an inputs field that is an object$/,
+            ),
+        });
     });
 
     // A call with no connectionId skips assertConnectionIdAllowed, so a scope nested in its inputs
@@ -1533,7 +1541,11 @@ describe('local-execution — executeScriptLocally', () => {
                     loadModule,
                     mockLogger,
                 ),
-            ).rejects.toThrow(/not in this function's allowed connections/);
+            ).rejects.toMatchObject({
+                detail: expect.stringMatching(
+                    /^Action .+ not in this function's allowed connections: \[.*\]$/,
+                ),
+            });
             expect(executeAction).not.toHaveBeenCalled();
         });
 
@@ -1576,7 +1588,11 @@ describe('local-execution — executeScriptLocally', () => {
                     loadModule,
                     mockLogger,
                 ),
-            ).rejects.toThrow(/must have an inputs field/);
+            ).rejects.toMatchObject({
+                detail: expect.stringMatching(
+                    /^First argument to action .+ must have an inputs field that is an object$/,
+                ),
+            });
             expect(executeAction).not.toHaveBeenCalled();
         });
 

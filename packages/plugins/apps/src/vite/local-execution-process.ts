@@ -30,12 +30,15 @@ import {
     sharedTmpPaths,
     withRealPath,
 } from './local-execution-sandbox';
-import { isIndexableRecord, validateActionCall } from './local-execution-shared';
+import {
+    FunctionThrewError,
+    isIndexableRecord,
+    validateActionCall,
+} from './local-execution-shared';
 import type { ExecuteAction, GetRuntimeContext } from './local-execution';
 import {
     assertValidRuntimeContext,
     deriveActionTimeouts,
-    enqueue,
     localExecutionResolutionContext,
     withTimeout,
 } from './local-execution';
@@ -264,6 +267,7 @@ interface ChildRun {
     executeAction: ExecuteAction;
     timeoutMs: number;
     longPolling: Required<LongPollingOptions>;
+    prefix: string;
 }
 
 export function createChildProcessExecutor(
@@ -287,6 +291,7 @@ export function createChildProcessExecutor(
     const moduleRunnerUrl = pathToFileURL(moduleRunnerPath).href;
     // Node checks read access on each linked part of the entry's path while it starts.
     const [realChildEntryPath = childEntryPath] = withRealPath(childEntryPath).slice(-1);
+    let callCount = 0;
 
     const ownChildren: ChildTmpDirs = new Map();
     let closed = false;
@@ -299,7 +304,7 @@ export function createChildProcessExecutor(
     };
 
     const runChild = async (run: ChildRun): Promise<BackendOutputs> => {
-        const { func, config, allowedConnectionIds, executeAction, timeoutMs } = run;
+        const { func, config, allowedConnectionIds, executeAction, timeoutMs, prefix } = run;
         // A call still starting when its server closed must not fork on the closed server.
         refuseIfClosed(func);
         const { actionCallTimeoutMs, totalExecutionTimeoutMs } = deriveActionTimeouts(
@@ -348,7 +353,7 @@ export function createChildProcessExecutor(
         let ranOutOfMemory = false;
         const writeChildLine = (stream: OutputStream) => (line: string) => {
             ranOutOfMemory ||= stream === 'stderr' && V8_OUT_OF_MEMORY_LINE.test(line);
-            writeOutput(stream, line);
+            writeOutput(stream, `${prefix} ${line}`);
         };
         if (child.stdout && child.stderr) {
             const writeStdoutLine = writeChildLine('stdout');
@@ -466,8 +471,15 @@ export function createChildProcessExecutor(
                 },
             ) => {
                 const replyWithError = (error: unknown) => {
+                    const thrownString = typeof error === 'string';
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    reply({ type: 'action-result', id, ok: false, message: errorMessage });
+                    reply({
+                        type: 'action-result',
+                        id,
+                        ok: false,
+                        message: errorMessage,
+                        thrownString,
+                    });
                 };
                 let validated: {
                     inputs: Record<string, unknown>;
@@ -535,6 +547,7 @@ export function createChildProcessExecutor(
                             ok: false,
                             message:
                                 'Malformed $.Actions request: it needs a string actionId, an inputs object and an optional string connectionId.',
+                            thrownString: false,
                         });
                     }
                 } else if (message.type === 'loaded' && !loaded) {
@@ -551,7 +564,11 @@ export function createChildProcessExecutor(
                 } else if (message.type === 'error') {
                     const reason =
                         typeof message.message === 'string' ? message.message : 'Unknown error';
-                    fail(reason);
+                    if (typeof message.detail === 'string') {
+                        finish(new FunctionThrewError(reason, message.detail));
+                    } else {
+                        fail(reason);
+                    }
                 }
             });
             // A process that fails to start may never emit 'close'.
@@ -581,43 +598,42 @@ export function createChildProcessExecutor(
         });
     };
 
-    // One call at a time, like the in-process path.
-    const execute: LocalExecutor = (request) =>
-        enqueue(async () => {
-            const { func, args, executeAction, getRuntimeContext, getAllowedConnectionIds } =
-                request;
-            refuseIfClosed(func);
-            const displayName = `${func.relativePath}/${func.name}`;
-            const runtimeContext = await getRuntimeContext();
-            assertValidRuntimeContext(runtimeContext);
-            const connectionIdsResolving = getAllowedConnectionIds(func.absolutePath);
-            const allowedConnectionIds = await withTimeout(
-                connectionIdsResolving,
-                request.timeoutMs,
-                `Resolving allowed connections for "${displayName}"`,
-            );
-            const actionCatalogInstalled = isActionCatalogInstalled(projectRoot);
-            const appsBackendInstalled = isDatadogAppsBackendInstalled(projectRoot);
-            return runChild({
-                func,
-                allowedConnectionIds,
-                executeAction,
-                timeoutMs: request.timeoutMs,
-                longPolling: request.longPolling,
-                config: {
-                    moduleRunnerUrl,
-                    projectRoot,
-                    entryUrl: func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
-                    entryPath: func.absolutePath,
-                    functionName: func.name,
-                    args,
-                    runtimeContext,
-                    actionCatalogInstalled,
-                    appsBackendInstalled,
-                    flushTimeoutMs,
-                },
-            });
+    const execute: LocalExecutor = async (request) => {
+        const { func, args, executeAction, getRuntimeContext, getAllowedConnectionIds } = request;
+        refuseIfClosed(func);
+        const displayName = `${func.relativePath}/${func.name}`;
+        const runtimeContext = await getRuntimeContext();
+        assertValidRuntimeContext(runtimeContext);
+        const connectionIdsResolving = getAllowedConnectionIds(func.absolutePath);
+        const allowedConnectionIds = await withTimeout(
+            connectionIdsResolving,
+            request.timeoutMs,
+            `Resolving allowed connections for "${displayName}"`,
+        );
+        const actionCatalogInstalled = isActionCatalogInstalled(projectRoot);
+        const appsBackendInstalled = isDatadogAppsBackendInstalled(projectRoot);
+        callCount += 1;
+        return runChild({
+            func,
+            allowedConnectionIds,
+            executeAction,
+            timeoutMs: request.timeoutMs,
+            longPolling: request.longPolling,
+            prefix: `[${func.name}#${callCount}]`,
+            config: {
+                moduleRunnerUrl,
+                projectRoot,
+                entryUrl: func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX,
+                entryPath: func.absolutePath,
+                functionName: func.name,
+                args,
+                runtimeContext,
+                actionCatalogInstalled,
+                appsBackendInstalled,
+                flushTimeoutMs,
+            },
         });
+    };
     const close = () => {
         closed = true;
         killChildren(ownChildren);

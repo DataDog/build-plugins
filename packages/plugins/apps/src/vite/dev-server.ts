@@ -25,6 +25,7 @@ import { getBaseBackendBuildConfig } from './build-config';
 import type { HostCheck } from './dev-server-request-guard';
 import { checkDevServerRequest } from './dev-server-request-guard';
 import type { LocalExecutor } from './local-execution-process';
+import { FunctionThrewError, throwActionFailure } from './local-execution-shared';
 import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
 import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
@@ -290,6 +291,17 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
+/** Callers that arrive while a run is in flight share its result instead of starting their own. */
+function shareInFlight<T>(): (run: () => Promise<T>) => Promise<T> {
+    let pending: Promise<T> | undefined;
+    return (run) => {
+        pending ??= run().finally(() => {
+            pending = undefined;
+        });
+        return pending;
+    };
+}
+
 /**
  * Resolves the serializable `$` context exposed by an authenticated preview execution. The
  * platform response is deliberately kept opaque here; local-execution validates the identity
@@ -315,9 +327,9 @@ function makeGetRuntimeContextRemotely(
         });
         try {
             // The request signal cancels active fetches and our own retry delays. Racing the whole
-            // operation also releases the local-execution queue if doRequest is already sleeping
-            // inside async-retry, whose backoff timer does not observe AbortSignal. Promise.race
-            // keeps observing submitQuery's eventual settlement after the deadline wins.
+            // operation also fails the call on time, freeing the queue on Vite 5, if doRequest is
+            // already sleeping inside async-retry, whose backoff timer does not observe AbortSignal.
+            // Promise.race keeps observing submitQuery's eventual settlement after the deadline wins.
             const outputs = await Promise.race([
                 submitQuery(
                     {
@@ -391,9 +403,19 @@ function makeExecuteActionRemotely(
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             log.error(`$.Actions call to "${fqn}" failed: ${message}`);
+            if (error instanceof QueryExecutionError) {
+                throwActionFailure(error.detail);
+            }
             throw error;
         }
     };
+}
+
+/** A query that ran and failed; `detail` is what a deployed `$.Actions` call rejects with. */
+class QueryExecutionError extends Error {
+    constructor(readonly detail: string) {
+        super(`Query execution failed: ${detail}`);
+    }
 }
 
 interface PollResult {
@@ -453,8 +475,11 @@ async function pollQueryExecution(
 
         // Check for error responses.
         if (result.errors?.length) {
-            const details = result.errors.map((e) => e.detail || e.title).join('; ');
-            throw new Error(`Query execution failed: ${details}`);
+            const details = result.errors
+                .map((e) => e.detail || e.title)
+                .filter(Boolean)
+                .join('; ');
+            throw new QueryExecutionError(details || 'Query execution failed');
         }
 
         const attrs = result.data?.attributes;
@@ -511,7 +536,14 @@ function guardAuthenticated(
 /** Shared catch-block shape for every handler below: an `HttpError` carries its own status code, anything else is a 500. `label` is omitted for handlers with no `log` in scope. */
 function handleHttpError(res: ServerResponse, error: unknown, log?: Logger, label?: string): void {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message =
+        error instanceof FunctionThrewError
+            ? `Execution failed: ${error.detail}`
+            : typeof error === 'string'
+              ? error
+              : error instanceof Error
+                ? error.message
+                : 'Internal server error';
     if (log && label) {
         log.debug(`Error handling ${label}: ${message}`);
     }
@@ -602,6 +634,7 @@ async function handleExecuteAction(
     projectRoot: string,
     log: Logger,
     executeLocally: LocalExecutor | undefined,
+    shareRuntimeContext: (run: GetRuntimeContext) => Promise<unknown>,
 ): Promise<void> {
     try {
         const { func, args } = await parseAndLookupFunction(req, functionsByName);
@@ -617,12 +650,13 @@ async function handleExecuteAction(
             longPolling,
             log,
         );
-        const getRuntimeContext = makeGetRuntimeContextRemotely(
+        const getRuntimeContextRemotely = makeGetRuntimeContextRemotely(
             auth,
             doAuthenticatedRequest,
             longPolling,
             log,
         );
+        const getRuntimeContext = () => shareRuntimeContext(getRuntimeContextRemotely);
         const result = executeLocally
             ? await executeLocally({
                   func,
@@ -759,6 +793,8 @@ export function createDevServerMiddleware(
             longPolling,
             log,
         );
+    // One query for a burst of parallel calls, so they don't each count against production's limit.
+    const shareRuntimeContext = shareInFlight<unknown>();
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
             handleExecuteAction(
@@ -773,6 +809,7 @@ export function createDevServerMiddleware(
                 projectRoot,
                 log,
                 executeLocally,
+                shareRuntimeContext,
             ),
         );
     const routeHandlers: Record<DevServerRoute, RouteHandler> = {

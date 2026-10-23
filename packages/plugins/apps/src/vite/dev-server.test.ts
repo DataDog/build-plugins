@@ -13,6 +13,7 @@ import {
     formatRef,
     getRetryDelay,
 } from '@dd/apps-plugin/vite/dev-server';
+import type { LocalExecutionRequest } from '@dd/apps-plugin/vite/local-execution-process';
 import { DEFAULT_TIMEOUT_MS, withTimeout } from '@dd/apps-plugin/vite/local-execution';
 import type { AuthOptionsWithDefaults, RequestOpts } from '@dd/core/types';
 import {
@@ -1204,6 +1205,67 @@ describe('Dev Server Middleware', () => {
                 );
                 expect(mockLoadModule).not.toHaveBeenCalled();
             });
+
+            test('Should send one runtime context query for calls that need it at the same time', async () => {
+                nock.cleanAll();
+                const hydration = mockRuntimeContextHydration(1);
+                const callCount = 3;
+                const allStarted = createDeferred();
+                let started = 0;
+                const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
+                    started += 1;
+                    if (started === callCount) {
+                        allStarted.resolve();
+                    }
+                    await withTimeout(allStarted.promise, 5000, 'Waiting for every call to start');
+                    const data = await request.getRuntimeContext();
+                    return { data };
+                });
+                const childMiddleware = createTestMiddleware({ executeLocally });
+                const responses = Array.from({ length: callCount }, () => {
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: encodeQueryName(mockFunctions[0]),
+                        args: [],
+                    });
+                    const res = createMockResponse();
+                    childMiddleware(req, res, jest.fn());
+                    return res;
+                });
+                const allDone = responses.map((res) => res.done);
+                await Promise.all(allDone);
+
+                for (const res of responses) {
+                    expect(res.statusCode).toBe(200);
+                    expect(JSON.parse(res.getBody()).result).toEqual({
+                        data: previewRuntimeContext,
+                    });
+                }
+                expect(hydration.isDone()).toBe(true);
+            });
+
+            test('Should query the runtime context again for a call that starts after the last query ended', async () => {
+                nock.cleanAll();
+                const hydration = mockRuntimeContextHydration(2);
+                const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
+                    const data = await request.getRuntimeContext();
+                    return { data };
+                });
+                const childMiddleware = createTestMiddleware({ executeLocally });
+                const callAndWait = async () => {
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: encodeQueryName(mockFunctions[0]),
+                        args: [],
+                    });
+                    const res = createMockResponse();
+                    childMiddleware(req, res, jest.fn());
+                    await res.done;
+                    return res.statusCode;
+                };
+
+                expect(await callAndWait()).toBe(200);
+                expect(await callAndWait()).toBe(200);
+                expect(hydration.isDone()).toBe(true);
+            });
         });
 
         test('Should hydrate context, run the function directly in-process, and return its result without bundling', async () => {
@@ -1586,6 +1648,196 @@ describe('Dev Server Middleware', () => {
                 expect.stringContaining('Connection is not authorized for this action'),
                 'error',
             );
+        });
+
+        describe('What a failed $.Actions call rejects with, as in a deployed app', () => {
+            const catchingPostMessage = (call: Record<string, unknown>) => async () => {
+                try {
+                    await testDollarActions().slack.chat.postMessage(call);
+                    return 'no error';
+                } catch (error) {
+                    return { type: typeof error, value: error };
+                }
+            };
+            const runAndReadData = async () => {
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                middleware(req, res, jest.fn());
+                await res.done;
+                return JSON.parse(res.getBody()).result.data;
+            };
+            const mockActionErrors = (errors: Array<{ detail?: string; title?: string }>) =>
+                nock(DD_API_ORIGIN)
+                    .post('/api/v2/app-builder/queries/preview-async')
+                    .reply(200, { data: { id: 'receipt-action-failure' } })
+                    .get(
+                        '/api/v2/app-builder/queries/execution-long-polling/receipt-action-failure',
+                    )
+                    .reply(200, { errors });
+
+            test("Should reject with the platform's bare error detail as a string", async () => {
+                mockLoadModuleReturning(
+                    mockFunctions[0],
+                    catchingPostMessage({ inputs: { text: 'hi' } }),
+                );
+                mockActionErrors([
+                    { detail: 'rpc error: code = NotFound desc = connection not found' },
+                ]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'rpc error: code = NotFound desc = connection not found',
+                });
+            });
+
+            test("Should join several of the platform's errors, using a title when there's no detail", async () => {
+                mockLoadModuleReturning(
+                    mockFunctions[0],
+                    catchingPostMessage({ inputs: { text: 'hi' } }),
+                );
+                mockActionErrors([{ detail: 'first' }, { title: 'second' }]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'first; second',
+                });
+            });
+
+            test('Should reject a call with no inputs with the deployed wording, as a string', async () => {
+                mockLoadModuleReturning(mockFunctions[0], catchingPostMessage({}));
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'First argument to action $.Actions.slack.chat.postMessage must have an inputs field that is an object',
+                });
+            });
+
+            test('Should report an uncaught failure as "Execution failed: " and the bare detail', async () => {
+                mockLoadModuleReturning(mockFunctions[0], () =>
+                    testDollarActions().slack.chat.postMessage({ inputs: { text: 'hi' } }),
+                );
+                mockActionErrors([
+                    { detail: 'a connection is required for com.datadoghq.slack.chat' },
+                ]);
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                middleware(req, res, jest.fn());
+                await res.done;
+
+                expect(res.statusCode).toBe(500);
+                expect(JSON.parse(res.getBody())).toEqual({
+                    success: false,
+                    error: 'Execution failed: a connection is required for com.datadoghq.slack.chat',
+                });
+            });
+
+            test('Should reject a call with no arguments with the deployed wording, as a string', async () => {
+                mockLoadModuleReturning(mockFunctions[0], async () => {
+                    try {
+                        await testDollarActions().slack.chat.postMessage();
+                        return 'no error';
+                    } catch (error) {
+                        return { type: typeof error, value: error };
+                    }
+                });
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'No arguments provided to action $.Actions.slack.chat.postMessage',
+                });
+            });
+
+            test('Should reject with a fallback message when no platform error has a detail or a title', async () => {
+                mockLoadModuleReturning(
+                    mockFunctions[0],
+                    catchingPostMessage({ inputs: { text: 'hi' } }),
+                );
+                mockActionErrors([{}, { detail: '' }]);
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: 'Query execution failed',
+                });
+            });
+
+            test("Should reject a connection outside the function's allowlist as a string", async () => {
+                mockLoadModuleReturning(
+                    mockFunctions[0],
+                    catchingPostMessage({ inputs: { text: 'hi' }, connectionId: 'not-listed' }),
+                );
+
+                await expect(runAndReadData()).resolves.toEqual({
+                    type: 'string',
+                    value: `Action $.Actions.slack.chat.postMessage used connection "not-listed", which is not in this function's allowed connections: []`,
+                });
+            });
+        });
+
+        describe('What an uncaught failure reports, as in a deployed app', () => {
+            const runAndReadError = async (fn: () => unknown) => {
+                mockLoadModuleReturning(mockFunctions[0], fn);
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                middleware(req, res, jest.fn());
+                await res.done;
+                return { statusCode: res.statusCode, error: JSON.parse(res.getBody()).error };
+            };
+
+            test('Should prefix a thrown string with "Execution failed: "', async () => {
+                await expect(
+                    runAndReadError(() => {
+                        const failure = 'plain string failure';
+                        throw failure;
+                    }),
+                ).resolves.toEqual({
+                    statusCode: 500,
+                    error: 'Execution failed: plain string failure',
+                });
+            });
+
+            test("Should report a thrown Error's stack after the prefix", async () => {
+                const { statusCode, error } = await runAndReadError(() => {
+                    throw new TypeError('plain error x');
+                });
+                expect(statusCode).toBe(500);
+                expect(error).toMatch(/^Execution failed: TypeError: plain error x\n {4}at /);
+            });
+
+            test('Should report any other thrown value as a string', async () => {
+                await expect(
+                    runAndReadError(() => {
+                        const failure = { a: 1 };
+                        throw failure;
+                    }),
+                ).resolves.toEqual({ statusCode: 500, error: 'Execution failed: [object Object]' });
+            });
+
+            test("Should leave the dev server's own failures unprefixed", async () => {
+                mockLoadModule.mockImplementation(
+                    moduleResolverFor(mockFunctions[0], { notTheFunction: () => 'unused' }),
+                );
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                middleware(req, res, jest.fn());
+                await res.done;
+
+                expect(res.statusCode).toBe(500);
+                expect(JSON.parse(res.getBody()).error).toBe(
+                    `"${mockFunctions[0].name}" is not a function exported from ${mockFunctions[0].absolutePath}`,
+                );
+            });
         });
 
         // The priming loadModule call (see handleExecuteAction) is the only place the entry's

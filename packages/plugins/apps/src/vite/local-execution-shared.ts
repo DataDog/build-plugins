@@ -23,6 +23,43 @@ export function isIndexableRecord(value: unknown): value is Record<string, unkno
     return typeof value === 'object' && value !== null;
 }
 
+/** Rejects the way a deployed `$.Actions` call does: with a bare string, not an Error. */
+export function throwActionFailure(message: string): never {
+    throw message;
+}
+
+/** The backend function's own code threw; `detail` is what a deployed app reports after "Execution failed: ". */
+export class FunctionThrewError extends Error {
+    constructor(
+        message: string,
+        readonly detail: string,
+    ) {
+        super(message);
+    }
+}
+
+function describeThrown(thrown: unknown): { message: string; detail: string } {
+    try {
+        if (thrown instanceof Error) {
+            const detail = typeof thrown.stack === 'string' ? thrown.stack : String(thrown);
+            return { message: String(thrown.message), detail };
+        }
+        const text = String(thrown);
+        return { message: text, detail: text };
+    } catch {
+        return { message: 'Unknown error', detail: 'Unknown error' };
+    }
+}
+
+export async function callBackendFunction(call: () => unknown): Promise<unknown> {
+    try {
+        return await call();
+    } catch (thrown) {
+        const { message, detail } = describeThrown(thrown);
+        throw new FunctionThrewError(message, detail);
+    }
+}
+
 /** Checks this one call's own connectionId field against the function's allowlist — not full parity with the cloud path's server-side restriction, since a nested meta-action's own inputs can carry a separate scope this never inspects (see validateActionCall's own check for that). */
 export function assertConnectionIdAllowed(
     connectionId: string | undefined,
@@ -30,7 +67,7 @@ export function assertConnectionIdAllowed(
     actionDescription: string,
 ): void {
     if (connectionId !== undefined && !allowedConnectionIds.includes(connectionId)) {
-        throw new Error(
+        throwActionFailure(
             `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
         );
     }
@@ -56,7 +93,9 @@ export function validateActionCallShape(
 ): { inputs: Record<string, unknown>; connectionId: string | undefined } {
     const { inputs, connectionId } = call;
     if (typeof inputs !== 'object' || !inputs) {
-        throw new Error(`Action ${actionDescription} must have an inputs field`);
+        throwActionFailure(
+            `First argument to action ${actionDescription} must have an inputs field that is an object`,
+        );
     }
     assertNoSelfDeclaredScope(inputs, actionDescription);
     return { inputs, connectionId };
@@ -103,7 +142,7 @@ export function makeActionsProxy(dispatch: ActionDispatch, pathParts: string[] =
         async apply(_target, _thisArg, args: unknown[]) {
             const actionPath = pathParts.join('.');
             if (args.length === 0) {
-                throw new Error(`No arguments provided to action $.Actions.${actionPath}`);
+                throwActionFailure(`No arguments provided to action $.Actions.${actionPath}`);
             }
             const call: Partial<ActionCallArgs> = isIndexableRecord(args[0]) ? args[0] : {};
             const fqn = `com.datadoghq.${actionPath}`;
