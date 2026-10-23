@@ -29,7 +29,7 @@ import nock from 'nock';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
-import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { DEV_VERIFY_MODE, LOCAL_EXECUTION_LOAD_SUFFIX, NODE_BACKEND_RUNTIME } from '../constants';
 import type { AppsOptionsWithDefaults } from '../types';
 
 /** Shape of the `$.Actions` dynamic proxy — a nested property path (e.g. `$.Actions.slack.chat.postMessage`) callable at any depth; types `globalThis.$` in tests without an `any` cast. */
@@ -608,7 +608,7 @@ describe('Dev Server Middleware', () => {
                 await emitModuleParsed(
                     config,
                     '/project/backend/helpers/secrets.ts',
-                    "import fs from 'fs';\nexport function readSecret() { return fs.readFileSync('/etc/passwd'); }",
+                    "export function readSecret() { return Deno.readTextFileSync('/etc/passwd'); }",
                 );
                 return mockBuildResult('// code');
             });
@@ -626,9 +626,7 @@ describe('Dev Server Middleware', () => {
             expect(res.statusCode).toBe(500);
             const responseText = res.getBody();
             const body = JSON.parse(responseText);
-            expect(body.error).toContain(
-                'Importing Node built-in module "fs" is not supported in backend function code',
-            );
+            expect(body.error).toContain(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
         });
 
         test('Should call vite.build with configFile: false and write: false', async () => {
@@ -2037,7 +2035,7 @@ describe('Dev Server Middleware', () => {
 
         // Regression test: getAllowedConnectionIds (which only resolves/transforms modules, never
         // executes them) must run and reject before the priming load ever evaluates the entry's
-        // real top-level code — otherwise a banned import there could run before being rejected.
+        // real top-level code — otherwise a module the static checks reject could run first.
         test('Should never prime (evaluate) the entry when getAllowedConnectionIds rejects', async () => {
             const primingCalls: string[] = [];
             mockLoadModule.mockImplementation(async (specifier: string) => {
@@ -2046,7 +2044,7 @@ describe('Dev Server Middleware', () => {
             });
             const rejectingMiddleware = createTestMiddleware({
                 getAllowedConnectionIds: async () => {
-                    throw new Error('Importing Node built-in module "fs" is not supported');
+                    throw new Error(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
                 },
             });
 

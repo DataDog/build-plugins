@@ -9,7 +9,7 @@ import path from 'node:path';
 import { parseAst } from 'rollup/parseAst';
 import type { ViteDevServer } from 'vite';
 
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { LOCAL_EXECUTION_LOAD_SUFFIX, NODE_BACKEND_RUNTIME } from '../constants';
 
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 
@@ -588,21 +588,21 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
     });
 
     // The production build path checks every app-local module transitively, not just the
-    // .backend.ts entry — local execution must reject the same banned helper the same way.
-    test('Should reject a helper module transitively imported by a backend entry when it imports a banned Node builtin', async () => {
-        const entryPath = path.join(FIXTURE_ROOT, 'viaBannedHelper.backend.ts');
-        const bannedHelperPath = path.join(FIXTURE_ROOT, 'helperWithBannedImport.ts');
-        const bannedHelperNode: FakeModuleNode = {
-            id: bannedHelperPath,
-            file: bannedHelperPath,
+    // .backend.ts entry — local execution must reject the same helper the same way.
+    test('Should reject a helper module transitively imported by a backend entry when it uses Deno, which Node lacks', async () => {
+        const entryPath = path.join(FIXTURE_ROOT, 'viaDenoHelper.backend.ts');
+        const denoHelperPath = path.join(FIXTURE_ROOT, 'helperUsingDeno.ts');
+        const denoHelperNode: FakeModuleNode = {
+            id: denoHelperPath,
+            file: denoHelperPath,
             importedModules: new Set(),
         };
         const entryNode: FakeModuleNode = {
             id: SUFFIXED_ENTRY_ID,
             file: entryPath,
-            importedModules: new Set([bannedHelperNode]),
+            importedModules: new Set([denoHelperNode]),
         };
-        const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
+        const server = makeFakeServer(async () => ({ id: denoHelperPath }), entryNode);
 
         const log = getMockLogger();
 
@@ -615,7 +615,7 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         );
 
         await expect(collecting).rejects.toThrow(
-            /Importing Node built-in module "fs" is not supported/,
+            `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
     });
 });

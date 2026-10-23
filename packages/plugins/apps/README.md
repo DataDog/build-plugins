@@ -12,6 +12,7 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
 -   [Local execution](#local-execution)
+-   [Backend function runtime](#backend-function-runtime)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -73,6 +74,10 @@ On Vite 6.0.4 or later, `/__dd/executeAction` runs each backend function call th
 -   **Older Node**: on a Node without the permission model, or without `--allow-inspector` while debugging, a call's process runs under in-process guards instead. They refuse writes outside the temp dirs, subprocesses and worker threads, from the module's top-level code on.
 
 Vite 5 has no module runner transport, so there each call runs inside the dev server's process, one at a time. Vite 6.0.0 to 6.0.3, whose dev server answers the module runner in an older shape, do the same with a warning at startup, as do a Yarn Plug'n'Play project, whose packages load through hooks a call's process doesn't get, and any Vite 6+ project where `vite/module-runner` can't be resolved.
+
+## Backend function runtime
+
+Backend functions run on the Node backend runtime, and the plugin's build-time and dev-server checks follow its rules: backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The checks fail only where the missing global would throw: any bare use but `typeof Deno`, or using `globalThis.Deno` as an object, function or class, even after a feature check or a polyfill install, so use an imported polyfill by its name. Feature checks such as `if (globalThis.EventSource)` and destructuring defaults pass. The checks follow a binding the global is declared or destructured into, but not a plain assignment such as `d = globalThis.Deno`, a `let` or parameter alias of `globalThis`, a bulk copy such as `{ ...globalThis }`, or a value that is exported, returned or passed on. Local execution runs on your own Node, while the Node backend runtime runs Node 24, so the dev server warns once at start on another major version, and on one before Node 22, which lacks the global `WebSocket`.
 
 ## Package output
 

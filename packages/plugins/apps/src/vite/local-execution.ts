@@ -486,7 +486,7 @@ export async function executeScriptLocally(
  * Cold-function entry point: collects `allowedConnectionIds`, then primes and runs the entry in
  * one `enqueue()` call — priming runs real top-level code, so doing it outside the queue would let
  * two cold functions run in parallel. Connection IDs are collected first, executing no code, so a
- * banned import is rejected before the entry runs.
+ * module the static checks reject never runs.
  */
 export async function executeColdActionLocally(
     func: BackendFunction,
