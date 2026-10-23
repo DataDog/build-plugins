@@ -18,7 +18,6 @@ import {
     EXECUTE_ACTION_ROUTE,
 } from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
-import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
@@ -29,10 +28,8 @@ import {
     getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
 import { execFileSync } from 'child_process';
-import fs from 'fs';
 import http from 'http';
 import nock from 'nock';
-import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
@@ -45,7 +42,6 @@ import {
     buildLocalExecutionChild,
     removeLocalExecutionChild,
 } from './local-execution-process.fixtures';
-import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
 // Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
 // entry and no `parseAst`; the published build keeps the real import.
@@ -887,143 +883,6 @@ describe('Dev Server Middleware — SSR import warmup warnings', () => {
         },
         30000,
     );
-});
-
-const LAZY_PACKAGE_NAME = 'dd-fake-lazy-package';
-
-// Its own server, since the exemption lives in the real configureServer hook, and the recording
-// plugin below must not see other tests' modules.
-describe('Dev Server Middleware — dynamic imports inside a backend function', () => {
-    let root = '';
-    let transformCacheDir = '';
-    let lazyServer: ViteDevServer;
-    const transformWrites: string[] = [];
-
-    beforeAll(async () => {
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-        const tmpBase = os.tmpdir();
-        const rootPrefix = path.join(tmpBase, 'dd-apps-dynamic-import-');
-        // Real path, since Vite resolves symlinks (e.g. macOS's /var) and buildRoot must match.
-        const createdRoot = fs.mkdtempSync(rootPrefix);
-        root = fs.realpathSync(createdRoot);
-        const packageDir = path.join(root, 'node_modules', LAZY_PACKAGE_NAME);
-        const sourceDir = path.join(root, 'src');
-        fs.mkdirSync(packageDir, { recursive: true });
-        fs.mkdirSync(sourceDir, { recursive: true });
-        const packageManifest = JSON.stringify({
-            name: LAZY_PACKAGE_NAME,
-            type: 'module',
-            main: 'index.js',
-        });
-        const packageManifestPath = path.join(packageDir, 'package.json');
-        const packageEntryPath = path.join(packageDir, 'index.js');
-        const lazyModulePath = path.join(packageDir, 'lazy-dep.js');
-        fs.writeFileSync(packageManifestPath, packageManifest);
-        fs.writeFileSync(
-            packageEntryPath,
-            "export async function loadLazy() { return (await import('./lazy-dep.js')).value; }\n",
-        );
-        // Its top-level write runs when the module is evaluated, which must stay blocked.
-        fs.writeFileSync(
-            lazyModulePath,
-            [
-                "import fs from 'fs';",
-                "let evaluationWrite = 'allowed';",
-                "try { fs.writeFileSync(process.env.DD_TEST_LAZY_WRITE_PATH, 'x'); } catch (err) { evaluationWrite = err.message; }",
-                'export const value = evaluationWrite;',
-            ].join('\n'),
-        );
-
-        // Outside the OS temp dir, so the write only succeeds if the transform runs exempt.
-        transformCacheDir = makeProbeDirOutsideTmp('dd-apps-transform-cache-');
-        // Stands in for a project plugin that writes a cache file while transforming a module.
-        const cacheWritingPlugin: Plugin = {
-            name: 'dd-test-cache-writing-plugin',
-            transform(_code, id) {
-                if (!id.includes('lazy-dep')) {
-                    return null;
-                }
-                const cachePath = path.join(transformCacheDir, 'transform-cache.json');
-                try {
-                    fs.writeFileSync(cachePath, '{}');
-                    transformWrites.push('written');
-                } catch (err) {
-                    transformWrites.push(err instanceof Error ? err.message : String(err));
-                }
-                return null;
-            },
-        };
-        const appsPlugin: Plugin = {
-            name: 'dd-apps-test',
-            ...getVitePlugin({
-                bundler: { build },
-                context: getContextMock({ buildRoot: root }),
-                options: { include: [], longPolling: mockLongPolling },
-            }),
-        };
-        lazyServer = await createServer({
-            configFile: false,
-            root,
-            logLevel: 'silent',
-            server: { middlewareMode: true, hmr: false, watch: { ignored: ['**/*'] } },
-            plugins: [appsPlugin, cacheWritingPlugin],
-            optimizeDeps: { noDiscovery: true },
-            ssr: { noExternal: [LAZY_PACKAGE_NAME] },
-        });
-    });
-
-    afterAll(async () => {
-        delete process.env.DD_TEST_LAZY_WRITE_PATH;
-        await lazyServer?.close();
-        if (root) {
-            rmSync(root);
-        }
-        if (transformCacheDir) {
-            rmSync(transformCacheDir);
-        }
-    });
-
-    afterEach(() => {
-        nock.cleanAll();
-    });
-
-    test('Should let a project plugin write while Vite transforms a module the function imports dynamically, but keep its evaluation blocked', async () => {
-        const outsideTmpDir = makeProbeDirOutsideTmp('dd-apps-dynamic-import-write-');
-        try {
-            const evaluationWritePath = path.join(outsideTmpDir, 'evaluation-write.txt');
-            process.env.DD_TEST_LAZY_WRITE_PATH = evaluationWritePath;
-            const file = path.join(root, 'src', 'lazyEntry.backend.ts');
-            fs.writeFileSync(
-                file,
-                `import { loadLazy } from '${LAZY_PACKAGE_NAME}';\nexport async function callLazy() { return loadLazy(); }\n`,
-            );
-            await lazyServer.ssrLoadModule(file);
-            const func: BackendFunction = {
-                relativePath: 'src/lazyEntry',
-                name: 'callLazy',
-                absolutePath: file,
-                allowedConnectionIds: [],
-            };
-            mockRuntimeContextHydration();
-            const functionName = encodeQueryName(func);
-            const req = createMockRequest('/__dd/executeAction', { functionName, args: [] });
-            const res = createMockResponse();
-
-            lazyServer.middlewares(req, res, jest.fn());
-            await res.done;
-            const rawBody = res.getBody();
-            const body: unknown = JSON.parse(rawBody);
-
-            const evaluationWritten = fs.existsSync(evaluationWritePath);
-
-            expect(body).toEqual({ success: true, result: { data: FS_WRITE_BLOCKED_MESSAGE } });
-            expect(evaluationWritten).toBe(false);
-            expect(transformWrites).toEqual(['written']);
-        } finally {
-            rmSync(outsideTmpDir);
-        }
-    }, 30000);
 });
 
 describe('Dev Server Middleware — request origin and host checks over real HTTP', () => {

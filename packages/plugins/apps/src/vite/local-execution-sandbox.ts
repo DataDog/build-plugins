@@ -18,7 +18,7 @@ function permissionFlag(nodeFlags: ReadonlySet<string>): string | undefined {
     return ['--permission', '--experimental-permission'].find((flag) => nodeFlags.has(flag));
 }
 
-/** Node's permission model flags for a call, or undefined when this Node has none, or has no `--allow-inspector` while debugging; the child then installs the in-process guards instead. */
+/** Node's permission model flags for a call, or undefined when this Node has none, or has no `--allow-inspector` while debugging; the call then runs unrestricted. */
 export function permissionModelArgv(options: {
     readPaths: string[];
     writePaths: string[];

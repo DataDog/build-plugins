@@ -46,6 +46,7 @@ import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
 import { getLocalExecutionChildPath } from './local-execution-child-path';
+import { UNRESTRICTED_LOCAL_EXECUTION_WARNING } from './local-execution-limits';
 import type { ChildProcessExecutor, LocalExecutor } from './local-execution-process';
 import {
     createChildProcessExecutor,
@@ -55,13 +56,6 @@ import {
     YARN_PNP_WARNING,
 } from './local-execution-process';
 import { localExecutionResolutionContext } from './local-execution';
-import {
-    exemptFetchFromBlockedScope,
-    exemptPluginContainerFromBlockedScope,
-    GRACEFUL_FS_UNGUARDED_WARNING,
-    gracefulFsPredatesGuards,
-    installGuards,
-} from './network-guard';
 import { createParameterCollector } from './parameter-collector';
 import { loadViteParseAst } from './vite-parse-ast';
 
@@ -555,27 +549,8 @@ export const getVitePlugin = ({
                     const reason = error instanceof Error ? error.message : String(error);
                     log.warn(`Local execution can't parse backend modules: ${reason}`);
                 });
-            }
-            if (runsLocally && !executeLocally) {
-                // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
-                // predate it. A failure must not stop the server: each execution installs again, failing closed.
-                try {
-                    installGuards();
-                } catch (error) {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(
-                        `Could not install the backend function sandbox guards yet: ${reason}`,
-                    );
-                }
-                if (gracefulFsPredatesGuards()) {
-                    log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
-                }
-                const ssrEnvironment = server.environments?.ssr;
-                if (ssrEnvironment) {
-                    const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
-                    ssrEnvironment.fetchModule = exemptFetchFromBlockedScope(fetchModule);
-                } else if (server.pluginContainer) {
-                    exemptPluginContainerFromBlockedScope(server.pluginContainer);
+                if (!executeLocally) {
+                    log.warn(UNRESTRICTED_LOCAL_EXECUTION_WARNING);
                 }
             }
 

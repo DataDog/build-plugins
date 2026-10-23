@@ -5,8 +5,10 @@
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
 import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { fork } from 'child_process';
+import { build as esbuild } from 'esbuild';
 import fs from 'fs';
 import http from 'http';
+import { isBuiltin } from 'module';
 import os from 'os';
 import path from 'path';
 import { pathToFileURL } from 'url';
@@ -15,6 +17,12 @@ import { build, createServer, type HotPayload, type Plugin, type ViteDevServer }
 import type { BackendFunction } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import {
+    NATIVE_ADDON_BLOCKED_MESSAGE,
+    OUTSIDE_TEMP_WRITE_BLOCKED_MESSAGE,
+    SUBPROCESS_BLOCKED_MESSAGE,
+    UNRESTRICTED_LOCAL_EXECUTION_WARNING,
+} from './local-execution-limits';
 import {
     buildLocalExecutionChild,
     FIXTURE_ROOT,
@@ -38,7 +46,7 @@ import {
     type ExecuteAction,
     withTimeout,
 } from './local-execution';
-import { FS_WRITE_BLOCKED_MESSAGE } from './network-guard';
+import { makeProbeDirOutsideTmp } from './probe-dir.fixtures';
 
 const CALL_TIMEOUT_MS = 60_000;
 
@@ -100,6 +108,24 @@ const virtualModulePlugin: Plugin = {
         return id === SLASH_VIRTUAL_MODULE_ID ? 'export const slashValue = 7;' : null;
     },
 };
+
+// The published child resolves a package from where the plugin is installed, which its sandbox may not read.
+test('Should import only Node built-ins from the child entry', async () => {
+    const result = await esbuild({
+        entryPoints: [path.join(__dirname, 'local-execution-child.ts')],
+        bundle: true,
+        format: 'esm',
+        platform: 'node',
+        packages: 'external',
+        write: false,
+        metafile: true,
+        logLevel: 'silent',
+    });
+    const outputs = Object.values(result.metafile.outputs);
+    const imports = outputs.flatMap((output) => output.imports.map((imported) => imported.path));
+    const packageImports = imports.filter((specifier) => !isBuiltin(specifier));
+    expect(packageImports).toEqual([]);
+});
 
 describe('Local execution in a child process', () => {
     let server: ViteDevServer;
@@ -524,7 +550,6 @@ describe('Local execution in a child process', () => {
                     runtimeContext: previewRuntimeContext,
                     actionCatalogInstalled: false,
                     appsBackendInstalled: false,
-                    installGuards: false,
                     flushTimeoutMs: 1000,
                 };
                 const child = fork(childEntryPath, [], {
@@ -645,7 +670,11 @@ describe('Local execution in a child process', () => {
         test(
             'Should refuse project writes, subprocesses and workers, and allow temp writes and fetch',
             async () => {
-                const execute = makeExecutor();
+                const warnings: string[] = [];
+                const execute = makeExecutor({
+                    isInspectorActive: () => false,
+                    log: getMockLogger({ warn: (text: string) => warnings.push(text) }),
+                });
                 const result = await execute(
                     makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
                         projectFile,
@@ -662,47 +691,95 @@ describe('Local execution in a child process', () => {
                     fetch: 'ok: 200 pong',
                 });
                 expect(fs.existsSync(projectFile)).toBe(false);
+                expect(warnings).toEqual([]);
             },
             CALL_TIMEOUT_MS,
         );
 
         test(
-            'Should fall back to the in-process guards while debugging on a Node without --allow-inspector',
+            'Should run calls unrestricted, warning once, while debugging on a Node without --allow-inspector',
             async () => {
                 const lines: string[] = [];
+                const warnings: string[] = [];
                 const execute = makeExecutor({
                     nodeFlags: withoutAllowInspector,
                     isInspectorActive: () => true,
                     writeOutput: (_stream, line) => lines.push(line),
+                    log: getMockLogger({ warn: (text: string) => warnings.push(text) }),
                 });
-                const result = await execute(
-                    makeRequest(fixtureFunction('childSandbox', 'runSandboxProbes'), [
-                        projectFile,
-                        fetchUrl,
-                        sharedTmpFile,
-                    ]),
-                );
-                expect(result.data).toEqual({
-                    sharedTmpWrite: 'ok: written',
-                    projectWrite: 'refused: EROFS',
-                    tempWrite: 'ok: x',
-                    spawn: 'refused: Spawning a subprocess is not allowed in backend functions.',
-                    worker: 'refused: Spawning a worker thread is not allowed in backend functions.',
-                    fetch: 'ok: 200 pong',
-                });
-                expect(fs.existsSync(projectFile)).toBe(false);
+                // Outside the fixtures folder, which other suites copy while this one runs.
+                const outsideDir = makeProbeDirOutsideTmp('dd-child-unrestricted-');
+                const outsideFile = path.join(outsideDir, 'probe.txt');
+                const probes = fixtureFunction('childSandbox', 'runSandboxProbes');
+                const request = makeRequest(probes, [outsideFile, fetchUrl, sharedTmpFile]);
+                try {
+                    const results = [await execute(request), await execute(request)];
+                    for (const result of results) {
+                        expect(result.data).toEqual({
+                            sharedTmpWrite: 'ok: written',
+                            projectWrite: 'ok: written',
+                            tempWrite: 'ok: x',
+                            spawn: 'ok: hi\n',
+                            worker: 'ok: started',
+                            fetch: 'ok: 200 pong',
+                        });
+                    }
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+                expect(warnings).toEqual([UNRESTRICTED_LOCAL_EXECUTION_WARNING]);
                 expect(lines.join('\n')).toContain('Debugger listening on ws://127.0.0.1:');
             },
             CALL_TIMEOUT_MS,
         );
 
+        test.each([
+            { refused: 'a subprocess', name: 'spawnEcho', message: SUBPROCESS_BLOCKED_MESSAGE },
+            {
+                refused: 'a write outside the temp dirs, naming its path',
+                name: 'writeFile',
+                message: `${OUTSIDE_TEMP_WRITE_BLOCKED_MESSAGE} Refused: `,
+            },
+            { refused: 'a native addon', name: 'loadAddon', message: NATIVE_ADDON_BLOCKED_MESSAGE },
+        ])(
+            "Should report the permission model's refusal of $refused with the dev:verify hint",
+            async ({ name, message }) => {
+                const execute = makeExecutor();
+                const outsideDir = makeProbeDirOutsideTmp('dd-child-refusal-');
+                try {
+                    const outsideFile = path.join(outsideDir, 'probe.txt');
+                    const call = execute(
+                        makeRequest(fixtureFunction('childSandbox', name), [outsideFile]),
+                    );
+                    // The detail keeps the refused call's own frames, as a deployed app's stack would.
+                    await expect(call).rejects.toMatchObject({
+                        message: expect.stringContaining(message),
+                        detail: expect.stringMatching(/\n {4}at /),
+                    });
+                    expect(fs.existsSync(outsideFile)).toBe(false);
+                } finally {
+                    fs.rmSync(outsideDir, { recursive: true, force: true });
+                }
+            },
+            CALL_TIMEOUT_MS,
+        );
+
         test(
-            "Should guard a module's top-level code too while debugging on a Node without --allow-inspector",
+            "Should keep the message of a function's own error that reuses the permission model's code",
             async () => {
-                const execute = makeExecutor({
-                    nodeFlags: withoutAllowInspector,
-                    isInspectorActive: () => true,
+                const execute = makeExecutor();
+                const lookalike = fixtureFunction('childSandbox', 'throwAccessDeniedLookalike');
+                await expect(execute(makeRequest(lookalike, []))).rejects.toMatchObject({
+                    message: 'upstream refused the request',
                 });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test(
+            "Should report the permission model's refusal of a module's top-level write with the dev:verify hint",
+            async () => {
+                const execute = makeExecutor();
                 await expect(
                     execute(
                         makeRequest(
@@ -710,7 +787,7 @@ describe('Local execution in a child process', () => {
                             [],
                         ),
                     ),
-                ).rejects.toThrow(FS_WRITE_BLOCKED_MESSAGE);
+                ).rejects.toThrow(OUTSIDE_TEMP_WRITE_BLOCKED_MESSAGE);
                 expect(fs.existsSync(path.join(FIXTURE_ROOT, 'top-level-probe.txt'))).toBe(false);
             },
             CALL_TIMEOUT_MS,

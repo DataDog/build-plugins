@@ -27,7 +27,6 @@ import {
     serializeActionInputs,
     validateActionCall,
 } from './local-execution-shared';
-import { assertNoForeignGuard, installGuards, runBlocked } from './network-guard';
 import { getTotalRetryDelayBudgetMs } from './retry-delay';
 
 type RuntimeUser = {
@@ -201,14 +200,11 @@ export function deriveActionTimeouts(longPolling: LongPollingConfig): {
 /** Loads a module by specifier, resolved against the customer's own project rather than build-plugins' dependency tree — the dev server passes its Vite instance's `ssrLoadModule` here. */
 export type LoadModule = (specifier: string) => Promise<Record<string, unknown>>;
 
-/** Loads a customer module under the same top-level `$`-scoping `runScriptLocally` uses, for callers (like `executeColdActionLocally`'s priming) that evaluate it before `runScriptLocally`. Its top-level code runs before `runBlocked`, so it isn't guarded; installing first still hands it the guarded fs/child_process functions. */
+/** Loads a customer module under the same top-level `$`-scoping `runScriptLocally` uses, for callers (like `executeColdActionLocally`'s priming) that evaluate it before `runScriptLocally`. */
 export async function loadCustomerModuleEntry(
     loadModule: LoadModule,
     entrySpecifier: string,
 ): Promise<Record<string, unknown>> {
-    installGuards();
-    // Checked before the customer's top-level code runs, since runBlocked would refuse anyway.
-    assertNoForeignGuard();
     return localExecutionResolutionContext.run(new Set(), () =>
         customerModuleLoadContext.run({ assigned: false, value: undefined }, () =>
             loadModule(entrySpecifier),
@@ -563,11 +559,8 @@ async function runScriptLocally(
     let rejectTimeout: ((error: Error) => void) | undefined;
     let pendingActionCalls = 0;
     let absoluteTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
-    // Promise.race abandons a hung fn without cancelling it, so this closes its blocked scope instead.
-    const blockedScopeController = new AbortController();
     const failWithTimeout = (message: string) => {
         concludeExecution();
-        blockedScopeController.abort();
         const timeoutError = new Error(message);
         rejectTimeout?.(timeoutError);
     };
@@ -695,14 +688,8 @@ async function runScriptLocally(
                     // Registration's loadModule() calls can take long enough to cross the timeout,
                     // and the customer function must never run once abandoned.
                     rejectIfAbandoned();
-                    // assertJsonSerializable runs inside runBlocked's callback, not after, since its toJSON()/getter calls must run while access is still blocked.
-                    const data = await runBlocked(
-                        async () => {
-                            const result = await callBackendFunction(() => fn(...args));
-                            return assertJsonSerializable(result, func);
-                        },
-                        { signal: blockedScopeController.signal },
-                    );
+                    const result = await callBackendFunction(() => fn(...args));
+                    const data = assertJsonSerializable(result, func);
                     return { data };
                 }),
             );
