@@ -7,7 +7,7 @@
 
 import { DEV_CLIENT_HOOK, RUN_QUERY, RUN_QUERY_RESPONSE } from '../../../protocol';
 import type { DebugBundleResponse, PreparedCall } from '../../../protocol';
-import { copyByIndex, isDebugBundle, isRecord } from '../../guards';
+import { copyByIndex, copyDebugBundleActions, isDebugBundle, isRecord } from '../../guards';
 import { generateRequestId } from '../../request-id';
 import type { BackendFunctionTransport } from '../../types';
 import { BackendFunctionError } from '../../types';
@@ -46,12 +46,16 @@ function copyBundle(candidate: unknown): DebugBundleResponse | undefined {
         return undefined;
     }
     const ids = 'allowedConnectionIds' in candidate ? candidate.allowedConnectionIds : undefined;
-    // Checked on a copy, so only the code and connection ids reach postMessage.
+    // Checked on a copy, so only the code, connection ids and action list reach postMessage.
     const copy = {
         code: 'code' in candidate ? candidate.code : undefined,
         allowedConnectionIds: Array.isArray(ids) ? copyByIndex(ids) : undefined,
     };
-    return isDebugBundle(copy) ? copy : undefined;
+    if (!isDebugBundle(copy)) {
+        return undefined;
+    }
+    const actions = copyDebugBundleActions(candidate);
+    return { ...copy, ...(actions && { actions }) };
 }
 
 // Any page script could install the hook, so its result is checked before anything is posted.

@@ -13,7 +13,7 @@ import type {
     IframeQueryPing,
     PrepareCall,
 } from '../../protocol';
-import { isDebugBundle, isRecord } from '../guards';
+import { copyDebugBundleActions, isDebugBundle, isRecord } from '../guards';
 import { generateRequestId } from '../request-id';
 
 export const BUNDLE_FETCH_TIMEOUT_MS = 60_000;
@@ -188,7 +188,9 @@ async function fetchOwnBundle(functionName: string): Promise<BundleFetch> {
         if (!isDebugBundle(body)) {
             return { failure: 'the dev server response is not a bundle' };
         }
-        return { bundle: { code: body.code, allowedConnectionIds: body.allowedConnectionIds } };
+        const actions = copyDebugBundleActions(body);
+        const { code, allowedConnectionIds } = body;
+        return { bundle: { code, allowedConnectionIds, ...(actions && { actions }) } };
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         return { failure: errorMessage };
