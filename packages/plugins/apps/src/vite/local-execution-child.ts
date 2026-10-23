@@ -7,6 +7,7 @@
 // Runs one backend function call in its own process, forked by the dev server's local execution.
 // Modules come from the dev server over IPC; `$.Actions` calls go back to it for scope checks and credentials.
 
+import nodeModule from 'node:module';
 import type { Writable } from 'node:stream';
 
 import type { ChildMessage, ChildStartConfig, ParentMessage } from './local-execution-protocol';
@@ -29,7 +30,7 @@ type CreateImportMeta = (modulePath: string) => unknown;
 type ModuleRunnerOptions = {
     transport: { invoke(payload: unknown): Promise<unknown> };
     hmr: false;
-    createImportMeta: CreateImportMeta;
+    createImportMeta?: CreateImportMeta;
 };
 type ModuleRunnerModule = {
     ModuleRunner: new (options: ModuleRunnerOptions, evaluator: unknown) => ModuleRunnerInstance;
@@ -168,11 +169,13 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     // Declared, so top-level code reading `$` sees undefined as in production rather than a ReferenceError.
     Reflect.set(globalThis, '$', undefined);
     const evaluator = new ESModulesEvaluator();
+    // Without `module.registerHooks`, Vite resolves it on a hooks thread, which the permission model refuses.
+    const resolvesImportMeta = config.installGuards || 'registerHooks' in nodeModule;
     // Without it, Vite's runner gives modules an import.meta.resolve that always throws.
     const runnerOptions: ModuleRunnerOptions = {
         transport: { invoke },
         hmr: false,
-        createImportMeta: createNodeImportMeta,
+        ...(resolvesImportMeta && { createImportMeta: createNodeImportMeta }),
     };
     const runner = new ModuleRunner(runnerOptions, evaluator);
     const mod = await runner.import(config.entryUrl);
@@ -195,8 +198,11 @@ async function load(config: ChildStartConfig): Promise<unknown> {
     return assertJsonRoundTrippable(returned, subject);
 }
 
-// The guards cover the module's top-level code as well as the call.
+// Without the permission model, the guards cover the module's top-level code as well as the call.
 function execute(config: ChildStartConfig): Promise<unknown> {
+    if (!config.installGuards) {
+        return load(config);
+    }
     installGuards();
     return runBlocked(() => load(config));
 }

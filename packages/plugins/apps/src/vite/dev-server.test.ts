@@ -208,6 +208,10 @@ function createTestExecutor(): LocalExecutor {
         projectRoot: '/project',
         childEntryPath: '/nonexistent/local-execution-child.mjs',
         moduleRunnerPath: '/nonexistent/module-runner.js',
+        readRoots: [],
+        denyPatterns: [],
+        restrictModuleLoads: true,
+        resolveModule: async () => undefined,
         log: mockLog,
     });
 }
