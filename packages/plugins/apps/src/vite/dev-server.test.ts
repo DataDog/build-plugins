@@ -5,14 +5,18 @@
 /* global globalThis */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { walkModuleGraph } from '@dd/apps-plugin/backend/ast-parsing/walk-module-graph';
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     createDevServerMiddleware,
     DEBUG_BUNDLE_ROUTE,
     DEV_SERVER_ROUTES,
+    EXECUTE_ACTION_VIA_CLOUD_ROUTE,
     formatRef,
+    getMissingActionListMessage,
     getRetryDelay,
+    NO_ACTION_FQNS_MESSAGE,
     oversizedBundleMessage,
 } from '@dd/apps-plugin/vite/dev-server';
 import { withTimeout } from '@dd/apps-plugin/vite/local-execution';
@@ -43,6 +47,15 @@ type ActionsProxy = { [key: string]: ActionsProxy } & ((...args: unknown[]) => P
 function testDollarActions(): ActionsProxy {
     return (globalThis as typeof globalThis & { $: { Actions: ActionsProxy } }).$.Actions;
 }
+
+jest.mock('@dd/apps-plugin/backend/ast-parsing/walk-module-graph', () => {
+    const actual = jest.requireActual<
+        typeof import('@dd/apps-plugin/backend/ast-parsing/walk-module-graph')
+    >('@dd/apps-plugin/backend/ast-parsing/walk-module-graph');
+    return { ...actual, walkModuleGraph: jest.fn(actual.walkModuleGraph) };
+});
+
+const walkModuleGraphMock = jest.mocked(walkModuleGraph);
 
 const mockViteBuild = jest.fn();
 
@@ -642,7 +655,7 @@ describe('Dev Server Middleware', () => {
         ];
 
         test.each(jsonAcceptCases)(
-            'Should return code and no connection IDs as JSON for an Accept header of $description',
+            'Should return code, no connection IDs and no actions as JSON for an Accept header of $description',
             async ({ accept }) => {
                 mockBuildWithParsedBackend('export function main($) {}');
 
@@ -661,6 +674,7 @@ describe('Dev Server Middleware', () => {
                 expect(body).toEqual({
                     code: 'export function main($) {}',
                     allowedConnectionIds: [],
+                    actions: [],
                 });
             },
         );
@@ -706,6 +720,199 @@ describe('Dev Server Middleware', () => {
                 code: '// bundled',
                 allowedConnectionIds: ['conn-http', 'conn-slack'],
             });
+        });
+
+        test("Should list each action the bundled function's file calls, with its connection IDs, as JSON", async () => {
+            // A fresh middleware, since an earlier test's warning is only logged once per middleware.
+            const freshMiddleware = createTestMiddleware();
+            const entryCode = `
+                import { request } from '@datadog/action-catalog/http/http';
+                import * as catalog from '@datadog/action-catalog';
+                export function greet() {
+                    request({ connectionId: 'conn-http', inputs: {} });
+                    return catalog.sendSlackMessage({ inputs: {} });
+                }
+            `;
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode);
+                await emitModuleParsed(
+                    config,
+                    '@datadog/action-catalog/http/http',
+                    "export function request(e) { return run('com.datadoghq.http.request', e); }",
+                );
+                await emitModuleParsed(
+                    config,
+                    '@datadog/action-catalog',
+                    "export function sendSlackMessage(e) { return run('com.datadoghq.slack.chat.postMessage', e); }",
+                );
+                return mockBuildResult('// bundled');
+            });
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                DEBUG_BUNDLE_PATH,
+                { functionName },
+                { accept: 'application/json' },
+            );
+            const res = createMockResponse();
+
+            const next = jest.fn();
+            freshMiddleware(req, res, next);
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
+            expect(body).toEqual({
+                code: '// bundled',
+                allowedConnectionIds: ['conn-http'],
+                actions: [
+                    { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-http'] },
+                    { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: [] },
+                ],
+            });
+            expect(mockLogFn).not.toHaveBeenCalledWith(NO_ACTION_FQNS_MESSAGE, 'warn');
+        });
+
+        test('Should walk the action-catalog calls once per JSON debugBundle request', async () => {
+            const entryCode = `
+                import { request } from '@datadog/action-catalog/http/http';
+                export function greet() {
+                    return request({ connectionId: 'conn-http', inputs: {} });
+                }
+            `;
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode);
+                return mockBuildResult('// bundled');
+            });
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                DEBUG_BUNDLE_PATH,
+                { functionName },
+                { accept: 'application/json' },
+            );
+            const res = createMockResponse();
+
+            const next = jest.fn();
+            middleware(req, res, next);
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(walkModuleGraphMock).toHaveBeenCalledTimes(1);
+        });
+
+        test('Should omit the action list and log why when a call has no known action FQN', async () => {
+            const entryCode = `
+                import request from '@datadog/action-catalog/http/http';
+                export function greet() {
+                    return request({ connectionId: 'conn-http', inputs: {} });
+                }
+            `;
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode);
+                return mockBuildResult('// bundled');
+            });
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            const req = createMockRequest(
+                DEBUG_BUNDLE_PATH,
+                { functionName },
+                { accept: 'application/json' },
+            );
+            const res = createMockResponse();
+
+            const next = jest.fn();
+            middleware(req, res, next);
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            const rawBody = res.getBody();
+            const body = JSON.parse(rawBody);
+            expect(body).toEqual({ code: '// bundled', allowedConnectionIds: ['conn-http'] });
+            const functionRef = formatRef(mockFunctions[0]);
+            const omittedMessage = getMissingActionListMessage(functionRef);
+            expect(mockLogFn).toHaveBeenCalledWith(omittedMessage, 'debug');
+        });
+
+        const nonJsonBundleCases = [
+            { description: 'a plain-text debugBundle response', route: DEBUG_BUNDLE_PATH },
+            { description: 'an executeActionViaCloud call', route: EXECUTE_ACTION_VIA_CLOUD_ROUTE },
+        ];
+
+        test.each(nonJsonBundleCases)(
+            'Should not build the action list for $description',
+            async ({ route }) => {
+                const entryCode = `
+                    import request from '@datadog/action-catalog/http/http';
+                    export function greet() {
+                        return request({ connectionId: 'conn-http', inputs: {} });
+                    }
+                `;
+                mockViteBuild.mockImplementation(async (config) => {
+                    await emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode);
+                    return mockBuildResult('// bundled');
+                });
+                nock(DD_API_ORIGIN)
+                    .post('/api/v2/app-builder/queries/preview-async')
+                    .reply(403, 'Forbidden');
+
+                const functionName = encodeQueryName(mockFunctions[0]);
+                const req = createMockRequest(route, { functionName, args: [] });
+                const res = createMockResponse();
+
+                const next = jest.fn();
+                middleware(req, res, next);
+                await res.done;
+
+                expect(mockViteBuild).toHaveBeenCalled();
+                const functionRef = formatRef(mockFunctions[0]);
+                const omittedMessage = getMissingActionListMessage(functionRef);
+                expect(mockLogFn).not.toHaveBeenCalledWith(omittedMessage, 'debug');
+            },
+        );
+
+        test('Should warn once when the action-catalog package maps no export to an action FQN', async () => {
+            const freshMiddleware = createTestMiddleware();
+            const entryCode = `
+                import { request } from '@datadog/action-catalog/http/http';
+                export function greet() {
+                    return request({ connectionId: 'conn-http', inputs: {} });
+                }
+            `;
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(config, mockFunctions[0].absolutePath, entryCode);
+                await emitModuleParsed(
+                    config,
+                    '@datadog/action-catalog/http/http',
+                    "export const request = defineAction('com.datadoghq.http.request');",
+                );
+                await emitModuleParsed(
+                    config,
+                    '/project/backend/helper.js',
+                    "export function send(e) { return run('com.datadoghq.http.request', e); }",
+                );
+                return mockBuildResult('// bundled');
+            });
+
+            const functionName = encodeQueryName(mockFunctions[0]);
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const req = createMockRequest(
+                    DEBUG_BUNDLE_PATH,
+                    { functionName },
+                    { accept: 'application/json' },
+                );
+                const res = createMockResponse();
+                const next = jest.fn();
+                freshMiddleware(req, res, next);
+                await res.done;
+                expect(res.statusCode).toBe(200);
+            }
+
+            const warnings = mockLogFn.mock.calls.filter(
+                ([text, level]) => level === 'warn' && text === NO_ACTION_FQNS_MESSAGE,
+            );
+            expect(warnings).toHaveLength(1);
         });
 
         test('Should return a JSON 404 for an unknown query name when JSON is requested', async () => {

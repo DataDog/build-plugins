@@ -12,9 +12,16 @@ import type { build } from 'vite';
 
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
+import { ACTION_CATALOG_PACKAGE } from '../backend/ast-parsing/action-catalog-imports';
+import {
+    collectActionCatalogCalls,
+    getConnectionIds,
+} from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { listActionCalls } from '../backend/ast-parsing/list-action-calls';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type {
+    DebugBundleAction,
     DebugBundleResponse,
     ExecuteActionRequest,
     ExecuteActionResponse,
@@ -24,6 +31,7 @@ import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import { DEV_VERIFY_MODE } from '../constants';
 import type { LongPollingOptions } from '../types';
 
+import { createActionCatalogFqnCollector } from './action-catalog-fqn-collector';
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
 import { getBaseBackendBuildConfig, withProductionSettings } from './build-config';
@@ -36,6 +44,7 @@ import { getMaxRetryDelayMs } from './retry-delay';
 interface BundleResult {
     func: BackendFunction;
     code: string;
+    listActions: () => DebugBundleAction[] | undefined;
 }
 
 type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
@@ -45,6 +54,11 @@ const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 export const DEBUG_BUNDLE_ROUTE = DEBUG_BUNDLE_PATH;
 export const EXECUTE_ACTION_ROUTE = '/__dd/executeAction';
 export const EXECUTE_ACTION_VIA_CLOUD_ROUTE = '/__dd/executeActionViaCloud';
+
+export const NO_ACTION_FQNS_MESSAGE = `Found no action FQNs in any bundled package, so debugBundle responses omit the action list; ${ACTION_CATALOG_PACKAGE}'s build output may have changed shape.`;
+
+export const getMissingActionListMessage = (displayName: string) =>
+    `Bundled "${displayName}" without an action list: a call has no known action FQN.`;
 
 export const DEV_SERVER_ROUTES = [
     DEBUG_BUNDLE_ROUTE,
@@ -144,6 +158,7 @@ async function bundleBackendFunction(
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
+    warnNoActionFqns: () => void,
 ): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
@@ -156,6 +171,10 @@ async function bundleBackendFunction(
         func.absolutePath,
         projectRoot,
     );
+    const actionCatalogFqnCollector = createActionCatalogFqnCollector(
+        log,
+        connectionIdCollector.getModuleRecords,
+    );
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
@@ -167,6 +186,7 @@ async function bundleBackendFunction(
     const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
         staticChecksPlugin,
+        actionCatalogFqnCollector.plugin,
     ]);
     const baseConfig = withProductionSettings(devBaseConfig, serverConditions);
 
@@ -194,14 +214,31 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const moduleRecords = connectionIdCollector.getModuleRecords();
+    const calls = collectActionCatalogCalls(func.absolutePath, moduleRecords, projectRoot);
     const enrichedFunc = {
         ...func,
-        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+        allowedConnectionIds: getConnectionIds(calls),
+    };
+    const listActions = () => {
+        const exportFqnsByModule = actionCatalogFqnCollector.getExportFqnsByModule();
+        const hasPackageExportFqns = [...exportFqnsByModule].some(
+            ([moduleId, fqns]) => fqns.size > 0 && !moduleRecords.has(moduleId),
+        );
+        if (calls.length > 0 && !hasPackageExportFqns) {
+            warnNoActionFqns();
+        }
+        const actions = listActionCalls(calls, exportFqnsByModule);
+        if (!actions) {
+            const missingListMessage = getMissingActionListMessage(displayName);
+            log.debug(missingListMessage);
+        }
+        return actions;
     };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
-    return { func: enrichedFunc, code };
+    return { func: enrichedFunc, code, listActions };
 }
 
 /**
@@ -609,7 +646,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+): Promise<BundleResult & { args: unknown[] }> {
     const { func, args } = await parseAndLookupFunction(req, functionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
@@ -628,7 +665,7 @@ function acceptsJson(req: IncomingMessage): boolean {
 
 /**
  * Handle POST /__dd/debugBundle — returns the bundled script, as plain text by default or as
- * `{ code, allowedConnectionIds }` when the Accept header lists `application/json` without q=0.
+ * `{ code, allowedConnectionIds, actions? }` when the Accept header lists `application/json` without q=0.
  */
 async function handleDebugBundle(
     req: IncomingMessage,
@@ -637,12 +674,14 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code, listActions } = await validateAndBundle(req, functionsByName, bundle);
 
         if (acceptsJson(req)) {
+            const actions = listActions();
             const body: DebugBundleResponse = {
                 code,
                 allowedConnectionIds: func.allowedConnectionIds,
+                ...(actions && { actions }),
             };
             sendJson(res, 200, body);
             return;
@@ -806,8 +845,22 @@ export function createDevServerMiddleware(
     isHostAllowed: HostCheck,
     serverConditions: readonly string[] | undefined,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
+    let hasWarnedNoActionFqns = false;
+    const warnNoActionFqns = () => {
+        if (!hasWarnedNoActionFqns) {
+            hasWarnedNoActionFqns = true;
+            log.warn(NO_ACTION_FQNS_MESSAGE);
+        }
+    };
     const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
+        bundleBackendFunction(
+            viteBuild,
+            serverConditions,
+            func,
+            projectRoot,
+            log,
+            warnNoActionFqns,
+        );
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
     const oversizedFunctionsWarned = new Set<string>();
 
