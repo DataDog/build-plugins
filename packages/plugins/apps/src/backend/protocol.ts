@@ -23,6 +23,7 @@ export const DEBUG_BUNDLE_PATH = '/__dd/debugBundle';
 // Message types of the frame ↔ parent postMessage protocol.
 export const RUN_QUERY = 'app-builder:run-query';
 export const RUN_QUERY_RESPONSE = 'app-builder:run-query:response';
+export const RUN_QUERY_KEEPALIVE = 'app-builder:run-query:keepalive';
 export const PING = 'app-builder:ping';
 export const PONG = 'app-builder:pong';
 

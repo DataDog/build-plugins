@@ -14,10 +14,14 @@ import {
     mockFetchResponse,
 } from '@dd/tests/_jest/helpers/fakeWindow';
 
-import { DEV_CLIENT_HOOK, RUN_QUERY_RESPONSE } from '../../../protocol';
+import { DEV_CLIENT_HOOK, RUN_QUERY_KEEPALIVE, RUN_QUERY_RESPONSE } from '../../../protocol';
 import { BackendFunctionError } from '../../types';
 
-import { POSTMESSAGE_TIMEOUT_MS, postMessageTransport } from './post-message-transport';
+import {
+    POSTMESSAGE_MAX_WAIT_MS,
+    POSTMESSAGE_TIMEOUT_MS,
+    postMessageTransport,
+} from './post-message-transport';
 
 describe('postMessageTransport', () => {
     let originalFetch: typeof fetch;
@@ -503,6 +507,7 @@ describe('postMessageTransport', () => {
     });
 
     const OTHER_ORIGIN = 'https://example.com';
+    const timedOut = { message: expect.stringContaining('timed out') };
 
     const installTargetedCall = () => {
         const fakeWindow = installFakeWindow();
@@ -540,7 +545,6 @@ describe('postMessageTransport', () => {
         await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS);
 
         const error = await outcome;
-        const timedOut = { message: expect.stringContaining('timed out') };
         expect(error).toBeInstanceOf(BackendFunctionError);
         expect(error).toMatchObject(timedOut);
         const remainingListeners = listenerCount();
@@ -582,6 +586,183 @@ describe('postMessageTransport', () => {
 
         await expect(first).resolves.toBe('first-result');
         await expect(second).resolves.toBe('second-result');
+    });
+
+    describe('keepalive', () => {
+        type FakeWindow = ReturnType<typeof installFakeWindow>;
+
+        const isPending = async (result: Promise<unknown>) => {
+            const marker = Symbol('pending');
+            const settledMarker = Promise.resolve(marker);
+            const outcome = await Promise.race([result, settledMarker]);
+            return outcome === marker;
+        };
+
+        beforeEach(() => {
+            jest.useFakeTimers();
+        });
+
+        test("Should keep waiting past the timeout while the parent keeps the call's request alive", async () => {
+            const fakeWindow = installTargetedCall();
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const message = await fakeWindow.posted;
+
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+            fakeWindow.keepAlive(message.requestId);
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+
+            const stillPending = await isPending(result);
+            expect(stillPending).toBe(true);
+            fakeWindow.reply(message.requestId, 'ok');
+            await expect(result).resolves.toBe('ok');
+        });
+
+        test('Should time out a full timeout after the last keepalive', async () => {
+            const fakeWindow = installTargetedCall();
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const outcome = result.catch((error: unknown) => error);
+            const message = await fakeWindow.posted;
+
+            await jest.advanceTimersByTimeAsync(1_000);
+            fakeWindow.keepAlive(message.requestId);
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+            const stillPending = await isPending(result);
+            expect(stillPending).toBe(true);
+            await jest.advanceTimersByTimeAsync(1);
+
+            const error = await outcome;
+            expect(error).toBeInstanceOf(BackendFunctionError);
+            expect(error).toMatchObject(timedOut);
+            const remainingListeners = fakeWindow.listenerCount();
+            expect(remainingListeners).toBe(0);
+        });
+
+        test("Should accept a keepalive from the parent at any origin when it posted with '*'", async () => {
+            const fakeWindow = installFakeWindow({});
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const message = await fakeWindow.posted;
+
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+            fakeWindow.keepAlive(message.requestId, fakeWindow.parent, OTHER_ORIGIN);
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+
+            const stillPending = await isPending(result);
+            expect(stillPending).toBe(true);
+            fakeWindow.reply(message.requestId, 'ok', fakeWindow.parent, OTHER_ORIGIN);
+            await expect(result).resolves.toBe('ok');
+        });
+
+        const ignoredKeepAlives = [
+            {
+                description: 'any window but the parent',
+                send: (fakeWindow: FakeWindow, requestId: string) =>
+                    fakeWindow.keepAlive(requestId, {}),
+            },
+            {
+                description: 'the parent at another origin than the call was posted to',
+                send: (fakeWindow: FakeWindow, requestId: string) =>
+                    fakeWindow.keepAlive(requestId, fakeWindow.parent, OTHER_ORIGIN),
+            },
+            {
+                description: 'the parent, for another request id',
+                send: (fakeWindow: FakeWindow) => fakeWindow.keepAlive('unknown-request-id'),
+            },
+        ];
+
+        test.each(ignoredKeepAlives)(
+            'Should ignore a keepalive from $description',
+            async ({ send }) => {
+                const fakeWindow = installTargetedCall();
+                const result = postMessageTransport(QUERY_NAME, ARGS);
+                const outcome = result.catch((error: unknown) => error);
+                const message = await fakeWindow.posted;
+
+                await jest.advanceTimersByTimeAsync(POSTMESSAGE_TIMEOUT_MS - 1);
+                send(fakeWindow, message.requestId);
+                await jest.advanceTimersByTimeAsync(1);
+
+                const error = await outcome;
+                expect(error).toBeInstanceOf(BackendFunctionError);
+                expect(error).toMatchObject(timedOut);
+            },
+        );
+
+        test('Should ignore a keepalive or reply that reaches the call after it settled', async () => {
+            const fakeWindow = installTargetedCall();
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const message = await fakeWindow.posted;
+            const [handleMessage] = fakeWindow.listeners();
+            fakeWindow.reply(message.requestId, 'ok');
+            await expect(result).resolves.toBe('ok');
+
+            // Calls the listener directly, so this holds even if it were still attached.
+            const sendLate = (data: unknown) =>
+                handleMessage({ data, origin: DATADOG_PARENT, source: fakeWindow.parent });
+            sendLate({ type: RUN_QUERY_KEEPALIVE, requestId: message.requestId });
+            const timersAfterKeepAlive = jest.getTimerCount();
+            expect(timersAfterKeepAlive).toBe(0);
+            sendLate({ type: RUN_QUERY_RESPONSE, requestId: message.requestId, success: false });
+
+            await jest.advanceTimersByTimeAsync(POSTMESSAGE_MAX_WAIT_MS);
+            await expect(result).resolves.toBe('ok');
+            const remainingListeners = fakeWindow.listenerCount();
+            expect(remainingListeners).toBe(0);
+        });
+
+        const sleeps = [
+            { description: 'the timeout', sleepMs: POSTMESSAGE_TIMEOUT_MS },
+            { description: 'the maximum wait', sleepMs: POSTMESSAGE_MAX_WAIT_MS },
+        ];
+
+        test.each(sleeps)(
+            'Should time out on a keepalive that arrives after $description passed while timers were paused',
+            async ({ sleepMs }) => {
+                const fakeWindow = installTargetedCall();
+                const result = postMessageTransport(QUERY_NAME, ARGS);
+                const outcome = result.catch((error: unknown) => error);
+                const message = await fakeWindow.posted;
+
+                // Moves the clock without running timers, as when the machine sleeps.
+                jest.setSystemTime(Date.now() + sleepMs);
+                fakeWindow.keepAlive(message.requestId);
+
+                const remainingTimers = jest.getTimerCount();
+                const remainingListeners = fakeWindow.listenerCount();
+                expect(remainingTimers).toBe(0);
+                expect(remainingListeners).toBe(0);
+                const error = await outcome;
+                expect(error).toBeInstanceOf(BackendFunctionError);
+                expect(error).toMatchObject(timedOut);
+            },
+        );
+
+        test('Should time out at the maximum wait however often the parent keeps the call alive', async () => {
+            const fakeWindow = installTargetedCall();
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const outcome = result.catch((error: unknown) => error);
+            const message = await fakeWindow.posted;
+            const interval = POSTMESSAGE_TIMEOUT_MS - 1;
+
+            const keepAliveCount = Math.ceil(POSTMESSAGE_MAX_WAIT_MS / interval) - 1;
+            for (let count = 0; count < keepAliveCount; count++) {
+                // eslint-disable-next-line no-await-in-loop
+                await jest.advanceTimersByTimeAsync(interval);
+                fakeWindow.keepAlive(message.requestId);
+            }
+            await jest.advanceTimersByTimeAsync(
+                POSTMESSAGE_MAX_WAIT_MS - keepAliveCount * interval - 1,
+            );
+            fakeWindow.keepAlive(message.requestId);
+            const stillPending = await isPending(result);
+            expect(stillPending).toBe(true);
+            await jest.advanceTimersByTimeAsync(1);
+
+            const error = await outcome;
+            expect(error).toBeInstanceOf(BackendFunctionError);
+            expect(error).toMatchObject(timedOut);
+            const remainingTimers = jest.getTimerCount();
+            expect(remainingTimers).toBe(0);
+        });
     });
 
     test('Should reject the call and stop waiting when the message cannot be posted', async () => {
