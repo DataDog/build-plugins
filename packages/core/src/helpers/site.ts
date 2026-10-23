@@ -4,36 +4,42 @@
 
 import { SITES } from '@dd/core/constants';
 
-// A site value can be a bare known site (e.g. "datadoghq.com") or a single-label
-// custom subdomain on top of one (e.g. "myorg.us5.datadoghq.com"), used by orgs
-// with a custom Datadog URL. Picks the longest (most specific) matching base site
-// so "myorg.us5.datadoghq.com" resolves to "us5.datadoghq.com", not "datadoghq.com".
-// Matching is case-insensitive; the returned site and subdomain are normalized to lowercase.
+const GENERIC_SUBDOMAINS = new Set(['api', 'app']);
+
+// Reduces "  https://MyOrg.datadoghq.com/path?x=1 " to "myorg.datadoghq.com".
+const normalizeSiteInput = (value: string): string => {
+    const withoutScheme = value.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    const host = withoutScheme.split(/[/?#]/)[0] ?? '';
+    return host.trim().toLowerCase();
+};
+
+// Mirrors the Datadog apps CLI's site parser; site-vectors.json pins that behavior.
 export const parseSite = (
-    value: string,
+    value: unknown,
 ): { site: (typeof SITES)[number]; subdomain?: string } | undefined => {
-    // Config isn't enforced by the type system at runtime (e.g. plain JS configs),
-    // so a non-string can reach here despite the `string` signature.
     if (typeof value !== 'string') {
         return undefined;
     }
 
-    const lowerValue = value.toLowerCase();
+    const normalizedValue = normalizeSiteInput(value);
 
-    const exactMatch = SITES.find((s) => s === lowerValue);
+    const exactMatch = SITES.find((s) => s === normalizedValue);
     if (exactMatch) {
         return { site: exactMatch };
     }
 
-    const suffixMatches = SITES.filter((s) => lowerValue.endsWith(`.${s}`));
+    const suffixMatches = SITES.filter((s) => normalizedValue.endsWith(`.${s}`));
     if (!suffixMatches.length) {
         return undefined;
     }
 
     const site = suffixMatches.reduce((longest, s) => (s.length > longest.length ? s : longest));
-    const subdomain = lowerValue.slice(0, lowerValue.length - site.length - 1);
-    if (!subdomain || !/^[a-z0-9-]+$/.test(subdomain)) {
+    const subdomain = normalizedValue.slice(0, normalizedValue.length - site.length - 1);
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(subdomain)) {
         return undefined;
+    }
+    if (GENERIC_SUBDOMAINS.has(subdomain)) {
+        return { site };
     }
 
     return { site, subdomain };
