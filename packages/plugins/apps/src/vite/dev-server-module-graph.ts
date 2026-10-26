@@ -58,14 +58,10 @@ export async function collectModuleGraphFromServer(
     return records;
 }
 
-// Priming refills an edited module's transformResult, which Vite 6+'s SSR runner reads as "cached
+// Priming refills an edited module's transformResult, which Vite's SSR runner reads as "cached
 // evaluation still current", so each stale module the walk primes is un-cached again after it.
 function trackStaleAppModules(server: ViteDevServer, buildRoot: string) {
-    // Vite 5 has no environment graph; its ssrLoadModule reads ssrModule, which priming never sets.
-    const ssrGraph = server.environments?.ssr?.moduleGraph;
-    if (!ssrGraph) {
-        return { record: () => {}, uncache: () => {} };
-    }
+    const ssrGraph = server.environments.ssr.moduleGraph;
     const isStale = (node: EnvironmentModuleNode) => {
         // Untransformed and never invalidated means never run, so there's no stale evaluation.
         const wasInvalidated = node.lastInvalidationTimestamp || node.lastHMRTimestamp;

@@ -19,7 +19,6 @@ import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import {
     ALREADY_GUARDED,
     exemptFetchFromBlockedScope,
-    exemptPluginContainerFromBlockedScope,
     FOREIGN_GUARD_MESSAGE,
     FS_WRITE_BLOCKED_MESSAGE,
     getSharedContext,
@@ -2174,24 +2173,6 @@ describe('exemptFetchFromBlockedScope', () => {
 
         await expect(fetching).rejects.toThrow(NON_STRING_MODULE_ID_MESSAGE);
         expect(fetchModule).not.toHaveBeenCalled();
-    });
-});
-
-describe('exemptPluginContainerFromBlockedScope', () => {
-    test('Should reject a non-string id on a Vite 5 plugin container method without calling it', async () => {
-        const resolveId = jest.fn(async (id: unknown) => id);
-        const transform = jest.fn(async (_code: unknown, id: unknown) => id);
-        const container = { resolveId, transform };
-        exemptPluginContainerFromBlockedScope(container);
-        const nonStringId: unknown = { toString: () => '/src/lazy.ts' };
-
-        const resolving = container.resolveId(nonStringId);
-        const transforming = container.transform('code', nonStringId);
-
-        await expect(resolving).rejects.toThrow(NON_STRING_MODULE_ID_MESSAGE);
-        await expect(transforming).rejects.toThrow(NON_STRING_MODULE_ID_MESSAGE);
-        expect(resolveId).not.toHaveBeenCalled();
-        expect(transform).not.toHaveBeenCalled();
     });
 });
 

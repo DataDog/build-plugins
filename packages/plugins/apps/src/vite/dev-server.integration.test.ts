@@ -166,7 +166,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, defaultServerConditions },
                 context: getContextMock({ buildRoot: FIXTURE_ROOT }),
                 options: {
                     include: [],
@@ -773,7 +773,7 @@ describe('Dev client module', () => {
             name: 'dd-apps-test',
             enforce: 'post',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, defaultServerConditions },
                 context: getContextMock({ buildRoot: FIXTURE_ROOT }),
                 options: { include: [], longPolling: mockLongPolling },
             }),
@@ -864,7 +864,7 @@ describe('Dev Server Middleware — editing files between local executions', () 
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, defaultServerConditions },
                 context,
                 options: { include: [], longPolling: mockLongPolling },
             }),
@@ -1148,7 +1148,7 @@ describe('Dev Server Middleware — SSR import warmup warnings', () => {
             const appsPlugin: Plugin = {
                 name: 'dd-apps-test',
                 ...getVitePlugin({
-                    bundler: { build },
+                    bundler: { build, defaultServerConditions },
                     context,
                     options: { include: [], longPolling: mockLongPolling },
                 }),
@@ -1246,7 +1246,7 @@ describe('Dev Server Middleware — dynamic imports inside a backend function', 
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, defaultServerConditions },
                 context: getContextMock({ buildRoot: root }),
                 options: { include: [], longPolling: mockLongPolling },
             }),
@@ -1358,7 +1358,7 @@ describe('Dev Server Middleware — request origin and host checks over real HTT
         const appsPlugin: Plugin = {
             name: 'dd-apps-test',
             ...getVitePlugin({
-                bundler: { build },
+                bundler: { build, defaultServerConditions },
                 context,
                 options: { include: [], tags: [], longPolling: mockLongPolling },
             }),

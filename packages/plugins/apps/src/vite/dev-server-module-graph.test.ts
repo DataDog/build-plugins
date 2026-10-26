@@ -46,6 +46,9 @@ function makeFakeServer(
         // its `importedModules`; these fixtures pre-wire the full graph instead, so this is a
         // no-op stand-in for that priming call.
         transformRequest: async () => null,
+        environments: {
+            ssr: { moduleGraph: { idToModuleMap: new Map(), getModuleById: () => undefined } },
+        },
     } as unknown as ViteDevServer;
 }
 
@@ -66,7 +69,7 @@ const fakeEnvironmentNode = (
     lastHMRTimestamp: state === 'hmr-updated' ? 1 : 0,
 });
 
-// A Vite 6+ SSR environment graph where priming refills a node's transformResult.
+// An SSR environment graph where priming refills a node's transformResult.
 function withSsrEnvironmentGraph(
     server: ViteDevServer,
     nodes: FakeEnvironmentNode[],
@@ -376,14 +379,6 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
 
             await expect(collecting).rejects.toThrow(/unresolvable import specifier/);
             expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should complete on a server without an SSR environment graph (Vite 5)', async () => {
-            const server = makeFakeServer(resolveToDependency);
-
-            const collecting = collect(server);
-
-            await expect(collecting).resolves.toBeInstanceOf(Map);
         });
     });
 
