@@ -6,6 +6,7 @@ import { queryTimeseriesData } from '@datadog/action-catalog/dd/metrics';
 // The package's own modules, reached both by relative path and by package specifier.
 import { METRICS_CONNECTION_ID } from '@fixtures/viz-lib/connections';
 
+import { labelSeries } from './label.backend.js';
 import { toTimeseriesRequest } from './request.js';
 
 export async function fetchSeries(query) {
@@ -13,5 +14,5 @@ export async function fetchSeries(query) {
         inputs: toTimeseriesRequest(query),
         connectionId: METRICS_CONNECTION_ID,
     });
-    return { query, series, servedBy: 'viz-lib backend body' };
+    return { query, series, servedBy: 'viz-lib backend body', label: labelSeries() };
 }

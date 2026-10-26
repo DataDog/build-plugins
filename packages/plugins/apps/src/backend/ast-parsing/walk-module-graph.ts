@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { isBackendSourceModule } from '../backend-sources';
+import { describeMissingBackendOptIn, isBackendSourceModule } from '../backend-sources';
 
 import { type ParsedModuleRecord, unsupportedModuleGraphDependency } from './module-graph';
 
@@ -43,6 +43,11 @@ export function walkModuleGraph(
         // omitting a possible connection ID.
         const record = modules.get(moduleId);
         if (!record) {
+            // A linked package's backend function file has no record until its package opts in.
+            const missingOptIn = describeMissingBackendOptIn(moduleId, buildRoot);
+            if (missingOptIn) {
+                throw new Error(missingOptIn);
+            }
             throw unsupportedModuleGraphDependency(
                 entryId,
                 `missing module record for ${moduleId}`,

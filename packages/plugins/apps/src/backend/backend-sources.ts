@@ -199,6 +199,33 @@ export function getBackendModuleOwner(moduleId: string, buildRoot: string): Back
     return { kind: 'other' };
 }
 
+/**
+ * Explains why a backend function file outside the build root can't become a function when the
+ * reason is its package's missing opt-in: a linked workspace package's `.backend.*` file is
+ * proxied like the app's, but its source is only analyzed once the package opts in. Undefined
+ * for any other module.
+ */
+export function describeMissingBackendOptIn(
+    moduleId: string,
+    buildRoot: string,
+): string | undefined {
+    const modulePath = path.normalize(moduleId);
+    const root = path.resolve(buildRoot);
+    if (isWithin(root, modulePath) || getBackendModuleOwner(modulePath, root).kind !== 'other') {
+        return undefined;
+    }
+    const owner = findOwningPackage(modulePath);
+    if (!owner || isWithin(owner.root, root)) {
+        return undefined;
+    }
+    const displayPath = path.relative(root, modulePath).split(path.sep).join('/');
+    return (
+        `${displayPath} is a backend function file in ${owner.name}, which hasn't opted in to ` +
+        `providing backend functions. Add "datadogApps": { "backendFunctions": true } to its ` +
+        `package.json, or rename the file.`
+    );
+}
+
 /** The package name a bare import specifier refers to, or undefined for a relative, absolute or URL-like one. */
 function getPackageName(specifier: string): string | undefined {
     if (/^[./\\]/.test(specifier) || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(specifier)) {
@@ -406,9 +433,13 @@ export function findInstalledBackendFunctionPackages(
             }
 
             const manifest = readManifest(path.join(packageDir, 'package.json'));
+            // Without a manifest name, the package is named as ownership names it: by the
+            // directory it's installed under.
             const name =
-                manifest && providesBackendFunctions(manifest) && typeof manifest.name === 'string'
-                    ? manifest.name
+                manifest && providesBackendFunctions(manifest)
+                    ? typeof manifest.name === 'string'
+                        ? manifest.name
+                        : dependencyName
                     : undefined;
             visited.set(packageDir, name);
             if (name) {

@@ -35,6 +35,8 @@ const ACTION_CATALOG_DIR = path.join(FIXTURES_DIR, 'action_catalog_project');
 
 // Only exists in the library's backend function body, never in its proxy.
 const VIZ_BACKEND_BODY = 'viz-lib backend body';
+// Returned by a sibling backend function file that the library's function imports.
+const VIZ_SIBLING_BODY = 'viz-lib sibling backend body';
 const PLAIN_LIB_BODY = 'plain-backend-lib ordinary module body';
 const LINKED_PLAIN_LIB_BODY = 'linked-plain-backend-lib module body';
 const QUERY = 'avg:system.cpu.user{*}';
@@ -313,6 +315,7 @@ describe.each<Layout>(['installed', 'linked'])(
                     Object.keys(built.manifest.backend.functions),
                 );
                 expect(built.frontendCode).not.toContain(VIZ_BACKEND_BODY);
+                expect(built.frontendCode).not.toContain(VIZ_SIBLING_BODY);
             });
 
             test("Should keep a .backend.js file in a package that didn't opt in as an ordinary module", () => {
@@ -342,6 +345,7 @@ describe.each<Layout>(['installed', 'linked'])(
                     query: QUERY,
                     series: { points: [1, 2, 3] },
                     servedBy: VIZ_BACKEND_BODY,
+                    label: VIZ_SIBLING_BODY,
                 });
             });
         });
@@ -400,6 +404,7 @@ describe.each<Layout>(['installed', 'linked'])(
                             query: QUERY,
                             series: { points: [4, 5, 6] },
                             servedBy: VIZ_BACKEND_BODY,
+                            label: VIZ_SIBLING_BODY,
                         },
                     },
                 });
@@ -407,6 +412,48 @@ describe.each<Layout>(['installed', 'linked'])(
                     expect.objectContaining({ connectionId: 'viz-lib-metrics-connection' }),
                 ]);
                 expect(api.isDone()).toBe(true);
+            }, 30000);
+
+            // A deps optimizer in the SSR environment makes Vite add a `?v=<hash>` cache key to the
+            // ids of installed modules, the library's included.
+            test('Should execute the library function locally while the SSR environment pre-bundles dependencies', async () => {
+                const optimizingServer = await createServer({
+                    root: appRoot,
+                    configFile: false,
+                    logLevel: 'silent',
+                    server: { middlewareMode: true, hmr: false },
+                    ssr: { optimizeDeps: { include: ['plain-backend-lib'] } },
+                    plugins: [getAppsPlugin()],
+                });
+                try {
+                    const [queryName] = getProxiedQueryNames(
+                        await loadClientModuleGraph(optimizingServer, '/main.ts'),
+                    );
+                    const { api } = mockDatadogApi({ points: [8] });
+
+                    const req = createMockRequest('/__dd/executeAction', {
+                        functionName: queryName,
+                        args: [QUERY],
+                    });
+                    const res = createMockResponse();
+                    optimizingServer.middlewares(req, res, jest.fn());
+                    await res.done;
+
+                    expect(JSON.parse(res.getBody())).toEqual({
+                        success: true,
+                        result: {
+                            data: {
+                                query: QUERY,
+                                series: { points: [8] },
+                                servedBy: VIZ_BACKEND_BODY,
+                                label: VIZ_SIBLING_BODY,
+                            },
+                        },
+                    });
+                    expect(api.isDone()).toBe(true);
+                } finally {
+                    await optimizingServer.close();
+                }
             }, 30000);
 
             // After a restart the browser reloads the page from its cache. It must still ask the
@@ -464,6 +511,7 @@ describe.each<Layout>(['installed', 'linked'])(
                                 query: QUERY,
                                 series: { points: [7] },
                                 servedBy: VIZ_BACKEND_BODY,
+                                label: VIZ_SIBLING_BODY,
                             },
                         },
                     });
@@ -529,11 +577,13 @@ describe('Backend functions shipped by a package: refusals and subfolders', () =
 
     // Upstream's rule: a linked workspace file outside the root is always proxied, opt-in or
     // not, and the graph checks then refuse it, so it fails closed instead of deploying.
-    test("Should fail the build for a linked .backend.js in a package that didn't opt in, without shipping its body", async () => {
+    test("Should fail the build for a linked .backend.js in a package that didn't opt in, naming the opt-in, without shipping its body", async () => {
         const outDir = path.join(appRoot, 'dist');
 
         await expect(buildApp(appRoot, 'linked-plain.ts')).rejects.toThrow(
-            /missing module record for \S+linked\.backend\.js/,
+            '../linked-plain-lib/linked.backend.js is a backend function file in linked-plain-backend-lib, ' +
+                "which hasn't opted in to providing backend functions. " +
+                'Add "datadogApps": { "backendFunctions": true } to its package.json, or rename the file.',
         );
 
         // Vite wrote the frontend before packaging failed: it holds only the proxy.

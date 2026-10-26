@@ -9,6 +9,7 @@ import path from 'path';
 
 import { walkModuleGraph } from './ast-parsing/walk-module-graph';
 import {
+    findInstalledBackendFunctionPackages,
     getBackendModuleOwner,
     isBackendSourceModule,
     isPackageManagerModule,
@@ -72,6 +73,7 @@ describe('Backend Functions - isBackendSourceModule', () => {
  *       node_modules/
  *         opted/                   opted in
  *         plain/                   not opted in
+ *         nameless/                opted in, without a manifest name
  *         .pnpm/opted@1.0.0/node_modules/opted/   a pnpm layout
  *     shared/                      outside the root, no manifest of its own
  */
@@ -90,9 +92,13 @@ describe('Backend Functions - package ownership rules', () => {
         tree = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-ownership-')));
         appRoot = at('app');
         write('package.json', { name: 'monorepo', ...OPT_IN });
-        write('app/package.json', { name: 'app', dependencies: { opted: '1', plain: '1' } });
+        write('app/package.json', {
+            name: 'app',
+            dependencies: { opted: '1', plain: '1', nameless: '1' },
+        });
         write('app/node_modules/opted/package.json', { name: 'opted', ...OPT_IN });
         write('app/node_modules/plain/package.json', { name: 'plain' });
+        write('app/node_modules/nameless/package.json', OPT_IN);
         write('app/node_modules/.pnpm/opted@1.0.0/node_modules/opted/package.json', {
             name: 'opted',
             ...OPT_IN,
@@ -128,6 +134,20 @@ describe('Backend Functions - package ownership rules', () => {
                   }
                 : owner,
         ).toEqual(expected);
+    });
+
+    // Discovery keeps an opted-in package out of dev pre-bundling, so it must find every package
+    // ownership treats as opted in, under the same name.
+    test('Should discover an opted-in package without a manifest name, named as ownership names it', () => {
+        const owner = getBackendModuleOwner(
+            at('app/node_modules/nameless/data.backend.js'),
+            appRoot,
+        );
+        const discovered = findInstalledBackendFunctionPackages(appRoot, false);
+
+        const namelessPackage = { name: 'nameless', root: at('app/node_modules/nameless') };
+        expect(owner).toEqual({ kind: 'backend-package', package: namelessPackage });
+        expect(discovered).toContainEqual({ ...namelessPackage, installedAs: ['nameless'] });
     });
 
     // A package's modules are backend source, so a dynamic import into one, whether by package

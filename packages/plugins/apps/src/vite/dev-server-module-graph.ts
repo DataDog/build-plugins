@@ -250,8 +250,11 @@ function stripLocalExecutionMarker(id: string): string {
         : id;
 }
 
+// Vite's `v=<hash>` (added to installed modules' ids once a deps optimizer runs) is only a cache
+// key; any other query parameter could change what the module is.
 function hasSemanticViteQuery(id: string): boolean {
-    return stripLocalExecutionMarker(id).includes('?');
+    const [, query = ''] = stripLocalExecutionMarker(id).split(/\?(.*)/s);
+    return query.split('&').some((param) => param !== '' && !/^v=[\w.-]+$/.test(param));
 }
 
 // Named distinctly from backend-module-graph-collector.ts's normalizeViteModuleId, which this

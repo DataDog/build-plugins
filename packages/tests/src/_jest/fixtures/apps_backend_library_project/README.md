@@ -7,7 +7,8 @@ a real `node_modules/` layout (copied or symlinked), since that layout is what's
 -   `@fixtures/viz-lib` opts in with `"datadogApps": { "backendFunctions": true }`. Its frontend
     entry imports its own backend function through a self-referencing subpath, like
     `@datadog/apps-frontend/visualizations/backend`, and the backend calls an action through its
-    `@datadog/action-catalog` peer dependency.
+    `@datadog/action-catalog` peer dependency. It also imports a sibling `.backend.js` file, whose
+    real body backend code must get, never its frontend proxy.
 -   `viz-alias` installs another copy of `@fixtures/viz-lib` under an npm alias.
 -   `plain-backend-lib` ships a `.backend.js` file without opting in; it must stay an ordinary module.
 -   `@fixtures/banned-lib` opts in, but its backend function's helper imports a Node built-in.

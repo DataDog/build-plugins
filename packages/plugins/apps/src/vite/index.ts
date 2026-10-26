@@ -46,6 +46,7 @@ import { createTagSources, resolveTags } from '../tags';
 import type { TagSource } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
+import { normalizeViteModuleId } from './backend-module-graph-collector';
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
@@ -367,12 +368,15 @@ export const getVitePlugin = ({
                 // optimizeDeps) gets a distinct local-execution identity — any other SDK/package
                 // import must resolve to the same module Vite otherwise caches for it, since an
                 // unrecognized query on a node_modules id can break Vite's optimizeDeps handling.
-                if (!isBackendSourceModule(resolved.id, context.buildRoot)) {
+                // Classified without its query: an installed module's id carries Vite's `?v=`
+                // cache key once the SSR environment has a deps optimizer.
+                const resolvedPath = normalizeViteModuleId(resolved.id);
+                if (!isBackendSourceModule(resolvedPath, context.buildRoot)) {
                     return resolved;
                 }
 
                 const suffixedId = resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX;
-                if (!BACKEND_FILE_RE.test(resolved.id)) {
+                if (!BACKEND_FILE_RE.test(resolvedPath)) {
                     subgraphImporters?.add(suffixedId);
                 }
                 return { ...resolved, id: suffixedId };
