@@ -18,8 +18,9 @@ import {
     DEBUG_BUNDLE_ROUTE,
     EXECUTE_ACTION_ROUTE,
 } from '@dd/apps-plugin/vite/dev-server';
-import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import { DEV_CLIENT_SRC, getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
+import * as fsHelpers from '@dd/core/helpers/fs';
 import { outputFileSync, readFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
@@ -45,6 +46,7 @@ import {
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE } from '../constants';
 
@@ -463,6 +465,43 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(apiScope.isDone()).toBe(true);
     }, 30000);
 
+    test('Should return a real bundle with the connection IDs it uses from /__dd/debugBundle as JSON', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const log = getMockLogger();
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [actionCatalogCallFunc],
+            async () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            mockLongPolling,
+            FIXTURE_ROOT,
+            log,
+            'development',
+            createViteHostCheck(server.config),
+            defaultServerConditions,
+        );
+
+        const functionName = encodeQueryName(actionCatalogCallFunc);
+        const req = createMockRequest(
+            DEBUG_BUNDLE_PATH,
+            { functionName },
+            { accept: 'application/json' },
+        );
+        const res = createMockResponse();
+
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const rawBody = res.getBody();
+        const body = JSON.parse(rawBody);
+        expect(body.allowedConnectionIds).toEqual(['conn-1']);
+        expect(body.code).toContain('conn-1');
+    }, 30000);
+
     // A dynamic import sits between two static ones, so resolution must come from the AST
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
@@ -727,6 +766,88 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
 // Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
 // would race other test files that copy that whole tree in parallel.
 const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
+
+describe('Dev client module', () => {
+    const startDevServer = async (base: string, extraPlugins: Plugin[] = []) => {
+        const appsPlugin: Plugin = {
+            name: 'dd-apps-test',
+            enforce: 'post',
+            ...getVitePlugin({
+                bundler: { build },
+                context: getContextMock({ buildRoot: FIXTURE_ROOT }),
+                options: { include: [], longPolling: mockLongPolling },
+            }),
+        };
+        const devServer = await createServer({
+            configFile: false,
+            root: FIXTURE_ROOT,
+            base,
+            logLevel: 'silent',
+            server: { middlewareMode: true, hmr: false },
+            plugins: [appsPlugin, ...extraPlugins],
+            optimizeDeps: { noDiscovery: true },
+        });
+        const httpServer = http.createServer(devServer.middlewares);
+        await new Promise<void>((resolve) => {
+            httpServer.listen(0, '127.0.0.1', resolve);
+        });
+        const address = httpServer.address();
+        const port = typeof address === 'object' && address !== null ? address.port : 0;
+        const close = async () => {
+            await new Promise((resolve) => {
+                httpServer.close(resolve);
+            });
+            await devServer.close();
+        };
+        return { devServer, origin: `http://127.0.0.1:${port}`, close };
+    };
+
+    beforeEach(() => {
+        nock.enableNetConnect('127.0.0.1');
+    });
+
+    afterEach(() => {
+        nock.disableNetConnect();
+        jest.restoreAllMocks();
+    });
+
+    const bases = [
+        { description: 'at the root', base: '/' },
+        { description: 'under a base path', base: '/myapp/' },
+    ];
+
+    test.each(bases)(
+        'Should serve the dev client its page links to $description',
+        async ({ base }) => {
+            jest.spyOn(fsHelpers, 'readFile').mockResolvedValue(
+                'globalThis.devClientLoaded = true;',
+            );
+            const loadsEveryId: Plugin = {
+                name: 'loads-every-id',
+                load: () => 'export const unexpected = true;',
+            };
+            const { devServer, origin, close } = await startDevServer(base, [loadsEveryId]);
+
+            try {
+                const html = await devServer.transformIndexHtml(
+                    '/index.html',
+                    '<html><head></head><body></body></html>',
+                );
+                const devClientSrc = path.posix.join(base, DEV_CLIENT_SRC);
+                const devClientUrl = `${origin}${devClientSrc}`;
+                const response = await fetch(devClientUrl);
+                const devClient = await response.text();
+
+                expect(html).toContain(`<script type="module" src="${devClientSrc}"></script>`);
+                expect(response.status).toBe(200);
+                expect(devClient).toContain('devClientLoaded');
+            } finally {
+                await close();
+            }
+        },
+        30000,
+    );
+});
 
 describe('Dev Server Middleware — editing files between local executions', () => {
     let editRoot: string | undefined;

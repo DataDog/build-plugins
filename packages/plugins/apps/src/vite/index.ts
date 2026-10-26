@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rm } from '@dd/core/helpers/fs';
+import { readFile, rm } from '@dd/core/helpers/fs';
 import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { createHash } from 'crypto';
@@ -126,6 +126,12 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+export const APPS_DEV_CLIENT_PATH = path.join(__dirname, './apps-dev-client.mjs');
+export const DEV_CLIENT_MODULE_ID = 'virtual:dd-apps-dev-client';
+// The `\0` prefix is Vite's virtual-module convention, which most plugins' id filters skip.
+export const DEV_CLIENT_RESOLVED_ID = `\0${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_SRC = `/@id/${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_RESOLVED_RE = new RegExp(`^${DEV_CLIENT_RESOLVED_ID}$`);
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
 // The `\0` prefix is the bundler convention for "not a real file": Rollup and Rolldown both leave
@@ -350,6 +356,12 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
+                if (source === DEV_CLIENT_MODULE_ID) {
+                    return devServerActive && resolveOptions.ssr !== true
+                        ? DEV_CLIENT_RESOLVED_ID
+                        : null;
+                }
+
                 // In a frontend build, each client-side import of a backend function file resolves
                 // to a proxy module of its own (see load below). Under the backend file's id, the
                 // stub would keep the sourcemaps earlier transforms attached to that file, whose
@@ -384,7 +396,7 @@ export const getVitePlugin = ({
                     return { ...resolved, id: proxyId };
                 }
 
-                // Top-level guard (not folded into each branch) so any future branch added below
+                // Guard (not folded into each branch) so any future local-execution branch below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.
                 if (resolveOptions.ssr !== true) {
@@ -434,8 +446,20 @@ export const getVitePlugin = ({
             },
         },
         load: {
-            filter: { id: { include: [FRONTEND_PROXY_ID_RE] } },
+            // Ahead of other plugins' load hooks, which may claim any id.
+            order: 'pre',
+            filter: { id: { include: [DEV_CLIENT_RESOLVED_RE, FRONTEND_PROXY_ID_RE] } },
             async handler(id) {
+                if (id === DEV_CLIENT_RESOLVED_ID) {
+                    try {
+                        return await readFile(APPS_DEV_CLIENT_PATH);
+                    } catch (error: unknown) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        throw new Error(
+                            `Framed backend calls won't carry their bundle, the dev client didn't load: ${errorMessage}`,
+                        );
+                    }
+                }
                 // Vite < 6.3 ignores hook filters.
                 if (!FRONTEND_PROXY_ID_RE.test(id)) {
                     return null;
@@ -624,6 +648,22 @@ export const getVitePlugin = ({
                     await rm(backendOutDir);
                 }
             }
+        },
+        transformIndexHtml: {
+            // Before Vite's own HTML rewrite, which prefixes the dev client's src with the configured `base`.
+            order: 'pre',
+            handler(_html, ctx) {
+                if (!ctx.server) {
+                    return [];
+                }
+                return [
+                    {
+                        tag: 'script',
+                        attrs: { type: 'module', src: DEV_CLIENT_SRC },
+                        injectTo: 'head-prepend',
+                    },
+                ];
+            },
         },
         configureServer(server) {
             devServerActive = true;
