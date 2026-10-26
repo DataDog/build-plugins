@@ -70,15 +70,11 @@ export const createRequestData = async (options: {
     // and auto-generated headers (boundary) that we can forward while piping through gzip.
     const req = new Request('fake://url', { method: 'POST', body: form });
 
-    // Use Web Streams pipeThrough instead of Node.js pipe() to keep the pipeline lazy.
-    // Node.js pipe() immediately puts the source into flowing mode (starts reading blobs
-    // via process.nextTick), which races with cleanup of file-backed blobs after the
-    // request completes. Web Streams only start reading when the output is consumed.
+    // Consume serialization and optional compression fully before starting fetch, so
+    // reading file-backed blobs and compressing them happen outside the HTTP request's
+    // body-receive deadline. The buffered payload uses memory for each concurrent upload.
     const rawStream = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
 
-    // Materialize the payload in memory before opening the HTTP request so disk I/O and
-    // gzip compression do not stall an already-open request stream against intake's
-    // 30s/60s body-receive deadlines.
     const bodyBuffer = new Uint8Array(await new Response(rawStream).arrayBuffer());
     const data = new Blob([bodyBuffer]).stream();
 
@@ -104,6 +100,11 @@ const RETRIABLE_NETWORK_ERROR_CODES = new Set([
     'EHOSTUNREACH',
     'ENETUNREACH',
     'EAI_AGAIN',
+    'UND_ERR_SOCKET',
+    'UND_ERR_CONNECT_TIMEOUT',
+    'UND_ERR_HEADERS_TIMEOUT',
+    'UND_ERR_BODY_TIMEOUT',
+    'UND_ERR_CLOSED',
 ]);
 
 const hasRetriableErrorCode = (err: unknown): boolean => {
@@ -114,7 +115,7 @@ const hasRetriableErrorCode = (err: unknown): boolean => {
     if (!code) {
         return false;
     }
-    return RETRIABLE_NETWORK_ERROR_CODES.has(code) || code.startsWith('UND_ERR_');
+    return RETRIABLE_NETWORK_ERROR_CODES.has(code);
 };
 
 export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boolean => {
@@ -131,9 +132,8 @@ export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boo
     if (hasRetriableErrorCode(error) || hasRetriableErrorCode(cause)) {
         return true;
     }
-    if ('message' in error && error.message === 'fetch failed') {
-        return true;
-    }
+    // The generic fetch failure message also wraps permanent TLS/configuration errors.
+    // Retry only when the error or its immediate cause has a recognized transient code.
     return false;
 };
 
@@ -195,7 +195,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         } catch (error: any) {
             // We don't want to retry if there is a non-fetch related error.
             bail(error);
-            // bail(error) throws so the return is never executed.
+            // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
         }
 
@@ -207,7 +207,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
             }
             // Bail on non-retriable fetch errors (e.g. locked stream, AbortSignal timeout).
             bail(error);
-            // bail(error) throws so the return is never executed.
+            // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
         }
 
@@ -225,7 +225,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
             }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
-                // bail(error) throws so the return is never executed.
+                // bail rejects the retry promise; return to stop this attempt.
                 return {} as T;
             } else {
                 // Trigger the retry.
@@ -249,7 +249,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         } catch (error: any) {
             // We don't want to retry on parsing errors.
             bail(error);
-            // bail(error) throws so the return is never executed.
+            // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
         }
     }, retryOpts);
