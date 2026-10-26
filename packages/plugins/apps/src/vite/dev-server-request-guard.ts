@@ -20,7 +20,6 @@ export interface RequestRejection {
     message: string;
 }
 
-// Matched exactly, as Vite 5 and 6 do; Vite 7+ folds them into `server.allowedHosts`.
 function getConfiguredHosts({ server, preview }: HostCheckConfig): string[] {
     const hosts: string[] = [];
     if (typeof server.host === 'string' && server.host) {
@@ -79,8 +78,8 @@ function matchesAllowedHosts(
 }
 
 /**
- * Vite's dev-server host check, which Vite doesn't export and Vite 5 and 6 run after plugin middleware.
- * Unlike Vite, it drops the `file:`/`-extension:` allowance.
+ * Mirrors Vite's dev-server host check, which Vite doesn't export and Vite 6 runs after plugin
+ * middleware. Unlike Vite, it drops the `file:`/`-extension:` allowance.
  */
 export function createViteHostCheck(config: HostCheckConfig): HostCheck {
     if (config.server.https) {
@@ -88,8 +87,7 @@ export function createViteHostCheck(config: HostCheckConfig): HostCheck {
     }
     const configuredHosts = getConfiguredHosts(config);
     return (hostHeader) => {
-        // Only `allowedHosts` is read per request, as Vite 6 does; it isn't an array on Vite
-        // versions that predate it or in an untyped config.
+        // Not an array in an untyped config.
         const { allowedHosts } = config.server;
         if (allowedHosts === true) {
             return true;

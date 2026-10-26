@@ -29,6 +29,7 @@ import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
 import type { IncomingMessage } from 'http';
 import nock from 'nock';
 import type { InlineConfig } from 'vite';
+import { defaultServerConditions } from 'vite';
 
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
@@ -308,7 +309,7 @@ function createTestMiddleware(
         overrides.log ?? mockLog,
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
-        overrides.serverConditions,
+        overrides.serverConditions ?? defaultServerConditions,
     );
 }
 
@@ -1600,7 +1601,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
-                    undefined,
+                    defaultServerConditions,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {
@@ -1634,7 +1635,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
-                    undefined,
+                    defaultServerConditions,
                 );
                 mockLoadModuleReturning(mockFunctions[0], () => 'recovered');
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
@@ -1936,7 +1937,7 @@ describe('Dev Server Middleware', () => {
                     mockLog,
                     'development',
                     localOnlyHostCheck,
-                    undefined,
+                    defaultServerConditions,
                 );
 
                 const req = createMockRequest('/__dd/executeAction', {

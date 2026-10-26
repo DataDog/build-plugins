@@ -2,6 +2,8 @@
 
 A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned by `@datadog/apps-cli`.
 
+It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with an upgrade hint.
+
 > [!WARNING]
 > The Apps plugin is in **alpha** and is likely to break in most setups.
 
@@ -88,7 +90,7 @@ To call one by hand, send that content type, for example `curl -X POST -H 'Conte
 
 ## Cloud execution
 
-Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Two cases still follow the dev server's `NODE_ENV`: package export conditions on Vite 5, which doesn't export its default server conditions, and Vite's stub for an optional peer dependency the app hasn't installed.
+Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Vite's stub for an optional peer dependency the app hasn't installed still follows the dev server's `NODE_ENV`.
 
 When Datadog rejects a bundle as longer than the `jsFunctionWithActions` `script` input accepts, the dev server answers with a 413 naming the function, its size and Datadog's answer, and warns once per function until the dev server restarts.
 

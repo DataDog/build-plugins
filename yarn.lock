@@ -1713,6 +1713,7 @@ __metadata:
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.60.4"
     rollup-plugin-esbuild: "npm:6.1.1"
+    semver: "npm:7.7.2"
     simple-git: "npm:4.0.2"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
@@ -1772,6 +1773,7 @@ __metadata:
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.60.4"
     rollup-plugin-esbuild: "npm:6.1.1"
+    semver: "npm:7.7.2"
     simple-git: "npm:4.0.2"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
@@ -1824,6 +1826,7 @@ __metadata:
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.60.4"
     rollup-plugin-esbuild: "npm:6.1.1"
+    semver: "npm:7.7.2"
     simple-git: "npm:4.0.2"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
@@ -1879,6 +1882,7 @@ __metadata:
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.60.4"
     rollup-plugin-esbuild: "npm:6.1.1"
+    semver: "npm:7.7.2"
     simple-git: "npm:4.0.2"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
@@ -1931,6 +1935,7 @@ __metadata:
     pretty-bytes: "npm:5.6.0"
     rollup: "npm:4.60.4"
     rollup-plugin-esbuild: "npm:6.1.1"
+    semver: "npm:7.7.2"
     simple-git: "npm:4.0.2"
     typescript: "npm:5.4.3"
     unplugin: "npm:2.3.11"
@@ -1957,12 +1962,14 @@ __metadata:
     "@types/eslint-scope": "npm:3.7.7"
     "@types/estree": "npm:1.0.8"
     "@types/node": "npm:^20"
+    "@types/semver": "npm:7.5.8"
     esbuild: "npm:0.25.8"
     eslint-scope: "npm:7.2.2"
     glob: "npm:11.1.0"
     graceful-fs: "npm:4.2.11"
     jszip: "npm:3.10.1"
     rollup: "npm:4.60.4"
+    semver: "npm:7.7.2"
     typescript: "npm:5.4.3"
     vite: "npm:6.4.3"
   languageName: unknown
@@ -4262,7 +4269,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/semver@npm:^7.5.0":
+"@types/semver@npm:7.5.8, @types/semver@npm:^7.5.0":
   version: 7.5.8
   resolution: "@types/semver@npm:7.5.8"
   checksum: 10/3496808818ddb36deabfe4974fd343a78101fa242c4690044ccdc3b95dcf8785b494f5d628f2f47f38a702f8db9c53c67f47d7818f2be1b79f2efb09692e1178
@@ -10224,21 +10231,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"semver@npm:7.7.2, semver@npm:^7.3.2, semver@npm:^7.3.4, semver@npm:^7.5.4, semver@npm:^7.6.0, semver@npm:^7.7.2":
+  version: 7.7.2
+  resolution: "semver@npm:7.7.2"
+  bin:
+    semver: bin/semver.js
+  checksum: 10/7a24cffcaa13f53c09ce55e05efe25cd41328730b2308678624f8b9f5fc3093fc4d189f47950f0b811ff8f3c3039c24a2c36717ba7961615c682045bf03e1dda
+  languageName: node
+  linkType: hard
+
 "semver@npm:^6.0.0, semver@npm:^6.3.1":
   version: 6.3.1
   resolution: "semver@npm:6.3.1"
   bin:
     semver: bin/semver.js
   checksum: 10/1ef3a85bd02a760c6ef76a45b8c1ce18226de40831e02a00bad78485390b98b6ccaa31046245fc63bba4a47a6a592b6c7eedc65cc47126e60489f9cc1ce3ed7e
-  languageName: node
-  linkType: hard
-
-"semver@npm:^7.3.2, semver@npm:^7.3.4, semver@npm:^7.5.4, semver@npm:^7.6.0, semver@npm:^7.7.2":
-  version: 7.7.2
-  resolution: "semver@npm:7.7.2"
-  bin:
-    semver: bin/semver.js
-  checksum: 10/7a24cffcaa13f53c09ce55e05efe25cd41328730b2308678624f8b9f5fc3093fc4d189f47950f0b811ff8f3c3039c24a2c36717ba7961615c682045bf03e1dda
   languageName: node
   linkType: hard
 

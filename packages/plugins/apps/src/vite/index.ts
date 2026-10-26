@@ -56,18 +56,17 @@ import { createDevServerMiddleware } from './dev-server';
 import { localExecutionResolutionContext } from './local-execution';
 import {
     exemptFetchFromBlockedScope,
-    exemptPluginContainerFromBlockedScope,
     GRACEFUL_FS_UNGUARDED_WARNING,
     gracefulFsPredatesGuards,
     installGuards,
 } from './network-guard';
 import { createParameterCollector } from './parameter-collector';
 import { loadViteParseAst } from './vite-parse-ast';
+import { assertSupportedVite } from './vite-version';
 
 export type ViteBundler = {
     build: typeof build;
-    // Vite 6 and later.
-    defaultServerConditions?: readonly string[];
+    defaultServerConditions: readonly string[];
 };
 
 export interface VitePluginOptions {
@@ -239,11 +238,8 @@ export const getVitePlugin = ({
         () => parametersModuleId,
     );
 
-    // Vite 6 invokes closeBundle when a dev server's plugin container closes,
-    // not only for production builds. configureServer only runs for dev
-    // servers, so use it to mark the session and skip packaging there — a
-    // dev exit must not rebuild backend functions or replace the production
-    // package with dev-session-derived output.
+    // Vite also invokes closeBundle when a dev server closes; configureServer marks the dev session
+    // so its exit doesn't rebuild backend functions or replace the production package.
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
@@ -264,6 +260,10 @@ export const getVitePlugin = ({
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
             handler(userConfig, { command }) {
+                // Tests run with mock bundler versions.
+                if (context.env !== 'test') {
+                    assertSupportedVite(this, context.bundler.version);
+                }
                 isBuild = command === 'build';
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
                 // A restarted dev server shares this process: read the manifests afresh.
@@ -330,7 +330,7 @@ export const getVitePlugin = ({
                 allowPackageRoots(config.server.fs.allow, backendPackages);
             }
         },
-        // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
+        // Unlike the config hook, it sees the SSR options merged with the defaults.
         configEnvironment(name, environmentOptions, { command, isPreview }) {
             if (name !== 'ssr' || command !== 'serve' || isPreview) {
                 return undefined;
@@ -460,10 +460,6 @@ export const getVitePlugin = ({
                         );
                     }
                 }
-                // Vite < 6.3 ignores hook filters.
-                if (!FRONTEND_PROXY_ID_RE.test(id)) {
-                    return null;
-                }
                 const sourceId = frontendProxySources.get(
                     id.slice(FRONTEND_PROXY_ID_PREFIX.length, -FRONTEND_PROXY_ID_SUFFIX.length),
                 );
@@ -479,8 +475,8 @@ export const getVitePlugin = ({
             },
         },
         transform: {
-            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative
-            // exclusions or a package's opt-in.
+            // Only an optimization: it can't express build-root-relative exclusions or a
+            // package's opt-in.
             filter: { id: { include: [BACKEND_FILE_WITH_QUERY_RE] } },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
@@ -708,8 +704,6 @@ export const getVitePlugin = ({
                 if (ssrEnvironment) {
                     const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
                     ssrEnvironment.fetchModule = exemptFetchFromBlockedScope(fetchModule);
-                } else if (server.pluginContainer) {
-                    exemptPluginContainerFromBlockedScope(server.pluginContainer);
                 }
             }
 

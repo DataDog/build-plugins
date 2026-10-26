@@ -140,7 +140,7 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
  */
 async function bundleBackendFunction(
     viteBuild: typeof build,
-    serverConditions: readonly string[] | undefined,
+    serverConditions: readonly string[],
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
@@ -804,7 +804,7 @@ export function createDevServerMiddleware(
     log: Logger,
     mode: string,
     isHostAllowed: HostCheck,
-    serverConditions: readonly string[] | undefined,
+    serverConditions: readonly string[],
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
