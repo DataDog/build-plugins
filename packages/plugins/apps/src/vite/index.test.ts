@@ -43,6 +43,7 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import * as devServer from './dev-server';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
 
@@ -1353,6 +1354,29 @@ describe('Backend Functions - getVitePlugin', () => {
             rmSync(cacheDir);
         }
     });
+
+    const serverConditionCases = [
+        { vite: 'Vite 6 and later', defaultServerConditions: ['module', 'node'] },
+        { vite: 'Vite 5', defaultServerConditions: undefined },
+    ];
+    test.each(serverConditionCases)(
+        'Should hand the middleware the default server conditions of $vite',
+        ({ defaultServerConditions }) => {
+            const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+            const bundler = { ...mockVite, defaultServerConditions };
+            const plugin = getVitePlugin({ ...defaultOptions, bundler });
+            const configureServer = getConfigureServer(plugin);
+            const use = jest.fn();
+            const ssrLoadModule = jest.fn();
+            const config = fakeServerConfig(DEV_VERIFY_MODE);
+
+            configureServer({ middlewares: { use }, ssrLoadModule, config });
+
+            const [middlewareArgs] = middlewareSpy.mock.calls;
+            const passedConditions = middlewareArgs.at(-1);
+            expect(passedConditions).toBe(defaultServerConditions);
+        },
+    );
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.
     test('Should route /__dd/executeAction to the cloud path when configureServer sees a dev-verify server.config.mode', async () => {

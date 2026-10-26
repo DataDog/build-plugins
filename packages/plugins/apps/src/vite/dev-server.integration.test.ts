@@ -10,6 +10,7 @@
  */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
@@ -19,7 +20,7 @@ import {
 } from '@dd/apps-plugin/vite/dev-server';
 import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
-import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
+import { outputFileSync, readFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
@@ -34,11 +35,18 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
-import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
+import {
+    build,
+    createServer,
+    defaultServerConditions,
+    type Plugin,
+    type ViteDevServer,
+} from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
+import { DEV_VERIFY_MODE } from '../constants';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
@@ -209,6 +217,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -254,6 +263,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -293,6 +303,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -371,6 +382,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -423,6 +435,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -484,6 +497,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -506,6 +520,207 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { ok: true } });
         expect(apiScope.isDone()).toBe(true);
+    }, 30000);
+});
+
+describe('Dev Server Middleware — dev:verify bundles', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+
+    afterEach(() => {
+        nock.cleanAll();
+        if (originalNodeEnv === undefined) {
+            delete process.env.NODE_ENV;
+        } else {
+            process.env.NODE_ENV = originalNodeEnv;
+        }
+    });
+
+    // Each build runs under the NODE_ENV its real process has: `vite build` sets production, a dev
+    // server development.
+    async function buildUploadAndVerify(workingDir: string, func: BackendFunction) {
+        const log = getMockLogger();
+        process.env.NODE_ENV = 'production';
+        const upload = await buildBackendFunctions(build, [func], workingDir, log);
+        let uploadCode: string;
+        try {
+            const [uploadPath] = [...upload.outputs.values()];
+            uploadCode = readFileSync(uploadPath);
+        } finally {
+            rmSync(upload.outDir);
+        }
+
+        process.env.NODE_ENV = 'development';
+        const submitted: { script?: unknown } = {};
+        const apiScope = nock('https://api.datadoghq.com')
+            .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                submitted.script = body.data.attributes.query.properties.spec.inputs.script;
+                return true;
+            })
+            .reply(200, { data: { id: 'receipt-verify-bundle' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-verify-bundle')
+            .reply(200, { data: { attributes: { done: true, outputs: { data: { ok: true } } } } });
+        const isHostAllowed = createViteHostCheck({ server: { allowedHosts: [] }, preview: {} });
+        const middleware = createDevServerMiddleware(
+            build,
+            async () => ({}),
+            () => [func],
+            async () => [],
+            { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
+            testApiKeyRequest,
+            mockLongPolling,
+            workingDir,
+            log,
+            DEV_VERIFY_MODE,
+            isHostAllowed,
+            defaultServerConditions,
+        );
+        const functionName = encodeQueryName(func);
+        const req = createMockRequest(EXECUTE_ACTION_ROUTE, { functionName, args: ['QA'] });
+        const res = createMockResponse();
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        const apiDone = apiScope.isDone();
+        return {
+            uploadCode,
+            submittedScript: submitted.script,
+            statusCode: res.statusCode,
+            apiDone,
+        };
+    }
+
+    test('Should submit the minified bytes an upload writes', async () => {
+        const seed = `dev-verify-minify-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const absolutePath = `${workingDir}/src/names.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            class BackendValidationError extends Error {}
+            const readableHelper = (value: string) => {
+                if (!value) throw new BackendValidationError('missing value');
+                return value;
+            };
+            export async function readableBackendFunction(value: string) {
+                return readableHelper(value);
+            }
+        `,
+            );
+            const namesFunc: BackendFunction = {
+                relativePath: 'src/names',
+                name: 'readableBackendFunction',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, namesFunc);
+
+            // Minified, with names kept: the unminified output spans many lines.
+            const uploadLineCount = result.uploadCode.trim().split('\n').length;
+            expect(result.statusCode).toBe(200);
+            expect(result.apiDone).toBe(true);
+            expect(result.submittedScript).toBe(result.uploadCode);
+            expect(uploadLineCount).toBeLessThan(5);
+            expect(result.uploadCode).toContain('"BackendValidationError"');
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+
+    test('Should submit the production bytes an upload writes, under the dev server NODE_ENV', async () => {
+        const seed = `dev-verify-production-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const packageDir = `${workingDir}/node_modules/dd-conditional-flavor`;
+            const packageJson = {
+                name: 'dd-conditional-flavor',
+                type: 'module',
+                exports: {
+                    '.': {
+                        development: './development.js',
+                        production: './production.js',
+                        default: './production.js',
+                    },
+                },
+            };
+            const packageJsonText = JSON.stringify(packageJson);
+            outputFileSync(`${packageDir}/package.json`, packageJsonText);
+            outputFileSync(`${packageDir}/development.js`, "export const flavor = 'dev-export';");
+            outputFileSync(`${packageDir}/production.js`, "export const flavor = 'prod-export';");
+            const absolutePath = `${workingDir}/src/flavors.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            import { flavor } from 'dd-conditional-flavor';
+            export async function flavors() {
+                const viteFlavor = import.meta.env.DEV ? 'vite-dev' : 'vite-prod';
+                const prodFlavor = import.meta.env.PROD ? 'prod-true' : 'prod-false';
+                const nodeFlavor = process.env.NODE_ENV === 'production' ? 'node-prod' : 'node-dev';
+                return [flavor, viteFlavor, prodFlavor, nodeFlavor, import.meta.env.MODE];
+            }
+        `,
+            );
+            const flavorsFunc: BackendFunction = {
+                relativePath: 'src/flavors',
+                name: 'flavors',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, flavorsFunc);
+
+            expect(result.statusCode).toBe(200);
+            expect(result.apiDone).toBe(true);
+            expect(result.uploadCode).toContain('prod-export');
+            expect(result.uploadCode).not.toContain('dev-export');
+            expect(result.submittedScript).toBe(result.uploadCode);
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+
+    test('Should submit the production JSX transform an upload writes, under the dev server NODE_ENV', async () => {
+        const seed = `dev-verify-jsx-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const reactDir = `${workingDir}/node_modules/react`;
+            const reactPackage = {
+                name: 'react',
+                type: 'module',
+                exports: {
+                    './jsx-runtime': './jsx-runtime.js',
+                    './jsx-dev-runtime': './jsx-dev-runtime.js',
+                },
+            };
+            const reactPackageText = JSON.stringify(reactPackage);
+            outputFileSync(`${reactDir}/package.json`, reactPackageText);
+            outputFileSync(`${reactDir}/jsx-runtime.js`, 'export const jsx = (type) => type;');
+            outputFileSync(
+                `${reactDir}/jsx-dev-runtime.js`,
+                'export const jsxDEV = (type) => type;',
+            );
+            const tsconfig = { compilerOptions: { jsx: 'react-jsx' } };
+            const tsconfigText = JSON.stringify(tsconfig);
+            outputFileSync(`${workingDir}/tsconfig.json`, tsconfigText);
+            const absolutePath = `${workingDir}/src/markup.backend.tsx`;
+            outputFileSync(absolutePath, 'export async function markup() { return <section />; }');
+            const markupFunc: BackendFunction = {
+                relativePath: 'src/markup',
+                name: 'markup',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, markupFunc);
+
+            expect(result.statusCode).toBe(200);
+            expect(result.uploadCode).not.toContain('jsxDEV');
+            expect(result.submittedScript).toBe(result.uploadCode);
+        } finally {
+            rmSync(workingDir);
+        }
     }, 30000);
 });
 

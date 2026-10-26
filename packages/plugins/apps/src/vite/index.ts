@@ -66,6 +66,8 @@ import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
     build: typeof build;
+    // Vite 6 and later.
+    defaultServerConditions?: readonly string[];
 };
 
 export interface VitePluginOptions {
@@ -699,6 +701,7 @@ export const getVitePlugin = ({
                 log,
                 server.config.mode,
                 isHostAllowed,
+                bundler.defaultServerConditions,
             );
             server.middlewares.use((req, res, next) => {
                 revalidateBackendFunctionFile(req);
