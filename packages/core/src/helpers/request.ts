@@ -91,33 +91,6 @@ export const createRequestData = async (options: {
 export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
 
-const RETRIABLE_NETWORK_ERROR_CODES = new Set([
-    'ECONNRESET',
-    'EPIPE',
-    'ETIMEDOUT',
-    'ECONNREFUSED',
-    'ECONNABORTED',
-    'EHOSTUNREACH',
-    'ENETUNREACH',
-    'EAI_AGAIN',
-    'UND_ERR_SOCKET',
-    'UND_ERR_CONNECT_TIMEOUT',
-    'UND_ERR_HEADERS_TIMEOUT',
-    'UND_ERR_BODY_TIMEOUT',
-    'UND_ERR_CLOSED',
-]);
-
-const hasRetriableErrorCode = (err: unknown): boolean => {
-    if (err === null || typeof err !== 'object') {
-        return false;
-    }
-    const code = 'code' in err && typeof err.code === 'string' ? err.code : undefined;
-    if (!code) {
-        return false;
-    }
-    return RETRIABLE_NETWORK_ERROR_CODES.has(code);
-};
-
 export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boolean => {
     if (signal?.aborted) {
         return false;
@@ -128,13 +101,9 @@ export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boo
     if ('name' in error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
         return false;
     }
-    const cause = 'cause' in error ? error.cause : undefined;
-    if (hasRetriableErrorCode(error) || hasRetriableErrorCode(cause)) {
-        return true;
-    }
-    // The generic fetch failure message also wraps permanent TLS/configuration errors.
-    // Retry only when the error or its immediate cause has a recognized transient code.
-    return false;
+    // Prefer bounded retries over dropping uploads because a recoverable error code
+    // is unknown. Permanent fetch failures may also exhaust the retry budget.
+    return true;
 };
 
 // Do a retriable fetch.
@@ -205,7 +174,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
             if (isRetriableFetchError(error, signal)) {
                 throw error;
             }
-            // Bail on non-retriable fetch errors (e.g. locked stream, AbortSignal timeout).
+            // Respect cancellation rather than retrying an aborted request.
             bail(error);
             // bail rejects the retry promise; return to stop this attempt.
             return {} as T;

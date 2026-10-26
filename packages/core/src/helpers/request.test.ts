@@ -198,7 +198,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should bail on unrelated errors', async () => {
+        test('Should eventually fail when getData reuses a consumed stream', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
             const scope = nock(API_URL).post(API_PATH).reply(503);
             // Creating the data stream outside should make the fetch invocation fail
@@ -206,13 +206,19 @@ describe('Request Helpers', () => {
             const data = getDataStream();
 
             await expect(async () => {
-                await doRequest({ ...requestOpts, getData: () => ({ data, headers: {} }) });
+                await doRequest({
+                    ...requestOpts,
+                    retries: 2,
+                    minTimeout: 1,
+                    maxTimeout: 1,
+                    getData: () => ({ data, headers: {} }),
+                });
             }).rejects.toThrow('Response body object should not be disturbed or locked');
             expect(scope.isDone()).toBe(true);
         });
 
-        test.each(['ECONNRESET', 'EPIPE'])(
-            'Should retry on transient fetch network error %s',
+        test.each(['ECONNRESET', 'EPIPE', 'UNKNOWN_NETWORK_CODE'])(
+            'Should recover from fetch network error %s',
             async (code) => {
                 const { doRequest } = await import('@dd/core/helpers/request');
                 const onRetryMock = jest.fn();
@@ -271,8 +277,9 @@ describe('Request Helpers', () => {
             'UND_ERR_INVALID_ARG',
             'UND_ERR_NOT_SUPPORTED',
             'UND_ERR_REQ_CONTENT_LENGTH_MISMATCH',
+            'UNKNOWN_NETWORK_CODE',
             undefined,
-        ])('Should bail on fetch failed with non-retriable cause %s', async (code) => {
+        ])('Should use bounded retries for fetch failed with cause %s', async (code) => {
             const { doRequest } = await import('@dd/core/helpers/request');
             const error = new TypeError('fetch failed');
             if (code) {
@@ -286,12 +293,13 @@ describe('Request Helpers', () => {
                     url: API_URL,
                     fetchImpl,
                     onRetry,
+                    retries: 2,
                     minTimeout: 1,
                     maxTimeout: 1,
                 }),
             ).rejects.toBe(error);
-            expect(fetchImpl).toHaveBeenCalledTimes(1);
-            expect(onRetry).not.toHaveBeenCalled();
+            expect(fetchImpl).toHaveBeenCalledTimes(3);
+            expect(onRetry).toHaveBeenCalledTimes(2);
         });
 
         test('Should bail on getData rejection even with a transient error code', async () => {
