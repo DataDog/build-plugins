@@ -228,7 +228,7 @@ async function bundleBackendFunction(
         if (calls.length > 0 && !hasPackageExportFqns) {
             warnNoActionFqns();
         }
-        const actions = listActionCalls(calls, exportFqnsByModule);
+        const actions = listActionCalls(calls, exportFqnsByModule, moduleRecords);
         if (!actions) {
             const missingListMessage = getMissingActionListMessage(displayName);
             log.debug(missingListMessage);

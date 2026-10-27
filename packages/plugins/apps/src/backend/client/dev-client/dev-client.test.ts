@@ -653,7 +653,16 @@ describe('dev client', () => {
 
     test('Should forward the action list with the bundle', async () => {
         const { posted, reply } = installFakeWindow();
-        const actions = [{ fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] }];
+        const actions = [
+            {
+                fqn: 'com.datadoghq.http.request',
+                connectionIds: ['conn-1'],
+                calls: [
+                    { connectionId: 'conn-1', inputs: { url: 'https://example.com', verb: 'GET' } },
+                    { inputs: {} },
+                ],
+            },
+        ];
         mockFetchResponse({ ok: true, json: async () => ({ ...BUNDLE, actions }) });
 
         const result = postMessageTransport(QUERY_NAME, ARGS);
@@ -666,10 +675,68 @@ describe('dev client', () => {
 
     const malformedActionLists = [
         { description: 'not a list', actions: { fqn: 'com.datadoghq.http.request' } },
-        { description: 'an action without an fqn', actions: [{ connectionIds: [] }] },
+        { description: 'an action without an fqn', actions: [{ connectionIds: [], calls: [] }] },
         {
             description: 'non-string connection IDs',
-            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [1] }],
+            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [1], calls: [] }],
+        },
+        {
+            description: 'an action without calls',
+            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [] }],
+        },
+        {
+            description: 'a call with a non-string connectionId',
+            actions: [
+                {
+                    fqn: 'com.datadoghq.http.request',
+                    connectionIds: [],
+                    calls: [{ connectionId: 1, inputs: {} }],
+                },
+            ],
+        },
+        {
+            description: 'a call that is not an object',
+            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [null] }],
+        },
+        {
+            description: 'a call without inputs',
+            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [{}] }],
+        },
+        {
+            description: 'an action whose fields are inherited',
+            actions: [
+                Object.create({ fqn: 'com.datadoghq.http.request', connectionIds: [], calls: [] }),
+            ],
+        },
+        {
+            description: 'a call whose inputs are inherited',
+            actions: [
+                {
+                    fqn: 'com.datadoghq.http.request',
+                    connectionIds: [],
+                    calls: [Object.create({ inputs: { url: 'https://example.com' } })],
+                },
+            ],
+        },
+        {
+            description: 'a call whose inputs are a list',
+            actions: [
+                {
+                    fqn: 'com.datadoghq.http.request',
+                    connectionIds: [],
+                    calls: [{ inputs: ['https://example.com'] }],
+                },
+            ],
+        },
+        {
+            description: 'a call with a non-string input',
+            actions: [
+                {
+                    fqn: 'com.datadoghq.http.request',
+                    connectionIds: [],
+                    calls: [{ inputs: { url: 'https://example.com', timeout: 30 } }],
+                },
+            ],
         },
     ];
 
