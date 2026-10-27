@@ -14,7 +14,8 @@ import { BackendFunctionError } from '../../types';
 
 import type { IframeQueryRequest, IframeQueryResponse } from './types';
 
-export const POSTMESSAGE_TIMEOUT_MS = 120_000;
+// The server stops any run after 5 minutes, so the frame never gives up on a run still in flight.
+export const POSTMESSAGE_TIMEOUT_MS = 300_000;
 
 function isQueryResponse<TData>(
     data: unknown,
