@@ -14,7 +14,8 @@ import { BackendFunctionError } from '../../types';
 
 import type { IframeQueryRequest, IframeQueryResponse } from './types';
 
-export const POSTMESSAGE_TIMEOUT_MS = 120_000;
+// The server stops any run after 5 minutes; the extra 30 seconds covers forwarding the call and its response.
+export const POSTMESSAGE_TIMEOUT_MS = 330_000;
 
 function isQueryResponse<TData>(
     data: unknown,
