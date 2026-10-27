@@ -6,6 +6,7 @@ Developer notes for the Live Debugger plugin.
 
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
+-   [Function IDs](#function-ids)
 -   [Symbol table](#symbol-table)
 -   [Consumer build canary](#consumer-build-canary)
 -   [Runtime benchmark](#runtime-benchmark)
@@ -42,6 +43,18 @@ Generated code should keep the dormant runtime path small: call `$dd_probes(func
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
+## Function IDs
+
+Every instrumented function passes its ID to `$dd_probes`. Outside the plugin, IDs are opaque: Datadog stores them with the symbols and the Browser Debugger SDK matches probes on them, so the format can change here alone. [`src/transform/functionId.ts`](./src/transform/functionId.ts) generates them during the transform's traversal, and [`EXAMPLES.md`](./EXAMPLES.md#function-ids) describes the format.
+
+- The path part is computed once per module by [`getFunctionIdPath`](./src/paths.ts): the query string is removed, Yarn PnP virtual folders are resolved, and the path is made relative to the git repository root, or to the build root outside a repository. Symlinks are only resolved for files outside the root, so most modules don't touch the file system.
+- The name part has no line numbers, so a function keeps its ID when the code around it changes. Duplicate qualified names get a `#<n>` suffix in traversal order. The suffix is assigned before any skip check, so `namedOnly`, `functionTypes`, and skip comments don't change the IDs of other functions.
+- A function's suffix changes when a function with the same qualified name is added before it. That's accepted, like a move.
+- Names come from the code the plugin transforms, which earlier loaders may have compiled, not from the original source. Original names would need the input source map, which only webpack and Rspack provide, and decoding it for every module would cost build time.
+- IDs are only unique within a module. Modules of the same file, such as a file imported with different queries, can share IDs.
+
+Keep the generation O(functions) per module, with no extra parsing and no per-function file system calls.
+
 ## Symbol table
 
 The plugin can list the instrumented functions that ship in a build, for upload to Datadog's Symbol Database. Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The table lives in [`src/symbol-table`](./src/symbol-table).
@@ -59,7 +72,7 @@ How it works:
 - After a one-off build, outside watch mode and dev servers, the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
 - Every instrumented function has exactly one `$dd_probes('<id>')` call at the start of its body and one `$dd_throw(` call at its end. The scan pairs them like brackets, which also gives each function's parent.
 - The transform anchors the `$dd_probes` call to the original body's opening brace, which gives the start line through the chunk's final source map. The end line is the last mapped position up to the `$dd_throw` call: for block bodies that's the closing brace. The code appended after an arrow function's expression body has no mapping, and minifiers leave some tokens unmapped, so the closest mapped token before it is used instead.
-- The path and display name come from the function ID. Query strings are removed, Yarn PnP virtual paths and symlinks are resolved, and the path is made relative to the git root. Without a git repository, the table is skipped.
+- The path and display name come from the function ID, whose path the transform already made relative to the git root. Without a git repository, the table is skipped.
 - Each chunk's debug ID is read from the runtime bootstrap, when debug IDs are enabled, to record which chunks contain each file.
 
 When changing instrumentation output, keep exactly one `$dd_probes` call at the start and one `$dd_throw` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the table on every bundler.

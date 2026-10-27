@@ -7,11 +7,11 @@ import type { BuildReport, GlobalContext, Logger, Output, PluginOptions } from '
 import path from 'path';
 
 import { SYMBOL_TABLE_PATH_ENV } from '../constants';
+import { getRepositoryRoot, isInsideDirectory } from '../paths';
 import type { LiveDebuggerOptionsWithDefaults } from '../types';
 
 import { createBuildModeTracker } from './build-mode';
 import { loadSourceMap, locateFunctions } from './locate';
-import { createSourceFileResolver, getRepositoryRoot, isInsideDirectory } from './paths';
 import { readChunkDebugId, scanChunk } from './scan';
 import type { SymbolTablePayload } from './serialize';
 import { serializeSymbolTable } from './serialize';
@@ -45,6 +45,7 @@ export const generateSymbolTable = async ({
     buildRoot,
     log,
 }: GenerateSymbolTableArgs): Promise<SymbolTable | undefined> => {
+    // Outside a git repository, function ID paths are relative to the build root instead.
     const repositoryRoot = getRepositoryRoot(buildRoot);
     if (!repositoryRoot) {
         log.warn(`Skipping ${LOG_PREFIX}: the build root isn't in a git repository.`);
@@ -79,11 +80,7 @@ export const generateSymbolTable = async ({
         chunks.push({ filepath: output.filepath, debugId, functions });
     }
 
-    const resolveSourceFile = createSourceFileResolver(buildRoot, repositoryRoot);
-    const { table, outsideModulePaths, invalidFunctionIds } = buildSymbolTable(
-        chunks,
-        resolveSourceFile,
-    );
+    const { table, outsideModulePaths, invalidFunctionIds } = buildSymbolTable(chunks);
 
     if (chunksWithoutSourceMap > 0) {
         log.warn(

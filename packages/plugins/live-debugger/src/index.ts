@@ -11,6 +11,7 @@ import type { SourceMapCompact, UnpluginBuildContext } from 'unplugin';
 
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
 import { createFileExtensionPattern, createFileFilter } from './filter';
+import { getRepositoryRoot } from './paths';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
 import { getSymbolTableHooks } from './symbol-table';
 import { transformCode } from './transform';
@@ -43,6 +44,15 @@ export const getLiveDebuggerPlugin = (
     let transformedFileCount = 0;
     let totalFunctions = 0;
     let totalFilesWithFunctions = 0;
+    let repositoryRoot: string | undefined;
+
+    // Looked up on the first transform, once the bundler has set the build root.
+    const getFunctionIdRoot = () => {
+        if (repositoryRoot === undefined) {
+            repositoryRoot = getRepositoryRoot(context.buildRoot) ?? context.buildRoot;
+        }
+        return repositoryRoot;
+    };
 
     return {
         name: PLUGIN_NAME,
@@ -74,10 +84,11 @@ export const getLiveDebuggerPlugin = (
                 }
 
                 try {
+                    const functionIdRoot = getFunctionIdRoot();
                     const result = transformCode({
                         code,
                         filePath: id,
-                        buildRoot: context.buildRoot,
+                        repositoryRoot: functionIdRoot,
                         honorSkipComments: pluginOptions.honorSkipComments,
                         functionTypes: pluginOptions.functionTypes,
                         namedOnly: pluginOptions.namedOnly,

@@ -95,7 +95,7 @@ Live Debugger also reads the build version from the top-level [`metadata.version
 The Live Debugger plugin automatically instruments all JavaScript functions in your application at build time. It adds lightweight checks that can be activated at runtime without rebuilding your code.
 
 Each instrumented function gets:
-- A unique, stable function ID (format: `<file-path>;<function-name>`)
+- A function ID that identifies the function and stays the same across builds until the function is renamed or moved
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
 - Deferred parameter-capture helpers (`$dd_e<N>`)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation

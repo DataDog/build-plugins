@@ -14,9 +14,15 @@ export const SKIP_INSTRUMENTATION_COMMENT = '@dd-no-instrumentation';
 // The symbol table relies on it marking the end of every instrumented function's body.
 export const LIVE_DEBUGGER_THROW_FUNCTION = '$dd_throw';
 
-// Function IDs are `<build-root-relative path>;<function name>`.
+// Function IDs are `<repository-relative path>;<qualified function name>`.
 export const FUNCTION_ID_SEPARATOR = ';';
-// Function name used in the IDs of anonymous functions, followed by their location.
+// Separates a function's name from the name of the function or class that contains it.
+export const SCOPE_SEPARATOR = '/';
+// Separates the name of a method or class property from the name of its class.
+export const CLASS_MEMBER_SEPARATOR = '.';
+// Starts the suffix that tells apart functions with the same qualified name in a module.
+export const DUPLICATE_SUFFIX_SEPARATOR = '#';
+// Function name used in the IDs of anonymous functions.
 export const ANONYMOUS_FUNCTION_NAME = '<anonymous>';
 
 // Path where an opt-in debug dump of the symbol table is written.

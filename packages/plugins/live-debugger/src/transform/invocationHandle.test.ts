@@ -9,7 +9,7 @@ import type { TransformOptions } from './index';
 
 const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     filePath: '/src/utils.ts',
-    buildRoot: '/',
+    repositoryRoot: '/',
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
