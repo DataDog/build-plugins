@@ -2,18 +2,49 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFile } from '@dd/core/helpers/fs';
 import { formatDuration as formatMilliseconds } from '@dd/core/helpers/strings';
 import { ROOT } from '@dd/tools/constants';
 import { Command, Option, UsageError } from 'clipanion';
 import os from 'os';
 import path from 'path';
 
-import { runCanary, StreamingCommandRunner } from './runner';
+import { checkoutTarget, getCheckoutRef } from './checkout';
+import { NETWORK_RETRY_DELAYS_MS, runCanary, StreamingCommandRunner } from './runner';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
+import {
+    DEFAULT_NODE_DIST_URL,
+    fetchNodeReleases,
+    formatToolchainEnvironment,
+    resolveToolchain,
+} from './toolchain';
 import { INSTRUMENTED_VARIANTS } from './types';
-import type { CanaryReport, InterruptSignal, MetricComparison } from './types';
+import type { CanaryReport, CanaryTarget, InterruptSignal, MetricComparison } from './types';
 
 const SUPPORTED_TARGETS = getCanaryTargetNames().join(', ');
+const REPORT_FILE = 'report.json';
+const LOGS_DIRECTORY = 'logs';
+const TOOLCHAIN_FILE = 'toolchain.env';
+
+const getTargetOrThrow = (name: string): CanaryTarget => {
+    const target = getCanaryTarget(name);
+    if (!target) {
+        throw new UsageError(
+            `Unknown canary target "${name}". Available targets: ${SUPPORTED_TARGETS}.`,
+        );
+    }
+    return target;
+};
+
+// Each command logs to its own subdirectory, since both number their commands from 01.
+const getLogDirectory = (
+    artifactsDirectory: string | undefined,
+    command: 'canary' | 'checkout',
+): string | undefined => {
+    return artifactsDirectory
+        ? path.resolve(artifactsDirectory, LOGS_DIRECTORY, command)
+        : undefined;
+};
 
 const getRunId = (): string => {
     return process.env.CI_PIPELINE_ID ?? process.env.GITHUB_RUN_ID ?? new Date().toISOString();
@@ -86,6 +117,10 @@ class Canary extends Command {
         examples: [
             ['Run every phase for a target', '$0 canary <target>'],
             ['Run one target-defined phase', '$0 canary <target> --phase <phase>'],
+            [
+                'Run in CI on a fresh checkout from canary-checkout',
+                '$0 canary <target> --root <checkout> --install --no-cleanup --artifacts-dir <dir>',
+            ],
         ],
     });
 
@@ -103,19 +138,31 @@ class Canary extends Command {
         description: 'Path for the versioned JSON result.',
     });
 
-    async execute(): Promise<number> {
-        const target = getCanaryTarget(this.targetName);
-        if (!target) {
-            const targetNames = getCanaryTargetNames().join(', ');
-            throw new UsageError(
-                `Unknown canary target "${this.targetName}". Available targets: ${targetNames}.`,
-            );
-        }
+    install = Option.Boolean('--install', false, {
+        description: "Install the target's dependencies first, retrying network failures.",
+    });
 
+    cleanup = Option.Boolean('--cleanup', true, {
+        description:
+            "Revert the target checkout's changes afterwards. Pass --no-cleanup on disposable checkouts.",
+    });
+
+    artifactsDirectory = Option.String('--artifacts-dir', {
+        description: `Directory for ${REPORT_FILE} (unless --report is set) and a log file per command in logs/canary/.`,
+    });
+
+    async execute(): Promise<number> {
+        const target = getTargetOrThrow(this.targetName);
         const root = path.resolve(this.root ?? target.getDefaultRoot());
-        const reportPath = this.report ? path.resolve(this.report) : getDefaultReportPath();
+        const artifactsReportPath = this.artifactsDirectory
+            ? path.resolve(this.artifactsDirectory, REPORT_FILE)
+            : undefined;
+        const reportPath = this.report
+            ? path.resolve(this.report)
+            : artifactsReportPath ?? getDefaultReportPath();
         const runId = getRunId();
-        const commandRunner = new StreamingCommandRunner();
+        const logDirectory = getLogDirectory(this.artifactsDirectory, 'canary');
+        const commandRunner = new StreamingCommandRunner(logDirectory);
         let interruption: InterruptSignal | undefined;
         const handleSignal = (signal: InterruptSignal): void => {
             interruption = signal;
@@ -129,6 +176,9 @@ class Canary extends Command {
         try {
             const report = await runCanary({
                 buildPluginsRoot: ROOT,
+                cleanup: this.cleanup,
+                install: this.install,
+                networkRetryDelaysMs: NETWORK_RETRY_DELAYS_MS,
                 phaseSelection: this.phase,
                 reportPath,
                 root,
@@ -156,4 +206,98 @@ class Canary extends Command {
     }
 }
 
-export default [Canary];
+class CanaryCheckout extends Command {
+    static paths = [['canary-checkout']];
+
+    static usage = Command.Usage({
+        category: 'Verification',
+        description: "Fetch a canary target's checkout and resolve its toolchain.",
+        details: `
+            Fetches one commit of the target's repository into an empty directory: the tip
+            of its tracked branch, its temporary pin, or --ref. Set GH_TOKEN to read private
+            repositories.
+
+            Then resolves the Node.js version and package manager the checkout declares,
+            prints them, and writes them to ${TOOLCHAIN_FILE} in --artifacts-dir.
+
+            Registered targets: ${SUPPORTED_TARGETS}.
+        `,
+        examples: [
+            [
+                "Check out a target's tracked branch",
+                '$0 canary-checkout <target> --root <checkout> --artifacts-dir <dir>',
+            ],
+            [
+                'Check out a specific commit',
+                '$0 canary-checkout <target> --root <checkout> --ref <sha>',
+            ],
+        ],
+    });
+
+    targetName = Option.String();
+
+    root = Option.String('--root', {
+        description: 'Directory to create the checkout in. It must be missing or empty.',
+        required: true,
+    });
+
+    ref = Option.String('--ref', {
+        description: "Branch or full commit SHA to use instead of the target's branch or pin.",
+    });
+
+    artifactsDirectory = Option.String('--artifacts-dir', {
+        description: `Directory for ${TOOLCHAIN_FILE} and a log file per command in logs/checkout/.`,
+    });
+
+    async execute(): Promise<number> {
+        const target = getTargetOrThrow(this.targetName);
+        const root = path.resolve(this.root);
+        const ref = getCheckoutRef(target.repository, this.ref);
+        const pin = target.repository.pin;
+        if (pin && !this.ref) {
+            this.context.stdout.write(
+                `[Canary] ${target.id} is pinned to ${pin.commit}: ${pin.reason}\n`,
+            );
+        }
+
+        const logDirectory = getLogDirectory(this.artifactsDirectory, 'checkout');
+        const commandRunner = new StreamingCommandRunner(logDirectory);
+        const distUrl = process.env.CANARY_NODE_DIST_URL ?? DEFAULT_NODE_DIST_URL;
+
+        try {
+            const commit = await checkoutTarget({
+                networkRetryDelaysMs: NETWORK_RETRY_DELAYS_MS,
+                ref,
+                repository: target.repository,
+                root,
+                runCommand: commandRunner.run,
+                token: process.env.GH_TOKEN,
+            });
+            const toolchain = await resolveToolchain({
+                getNodeReleases: () => fetchNodeReleases(distUrl),
+                root,
+                target,
+            });
+            const environment = formatToolchainEnvironment(toolchain, commit);
+            this.context.stdout.write(
+                `\n[Canary] Checked out ${target.repository.name} ${ref} at ${commit}.\n`,
+            );
+            this.context.stdout.write(
+                `[Canary] Node.js ${toolchain.node.version} comes from ${toolchain.node.source}.\n`,
+            );
+            this.context.stdout.write(environment);
+
+            if (this.artifactsDirectory) {
+                const toolchainPath = path.resolve(this.artifactsDirectory, TOOLCHAIN_FILE);
+                await outputFile(toolchainPath, environment);
+            }
+            return 0;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.context.stderr.write(`\n[Canary] ${message}\n`);
+            return 1;
+        }
+    }
+}
+
+export default [Canary, CanaryCheckout];

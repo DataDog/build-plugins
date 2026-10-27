@@ -20,6 +20,7 @@ const jestBinDir = path.dirname(jestPackagePath);
 const JEST_BIN_PATH = path.join(jestBinDir, 'bin/jest.js');
 const JEST_CONFIG_PATH = path.resolve(__dirname, '../../../jest.config.ts');
 export const NOOP_SETUP_PATH = path.resolve(__dirname, '../noopGlobalSetup.ts');
+export const PATH_ORDER_SEQUENCER_PATH = path.resolve(__dirname, 'pathOrderSequencer.js');
 // Only a hang guard: inside a loaded full-suite run, the child's startup alone can pass 15s.
 const SPAWN_TIMEOUT_MS = 60000;
 export const FIXTURE_TEST_TIMEOUT_MS = SPAWN_TIMEOUT_MS + 5000;

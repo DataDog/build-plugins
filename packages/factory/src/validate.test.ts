@@ -2,7 +2,9 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { DEFAULT_SITE } from '@dd/core/constants';
 import type { Options } from '@dd/core/types';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 
 import { validateOptions } from './validate';
 
@@ -67,13 +69,212 @@ describe('factory validateOptions', () => {
                 validateOptions({ auth: { site: 'not-a-real-site.example.com' } }),
             ).toThrow(/auth\.site.*is not a supported Datadog site/);
         });
+    });
 
-        it('should reject a non-string site value with the standard validation error, not throw internally', () => {
-            expect(() =>
-                // Plain JS configs aren't enforced by the type system at runtime.
-                validateOptions({ auth: { site: 123 as unknown as string } }),
-            ).toThrow(/auth\.site.*is not a supported Datadog site/);
+    describe('site resolution from the environment and auth.site', () => {
+        let restoreEnv: () => void;
+
+        beforeEach(() => {
+            restoreEnv = clearDatadogEnv();
         });
+
+        afterEach(() => {
+            restoreEnv();
+        });
+
+        // Plain JS configs can pass these values, which Options can't express.
+        const nullSiteOptions: Options = JSON.parse('{ "auth": { "site": null } }');
+        const numberSiteOptions: Options = JSON.parse('{ "auth": { "site": 123 } }');
+        const booleanSiteOptions: Options = JSON.parse('{ "auth": { "site": true } }');
+        const arraySiteOptions: Options = JSON.parse('{ "auth": { "site": ["datadoghq.eu"] } }');
+        const objectSiteOptions: Options = JSON.parse(
+            '{ "auth": { "site": { "apiKey": "abc123" } } }',
+        );
+        const nullPrototypeSiteOptions: Options = { auth: { site: Object.create(null) } };
+
+        const cases = [
+            {
+                description: 'treat an empty DD_SITE as unset',
+                env: { DD_SITE: '' },
+                options: {},
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'treat an empty DATADOG_SITE as unset',
+                env: { DATADOG_SITE: '' },
+                options: {},
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'fall back to DD_SITE when DATADOG_SITE is empty',
+                env: { DATADOG_SITE: '', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'fall back to auth.site when DD_SITE is empty',
+                env: { DD_SITE: '' },
+                options: { auth: { site: 'datadoghq.eu' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'prefer a valid DD_SITE over auth.site',
+                env: { DD_SITE: 'datadoghq.eu' },
+                options: { auth: { site: 'us5.datadoghq.com' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'treat an empty auth.site as unset',
+                env: {},
+                options: { auth: { site: '' } },
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'treat an empty auth.site as unset when DD_SITE is also empty',
+                env: { DD_SITE: '' },
+                options: { auth: { site: '' } },
+                expected: DEFAULT_SITE,
+            },
+            {
+                description: 'accept the UK1 site from DD_SITE',
+                env: { DD_SITE: 'uk1.datadoghq.com' },
+                options: {},
+                expected: 'uk1.datadoghq.com',
+            },
+            {
+                description: 'trim surrounding whitespace from DD_SITE',
+                env: { DD_SITE: ' datadoghq.eu\n' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'prefer a padded DATADOG_SITE over DD_SITE',
+                env: { DATADOG_SITE: ' us5.datadoghq.com ', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expected: 'us5.datadoghq.com',
+            },
+            {
+                description: 'trim surrounding whitespace from auth.site',
+                env: {},
+                options: { auth: { site: '  datadoghq.eu\t' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'accept a URL-shaped DD_SITE',
+                env: { DD_SITE: 'https://app.datadoghq.eu/apm/home' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'treat a null auth.site as unset',
+                env: {},
+                options: nullSiteOptions,
+                expected: DEFAULT_SITE,
+            },
+        ];
+
+        test.each(cases)('should $description', ({ env, options, expected }) => {
+            Object.assign(process.env, env);
+            expect(validateOptions(options).auth.site).toBe(expected);
+        });
+
+        const rejectionCases = [
+            {
+                description: 'an unsupported DD_SITE',
+                env: { DD_SITE: 'not-a-real-site.example.com' },
+                options: {},
+                expectedError:
+                    'DATADOG_SITE/DD_SITE "not-a-real-site.example.com" is not a supported',
+            },
+            {
+                description: 'an unsupported DD_SITE, even with a valid auth.site',
+                env: { DD_SITE: 'not-a-real-site.example.com' },
+                options: { auth: { site: 'datadoghq.eu' } },
+                expectedError:
+                    'DATADOG_SITE/DD_SITE "not-a-real-site.example.com" is not a supported',
+            },
+            {
+                description: 'a whitespace-only DD_SITE',
+                env: { DD_SITE: '  ' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE "  " is not a supported',
+            },
+            {
+                description: 'a whitespace-only DATADOG_SITE, even with a valid DD_SITE',
+                env: { DATADOG_SITE: '  ', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE "  " is not a supported',
+            },
+            {
+                description: 'a DD_SITE with an inner tab, escaped in the message',
+                env: { DD_SITE: 'datadoghq\t.eu' },
+                options: {},
+                expectedError: 'DATADOG_SITE/DD_SITE "datadoghq\\t.eu" is not a supported',
+            },
+            {
+                description: 'a whitespace-only auth.site',
+                env: {},
+                options: { auth: { site: '  ' } },
+                expectedError: 'auth.site "  " is not a supported',
+            },
+            {
+                description: 'an auth.site with an inner newline, escaped in the message',
+                env: {},
+                options: { auth: { site: 'datadoghq.eu\nus5.datadoghq.com' } },
+                expectedError: 'auth.site "datadoghq.eu\\nus5.datadoghq.com" is not a supported',
+            },
+            {
+                description: 'a number auth.site',
+                env: {},
+                options: numberSiteOptions,
+                expectedError: 'auth.site 123 is not a supported',
+            },
+            {
+                description: 'a boolean auth.site',
+                env: {},
+                options: booleanSiteOptions,
+                expectedError: 'auth.site true is not a supported',
+            },
+            {
+                description: 'an array auth.site without printing its contents',
+                env: {},
+                options: arraySiteOptions,
+                expectedError: 'auth.site array is not a supported',
+            },
+            {
+                description: 'an object auth.site without printing its fields',
+                env: {},
+                options: objectSiteOptions,
+                expectedError: 'auth.site object is not a supported',
+            },
+            {
+                description: 'a null-prototype object auth.site with the standard validation error',
+                env: {},
+                options: nullPrototypeSiteOptions,
+                expectedError: 'auth.site object is not a supported',
+            },
+        ];
+
+        test.each(rejectionCases)(
+            'should reject $description',
+            ({ env, options, expectedError }) => {
+                Object.assign(process.env, env);
+                expect(() => validateOptions(options)).toThrow(expectedError);
+            },
+        );
+
+        const unprintedContentCases = [
+            { description: 'an array', options: arraySiteOptions, content: /datadoghq\.eu/ },
+            { description: 'an object', options: objectSiteOptions, content: /abc123/ },
+        ];
+
+        test.each(unprintedContentCases)(
+            'should not print the contents of $description auth.site',
+            ({ options, content }) => {
+                expect(() => validateOptions(options)).toThrow('is not a supported');
+                expect(() => validateOptions(options)).not.toThrow(content);
+            },
+        );
     });
 
     describe('metadata validation', () => {

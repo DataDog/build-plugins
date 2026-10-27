@@ -19,6 +19,12 @@
                 "format": [
                     "esm"
                 ]
+            },
+            "apps-dev-client": {
+                "entry": "./src/built/apps-dev-client.ts",
+                "format": [
+                    "esm"
+                ]
             }
         }
     },
