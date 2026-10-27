@@ -3,9 +3,18 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
-import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import {
+    APPS_DEV_CLIENT_PATH,
+    DEV_CLIENT_MODULE_ID,
+    DEV_CLIENT_RESOLVED_ID,
+    DEV_CLIENT_RESOLVED_RE,
+    DEV_CLIENT_SRC,
+    getVitePlugin,
+    SSR_WARMUP_SETTING,
+} from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
+import * as fsHelpers from '@dd/core/helpers/fs';
 import { rmSync } from '@dd/core/helpers/fs';
 import { InjectPosition } from '@dd/core/types';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
@@ -43,6 +52,7 @@ import {
 } from '../constants';
 
 import * as buildPackage from './build-package';
+import * as devServer from './dev-server';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import * as networkGuard from './network-guard';
 
@@ -115,6 +125,49 @@ function getConfigureServer(
     };
 }
 
+// Narrows `plugin.transformIndexHtml` to its object-hook form, which must run before Vite rewrites
+// script srcs for the configured `base`.
+function getTransformIndexHtml(
+    plugin: ReturnType<typeof getVitePlugin>,
+): (ctx: { server?: object }) => unknown {
+    const { transformIndexHtml } = plugin ?? {};
+    if (
+        typeof transformIndexHtml !== 'object' ||
+        transformIndexHtml === null ||
+        !('handler' in transformIndexHtml) ||
+        typeof transformIndexHtml.handler !== 'function' ||
+        !('order' in transformIndexHtml) ||
+        transformIndexHtml.order !== 'pre'
+    ) {
+        throw new Error("Expected plugin.transformIndexHtml to be an object hook with order 'pre'");
+    }
+    const { handler } = transformIndexHtml;
+    return function callTransformIndexHtml(ctx: { server?: object }): unknown {
+        return Reflect.apply(handler, undefined, ['<html></html>', ctx]);
+    };
+}
+
+// Narrows `plugin.load` to its object-hook form, whose filter includes the dev client module.
+function getLoad(
+    plugin: ReturnType<typeof getVitePlugin>,
+    pluginContext: object,
+): (id: string) => Promise<unknown> {
+    const { load } = plugin ?? {};
+    if (
+        typeof load !== 'object' ||
+        load === null ||
+        !('handler' in load) ||
+        typeof load.handler !== 'function' ||
+        !('filter' in load)
+    ) {
+        throw new Error('Expected plugin.load to be a filtered object hook');
+    }
+    const { handler } = load;
+    return async function callLoad(id: string): Promise<unknown> {
+        return Reflect.apply(handler, pluginContext, [id]);
+    };
+}
+
 function isDevServerMiddleware(value: unknown): value is DevServerMiddleware {
     return typeof value === 'function';
 }
@@ -141,7 +194,11 @@ function getConfigHandler(
         throw new Error('Expected plugin.config to have a function handler');
     }
     return function callConfig(userConfig = {}): ConfigHookResult {
-        const result: unknown = Reflect.apply(handler, undefined, [userConfig, DEV_SERVER_ENV]);
+        // Rooted where no packages are installed, so dependency discovery finds nothing.
+        const result: unknown = Reflect.apply(handler, undefined, [
+            { root: '/build', ...userConfig },
+            DEV_SERVER_ENV,
+        ]);
         if (!isConfigHookResult(result)) {
             throw new Error('Expected plugin.config to return a config object');
         }
@@ -265,6 +322,125 @@ describe('Backend Functions - getVitePlugin', () => {
 
     afterEach(() => {
         nock.cleanAll();
+    });
+
+    test('Should load the dev client as a module on pages the dev server serves', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformIndexHtml = getTransformIndexHtml(plugin);
+
+        const tags = transformIndexHtml({ server: {} });
+
+        expect(tags).toEqual([
+            {
+                tag: 'script',
+                attrs: { type: 'module', src: DEV_CLIENT_SRC },
+                injectTo: 'head-prepend',
+            },
+        ]);
+    });
+
+    test('Should not load the dev client in a production build', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const transformIndexHtml = getTransformIndexHtml(plugin);
+
+        const tags = transformIndexHtml({});
+
+        expect(tags).toEqual([]);
+    });
+
+    const serveFakeDevServer = (plugin: ReturnType<typeof getVitePlugin>) => {
+        const configureServer = getConfigureServer(plugin);
+        configureServer({
+            middlewares: { use: jest.fn() },
+            ssrLoadModule: jest.fn(),
+            config: fakeServerConfig('development'),
+        });
+    };
+
+    const devClientResolutions = [
+        {
+            description: 'resolve in the browser graph of a dev server',
+            serve: true,
+            ssr: false,
+            expected: DEV_CLIENT_RESOLVED_ID,
+        },
+        { description: 'not resolve in the SSR graph', serve: true, ssr: true, expected: null },
+        {
+            description: 'not resolve outside a dev server',
+            serve: false,
+            ssr: false,
+            expected: null,
+        },
+    ];
+
+    test.each(devClientResolutions)(
+        'Should $description for the dev client module',
+        async ({ serve, ssr, expected }) => {
+            const plugin = getVitePlugin(defaultOptions);
+            if (serve) {
+                serveFakeDevServer(plugin);
+            }
+            const resolveIdHandler = getResolveIdHandler(plugin);
+
+            const resolved = await resolveIdHandler.call({}, DEV_CLIENT_MODULE_ID, undefined, {
+                ssr,
+            });
+
+            expect(resolved).toBe(expected);
+        },
+    );
+
+    test('Should include the dev client module id in the load hook filter', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const load = plugin?.load;
+        const filter =
+            typeof load === 'object' && load !== null && 'filter' in load ? load.filter : undefined;
+        const matchesResolvedId = DEV_CLIENT_RESOLVED_RE.test(DEV_CLIENT_RESOLVED_ID);
+
+        expect(filter).toEqual({
+            id: { include: expect.arrayContaining([DEV_CLIENT_RESOLVED_RE]) },
+        });
+        expect(matchesResolvedId).toBe(true);
+    });
+
+    test('Should build the load filter from the resolved dev client id', () => {
+        const expectedSource = `^${DEV_CLIENT_RESOLVED_ID}$`;
+        const matchesPrefixed = DEV_CLIENT_RESOLVED_RE.test(`x${DEV_CLIENT_RESOLVED_ID}`);
+        const matchesSuffixed = DEV_CLIENT_RESOLVED_RE.test(`${DEV_CLIENT_RESOLVED_ID}x`);
+
+        expect(DEV_CLIENT_RESOLVED_RE.source).toBe(expectedSource);
+        expect(matchesPrefixed).toBe(false);
+        expect(matchesSuffixed).toBe(false);
+    });
+
+    test('Should serve the built dev client as that module', async () => {
+        const readFile = jest
+            .spyOn(fsHelpers, 'readFile')
+            .mockResolvedValue('globalThis.devClientLoaded = true;');
+        const plugin = getVitePlugin(defaultOptions);
+        serveFakeDevServer(plugin);
+        const load = getLoad(plugin, {});
+
+        const code = await load(DEV_CLIENT_RESOLVED_ID);
+        const otherModule = await load('/src/main.ts');
+        const unresolvedId = await load(DEV_CLIENT_MODULE_ID);
+
+        expect(code).toBe('globalThis.devClientLoaded = true;');
+        expect(readFile).toHaveBeenCalledWith(APPS_DEV_CLIENT_PATH);
+        expect(otherModule).toBeNull();
+        expect(unresolvedId).toBeNull();
+    });
+
+    test('Should fail the dev client module with its cause when the built file is missing', async () => {
+        const missingFile = new Error('ENOENT: no such file or directory');
+        jest.spyOn(fsHelpers, 'readFile').mockRejectedValue(missingFile);
+        const plugin = getVitePlugin(defaultOptions);
+        serveFakeDevServer(plugin);
+        const load = getLoad(plugin, {});
+
+        const loading = load(DEV_CLIENT_RESOLVED_ID);
+
+        await expect(loading).rejects.toThrow('ENOENT');
     });
 
     test('Should return a vite plugin object with closeBundle', () => {
@@ -1077,6 +1253,8 @@ describe('Backend Functions - getVitePlugin', () => {
             ssr: {
                 noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
             },
+            optimizeDeps: { exclude: [] },
+            resolve: { dedupe: ['@datadog/apps-backend', '@datadog/action-catalog'] },
         });
     });
 
@@ -1347,6 +1525,29 @@ describe('Backend Functions - getVitePlugin', () => {
             rmSync(cacheDir);
         }
     });
+
+    const serverConditionCases = [
+        { vite: 'Vite 6 and later', defaultServerConditions: ['module', 'node'] },
+        { vite: 'Vite 5', defaultServerConditions: undefined },
+    ];
+    test.each(serverConditionCases)(
+        'Should hand the middleware the default server conditions of $vite',
+        ({ defaultServerConditions }) => {
+            const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+            const bundler = { ...mockVite, defaultServerConditions };
+            const plugin = getVitePlugin({ ...defaultOptions, bundler });
+            const configureServer = getConfigureServer(plugin);
+            const use = jest.fn();
+            const ssrLoadModule = jest.fn();
+            const config = fakeServerConfig(DEV_VERIFY_MODE);
+
+            configureServer({ middlewares: { use }, ssrLoadModule, config });
+
+            const [middlewareArgs] = middlewareSpy.mock.calls;
+            const passedConditions = middlewareArgs.at(-1);
+            expect(passedConditions).toBe(defaultServerConditions);
+        },
+    );
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.
     test('Should route /__dd/executeAction to the cloud path when configureServer sees a dev-verify server.config.mode', async () => {

@@ -20,6 +20,7 @@ export const SITES = [
     'us2.ddog-gov.com',
     'ap1.datadoghq.com',
     'ap2.datadoghq.com',
+    'uk1.datadoghq.com',
     'datad0g.com',
 ] as const;
 

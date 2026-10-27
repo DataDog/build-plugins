@@ -4,9 +4,15 @@
 
 import type { CanaryTarget } from '../types';
 
+import { excalidrawTarget } from './excalidraw';
+import { mastodonTarget } from './mastodon';
 import { webUiTarget } from './web-ui';
 
-const targets = new Map<string, CanaryTarget>([[webUiTarget.id, webUiTarget]]);
+const targets = new Map<string, CanaryTarget>([
+    [excalidrawTarget.id, excalidrawTarget],
+    [mastodonTarget.id, mastodonTarget],
+    [webUiTarget.id, webUiTarget],
+]);
 
 export const getCanaryTarget = (name: string): CanaryTarget | undefined => {
     return targets.get(name);

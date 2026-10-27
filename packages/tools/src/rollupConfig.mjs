@@ -108,9 +108,6 @@ const getPluginConfig = (bundlerName, buildName, addMetrics = false) => {
     const packageName = `${bundlerName}-plugin`;
     const enableReports = !!process.env.BUILD_PLUGINS_REPORTS;
     return {
-        auth: {
-            apiKey: process.env.DATADOG_API_KEY,
-        },
         logLevel: 'debug',
         metadata: {
             name: buildName,
