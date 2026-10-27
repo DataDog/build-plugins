@@ -13,6 +13,7 @@ Especially useful for having mock projects, built with specific bundlers and run
 -   [Unit tests](#unit-tests)
     -   [Run](#run)
     -   [Debug](#debug)
+    -   [Keep test files isolated](#keep-test-files-isolated)
     -   [Test a plugin](#test-a-plugin)
 -   [End to End tests](#end-to-end-tests)
     -   [Run](#run)
@@ -38,6 +39,13 @@ Within your test you can then use `.only` or `.skip` to target a single test in 
 ```bash
 yarn test:unit packages/...
 ```
+
+### Keep test files isolated
+
+Jest runs many test files in one worker, and they share Node's core modules (`http`, `https`, `net`, …) and globals like `Headers`. `src/_jest/setupAfterEnv.ts` puts back what any copy of nock patches on them (`http`, `https` and `Headers`), so in tests and test helpers:
+
+-   Mock HTTP with nock or a stub of your own file's `global.fetch`, never by patching core module exports or shared prototypes like `Headers.prototype`.
+-   Don't keep state a later hook needs in a helper's module scope: after `jest.resetModules()`, code that loads the helper again gets a fresh copy of it. Keep it on the test file's `global` instead, like `src/_jest/helpers/cleanups.ts`.
 
 ### Test a plugin
 

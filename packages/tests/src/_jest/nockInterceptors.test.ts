@@ -10,16 +10,27 @@ import { isDeepStrictEqual } from 'util';
 import {
     FIXTURE_TEST_TIMEOUT_MS,
     NOOP_SETUP_PATH,
+    PATH_ORDER_SEQUENCER_PATH,
     parseJestReport,
     spawnJestFixture,
 } from './helpers/spawnJestFixture';
-import { CHAIN_FILE_COUNT } from './nockChainShared';
 import { LEAKED_REQUESTS, SETTLED } from './nockLeakShared';
 
 const SETUP_AFTER_ENV_PATH = path.resolve(__dirname, 'setupAfterEnv.ts');
 const TEARDOWN_PATH = path.resolve(__dirname, 'nockLeakTeardown.ts');
 const REACTIVATE_SETUP_PATH = path.resolve(__dirname, 'nockReactivateSetup.ts');
 const STACKED_INTERCEPTOR_ERROR = 'Cannot convert undefined or null to object';
+const CHAIN_PREFIX = 'nockChain';
+const RESET_PREFIX = 'nockReset';
+const STACK_PREFIX = 'nockStack';
+
+const getFixtureFileCount = (prefix: string) => {
+    const fileNames = fs.readdirSync(__dirname);
+    const fixtureNames = fileNames.filter(
+        (name) => name.startsWith(prefix) && name.endsWith('.fixture.ts'),
+    );
+    return fixtureNames.length;
+};
 
 const runLeakFixture = (setupFilesAfterEnvPath: string) => {
     const tmpDir = os.tmpdir();
@@ -92,48 +103,106 @@ describeBeforeNode22("nock's interceptors and Jest's per-file global cleanup", (
     );
 });
 
-const runChainFixtures = (setupFilesAfterEnvPaths: string[]) => {
+const runFixtureFiles = (prefix: string, setupFilesAfterEnvPaths: string[]) => {
     const run = spawnJestFixture(
-        '**/nockChain?.fixture.ts',
-        ['--setupFilesAfterEnv', ...setupFilesAfterEnvPaths, '--json'],
+        `**/${prefix}*.fixture.ts`,
+        [
+            '--setupFilesAfterEnv',
+            ...setupFilesAfterEnvPaths,
+            '--testSequencer',
+            PATH_ORDER_SEQUENCER_PATH,
+            '--json',
+        ],
         {},
     );
     const report = parseJestReport(run);
     const stackedFiles = report.testResults.filter((file) =>
         file.message.includes(STACKED_INTERCEPTOR_ERROR),
     );
+    const otherFailedFiles = report.testResults.filter(
+        (file) => file.message !== '' && !file.message.includes(STACKED_INTERCEPTOR_ERROR),
+    );
+    const assertions = report.testResults.flatMap((file) => file.assertionResults);
+    const skippedTests = assertions.filter((assertion) => assertion.status !== 'passed');
     const actual = {
-        passed: report.numPassedTests,
-        failed: report.numFailedTests,
-        stackedFailures: stackedFiles.length,
+        files: report.testResults.length,
+        skippedOrFailedTests: skippedTests.length,
+        stackedFiles: stackedFiles.length,
+        otherFailedFiles: otherFailedFiles.length,
         runtimeErrors: report.numRuntimeErrorTestSuites,
     };
     return { actual, output: run.output };
 };
 
+// Each fixture file runs one test: a stacked file fails it, while a file whose afterAll throws
+// keeps it passed and reports a runtime error instead.
+const getExpectedRun = (prefix: string, stackedFiles: number, afterAllErrorFiles = 0) => ({
+    files: getFixtureFileCount(prefix),
+    skippedOrFailedTests: stackedFiles,
+    stackedFiles,
+    otherFailedFiles: afterAllErrorFiles,
+    runtimeErrors: afterAllErrorFiles,
+});
+
+// Without setupAfterEnv, every chain and reset file after the first fails, and so does every
+// nockStack file before the last one, which checks setupAfterEnv's own work.
+const chainLaterFiles = getFixtureFileCount(CHAIN_PREFIX) - 1;
+const resetLaterFiles = getFixtureFileCount(RESET_PREFIX) - 1;
+const stackLeakerFiles = getFixtureFileCount(STACK_PREFIX) - 1;
+
 describe('nock across the test files of one worker', () => {
     const cases = [
         {
             description: 'mock requests in every file',
+            prefix: CHAIN_PREFIX,
             setupFilesAfterEnvPaths: [SETUP_AFTER_ENV_PATH],
-            expected: { passed: CHAIN_FILE_COUNT, failed: 0, stackedFailures: 0, runtimeErrors: 0 },
+            expected: getExpectedRun(CHAIN_PREFIX, 0),
         },
         {
-            description: 'break every later file when nock is re-activated, as a positive control',
+            description: 'mock requests in every file even when nock is re-activated after restore',
+            prefix: CHAIN_PREFIX,
             setupFilesAfterEnvPaths: [SETUP_AFTER_ENV_PATH, REACTIVATE_SETUP_PATH],
-            expected: {
-                passed: 1,
-                failed: CHAIN_FILE_COUNT - 1,
-                stackedFailures: CHAIN_FILE_COUNT - 1,
-                runtimeErrors: 0,
-            },
+            expected: getExpectedRun(CHAIN_PREFIX, 0),
+        },
+        {
+            description:
+                'break every later mocking file when nock is never restored, as a positive control',
+            prefix: CHAIN_PREFIX,
+            setupFilesAfterEnvPaths: [NOOP_SETUP_PATH],
+            expected: getExpectedRun(CHAIN_PREFIX, chainLaterFiles),
+        },
+        {
+            description: 'reach local servers in every file after jest.resetModules()',
+            prefix: RESET_PREFIX,
+            setupFilesAfterEnvPaths: [SETUP_AFTER_ENV_PATH],
+            expected: getExpectedRun(RESET_PREFIX, 0),
+        },
+        {
+            description:
+                'break every later file when nock is never restored, as a positive control',
+            prefix: RESET_PREFIX,
+            setupFilesAfterEnvPaths: [NOOP_SETUP_PATH],
+            expected: getExpectedRun(RESET_PREFIX, resetLaterFiles),
+        },
+        {
+            description: 'put back what files that left a copy of nock behind patched',
+            prefix: STACK_PREFIX,
+            setupFilesAfterEnvPaths: [SETUP_AFTER_ENV_PATH],
+            expected: getExpectedRun(STACK_PREFIX, 0),
+        },
+        {
+            description:
+                'break the request after files that left a copy of nock behind, as a positive control',
+            prefix: STACK_PREFIX,
+            setupFilesAfterEnvPaths: [NOOP_SETUP_PATH],
+            expected: getExpectedRun(STACK_PREFIX, 1, stackLeakerFiles),
         },
     ];
 
     test.each(cases)(
         'Should $description',
-        ({ setupFilesAfterEnvPaths, expected }) => {
-            const { actual, output } = runChainFixtures(setupFilesAfterEnvPaths);
+        ({ prefix, setupFilesAfterEnvPaths, expected }) => {
+            const { actual, output } = runFixtureFiles(prefix, setupFilesAfterEnvPaths);
             if (!isDeepStrictEqual(actual, expected)) {
                 const actualText = JSON.stringify(actual);
                 throw new Error(`Unexpected fixture run ${actualText}\n${output}`);

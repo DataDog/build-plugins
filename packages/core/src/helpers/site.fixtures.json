@@ -1,0 +1,142 @@
+{
+    "datadoghq.eu": {
+        "site": "datadoghq.eu"
+    },
+    "DataDogHQ.com": {
+        "site": "datadoghq.com"
+    },
+    "myorg.us5.datadoghq.com": {
+        "site": "us5.datadoghq.com",
+        "subdomain": "myorg"
+    },
+    "dd.datad0g.com": {
+        "site": "datad0g.com",
+        "subdomain": "dd"
+    },
+    "https://myorg.datadoghq.com/some/path?x=1": {
+        "site": "datadoghq.com",
+        "subdomain": "myorg"
+    },
+    "example.com": "rejected",
+    "my_org!.datadoghq.com": "rejected",
+    "": "rejected",
+    "app.datadoghq.com": {
+        "site": "datadoghq.com"
+    },
+    "api.us5.datadoghq.com": {
+        "site": "us5.datadoghq.com"
+    },
+    "datad0g.com": {
+        "site": "datad0g.com"
+    },
+    "uk1.datadoghq.com": {
+        "site": "uk1.datadoghq.com"
+    },
+    "-acme.datadoghq.com": "rejected",
+    "acme-.datadoghq.com": "rejected",
+    "datadoghq.com": {
+        "site": "datadoghq.com"
+    },
+    "myorg.datadoghq.com": {
+        "site": "datadoghq.com",
+        "subdomain": "myorg"
+    },
+    "https://acme.datadoghq.com/path?x=1": {
+        "site": "datadoghq.com",
+        "subdomain": "acme"
+    },
+    "  DataDogHQ.com  ": {
+        "site": "datadoghq.com"
+    },
+    "  https://acme.datadoghq.com/path  ": {
+        "site": "datadoghq.com",
+        "subdomain": "acme"
+    },
+    "acme.datadoghq.com": {
+        "site": "datadoghq.com",
+        "subdomain": "acme"
+    },
+    "https://acme.datadoghq.com/path": {
+        "site": "datadoghq.com",
+        "subdomain": "acme"
+    },
+    "api.datadoghq.com": {
+        "site": "datadoghq.com"
+    },
+    "https://app.datadoghq.com/path?x=1": {
+        "site": "datadoghq.com"
+    },
+    "us5.datadoghq.com": {
+        "site": "us5.datadoghq.com"
+    },
+    "myorg.uk1.datadoghq.com": {
+        "site": "uk1.datadoghq.com",
+        "subdomain": "myorg"
+    },
+    "customsubdomain.us5.datadoghq.com": {
+        "site": "us5.datadoghq.com",
+        "subdomain": "customsubdomain"
+    },
+    "foobar.datadoghq.com": {
+        "site": "datadoghq.com",
+        "subdomain": "foobar"
+    },
+    "CustomSubdomain.US5.DatadogHQ.com": {
+        "site": "us5.datadoghq.com",
+        "subdomain": "customsubdomain"
+    },
+    "not-a-real-site.example.com": "rejected",
+    "foo.bar.datadoghq.com": "rejected",
+    "foo_bar.datadoghq.com": "rejected",
+    " datadoghq.eu ": {
+        "site": "datadoghq.eu"
+    },
+    " datadoghq.eu\n": {
+        "site": "datadoghq.eu"
+    },
+    "datadoghq.eu\n": {
+        "site": "datadoghq.eu"
+    },
+    "  datadoghq.eu\t": {
+        "site": "datadoghq.eu"
+    },
+    "\tMyOrg.US5.datadoghq.com  ": {
+        "site": "us5.datadoghq.com",
+        "subdomain": "myorg"
+    },
+    " us5.datadoghq.com ": {
+        "site": "us5.datadoghq.com"
+    },
+    " datad0g.com\t": {
+        "site": "datad0g.com"
+    },
+    "  ": "rejected",
+    "datadoghq\t.eu": "rejected",
+    "datadoghq.eu\nus5.datadoghq.com": "rejected",
+    "https://datadoghq.eu": {
+        "site": "datadoghq.eu"
+    },
+    "datadoghq.eu/": {
+        "site": "datadoghq.eu"
+    },
+    "HTTPS://App.DatadogHQ.eu/": {
+        "site": "datadoghq.eu"
+    },
+    "datadoghq.eu?x=1": {
+        "site": "datadoghq.eu"
+    },
+    "datadoghq.eu#section": {
+        "site": "datadoghq.eu"
+    },
+    "https://": "rejected",
+    "datadoghq.com:443": "rejected",
+    "a.datadoghq.com": {
+        "site": "datadoghq.com",
+        "subdomain": "a"
+    },
+    "a-b.datadoghq.com": {
+        "site": "datadoghq.com",
+        "subdomain": "a-b"
+    },
+    "app.myorg.datadoghq.com": "rejected"
+}

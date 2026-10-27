@@ -2196,6 +2196,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/tests@workspace:packages/tests"
   dependencies:
+    "@babel/parser": "npm:7.24.5"
+    "@babel/types": "npm:7.24.5"
     "@datadog/browser-rum": "npm:6.26.0"
     "@datadog/esbuild-plugin": "workspace:*"
     "@datadog/rollup-plugin": "workspace:*"

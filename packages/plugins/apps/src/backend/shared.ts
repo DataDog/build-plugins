@@ -25,6 +25,17 @@ export function isDatadogAppsBackendInstalled(fromDir: string): boolean {
     return isPackageExportInstalled('@datadog/apps-backend/runtime/jsFunctionWithActions', fromDir);
 }
 
+/**
+ * The backend runtime packages. Each holds module-level state the backend entry initializes
+ * (`setExecuteActionImplementation`, `setBackend`) on the copy resolved from the app root, so every
+ * importer — including a package that provides backend functions and declares them as peers — must
+ * be deduplicated onto that same copy.
+ */
+export const BACKEND_RUNTIME_PACKAGES: readonly string[] = [
+    '@datadog/apps-backend',
+    '@datadog/action-catalog',
+];
+
 /** The import line to pull action-catalog's setExecuteActionImplementation into bundles. */
 export const ACTION_CATALOG_IMPORT =
     "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution';";

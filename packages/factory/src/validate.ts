@@ -15,20 +15,33 @@ import type {
 
 const SITES_DOC_URL = 'https://docs.datadoghq.com/getting_started/site/';
 
+// Strings are JSON-quoted so an inner newline or tab stays escaped; arrays and objects print
+// only their type, so a misplaced config object isn't dumped into the build log.
+const formatSiteValue = (value: unknown): string => {
+    if (typeof value === 'string') {
+        return JSON.stringify(value);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+    return Array.isArray(value) ? 'array' : typeof value;
+};
+
 const resolveSite = (
-    value: string | undefined,
+    value: unknown,
     source: string,
     errors: string[],
 ): ReturnType<typeof parseSite> => {
-    if (value === undefined) {
+    if (value === undefined || value === null || value === '') {
         return undefined;
     }
     const parsed = parseSite(value);
     if (parsed) {
         return parsed;
     }
+    const printableValue = formatSiteValue(value);
     errors.push(
-        `${source} "${value}" is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
+        `${source} ${printableValue} is not a supported Datadog site. See the site parameters in ${SITES_DOC_URL}.`,
     );
     return undefined;
 };
@@ -136,9 +149,8 @@ const normalizeSourcemapsOptions = (options: Options, errors: string[]): Options
 export const validateOptions = (options: Options = {}): OptionsWithDefaults => {
     const errors: string[] = validateMetadata(options.metadata);
     const normalizedOptions = normalizeSourcemapsOptions(options, errors);
-    // DATADOG_SITE env var takes precedence over configuration; only validate
-    // auth.site when no env var is set, so a stale auth.site can't block a
-    // build that has already opted into an env override.
+    // A valid DATADOG_SITE/DD_SITE takes precedence over configuration, so a
+    // stale auth.site can't block a build that has opted into an env override.
     const envRaw = getDDEnvValue('SITE');
     const resolvedSite =
         resolveSite(envRaw, 'DATADOG_SITE/DD_SITE', errors) ??

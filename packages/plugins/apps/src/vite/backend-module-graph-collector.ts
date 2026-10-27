@@ -8,10 +8,10 @@ import {
     createParsedModuleRecord,
     type ParsedModuleRecord,
     resolveStaticModuleSources,
-    shouldTraverseCollectedModule,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
+import { isBackendSourceModule } from '../backend/backend-sources';
 
 const VIRTUAL_MODULE_ID_RE = /^(?:\0|virtual:)/;
 
@@ -39,8 +39,8 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
 
                     // `createParsedModuleRecord` applies this same predicate, but
                     // only after the AST exists. Checking it here keeps us from
-                    // parsing every `node_modules` module just to discard it.
-                    if (!shouldTraverseCollectedModule(moduleId, buildRoot)) {
+                    // parsing every ordinary `node_modules` module just to discard it.
+                    if (!isBackendSourceModule(moduleId, buildRoot)) {
                         return;
                     }
 
@@ -82,10 +82,11 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                         }
                         const resolvedId = normalizeViteModuleId(resolved.id);
                         // This re-resolution can disagree with the bundler's own (e.g. a
-                        // resolver that reads import attributes); never graph an app
-                        // module the bundler didn't load. Package modules aren't walked.
-                        const isAppModule = shouldTraverseCollectedModule(resolvedId, buildRoot);
-                        if (isAppModule && !loadedIdSet.has(resolvedId)) {
+                        // resolver that reads import attributes); never graph a backend
+                        // source module the bundler didn't load. Ordinary package modules
+                        // aren't walked.
+                        const isBackendSource = isBackendSourceModule(resolvedId, buildRoot);
+                        if (isBackendSource && !loadedIdSet.has(resolvedId)) {
                             throw unsupportedModuleGraphDependency(
                                 moduleId,
                                 `import "${source}" resolving to ${resolvedId}, which the bundler did not load,`,
@@ -100,12 +101,12 @@ export function createBackendModuleGraphCollector(buildRoot: string): BackendMod
                     );
                     const resolvedIds = staticDependencies.map(({ resolvedId }) => resolvedId);
                     const resolvedIdSet = new Set(resolvedIds);
-                    // App modules only: Rolldown also lists `require()` targets, and a
-                    // package one is never walked.
-                    const appLocalLoadedIds = loadedIds.filter((id) =>
-                        shouldTraverseCollectedModule(id, buildRoot),
+                    // Backend source modules only: Rolldown also lists `require()` targets,
+                    // and an ordinary package one is never walked.
+                    const backendSourceLoadedIds = loadedIds.filter((id) =>
+                        isBackendSourceModule(id, buildRoot),
                     );
-                    const unresolvedLoadedId = appLocalLoadedIds.find(
+                    const unresolvedLoadedId = backendSourceLoadedIds.find(
                         (id) => !resolvedIdSet.has(id),
                     );
                     if (unresolvedLoadedId) {

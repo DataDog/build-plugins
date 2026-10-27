@@ -30,6 +30,7 @@ import type { RollupOptions } from 'rollup';
 import type { UserConfig } from 'vite';
 import type { Configuration } from 'webpack';
 
+import { addCleanup, addWorkingDir } from './cleanups';
 import { PLUGIN_VERSIONS } from './constants';
 import { getOutDir, prepareWorkingDir } from './env';
 import { easyProjectEntry, defaultPluginOptions } from './mocks';
@@ -39,26 +40,6 @@ type PartialBuildOverrides = Partial<BundlerConfig>;
 
 // Get the environment variables.
 const { NEED_BUILD, REQUESTED_BUNDLERS } = process.env;
-
-// A list of all the cleanup functions that will need to be run at the end of the tests.
-const cleanups: CleanupFn[] = [];
-const workingDirs: string[] = [];
-
-// Run the global cleaning of temp working dirs.
-// It is used in an `afterAll` hook in ./setupAfterEnv.ts.
-export const cleanupEverything = async () => {
-    const bundlerCleanups = cleanups.splice(0).map((cleanup) => cleanup());
-    const workingDirRemovals = workingDirs.splice(0).map((workingDir) => rm(workingDir));
-    const results = await Promise.allSettled([...bundlerCleanups, ...workingDirRemovals]);
-
-    const failures = results.flatMap((result) =>
-        result.status === 'rejected' ? [result.reason] : [],
-    );
-    if (failures.length) {
-        const failureMessages = failures.map(String).join('\n');
-        throw new AggregateError(failures, `Cleanup failed:\n${failureMessages}`);
-    }
-};
 
 const getCleanupFunction = (
     bundlerName: string,
@@ -237,7 +218,7 @@ export const runBundlers = async (
     if (noCleanup) {
         console.log(`[NO_CLEANUP] Working directory: ${workingDir}`);
     } else {
-        workingDirs.push(workingDir);
+        addWorkingDir(workingDir);
     }
 
     const runBundlerFunction = async (bundler: Bundler) => {
@@ -254,7 +235,7 @@ export const runBundlers = async (
         const cleanup = await runBundlerFunction(bundler);
         results.push(cleanup);
         if (!noCleanup) {
-            cleanups.push(cleanup);
+            addCleanup(cleanup);
         }
     }
     errors.push(...results.map((result) => result.errors).flat());

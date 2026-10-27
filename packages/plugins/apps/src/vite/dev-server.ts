@@ -13,7 +13,12 @@ import type { build } from 'vite';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
-import type { ExecuteActionRequest, ExecuteActionResponse } from '../backend/protocol';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
+import type {
+    DebugBundleResponse,
+    ExecuteActionRequest,
+    ExecuteActionResponse,
+} from '../backend/protocol';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import { DEV_VERIFY_MODE } from '../constants';
@@ -21,7 +26,7 @@ import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
-import { getBaseBackendBuildConfig } from './build-config';
+import { getBaseBackendBuildConfig, withProductionSettings } from './build-config';
 import type { HostCheck } from './dev-server-request-guard';
 import { checkDevServerRequest } from './dev-server-request-guard';
 import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
@@ -37,7 +42,7 @@ type BundleFn = (func: BackendFunction) => Promise<BundleResult>;
 
 const DEV_VIRTUAL_PREFIX = 'virtual:dd-backend-dev:';
 
-export const DEBUG_BUNDLE_ROUTE = '/__dd/debugBundle';
+export const DEBUG_BUNDLE_ROUTE = DEBUG_BUNDLE_PATH;
 export const EXECUTE_ACTION_ROUTE = '/__dd/executeAction';
 export const EXECUTE_ACTION_VIA_CLOUD_ROUTE = '/__dd/executeActionViaCloud';
 
@@ -135,6 +140,7 @@ function parseRequestBody(req: IncomingMessage): Promise<ExecuteActionRequest> {
  */
 async function bundleBackendFunction(
     viteBuild: typeof build,
+    serverConditions: readonly string[] | undefined,
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
@@ -158,10 +164,11 @@ async function bundleBackendFunction(
         log,
         connectionIdCollector.getModuleRecords,
     );
-    const baseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
+    const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
         connectionIdCollector.plugin,
         staticChecksPlugin,
     ]);
+    const baseConfig = withProductionSettings(devBaseConfig, serverConditions);
 
     // Dev: build a single function in-memory per request so we can send the
     // bundled script to the Datadog API without writing temp files.
@@ -255,6 +262,35 @@ async function submitQuery(
     return pollQueryExecution(receiptId, auth, doAuthenticatedRequest, longPolling, log, signal);
 }
 
+export function oversizedBundleMessage(
+    displayName: string,
+    length: number,
+    rejection: string,
+): string {
+    return `Backend function "${displayName}" is larger than production accepts: its minified bundle is ${length} characters, and Datadog answered "${rejection}". Shrink the bundle, for example by splitting the function or moving large data out of it.`;
+}
+
+// Datadog rejects a script over the action's maxLength as an invalid `script` input, the only
+// constraint on that field a string can break. doRequest's message lists each error's fields.
+function asOversizedBundleError(
+    error: unknown,
+    displayName: string,
+    script: string,
+): OversizedBundleError | undefined {
+    if (!(error instanceof Error) || !error.message.startsWith('HTTP 400 ')) {
+        return undefined;
+    }
+    const isInputRejection = error.message.includes('code: INVALID_INPUT_PARAMETER');
+    const rejection = /(?:^|\s)(\.script: [^\n]*)/.exec(error.message)?.[1];
+    if (!isInputRejection || !rejection) {
+        return undefined;
+    }
+    // Datadog counts code points, as JSON Schema's maxLength does.
+    const length = Array.from(script).length;
+    const message = oversizedBundleMessage(displayName, length, rejection);
+    return new OversizedBundleError(message, displayName);
+}
+
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
 async function executeScriptViaDatadog(
     scriptBody: string,
@@ -281,7 +317,9 @@ async function executeScriptViaDatadog(
         doAuthenticatedRequest,
         longPolling,
         log,
-    );
+    ).catch((error: unknown) => {
+        throw asOversizedBundleError(error, displayName, scriptBody) ?? error;
+    });
 
     if (typeof outputs !== 'object' || outputs === null || !('data' in outputs)) {
         throw new Error('Query execution completed without a "data" field in its outputs');
@@ -472,22 +510,27 @@ async function pollQueryExecution(
     throw new Error('Query execution timed out');
 }
 
+function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
+    const serializedBody = JSON.stringify(body);
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(serializedBody);
+}
+
 /**
  * Send a JSON error response.
  */
 function sendError(res: ServerResponse, statusCode: number, message: string): void {
-    res.statusCode = statusCode;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: false, error: message } satisfies ExecuteActionResponse));
+    const body = { success: false, error: message } satisfies ExecuteActionResponse;
+    sendJson(res, statusCode, body);
 }
 
 /**
  * Send a JSON success response.
  */
 function sendSuccess(res: ServerResponse, result: { data: unknown }): void {
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: true, result } satisfies ExecuteActionResponse));
+    const body = { success: true, result } satisfies ExecuteActionResponse;
+    sendJson(res, 200, body);
 }
 
 /**
@@ -523,6 +566,15 @@ class HttpError extends Error {
         message: string,
     ) {
         super(message);
+    }
+}
+
+class OversizedBundleError extends HttpError {
+    constructor(
+        message: string,
+        readonly displayName: string,
+    ) {
+        super(413, message);
     }
 }
 
@@ -563,8 +615,20 @@ async function validateAndBundle(
     return { ...bundled, args };
 }
 
+function acceptsJson(req: IncomingMessage): boolean {
+    const accept = req.headers.accept ?? '';
+    return accept.split(',').some((mediaRange) => {
+        const [mediaType, ...parameters] = mediaRange.split(';');
+        const isRefused = parameters.some((parameter) =>
+            /^\s*q\s*=\s*0(\.0*)?\s*$/i.test(parameter),
+        );
+        return mediaType.trim().toLowerCase() === 'application/json' && !isRefused;
+    });
+}
+
 /**
- * Handle POST /__dd/debugBundle — returns the bundled script for inspection.
+ * Handle POST /__dd/debugBundle — returns the bundled script, as plain text by default or as
+ * `{ code, allowedConnectionIds }` when the Accept header lists `application/json` without q=0.
  */
 async function handleDebugBundle(
     req: IncomingMessage,
@@ -573,8 +637,16 @@ async function handleDebugBundle(
     bundle: BundleFn,
 ): Promise<void> {
     try {
-        const { code } = await validateAndBundle(req, functionsByName, bundle);
+        const { func, code } = await validateAndBundle(req, functionsByName, bundle);
 
+        if (acceptsJson(req)) {
+            const body: DebugBundleResponse = {
+                code,
+                allowedConnectionIds: func.allowedConnectionIds,
+            };
+            sendJson(res, 200, body);
+            return;
+        }
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain');
         res.end(code);
@@ -649,6 +721,7 @@ async function handleExecuteActionViaCloud(
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
     log: Logger,
+    oversizedFunctionsWarned: Set<string>,
 ): Promise<void> {
     try {
         const { func, code, args } = await validateAndBundle(req, functionsByName, bundle);
@@ -668,6 +741,13 @@ async function handleExecuteActionViaCloud(
 
         sendSuccess(res, result);
     } catch (error: unknown) {
+        if (
+            error instanceof OversizedBundleError &&
+            !oversizedFunctionsWarned.has(error.displayName)
+        ) {
+            oversizedFunctionsWarned.add(error.displayName);
+            log.warn(error.message);
+        }
         // Labeled by the actual URL hit, not a fixed name, since dev-verify mode also reaches this via /__dd/executeAction.
         handleHttpError(res, error, log, req.url ?? 'executeActionViaCloud');
     }
@@ -683,6 +763,7 @@ function routeToCloudHandler(
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
     log: Logger,
+    oversizedFunctionsWarned: Set<string>,
 ): void {
     guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
         handleExecuteActionViaCloud(
@@ -694,6 +775,7 @@ function routeToCloudHandler(
             authedRequest,
             longPolling,
             log,
+            oversizedFunctionsWarned,
         ),
     );
 }
@@ -722,10 +804,12 @@ export function createDevServerMiddleware(
     log: Logger,
     mode: string,
     isHostAllowed: HostCheck,
+    serverConditions: readonly string[] | undefined,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, func, projectRoot, log);
+        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
     if (initialFunctions.length > 0) {
@@ -744,6 +828,7 @@ export function createDevServerMiddleware(
             doAuthenticatedRequest,
             longPolling,
             log,
+            oversizedFunctionsWarned,
         );
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>

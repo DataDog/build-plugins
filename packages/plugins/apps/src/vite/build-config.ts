@@ -4,7 +4,43 @@
 
 import type { BuildOptions, InlineConfig, Plugin } from 'vite';
 
+import { BACKEND_RUNTIME_PACKAGES } from '../backend/shared';
 import { BACKEND_CODE_EXTENSIONS } from '../constants';
+
+// Rolldown (Vite 8) output option that keeps function and class names when minifying. Rollup's
+// types don't declare it, and Rollup-based Vite ignores it, so it is spread in rather than typed.
+const ROLLDOWN_KEEP_NAMES = { keepNames: true } satisfies Record<string, unknown>;
+
+export const DEV_PROD_CONDITION = 'development|production';
+
+type BaseBackendBuildConfig = ReturnType<typeof getBaseBackendBuildConfig>;
+
+/**
+ * Vite takes export conditions, `import.meta.env.DEV`/`PROD` and the JSX dev transform from
+ * `process.env.NODE_ENV`, which a dev server sets to development. Pinning them makes a bundle built
+ * there match a `vite build` upload, which runs under production. `serverConditions` is Vite's
+ * `defaultServerConditions`, which Vite 5 doesn't export; no option pins its missing-peer stub.
+ */
+export function withProductionSettings(
+    config: BaseBackendBuildConfig,
+    serverConditions: readonly string[] | undefined,
+): BaseBackendBuildConfig {
+    const conditions = serverConditions?.map((condition) =>
+        condition === DEV_PROD_CONDITION ? 'production' : condition,
+    );
+    const resolve = conditions && { resolve: { ...config.ssr?.resolve, conditions } };
+    return {
+        ...config,
+        define: {
+            ...config.define,
+            'import.meta.env.DEV': 'false',
+            'import.meta.env.PROD': 'true',
+        },
+        // Vite 8 converts esbuild options to Oxc's, jsxDev included.
+        esbuild: { ...config.esbuild, jsxDev: false },
+        ssr: { ...config.ssr, ...resolve },
+    };
+}
 
 /**
  * Create the virtual module resolver plugin used by both production and dev builds.
@@ -30,9 +66,9 @@ export function createVirtualPlugin(name: string, virtualEntries: Record<string,
 }
 
 /**
- * Shared Vite/Rollup config for building backend functions.
- * Both the production build (write to disk) and dev build (in-memory)
- * use this as a base, overriding only what differs.
+ * Shared Vite/Rollup config for the backend bundles Datadog runs: uploads (written to disk) and
+ * dev-server cloud execution (in memory, through `withProductionSettings`), so both build alike.
+ * Local execution imports the source directly and never builds with it.
  */
 export function getBaseBackendBuildConfig(
     root: string,
@@ -52,15 +88,24 @@ export function getBaseBackendBuildConfig(
         envPrefix: [],
         root,
         logLevel: 'silent',
+        // Names stay readable in function-log stack frames and to code reading `.name`. esbuild
+        // (before Vite 8) and Oxc (Vite 8) each read only their own keepNames option.
+        esbuild: { keepNames: true },
         build: {
-            minify: false,
+            // Not 'esbuild', which Vite 8 (Rolldown) loads only if the app installs it.
+            minify: true,
             target: 'esnext',
             // Backend functions run server-side. Without this, Vite's default
             // browser-target build externalizes Node builtins (node:crypto, fs)
             // to a stub with no real exports.
             ssr: true,
             rollupOptions: {
-                output: { format: 'es', exports: 'named', inlineDynamicImports: true },
+                output: {
+                    format: 'es',
+                    exports: 'named',
+                    inlineDynamicImports: true,
+                    ...ROLLDOWN_KEEP_NAMES,
+                },
                 preserveEntrySignatures: 'exports-only',
                 // Each exported function is bundled separately, so without tree-shaking every
                 // bundle carries the whole import graph of its `.backend.ts` file, including code
@@ -77,6 +122,10 @@ export function getBaseBackendBuildConfig(
         },
         resolve: {
             extensions: [...BACKEND_CODE_EXTENSIONS, '.json'],
+            // The virtual entry initializes these runtimes on the copy resolved from the root, so
+            // a package providing backend functions must reach that same copy even when it's
+            // linked from a location with its own copy installed.
+            dedupe: [...BACKEND_RUNTIME_PACKAGES],
         },
         // SSR mode externalizes node_modules deps by default, assuming a
         // server runtime can require() them at runtime. Backend bundles have

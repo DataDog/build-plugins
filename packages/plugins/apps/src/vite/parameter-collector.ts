@@ -6,7 +6,7 @@ import type { Program } from 'estree';
 import fs from 'fs';
 import path from 'path';
 
-import { shouldTraverseCollectedModule } from '../backend/ast-parsing/module-graph';
+import { isAppSourceModule } from '../backend/backend-sources';
 import {
     extractParameterDeclarations,
     importsParametersModule,
@@ -82,7 +82,7 @@ export function createParameterCollector(
             const isAppSource =
                 id === moduleId &&
                 !isViteVirtualModuleId(moduleId) &&
-                shouldTraverseCollectedModule(realPath(moduleId), getRealBuildRoot());
+                isAppSourceModule(realPath(moduleId), getRealBuildRoot());
             const aliasedSpecifier = importsResolvedModule
                 ? await findAliasedSpecifier(program, resolve, parametersModuleId)
                 : undefined;

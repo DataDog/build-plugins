@@ -50,10 +50,10 @@ describe('web-ui canary target', () => {
     test('should keep validation outside the timed build', () => {
         const phase = createWebUiPhase('main');
         const build = phase.getBuildCommand('/web-ui', 'control');
-        const validation = phase.getValidationCommand('/web-ui', 'control');
+        const validation = phase.getValidationCommand?.('/web-ui', 'control');
 
         expect(build.args).toEqual(expect.arrayContaining(['--clean', '--no-validate']));
-        expect(validation.args).toEqual(expect.arrayContaining(['--no-build', '--validate']));
+        expect(validation?.args).toEqual(expect.arrayContaining(['--no-build', '--validate']));
     });
 
     test('should use the dynamic split-deploys preset for the federated phase', () => {
