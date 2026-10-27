@@ -817,6 +817,10 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
             statements: "Object['assign'](CONN, { github: 'other' });",
         },
         {
+            description: 'Object.assign called with a template-literal computed key',
+            statements: "Object[`assign`](CONN, { github: 'other' });",
+        },
+        {
             description: 'Object.assign called with a const-aliased computed key',
             statements: "const method = 'assign'; Object[method](CONN, { github: 'other' });",
         },
