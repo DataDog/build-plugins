@@ -35,9 +35,11 @@
         "@dd/output-plugin": "workspace:*",
         "@dd/rum-plugin": "workspace:*",
         "chalk": "2.3.1",
+        "semver": "7.7.2",
         "unplugin": "2.3.11"
     },
     "devDependencies": {
+        "@types/semver": "7.5.8",
         "typescript": "5.4.3"
     }
 }
