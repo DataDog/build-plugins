@@ -216,14 +216,14 @@ The Datadog site to use APIs from, and which Datadog site telemetry metrics and 
 - `'ap2.datadoghq.com'`
 - `'uk1.datadoghq.com'`
 
-You can also prefix any of the sites above with a custom subdomain (e.g. `'myorg.us5.datadoghq.com'`), if your organization uses a custom Datadog URL. All API calls (metrics, error tracking sourcemaps) still go to the base site.
+You can also prefix any of the sites above with a single-label custom subdomain of letters, digits and inner hyphens (e.g. `'myorg.us5.datadoghq.com'`), if your organization uses a custom Datadog URL. All API calls (metrics, error tracking sourcemaps) still go to the base site.
 
-An unsupported value (passed via configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization. An empty value is treated as unset, as it is for every other `DATADOG_*` / `DD_*` override variable, such as `DATADOG_API_KEY`.
+The value is parsed the way the Datadog apps CLI parses it: surrounding whitespace, a URL scheme and any path are stripped (`'https://myorg.datadoghq.com/'` works), an `app` or `api` subdomain resolves to the base site, and ports are not accepted. An unsupported value (including a whitespace-only one, from configuration or the `DATADOG_SITE` / `DD_SITE` environment variable) will throw at plugin initialization. An empty value is treated as unset, as it is for every other `DATADOG_*` / `DD_*` override variable, such as `DATADOG_API_KEY`; so is a `null` `auth.site` from a plain JavaScript config.
 
 > [!NOTE]
 > The `DATADOG_SITE` environment variable takes priority over this configuration.
 > The order of precedence is:
-> 1. `DATADOG_SITE` or `DD_SITE` environment variable (highest priority)
+> 1. `DATADOG_SITE` environment variable, or `DD_SITE` when `DATADOG_SITE` is unset or empty (highest priority)
 > 2. `auth.site` configuration
 > 3. `'datadoghq.com'` (default)
 

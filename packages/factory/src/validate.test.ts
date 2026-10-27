@@ -64,13 +64,6 @@ describe('factory validateOptions', () => {
                 validateOptions({ auth: { site: 'not-a-real-site.example.com' } }),
             ).toThrow(/auth\.site.*is not a supported Datadog site/);
         });
-
-        it('should reject a non-string site value with the standard validation error, not throw internally', () => {
-            expect(() =>
-                // Plain JS configs aren't enforced by the type system at runtime.
-                validateOptions({ auth: { site: 123 as unknown as string } }),
-            ).toThrow(/auth\.site.*is not a supported Datadog site/);
-        });
     });
 
     describe('site resolution from the environment and auth.site', () => {
@@ -83,6 +76,16 @@ describe('factory validateOptions', () => {
         afterEach(() => {
             restoreEnv();
         });
+
+        // Plain JS configs can pass these values, which Options can't express.
+        const nullSiteOptions: Options = JSON.parse('{ "auth": { "site": null } }');
+        const numberSiteOptions: Options = JSON.parse('{ "auth": { "site": 123 } }');
+        const booleanSiteOptions: Options = JSON.parse('{ "auth": { "site": true } }');
+        const arraySiteOptions: Options = JSON.parse('{ "auth": { "site": ["datadoghq.eu"] } }');
+        const objectSiteOptions: Options = JSON.parse(
+            '{ "auth": { "site": { "apiKey": "abc123" } } }',
+        );
+        const nullPrototypeSiteOptions: Options = { auth: { site: Object.create(null) } };
 
         const cases = [
             {
@@ -133,6 +136,36 @@ describe('factory validateOptions', () => {
                 options: {},
                 expected: 'uk1.datadoghq.com',
             },
+            {
+                description: 'trim surrounding whitespace from DD_SITE',
+                env: { DD_SITE: ' datadoghq.eu\n' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'prefer a padded DATADOG_SITE over DD_SITE',
+                env: { DATADOG_SITE: ' us5.datadoghq.com ', DD_SITE: 'datadoghq.eu' },
+                options: {},
+                expected: 'us5.datadoghq.com',
+            },
+            {
+                description: 'trim surrounding whitespace from auth.site',
+                env: {},
+                options: { auth: { site: '  datadoghq.eu\t' } },
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'accept a URL-shaped DD_SITE',
+                env: { DD_SITE: 'https://app.datadoghq.eu/apm/home' },
+                options: {},
+                expected: 'datadoghq.eu',
+            },
+            {
+                description: 'treat a null auth.site as unset',
+                env: {},
+                options: nullSiteOptions,
+                expected: DEFAULT_SITE,
+            },
         ];
 
         test.each(cases)('should $description', ({ env, options, expected }) => {
@@ -168,16 +201,52 @@ describe('factory validateOptions', () => {
                 expectedError: 'DATADOG_SITE/DD_SITE "  " is not a supported',
             },
             {
-                description: 'a DD_SITE with surrounding whitespace',
-                env: { DD_SITE: ' datadoghq.eu\n' },
+                description: 'a DD_SITE with an inner tab, escaped in the message',
+                env: { DD_SITE: 'datadoghq\t.eu' },
                 options: {},
-                expectedError: 'DATADOG_SITE/DD_SITE " datadoghq.eu\n" is not a supported',
+                expectedError: 'DATADOG_SITE/DD_SITE "datadoghq\\t.eu" is not a supported',
             },
             {
                 description: 'a whitespace-only auth.site',
                 env: {},
                 options: { auth: { site: '  ' } },
                 expectedError: 'auth.site "  " is not a supported',
+            },
+            {
+                description: 'an auth.site with an inner newline, escaped in the message',
+                env: {},
+                options: { auth: { site: 'datadoghq.eu\nus5.datadoghq.com' } },
+                expectedError: 'auth.site "datadoghq.eu\\nus5.datadoghq.com" is not a supported',
+            },
+            {
+                description: 'a number auth.site',
+                env: {},
+                options: numberSiteOptions,
+                expectedError: 'auth.site 123 is not a supported',
+            },
+            {
+                description: 'a boolean auth.site',
+                env: {},
+                options: booleanSiteOptions,
+                expectedError: 'auth.site true is not a supported',
+            },
+            {
+                description: 'an array auth.site without printing its contents',
+                env: {},
+                options: arraySiteOptions,
+                expectedError: 'auth.site array is not a supported',
+            },
+            {
+                description: 'an object auth.site without printing its fields',
+                env: {},
+                options: objectSiteOptions,
+                expectedError: 'auth.site object is not a supported',
+            },
+            {
+                description: 'a null-prototype object auth.site with the standard validation error',
+                env: {},
+                options: nullPrototypeSiteOptions,
+                expectedError: 'auth.site object is not a supported',
             },
         ];
 
@@ -186,6 +255,19 @@ describe('factory validateOptions', () => {
             ({ env, options, expectedError }) => {
                 Object.assign(process.env, env);
                 expect(() => validateOptions(options)).toThrow(expectedError);
+            },
+        );
+
+        const unprintedContentCases = [
+            { description: 'an array', options: arraySiteOptions, content: /datadoghq\.eu/ },
+            { description: 'an object', options: objectSiteOptions, content: /abc123/ },
+        ];
+
+        test.each(unprintedContentCases)(
+            'should not print the contents of $description auth.site',
+            ({ options, content }) => {
+                expect(() => validateOptions(options)).toThrow('is not a supported');
+                expect(() => validateOptions(options)).not.toThrow(content);
             },
         );
     });
