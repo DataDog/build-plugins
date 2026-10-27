@@ -2,9 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { rm } from '@dd/core/helpers/fs';
-import type { GlobalContext, PluginOptions } from '@dd/core/types';
+import { readFile, rm } from '@dd/core/helpers/fs';
+import type { GlobalContext, Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
+import { createHash } from 'crypto';
+import type { IncomingMessage } from 'http';
 import path from 'path';
 import type { build } from 'vite';
 
@@ -16,15 +18,22 @@ import {
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
-import {
-    PACKAGE_MANAGER_DIRS,
-    shouldTraverseCollectedModule,
-} from '../backend/ast-parsing/module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
+import {
+    findInstalledBackendFunctionPackages,
+    forgetBackendModuleOwners,
+    getBackendModuleOwner,
+    isBackendFunctionFile,
+    isBackendSourceModule,
+    isOutsideRoot,
+    type BackendFunctionPackage,
+    type InstalledBackendFunctionPackage,
+} from '../backend/backend-sources';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
+import { BACKEND_RUNTIME_PACKAGES } from '../backend/shared';
 import type { BackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
@@ -38,6 +47,7 @@ import { createTagSources, resolveTags } from '../tags';
 import type { TagSource } from '../tags';
 import type { AppsOptionsWithDefaults } from '../types';
 
+import { normalizeViteModuleId } from './backend-module-graph-collector';
 import { buildBackendFunctions } from './build-backend-functions';
 import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
@@ -56,6 +66,8 @@ import { loadViteParseAst } from './vite-parse-ast';
 
 export type ViteBundler = {
     build: typeof build;
+    // Vite 6 and later.
+    defaultServerConditions?: readonly string[];
 };
 
 export interface VitePluginOptions {
@@ -114,48 +126,83 @@ function createBackendFunctionRegistry() {
 }
 
 const APPS_RUNTIME_PATH = path.join(__dirname, './apps-runtime.mjs');
+export const APPS_DEV_CLIENT_PATH = path.join(__dirname, './apps-dev-client.mjs');
+export const DEV_CLIENT_MODULE_ID = 'virtual:dd-apps-dev-client';
+// The `\0` prefix is Vite's virtual-module convention, which most plugins' id filters skip.
+export const DEV_CLIENT_RESOLVED_ID = `\0${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_SRC = `/@id/${DEV_CLIENT_MODULE_ID}`;
+export const DEV_CLIENT_RESOLVED_RE = new RegExp(`^${DEV_CLIENT_RESOLVED_ID}$`);
 export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 
-const toPosixPath = (filePath: string) => filePath.replace(/\\/g, '/');
+// The `\0` prefix is the bundler convention for "not a real file": Rollup and Rolldown both leave
+// such modules out of sourcemaps, and Vite's own resolvers and loaders don't touch them.
+// Between them goes a hash of the backend module's root-relative id, not the id itself: the
+// proxy id can reach build outputs such as Vite's manifest, which shouldn't name backend files
+// or depend on where the project is checked out. Bundlers name a chunk after its module's last
+// path segment, so the id ends in a short one.
+const FRONTEND_PROXY_ID_PREFIX = '\0dd-apps-backend-proxy:';
+const FRONTEND_PROXY_ID_SUFFIX = '/proxy';
+const FRONTEND_PROXY_ID_RE = new RegExp(`^${FRONTEND_PROXY_ID_PREFIX}`);
 
-const isWithinDirectory = (directory: string, filePath: string): boolean => {
-    const relativePath = path.posix.relative(directory, filePath);
-    return (
-        relativePath !== '..' &&
-        !relativePath.startsWith('../') &&
-        !path.posix.isAbsolute(relativePath)
-    );
-};
-
-const shouldTransformBackendModule = (id: string, buildRoot: string, outDir: string): boolean => {
-    if (!BACKEND_FILE_WITH_QUERY_RE.test(id)) {
-        return false;
+/**
+ * Has the browser revalidate a requested backend function file, as it does the app's own modules.
+ * Vite versions a dependency's module URLs with a `v=` query and serves those with a year-long
+ * immutable cache, so after a dev-server restart the browser would keep calling through a
+ * package's cached proxy without requesting it, and the new server would never register its
+ * functions. Dropping the query from the request, not from the URLs Vite writes into importing
+ * modules, makes Vite serve the file with `no-cache`.
+ */
+function revalidateBackendFunctionFile(req: IncomingMessage): void {
+    if (req.method === 'GET' && req.url) {
+        const [urlPath] = req.url.split(/[?#]/);
+        if (BACKEND_FILE_RE.test(urlPath)) {
+            req.url = req.url.replace(/([?&])v=[^&#]*(&?)/, (_, separator: string, rest: string) =>
+                rest ? separator : '',
+            );
+        }
     }
+}
 
-    const [idWithoutQuery] = id.split(/[?#]/);
-    const filePath = toPosixPath(idWithoutQuery).replace(/^\0/, '');
-    // Virtual ids aren't on disk, so on-disk exclusions don't apply; resolving them would depend on cwd.
-    if (!path.posix.isAbsolute(filePath) && !path.win32.isAbsolute(filePath)) {
-        return true;
+/**
+ * Logs, at info level, the backend functions packages contribute to the app's package. The
+ * package's own manifest is the whole consent, so whoever builds the app should see what it ships.
+ */
+function logPackageBackendFunctions(
+    functions: BackendFunction[],
+    buildRoot: string,
+    log: Logger,
+): void {
+    const namesByPackage = new Map<string, string[]>();
+    for (const func of functions) {
+        const owner = getBackendModuleOwner(func.absolutePath, buildRoot);
+        if (owner.kind === 'backend-package') {
+            const names = namesByPackage.get(owner.package.name) ?? [];
+            namesByPackage.set(owner.package.name, [...names, func.name]);
+        }
     }
-
-    const posixBuildRoot = toPosixPath(buildRoot);
-    // Outside the build root the full path decides, so a hoisted package beside an app under
-    // node_modules stays excluded while a linked workspace file is still proxied.
-    const isInsideBuildRoot = isWithinDirectory(posixBuildRoot, filePath);
-    const pathToClassify = isInsideBuildRoot
-        ? path.posix.relative(posixBuildRoot, filePath)
-        : filePath;
-    const segments = pathToClassify.split('/');
-    if (segments.some((segment) => PACKAGE_MANAGER_DIRS.has(segment))) {
-        return false;
+    if (namesByPackage.size > 0) {
+        const contributions = [...namesByPackage].map(
+            ([name, names]) => `${name} (${names.join(', ')})`,
+        );
+        log.info(`Backend functions provided by packages: ${contributions.join('; ')}`);
     }
+}
 
-    // An outDir at or above the build root (e.g. `build.outDir: '.'`) must not exclude app files.
-    const posixOutDir = toPosixPath(outDir);
-    const outDirContainsBuildRoot = isWithinDirectory(posixOutDir, posixBuildRoot);
-    return outDirContainsBuildRoot || !isWithinDirectory(posixOutDir, filePath);
-};
+/**
+ * Adds each package's root to the dev server's `server.fs.allow`, unless an entry already
+ * covers it. Otherwise Vite only serves a file from a package linked outside the workspace once
+ * this server has transformed a module importing it: after a restart, a browser revalidating a
+ * linked package's backend file, imported from a module it still has cached, would be refused.
+ */
+function allowPackageRoots(allow: string[], packages: BackendFunctionPackage[]): void {
+    for (const { root } of packages) {
+        // Vite's entries and the paths it checks against them use forward slashes.
+        const vitePath = path.sep === '\\' ? root.split(path.sep).join('/') : root;
+        if (!allow.some((dir) => !isOutsideRoot(path.relative(dir, vitePath)))) {
+            allow.push(vitePath);
+        }
+    }
+}
 
 /**
  * Returns the Vite-specific plugin hooks for the apps plugin.
@@ -200,6 +247,10 @@ export const getVitePlugin = ({
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
+    let isBuild = false;
+    // A build's proxy ids, each to the backend module it stands for.
+    const frontendProxySources = new Map<string, string>();
+    let backendPackages: InstalledBackendFunctionPackage[] = [];
 
     // Tag sources for the current build. Replaced (never mutated) per build, since a watch-mode
     // rebuild can start before the previous closeBundle finishes.
@@ -212,17 +263,72 @@ export const getVitePlugin = ({
         config: {
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
-            handler(userConfig) {
+            handler(userConfig, { command }) {
+                isBuild = command === 'build';
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
+                // A restarted dev server shares this process: read the manifests afresh.
+                forgetBackendModuleOwners();
+                // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
+                // require(), which throws "Cannot use import statement outside a module";
+                // ssr.noExternal forces Vite's SSR transform instead.
+                // Only the dev server pre-bundles dependencies or loads modules through SSR; the
+                // nested backend builds configure their own resolution (see build-config.ts).
+                if (command !== 'serve') {
+                    backendPackages = [];
+                    return { ssr: { noExternal: [...BACKEND_RUNTIME_PACKAGES] } };
+                }
+
+                // configResolved (where context.buildRoot is set) runs after this hook, so resolve
+                // the root the same way Vite does.
+                const root = path.resolve(userConfig.root ?? process.cwd());
+                // Package roots must match the paths Vite serves, and Vite only resolves symlinks
+                // in them when preserveSymlinks is off.
+                const preserveSymlinks = userConfig.resolve?.preserveSymlinks ?? false;
+                // A package the app imports without declaring it is found through the
+                // optimizeDeps.exclude entry the README asks for, so it's configured like the rest.
+                backendPackages = findInstalledBackendFunctionPackages(
+                    root,
+                    preserveSymlinks,
+                    userConfig.optimizeDeps?.exclude ?? [],
+                );
+                // Every name an import can use: an npm alias too, or Vite would pre-bundle the
+                // aliased package. Two installed copies of a package share its name.
+                const backendPackageNames = [
+                    ...new Set(backendPackages.flatMap((pkg) => pkg.installedAs)),
+                ];
+                // Info, not debug: the package's own manifest is the whole consent, so the app's
+                // developer should see which packages it trusts to add backend functions.
+                if (backendPackageNames.length > 0) {
+                    log.info(
+                        `Packages providing backend functions, kept out of dependency pre-bundling: ${backendPackageNames.join(', ')}`,
+                    );
+                }
                 return {
-                    // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with
-                    // a plain require(), which throws "Cannot use import statement outside a
-                    // module"; ssr.noExternal forces Vite's SSR transform instead.
+                    // A package providing backend functions needs the same, so local execution
+                    // runs its real modules (and its self-referencing imports) through this plugin.
                     ssr: {
-                        noExternal: ['@datadog/apps-backend', '@datadog/action-catalog'],
+                        noExternal: [...BACKEND_RUNTIME_PACKAGES, ...backendPackageNames],
+                    },
+                    // Pre-bundling would inline a package's backend files into a browser chunk
+                    // where the transform below never sees them, shipping their real body instead
+                    // of the proxy. Excluding the package also keeps it external inside any other
+                    // pre-bundled dependency that imports it.
+                    optimizeDeps: { exclude: backendPackageNames },
+                    // A backend runtime singleton must be the app's own copy, the one the backend
+                    // entry initializes during local execution, even when a package providing
+                    // backend functions is linked from somewhere that has its own copy installed.
+                    resolve: {
+                        dedupe: [...BACKEND_RUNTIME_PACKAGES],
                     },
                 };
             },
+        },
+        configResolved(config) {
+            if (config.command === 'serve') {
+                // Mutates the resolved list: that extends Vite's default (or the user's list)
+                // without replacing it or importing vite.
+                allowPackageRoots(config.server.fs.allow, backendPackages);
+            }
         },
         // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
         configEnvironment(name, environmentOptions, { command, isPreview }) {
@@ -250,7 +356,47 @@ export const getVitePlugin = ({
             // first, short-circuiting the hook chain before this plugin ever sees it.
             order: 'pre',
             async handler(source, importer, resolveOptions) {
-                // Top-level guard (not folded into each branch) so any future branch added below
+                if (source === DEV_CLIENT_MODULE_ID) {
+                    return devServerActive && resolveOptions.ssr !== true
+                        ? DEV_CLIENT_RESOLVED_ID
+                        : null;
+                }
+
+                // In a frontend build, each client-side import of a backend function file resolves
+                // to a proxy module of its own (see load below). Under the backend file's id, the
+                // stub would keep the sourcemaps earlier transforms attached to that file, whose
+                // sourcesContent is the original source: Rolldown keeps the first map's sources
+                // whatever later transforms return. The dev server keeps serving backend modules
+                // under their own ids, where the transform below replaces them and edits to the
+                // file still reach the browser. This costs every client-side import in a build one
+                // extra resolution.
+                if (isBuild && resolveOptions.ssr !== true) {
+                    const resolved = await this.resolve(source, importer, {
+                        ...resolveOptions,
+                        skipSelf: true,
+                    });
+                    if (
+                        !resolved ||
+                        resolved.external ||
+                        !isBackendFunctionFile(
+                            resolved.id,
+                            context.buildRoot,
+                            context.bundler.outDir,
+                        )
+                    ) {
+                        return resolved;
+                    }
+                    const relativeId = path
+                        .relative(context.buildRoot, resolved.id)
+                        .split(path.sep)
+                        .join('/');
+                    const key = createHash('sha256').update(relativeId).digest('hex');
+                    frontendProxySources.set(key, resolved.id);
+                    const proxyId = `${FRONTEND_PROXY_ID_PREFIX}${key}${FRONTEND_PROXY_ID_SUFFIX}`;
+                    return { ...resolved, id: proxyId };
+                }
+
+                // Guard (not folded into each branch) so any future local-execution branch below
                 // inherits it automatically: local execution's traversal is always SSR, so without
                 // this a client-mode resolution could inherit the marker and leak real backend code.
                 if (resolveOptions.ssr !== true) {
@@ -281,28 +427,69 @@ export const getVitePlugin = ({
                     return resolved;
                 }
 
-                // Only app-local source gets a distinct local-execution identity — an SDK/package
+                // Only backend source (app code or an opted-in package's code, which is kept out of
+                // optimizeDeps) gets a distinct local-execution identity — any other SDK/package
                 // import must resolve to the same module Vite otherwise caches for it, since an
                 // unrecognized query on a node_modules id can break Vite's optimizeDeps handling.
-                if (!shouldTraverseCollectedModule(resolved.id, context.buildRoot)) {
+                // Classified without its query: an installed module's id carries Vite's `?v=`
+                // cache key once the SSR environment has a deps optimizer.
+                const resolvedPath = normalizeViteModuleId(resolved.id);
+                if (!isBackendSourceModule(resolvedPath, context.buildRoot)) {
                     return resolved;
                 }
 
                 const suffixedId = resolved.id + LOCAL_EXECUTION_LOAD_SUFFIX;
-                if (!BACKEND_FILE_RE.test(resolved.id)) {
+                if (!BACKEND_FILE_RE.test(resolvedPath)) {
                     subgraphImporters?.add(suffixedId);
                 }
                 return { ...resolved, id: suffixedId };
             },
         },
+        load: {
+            // Ahead of other plugins' load hooks, which may claim any id.
+            order: 'pre',
+            filter: { id: { include: [DEV_CLIENT_RESOLVED_RE, FRONTEND_PROXY_ID_RE] } },
+            async handler(id) {
+                if (id === DEV_CLIENT_RESOLVED_ID) {
+                    try {
+                        return await readFile(APPS_DEV_CLIENT_PATH);
+                    } catch (error: unknown) {
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        throw new Error(
+                            `Framed backend calls won't carry their bundle, the dev client didn't load: ${errorMessage}`,
+                        );
+                    }
+                }
+                // Vite < 6.3 ignores hook filters.
+                if (!FRONTEND_PROXY_ID_RE.test(id)) {
+                    return null;
+                }
+                const sourceId = frontendProxySources.get(
+                    id.slice(FRONTEND_PROXY_ID_PREFIX.length, -FRONTEND_PROXY_ID_SUFFIX.length),
+                );
+                if (sourceId === undefined) {
+                    return null;
+                }
+                // Loading the backend module runs it through the app's own pipeline and then the
+                // transform below, which registers its functions and returns the proxy stub. Only
+                // that code joins the frontend graph: nothing imports the backend module itself,
+                // so the bundler never renders it or its sourcemaps.
+                const { code } = await this.load({ id: sourceId });
+                return code;
+            },
+        },
         transform: {
-            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative exclusions.
+            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative
+            // exclusions or a package's opt-in.
             filter: { id: { include: [BACKEND_FILE_WITH_QUERY_RE] } },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
             // frontend proxy that calls executeBackendFunction at runtime.
             handler(code, id, transformOptions) {
-                const shouldTransform = shouldTransformBackendModule(
+                // A `.backend.*` name alone isn't enough: only the app's own files (outside
+                // package-manager dirs and the outDir) and those of packages that opted in become
+                // functions. Anything else stays an ordinary module.
+                const shouldTransform = isBackendFunctionFile(
                     id,
                     context.buildRoot,
                     context.bundler.outDir,
@@ -343,7 +530,7 @@ export const getVitePlugin = ({
                         // so stale entries don't persist across HMR re-transforms.
                         setBackendFunctions(normalizedId, []);
                     }
-                    return { code: '', map: null };
+                    return { code: '', map: { mappings: '' } };
                 }
 
                 const { functions, proxyCode } = buildProxyModule(
@@ -354,7 +541,10 @@ export const getVitePlugin = ({
                 setBackendFunctions(normalizedId, functions);
                 log.debug(`Generated proxy for ${normalizedId} with ${functions.length} export(s)`);
 
-                return { code: proxyCode, map: null };
+                // The stub doesn't correspond position-for-position to the code it replaces, which
+                // `map: null` would claim: the dev server would then trace it back into the
+                // original source and serve that alongside it. An empty mapping maps it to nothing.
+                return { code: proxyCode, map: { mappings: '' } };
             },
         },
         async buildStart() {
@@ -432,6 +622,7 @@ export const getVitePlugin = ({
             let backendOutDir: string | undefined;
             let backendOutputs = new Map<string, string>();
             let backendFunctions = getBackendFunctions();
+            logPackageBackendFunctions(backendFunctions, context.buildRoot, log);
             if (backendFunctions.length > 0) {
                 const result = await buildBackendFunctions(
                     bundler.build,
@@ -457,6 +648,22 @@ export const getVitePlugin = ({
                     await rm(backendOutDir);
                 }
             }
+        },
+        transformIndexHtml: {
+            // Before Vite's own HTML rewrite, which prefixes the dev client's src with the configured `base`.
+            order: 'pre',
+            handler(_html, ctx) {
+                if (!ctx.server) {
+                    return [];
+                }
+                return [
+                    {
+                        tag: 'script',
+                        attrs: { type: 'module', src: DEV_CLIENT_SRC },
+                        injectTo: 'head-prepend',
+                    },
+                ];
+            },
         },
         configureServer(server) {
             devServerActive = true;
@@ -534,8 +741,12 @@ export const getVitePlugin = ({
                 log,
                 server.config.mode,
                 isHostAllowed,
+                bundler.defaultServerConditions,
             );
-            server.middlewares.use(middleware);
+            server.middlewares.use((req, res, next) => {
+                revalidateBackendFunctionFile(req);
+                middleware(req, res, next);
+            });
         },
     };
 };

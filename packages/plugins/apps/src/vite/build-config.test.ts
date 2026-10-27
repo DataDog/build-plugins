@@ -7,9 +7,13 @@
 
 import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
-import { build } from 'vite';
+import { build, defaultServerConditions } from 'vite';
 
-import { getBaseBackendBuildConfig } from './build-config';
+import {
+    DEV_PROD_CONDITION,
+    getBaseBackendBuildConfig,
+    withProductionSettings,
+} from './build-config';
 
 describe('getBaseBackendBuildConfig', () => {
     test('bundles a backend function that imports a real Node builtin module with a working import, not a browser-external stub', async () => {
@@ -58,7 +62,7 @@ describe('getBaseBackendBuildConfig', () => {
             const code = chunk.type === 'chunk' ? chunk.code : '';
 
             // The browser-external stub has no real exports and rewrites away the import specifier.
-            expect(code).toContain("from 'node:crypto'");
+            expect(code).toMatch(/from\s*["']node:crypto["']/);
             expect(code).not.toContain('__vite-browser-external');
         } finally {
             rmSync(workingDir);
@@ -108,6 +112,8 @@ describe('getBaseBackendBuildConfig', () => {
                 ...baseConfig,
                 build: {
                     ...baseConfig.build,
+                    // The minifier's own dead-code removal would otherwise hide a tree-shaking regression.
+                    minify: false,
                     write: false,
                     rollupOptions: { ...baseConfig.build.rollupOptions, input: virtualId },
                 },
@@ -241,5 +247,35 @@ describe('getBaseBackendBuildConfig', () => {
         } finally {
             rmSync(workingDir);
         }
+    });
+});
+
+describe('withProductionSettings', () => {
+    const baseConfig = getBaseBackendBuildConfig('/project', {});
+
+    test("Should resolve Vite's default server conditions to production", () => {
+        const config = withProductionSettings(baseConfig, defaultServerConditions);
+
+        const { resolve, ...ssr } = config.ssr ?? {};
+        const conditions = resolve?.conditions;
+        const otherConditions = defaultServerConditions.filter((c) => c !== DEV_PROD_CONDITION);
+        expect(defaultServerConditions).toContain(DEV_PROD_CONDITION);
+        expect(ssr).toEqual(baseConfig.ssr);
+        const expectedConditions = expect.arrayContaining(['production', ...otherConditions]);
+        expect(conditions).toEqual(expectedConditions);
+        expect(conditions).toHaveLength(defaultServerConditions.length);
+        expect(config.define).toEqual({
+            ...baseConfig.define,
+            'import.meta.env.DEV': 'false',
+            'import.meta.env.PROD': 'true',
+        });
+        expect(config.esbuild).toEqual({ ...baseConfig.esbuild, jsxDev: false });
+    });
+
+    test("Should keep Vite's own conditions when it exports no defaults", () => {
+        const config = withProductionSettings(baseConfig, undefined);
+
+        expect(config.ssr).toEqual(baseConfig.ssr);
+        expect(config.esbuild).toEqual({ ...baseConfig.esbuild, jsxDev: false });
     });
 });

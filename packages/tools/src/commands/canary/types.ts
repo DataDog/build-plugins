@@ -59,7 +59,8 @@ export type CanaryPhase = {
     localPackages: string[];
     getArtifactSpec: (root: string, variant: CanaryVariant) => ArtifactSpec;
     getBuildCommand: (root: string, variant: CanaryVariant) => CommandSpec;
-    getValidationCommand: (root: string, variant: CanaryVariant) => CommandSpec;
+    // Targets without their own output validator can check syntax in assertArtifacts instead.
+    getValidationCommand?: (root: string, variant: CanaryVariant) => CommandSpec;
     assertBuildOutput: (result: CommandResult, variant: CanaryVariant) => void;
     assertArtifacts?: (filePaths: string[], variant: CanaryVariant) => Promise<void>;
 };
@@ -78,10 +79,28 @@ export type TargetSetupContext = {
     runCommand: RunCommand;
 };
 
+export type TargetRepository = {
+    // GitHub repository, as `owner/name`.
+    name: string;
+    // Branch whose tip the canary builds.
+    branch: string;
+    // Temporary pin used instead of the branch tip, for example while upstream is
+    // broken. Link the tracking issue in the reason.
+    pin?: {
+        commit: string;
+        reason: string;
+    };
+};
+
 export type CanaryTarget = {
     id: string;
+    repository: TargetRepository;
+    // Node.js version to use when the checkout doesn't pin one: an exact version, a
+    // major or minor version, or an nvm alias such as `lts/*`.
+    nodeVersion?: string;
     getDefaultRoot: () => string;
     getPhases: (root: string) => CanaryPhase[];
+    install: (context: TargetSetupContext) => Promise<void>;
     preflight: (context: TargetSetupContext) => Promise<void>;
     setup: (context: TargetSetupContext) => Promise<void>;
 };

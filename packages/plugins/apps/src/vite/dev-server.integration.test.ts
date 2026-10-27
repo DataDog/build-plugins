@@ -10,6 +10,7 @@
  */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
@@ -17,9 +18,10 @@ import {
     DEBUG_BUNDLE_ROUTE,
     EXECUTE_ACTION_ROUTE,
 } from '@dd/apps-plugin/vite/dev-server';
-import { getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
+import { DEV_CLIENT_SRC, getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
 import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
-import { outputFileSync, rmSync } from '@dd/core/helpers/fs';
+import * as fsHelpers from '@dd/core/helpers/fs';
+import { outputFileSync, readFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
@@ -34,11 +36,19 @@ import nock from 'nock';
 import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
-import { build, createServer, type Plugin, type ViteDevServer } from 'vite';
+import {
+    build,
+    createServer,
+    defaultServerConditions,
+    type Plugin,
+    type ViteDevServer,
+} from 'vite';
 
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
+import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
+import { DEV_VERIFY_MODE } from '../constants';
 
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 
@@ -209,6 +219,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -254,6 +265,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -293,6 +305,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -371,6 +384,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -423,6 +437,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -448,6 +463,43 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.success).toBe(true);
         expect(body.result).toEqual({ data: { ok: true } });
         expect(apiScope.isDone()).toBe(true);
+    }, 30000);
+
+    test('Should return a real bundle with the connection IDs it uses from /__dd/debugBundle as JSON', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const log = getMockLogger();
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [actionCatalogCallFunc],
+            async () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            mockLongPolling,
+            FIXTURE_ROOT,
+            log,
+            'development',
+            createViteHostCheck(server.config),
+            defaultServerConditions,
+        );
+
+        const functionName = encodeQueryName(actionCatalogCallFunc);
+        const req = createMockRequest(
+            DEBUG_BUNDLE_PATH,
+            { functionName },
+            { accept: 'application/json' },
+        );
+        const res = createMockResponse();
+
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const rawBody = res.getBody();
+        const body = JSON.parse(rawBody);
+        expect(body.allowedConnectionIds).toEqual(['conn-1']);
+        expect(body.code).toContain('conn-1');
     }, 30000);
 
     // A dynamic import sits between two static ones, so resolution must come from the AST
@@ -484,6 +536,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             getMockLogger(),
             'development',
             isHostAllowed,
+            defaultServerConditions,
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -509,9 +562,292 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     }, 30000);
 });
 
+describe('Dev Server Middleware — dev:verify bundles', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+
+    afterEach(() => {
+        nock.cleanAll();
+        if (originalNodeEnv === undefined) {
+            delete process.env.NODE_ENV;
+        } else {
+            process.env.NODE_ENV = originalNodeEnv;
+        }
+    });
+
+    // Each build runs under the NODE_ENV its real process has: `vite build` sets production, a dev
+    // server development.
+    async function buildUploadAndVerify(workingDir: string, func: BackendFunction) {
+        const log = getMockLogger();
+        process.env.NODE_ENV = 'production';
+        const upload = await buildBackendFunctions(build, [func], workingDir, log);
+        let uploadCode: string;
+        try {
+            const [uploadPath] = [...upload.outputs.values()];
+            uploadCode = readFileSync(uploadPath);
+        } finally {
+            rmSync(upload.outDir);
+        }
+
+        process.env.NODE_ENV = 'development';
+        const submitted: { script?: unknown } = {};
+        const apiScope = nock('https://api.datadoghq.com')
+            .post('/api/v2/app-builder/queries/preview-async', (body) => {
+                submitted.script = body.data.attributes.query.properties.spec.inputs.script;
+                return true;
+            })
+            .reply(200, { data: { id: 'receipt-verify-bundle' } })
+            .get('/api/v2/app-builder/queries/execution-long-polling/receipt-verify-bundle')
+            .reply(200, { data: { attributes: { done: true, outputs: { data: { ok: true } } } } });
+        const isHostAllowed = createViteHostCheck({ server: { allowedHosts: [] }, preview: {} });
+        const middleware = createDevServerMiddleware(
+            build,
+            async () => ({}),
+            () => [func],
+            async () => [],
+            { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
+            testApiKeyRequest,
+            mockLongPolling,
+            workingDir,
+            log,
+            DEV_VERIFY_MODE,
+            isHostAllowed,
+            defaultServerConditions,
+        );
+        const functionName = encodeQueryName(func);
+        const req = createMockRequest(EXECUTE_ACTION_ROUTE, { functionName, args: ['QA'] });
+        const res = createMockResponse();
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        const apiDone = apiScope.isDone();
+        return {
+            uploadCode,
+            submittedScript: submitted.script,
+            statusCode: res.statusCode,
+            apiDone,
+        };
+    }
+
+    test('Should submit the minified bytes an upload writes', async () => {
+        const seed = `dev-verify-minify-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const absolutePath = `${workingDir}/src/names.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            class BackendValidationError extends Error {}
+            const readableHelper = (value: string) => {
+                if (!value) throw new BackendValidationError('missing value');
+                return value;
+            };
+            export async function readableBackendFunction(value: string) {
+                return readableHelper(value);
+            }
+        `,
+            );
+            const namesFunc: BackendFunction = {
+                relativePath: 'src/names',
+                name: 'readableBackendFunction',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, namesFunc);
+
+            // Minified, with names kept: the unminified output spans many lines.
+            const uploadLineCount = result.uploadCode.trim().split('\n').length;
+            expect(result.statusCode).toBe(200);
+            expect(result.apiDone).toBe(true);
+            expect(result.submittedScript).toBe(result.uploadCode);
+            expect(uploadLineCount).toBeLessThan(5);
+            expect(result.uploadCode).toContain('"BackendValidationError"');
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+
+    test('Should submit the production bytes an upload writes, under the dev server NODE_ENV', async () => {
+        const seed = `dev-verify-production-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const packageDir = `${workingDir}/node_modules/dd-conditional-flavor`;
+            const packageJson = {
+                name: 'dd-conditional-flavor',
+                type: 'module',
+                exports: {
+                    '.': {
+                        development: './development.js',
+                        production: './production.js',
+                        default: './production.js',
+                    },
+                },
+            };
+            const packageJsonText = JSON.stringify(packageJson);
+            outputFileSync(`${packageDir}/package.json`, packageJsonText);
+            outputFileSync(`${packageDir}/development.js`, "export const flavor = 'dev-export';");
+            outputFileSync(`${packageDir}/production.js`, "export const flavor = 'prod-export';");
+            const absolutePath = `${workingDir}/src/flavors.backend.ts`;
+            outputFileSync(
+                absolutePath,
+                `
+            import { flavor } from 'dd-conditional-flavor';
+            export async function flavors() {
+                const viteFlavor = import.meta.env.DEV ? 'vite-dev' : 'vite-prod';
+                const prodFlavor = import.meta.env.PROD ? 'prod-true' : 'prod-false';
+                const nodeFlavor = process.env.NODE_ENV === 'production' ? 'node-prod' : 'node-dev';
+                return [flavor, viteFlavor, prodFlavor, nodeFlavor, import.meta.env.MODE];
+            }
+        `,
+            );
+            const flavorsFunc: BackendFunction = {
+                relativePath: 'src/flavors',
+                name: 'flavors',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, flavorsFunc);
+
+            expect(result.statusCode).toBe(200);
+            expect(result.apiDone).toBe(true);
+            expect(result.uploadCode).toContain('prod-export');
+            expect(result.uploadCode).not.toContain('dev-export');
+            expect(result.submittedScript).toBe(result.uploadCode);
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+
+    test('Should submit the production JSX transform an upload writes, under the dev server NODE_ENV', async () => {
+        const seed = `dev-verify-jsx-${Date.now()}`;
+        const workingDir = getTempWorkingDir(seed);
+        try {
+            const reactDir = `${workingDir}/node_modules/react`;
+            const reactPackage = {
+                name: 'react',
+                type: 'module',
+                exports: {
+                    './jsx-runtime': './jsx-runtime.js',
+                    './jsx-dev-runtime': './jsx-dev-runtime.js',
+                },
+            };
+            const reactPackageText = JSON.stringify(reactPackage);
+            outputFileSync(`${reactDir}/package.json`, reactPackageText);
+            outputFileSync(`${reactDir}/jsx-runtime.js`, 'export const jsx = (type) => type;');
+            outputFileSync(
+                `${reactDir}/jsx-dev-runtime.js`,
+                'export const jsxDEV = (type) => type;',
+            );
+            const tsconfig = { compilerOptions: { jsx: 'react-jsx' } };
+            const tsconfigText = JSON.stringify(tsconfig);
+            outputFileSync(`${workingDir}/tsconfig.json`, tsconfigText);
+            const absolutePath = `${workingDir}/src/markup.backend.tsx`;
+            outputFileSync(absolutePath, 'export async function markup() { return <section />; }');
+            const markupFunc: BackendFunction = {
+                relativePath: 'src/markup',
+                name: 'markup',
+                absolutePath,
+                allowedConnectionIds: [],
+            };
+
+            const result = await buildUploadAndVerify(workingDir, markupFunc);
+
+            expect(result.statusCode).toBe(200);
+            expect(result.uploadCode).not.toContain('jsxDEV');
+            expect(result.submittedScript).toBe(result.uploadCode);
+        } finally {
+            rmSync(workingDir);
+        }
+    }, 30000);
+});
+
 // Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
 // would race other test files that copy that whole tree in parallel.
 const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
+
+describe('Dev client module', () => {
+    const startDevServer = async (base: string, extraPlugins: Plugin[] = []) => {
+        const appsPlugin: Plugin = {
+            name: 'dd-apps-test',
+            enforce: 'post',
+            ...getVitePlugin({
+                bundler: { build },
+                context: getContextMock({ buildRoot: FIXTURE_ROOT }),
+                options: { include: [], longPolling: mockLongPolling },
+            }),
+        };
+        const devServer = await createServer({
+            configFile: false,
+            root: FIXTURE_ROOT,
+            base,
+            logLevel: 'silent',
+            server: { middlewareMode: true, hmr: false },
+            plugins: [appsPlugin, ...extraPlugins],
+            optimizeDeps: { noDiscovery: true },
+        });
+        const httpServer = http.createServer(devServer.middlewares);
+        await new Promise<void>((resolve) => {
+            httpServer.listen(0, '127.0.0.1', resolve);
+        });
+        const address = httpServer.address();
+        const port = typeof address === 'object' && address !== null ? address.port : 0;
+        const close = async () => {
+            await new Promise((resolve) => {
+                httpServer.close(resolve);
+            });
+            await devServer.close();
+        };
+        return { devServer, origin: `http://127.0.0.1:${port}`, close };
+    };
+
+    beforeEach(() => {
+        nock.enableNetConnect('127.0.0.1');
+    });
+
+    afterEach(() => {
+        nock.disableNetConnect();
+        jest.restoreAllMocks();
+    });
+
+    const bases = [
+        { description: 'at the root', base: '/' },
+        { description: 'under a base path', base: '/myapp/' },
+    ];
+
+    test.each(bases)(
+        'Should serve the dev client its page links to $description',
+        async ({ base }) => {
+            jest.spyOn(fsHelpers, 'readFile').mockResolvedValue(
+                'globalThis.devClientLoaded = true;',
+            );
+            const loadsEveryId: Plugin = {
+                name: 'loads-every-id',
+                load: () => 'export const unexpected = true;',
+            };
+            const { devServer, origin, close } = await startDevServer(base, [loadsEveryId]);
+
+            try {
+                const html = await devServer.transformIndexHtml(
+                    '/index.html',
+                    '<html><head></head><body></body></html>',
+                );
+                const devClientSrc = path.posix.join(base, DEV_CLIENT_SRC);
+                const devClientUrl = `${origin}${devClientSrc}`;
+                const response = await fetch(devClientUrl);
+                const devClient = await response.text();
+
+                expect(html).toContain(`<script type="module" src="${devClientSrc}"></script>`);
+                expect(response.status).toBe(200);
+                expect(devClient).toContain('devClientLoaded');
+            } finally {
+                await close();
+            }
+        },
+        30000,
+    );
+});
 
 describe('Dev Server Middleware — editing files between local executions', () => {
     let editRoot: string | undefined;
