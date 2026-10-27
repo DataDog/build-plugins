@@ -31,6 +31,7 @@ import chalk from 'chalk';
 
 import { validateOptions } from './validate';
 import { getContext } from './helpers/context';
+import { getUnsupportedViteWarning } from './helpers/vite-version';
 import { wrapGetPlugins } from './helpers/wrapPlugins';
 import { ALL_ENVS, HOST_NAME } from '@dd/core/constants';
 import { notifyOnEnvOverrides } from '@dd/core/helpers/env';
@@ -135,6 +136,12 @@ export const buildPluginFactory = ({
 
         const log = context.getLogger('factory');
         const timeInit = log.time('Plugins initialization', { start: pluginStart });
+
+        const viteWarning =
+            bundlerName === 'vite' ? getUnsupportedViteWarning(bundlerVersion) : undefined;
+        if (viteWarning) {
+            log.warn(viteWarning);
+        }
 
         context.pluginNames.push(HOST_NAME);
 
