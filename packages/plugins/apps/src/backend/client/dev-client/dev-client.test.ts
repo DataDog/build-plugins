@@ -651,6 +651,44 @@ describe('dev client', () => {
         expect(message).toHaveProperty('bundle', BUNDLE);
     });
 
+    test('Should forward the action list with the bundle', async () => {
+        const { posted, reply } = installFakeWindow();
+        const actions = [{ fqn: 'com.datadoghq.http.request', connectionIds: ['conn-1'] }];
+        mockFetchResponse({ ok: true, json: async () => ({ ...BUNDLE, actions }) });
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const message = await posted;
+        reply(message.requestId, 'ok');
+        await result;
+
+        expect(message).toHaveProperty('bundle', { ...BUNDLE, actions });
+    });
+
+    const malformedActionLists = [
+        { description: 'not a list', actions: { fqn: 'com.datadoghq.http.request' } },
+        { description: 'an action without an fqn', actions: [{ connectionIds: [] }] },
+        {
+            description: 'non-string connection IDs',
+            actions: [{ fqn: 'com.datadoghq.http.request', connectionIds: [1] }],
+        },
+    ];
+
+    test.each(malformedActionLists)(
+        'Should forward the bundle without its action list when that list is $description',
+        async ({ actions }) => {
+            const { posted, reply } = installFakeWindow();
+            mockFetchResponse({ ok: true, json: async () => ({ ...BUNDLE, actions }) });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+            await result;
+
+            expect(message).toHaveProperty('bundle', BUNDLE);
+            expect(warn).not.toHaveBeenCalled();
+        },
+    );
+
     const failureCases = [
         {
             description: 'the fetch rejects',

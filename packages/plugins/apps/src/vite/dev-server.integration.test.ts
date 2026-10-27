@@ -121,6 +121,13 @@ const mixedImportsFunc: BackendFunction = {
     allowedConnectionIds: [],
 };
 
+const twoActionsFunc: BackendFunction = {
+    relativePath: 'twoActions',
+    name: 'fetchAndNotify',
+    absolutePath: path.join(FIXTURE_ROOT, 'twoActions.backend.ts'),
+    allowedConnectionIds: [],
+};
+
 const previewRuntimeContext = {
     Source: {
         initiator: { id: 'preview-initiator', orgId: 'preview-org' },
@@ -500,6 +507,47 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const body = JSON.parse(rawBody);
         expect(body.allowedConnectionIds).toEqual(['conn-1']);
         expect(body.code).toContain('conn-1');
+    }, 30000);
+
+    test('Should list the actions a real backend file calls, with their connection IDs, from /__dd/debugBundle as JSON', async () => {
+        const loadModule = server.ssrLoadModule.bind(server);
+        const isHostAllowed = createViteHostCheck(server.config);
+        const logger = getMockLogger();
+        const middleware = createDevServerMiddleware(
+            build,
+            loadModule,
+            () => [twoActionsFunc],
+            async () => [],
+            { site: 'datadoghq.com' },
+            undefined,
+            mockLongPolling,
+            FIXTURE_ROOT,
+            logger,
+            'development',
+            isHostAllowed,
+            defaultServerConditions,
+        );
+
+        const functionName = encodeQueryName(twoActionsFunc);
+        const req = createMockRequest(
+            DEBUG_BUNDLE_PATH,
+            { functionName },
+            { accept: 'application/json' },
+        );
+        const res = createMockResponse();
+
+        const next = jest.fn();
+        middleware(req, res, next);
+        await res.done;
+
+        expect(res.statusCode).toBe(200);
+        const rawBody = res.getBody();
+        const body = JSON.parse(rawBody);
+        expect(body.allowedConnectionIds).toEqual(['conn-1', 'conn-http']);
+        expect(body.actions).toEqual([
+            { fqn: 'com.datadoghq.http.request', connectionIds: ['conn-http'] },
+            { fqn: 'com.datadoghq.slack.chat.postMessage', connectionIds: ['conn-1'] },
+        ]);
     }, 30000);
 
     // A dynamic import sits between two static ones, so resolution must come from the AST
