@@ -6,6 +6,7 @@ import type {
     DebugBundleResponse,
     ExecuteActionResponse,
     RUN_QUERY,
+    RUN_QUERY_KEEPALIVE,
     RUN_QUERY_RESPONSE,
 } from '../../../protocol';
 
@@ -24,3 +25,9 @@ export type IframeQueryResponse<TData = unknown> = {
     type: typeof RUN_QUERY_RESPONSE;
     requestId: string;
 } & ExecuteActionResponse<TData>;
+
+// Keepalive: parent → iframe, re-arms a pending request's timeout, e.g. while a consent dialog is open.
+export type IframeQueryKeepAlive = {
+    type: typeof RUN_QUERY_KEEPALIVE;
+    requestId: string;
+};
