@@ -97,7 +97,6 @@ The Live Debugger plugin automatically instruments all JavaScript functions in y
 Each instrumented function gets:
 - A unique, stable function ID (format: `<file-path>;<function-name>`)
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
-- Deferred parameter-capture helpers (`$dd_e<N>`)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
@@ -121,7 +120,7 @@ function add(a, b) {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
         return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
 }
 ```
 
@@ -326,7 +325,7 @@ function add(a, b) {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
 }
 ```
 

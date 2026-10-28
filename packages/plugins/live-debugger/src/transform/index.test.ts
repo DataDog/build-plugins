@@ -238,10 +238,10 @@ describe('transformCode', () => {
             expect(result.code).toContain('super(items.map((x) => {');
             expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, {x})');
             expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, $dd_t, {x})');
-            expect(result.code).toContain('$dd_throw($dd_p0, e, $dd_t, {x})');
+            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, $dd_t, {x})');
             expect(result.code).not.toContain('$dd_entry($dd_p0, this');
             expect(result.code).not.toContain('$dd_return($dd_p0, $dd_rv0, this');
-            expect(result.code).not.toContain('$dd_throw($dd_p0, e, this');
+            expect(result.code).not.toContain('$dd_throw($dd_p0, $dd_e, this');
         });
 
         it('should handle arrow expression bodies that are super calls', () => {
@@ -450,7 +450,7 @@ describe('transformCode', () => {
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
                 expect(probeMatches?.length).toBe(expectedInstrumentedCount);
                 expect(result.code).toContain('$dd_return');
-                expect(result.code).toContain('catch(e)');
+                expect(result.code).toContain('catch($dd_e)');
             },
         );
     });
@@ -480,7 +480,7 @@ describe('transformCode', () => {
                 expect(result.instrumentedCount).toBe(1);
                 expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
                 expect(result.code).toContain('$dd_return');
-                expect(result.code).toContain('catch(e)');
+                expect(result.code).toContain('catch($dd_e)');
             },
         );
     });
@@ -599,7 +599,7 @@ describe('transformCode', () => {
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
                 expect(result.code).toContain('$dd_probes');
-                expect(result.code).toContain('catch(e)');
+                expect(result.code).toContain('catch($dd_e)');
             },
         );
     });
@@ -646,7 +646,7 @@ describe('transformCode', () => {
                 expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
-                expect(result.code).toContain('catch(e)');
+                expect(result.code).toContain('catch($dd_e)');
             },
         );
     });
@@ -698,7 +698,7 @@ describe('transformCode', () => {
             expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
             expect(parseError(result.code, LEGACY_PLUGINS)).toBeNull();
             expect(result.code).toContain('$dd_probes');
-            expect(result.code).toContain('catch(e)');
+            expect(result.code).toContain('catch($dd_e)');
         });
 
         it('parses and instruments modern decorators when decorators is "modern"', () => {
@@ -711,7 +711,7 @@ describe('transformCode', () => {
             expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
             expect(parseError(result.code, MODERN_PLUGINS)).toBeNull();
             expect(result.code).toContain('$dd_probes');
-            expect(result.code).toContain('catch(e)');
+            expect(result.code).toContain('catch($dd_e)');
         });
 
         it('cannot parse legacy parameter decorators under modern mode', () => {
@@ -811,8 +811,8 @@ describe('transformCode', () => {
             });
 
             expect(result.code).toContain('try {');
-            expect(result.code).toContain('catch(e)');
-            expect(result.code).toContain('throw e;');
+            expect(result.code).toContain('catch($dd_e)');
+            expect(result.code).toContain('throw $dd_e;');
         });
     });
 
@@ -1400,7 +1400,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1418,7 +1418,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1436,7 +1436,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1454,7 +1454,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1472,7 +1472,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {flag}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {flag}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1491,7 +1491,7 @@ describe('transformCode', () => {
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, undefined, {a});',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1512,7 +1512,7 @@ describe('transformCode', () => {
                     '    const $dd_rv0 = x * 2;',
                     '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '};',
                 ),
             );
@@ -1533,7 +1533,7 @@ describe('transformCode', () => {
                     '    const $dd_rv0 = {key: x};',
                     '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
                     '    return $dd_rv0;',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '};',
                 ),
             );
@@ -1564,7 +1564,7 @@ describe('transformCode', () => {
                     '        const $dd_rv0 = x * 2;',
                     '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});',
                     '        return $dd_rv0;',
-                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t, {x}); throw e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t, {x}); throw $dd_e; }',
                     '    })));',
                     '  }',
                     '}',
@@ -1598,7 +1598,7 @@ describe('transformCode', () => {
                     '        const $dd_rv0 = ($dd_t = super(args));',
                     '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);',
                     '        return $dd_rv0;',
-                    '      } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, $dd_t); throw e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t); throw $dd_e; }',
                     '    };',
                     '    init();',
                     '  }',
@@ -1620,7 +1620,7 @@ describe('transformCode', () => {
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {msg}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {msg}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1638,7 +1638,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1657,7 +1657,7 @@ describe('transformCode', () => {
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1676,7 +1676,7 @@ describe('transformCode', () => {
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
                     '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1708,7 +1708,7 @@ describe('transformCode', () => {
                     '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
                     '    }',
                     '',
-                    '  } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {x}); throw e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
                     '}',
                 ),
             );
