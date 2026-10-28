@@ -217,6 +217,31 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
+        test.each([undefined, false])(
+            'Should not replay a POST when retryFetchErrors is %s',
+            async (retryFetchErrors) => {
+                const { doRequest } = await import('@dd/core/helpers/request');
+                const error = new TypeError('fetch failed', {
+                    cause: Object.assign(new Error('socket closed'), { code: 'ECONNRESET' }),
+                });
+                const fetchImpl = jest.fn().mockRejectedValue(error);
+                const onRetry = jest.fn();
+
+                await expect(
+                    doRequest({
+                        ...requestOpts,
+                        retryFetchErrors,
+                        fetchImpl,
+                        onRetry,
+                        minTimeout: 1,
+                        maxTimeout: 1,
+                    }),
+                ).rejects.toBe(error);
+                expect(fetchImpl).toHaveBeenCalledTimes(1);
+                expect(onRetry).not.toHaveBeenCalled();
+            },
+        );
+
         test.each(['ECONNRESET', 'EPIPE', 'UNKNOWN_NETWORK_CODE'])(
             'Should recover from fetch network error %s',
             async (code) => {
@@ -234,6 +259,7 @@ describe('Request Helpers', () => {
                 const response = await doRequest({
                     ...requestOpts,
                     retries: 2,
+                    retryFetchErrors: true,
                     minTimeout: 1,
                     maxTimeout: 5,
                     onRetry: onRetryMock,
@@ -258,6 +284,7 @@ describe('Request Helpers', () => {
                 await expect(
                     doRequest({
                         url: API_URL,
+                        retryFetchErrors: true,
                         fetchImpl,
                         onRetry,
                         minTimeout: 1,
@@ -293,6 +320,7 @@ describe('Request Helpers', () => {
                     url: API_URL,
                     fetchImpl,
                     onRetry,
+                    retryFetchErrors: true,
                     retries: 2,
                     minTimeout: 1,
                     maxTimeout: 1,
@@ -312,6 +340,7 @@ describe('Request Helpers', () => {
             await expect(
                 doRequest({
                     url: API_URL,
+                    retryFetchErrors: true,
                     getData,
                     fetchImpl,
                     onRetry,
@@ -338,6 +367,7 @@ describe('Request Helpers', () => {
                 doRequest({
                     ...requestOpts,
                     retries: 3,
+                    retryFetchErrors: true,
                     signal: controller.signal,
                     onRetry: onRetryMock,
                     fetchImpl,

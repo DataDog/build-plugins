@@ -117,6 +117,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         onResponse,
         signal,
         fetchImpl = fetch,
+        retryFetchErrors = false,
     } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
@@ -171,10 +172,10 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         try {
             response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
         } catch (error: any) {
-            if (isRetriableFetchError(error, signal)) {
+            if (retryFetchErrors && isRetriableFetchError(error, signal)) {
                 throw error;
             }
-            // Respect cancellation rather than retrying an aborted request.
+            // Preserve immediate failure unless retries are opted into; respect cancellation.
             bail(error);
             // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
