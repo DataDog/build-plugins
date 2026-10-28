@@ -6,18 +6,14 @@ import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 
 import type { ModuleScopeAnalysis } from './module-scope';
-import { rejectNodeBuiltinImports } from './reject-node-builtin-imports';
-import { rejectRestrictedGlobals } from './reject-restricted-globals';
-import { warnAboutDivergentGlobals } from './warn-divergent-globals';
+import { rejectGlobalsMissingFromNode } from './reject-globals-missing-from-node';
 
-/** Runs every static check (banned Node built-ins, restricted globals, divergent-global warnings) against a single module; shared by index.ts and backend-static-checks-plugin.ts so the two call sites can't drift. */
+/** Runs every static check against a single module; shared by every call site so the checks can't drift. */
 export function runBackendStaticChecks(
     ast: BaseNode,
     filePath: string,
     log: Logger,
     scopeAnalysis: ModuleScopeAnalysis,
 ): void {
-    rejectNodeBuiltinImports(ast, filePath);
-    rejectRestrictedGlobals(ast, filePath, scopeAnalysis);
-    warnAboutDivergentGlobals(ast, filePath, log, scopeAnalysis);
+    rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
 }

@@ -22,6 +22,7 @@ import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 
+import { UNRESTRICTED_LOCAL_EXECUTION_WARNING } from './local-execution-limits';
 import type { ChildStartConfig, ParentMessage } from './local-execution-protocol';
 import {
     collectReadPaths,
@@ -250,7 +251,7 @@ function isActionMessage(message: Record<string, unknown>): message is Record<st
 
 interface ChildRun {
     func: BackendFunction;
-    config: Omit<ChildStartConfig, 'installGuards'>;
+    config: ChildStartConfig;
     allowedConnectionIds: string[];
     executeAction: ExecuteAction;
     timeoutMs: number;
@@ -297,6 +298,7 @@ export function createChildProcessExecutor(
     const [realModuleRunnerPath = moduleRunnerPath] = withRealPath(moduleRunnerPath).slice(-1);
     const moduleRunnerUrl = pathToFileURL(realModuleRunnerPath).href;
     let callCount = 0;
+    let warnedUnrestricted = false;
 
     const ownChildren: ChildTmpDirs = new Map();
     let closed = false;
@@ -355,6 +357,10 @@ export function createChildProcessExecutor(
         } catch (error) {
             rmSync(tmpDir);
             throw error;
+        }
+        if (!sandboxArgv && !warnedUnrestricted) {
+            warnedUnrestricted = true;
+            log.warn(UNRESTRICTED_LOCAL_EXECUTION_WARNING);
         }
         log.debug(
             `Executing "${func.name}" in a child process (pid ${child.pid}, temp dir ${tmpDir}) with args`,
@@ -613,10 +619,7 @@ export function createChildProcessExecutor(
             });
 
             startLoadTimer();
-            reply({
-                type: 'start',
-                config: { ...config, installGuards: sandboxArgv === undefined },
-            });
+            reply({ type: 'start', config });
         });
     };
 

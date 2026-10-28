@@ -56,7 +56,6 @@
         "@types/node": "^20",
         "@types/picomatch": "4.0.2",
         "@types/semver": "7.5.8",
-        "graceful-fs": "4.2.11",
         "rollup": "4.60.4",
         "typescript": "5.4.3",
         "vite": "6.4.3"
