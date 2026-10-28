@@ -461,25 +461,34 @@ describe('Request Helpers', () => {
     });
 
     describe('isRetriableFetchError', () => {
-        test.each([
-            'ECONNRESET',
-            'EPIPE',
-            'ETIMEDOUT',
-            'ECONNREFUSED',
-            'ECONNABORTED',
-            'EHOSTUNREACH',
-            'ENETUNREACH',
-            'EAI_AGAIN',
-            'UND_ERR_SOCKET',
-            'UND_ERR_CONNECT_TIMEOUT',
-            'UND_ERR_HEADERS_TIMEOUT',
-            'UND_ERR_BODY_TIMEOUT',
-            'UND_ERR_CLOSED',
-        ])('accepts transient code %s directly or as a cause', async (code) => {
+        test.each([null, undefined, 'fetch failed', 42, false])(
+            'rejects non-object errors: %p',
+            async (error) => {
+                const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+                expect(isRetriableFetchError(error)).toBe(false);
+            },
+        );
+
+        test.each(['AbortError', 'TimeoutError'])('rejects %s without a signal', async (name) => {
             const { isRetriableFetchError } = await import('@dd/core/helpers/request');
-            const error = Object.assign(new Error('network failure'), { code });
+            expect(isRetriableFetchError({ name })).toBe(false);
+        });
+
+        test('rejects errors when the signal is aborted', async () => {
+            const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+            const controller = new AbortController();
+            controller.abort();
+            expect(isRetriableFetchError(new Error('fetch failed'), controller.signal)).toBe(false);
+        });
+
+        test.each([
+            {},
+            new Error('fetch failed'),
+            { code: 'UNKNOWN_CODE' },
+            { cause: { code: 'UNKNOWN_CODE' } },
+        ])('accepts non-cancellation objects regardless of error code: %p', async (error) => {
+            const { isRetriableFetchError } = await import('@dd/core/helpers/request');
             expect(isRetriableFetchError(error)).toBe(true);
-            expect(isRetriableFetchError(new Error('wrapped', { cause: error }))).toBe(true);
         });
     });
 
