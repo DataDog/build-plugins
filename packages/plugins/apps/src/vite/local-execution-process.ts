@@ -2,14 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/** Runs each local backend function call in a fresh Node child process, the way production gives each call its own process. */
+/** Runs each local backend function call in a fresh, sandboxed Node child process, the way production gives each call its own process. */
 
 import { readJsonSync, rm, rmSync } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { type ChildProcess, fork } from 'node:child_process';
 import fs from 'node:fs';
 import inspector from 'node:inspector';
-import { createRequire } from 'node:module';
+import nodeModule, { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
@@ -23,6 +23,13 @@ import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 
 import type { ChildStartConfig, ParentMessage } from './local-execution-protocol';
+import {
+    collectReadPaths,
+    createModuleLoadGuard,
+    permissionModelArgv,
+    sharedTmpPaths,
+    withRealPath,
+} from './local-execution-sandbox';
 import { describeError, isIndexableRecord, validateActionCall } from './local-execution-shared';
 import type { ExecuteAction, GetRuntimeContext } from './local-execution';
 import {
@@ -63,8 +70,18 @@ export interface ChildProcessExecutorOptions {
     projectRoot: string;
     childEntryPath: string;
     moduleRunnerPath: string | undefined;
+    /** Extra folders a call may read, such as Vite's `server.fs.allow`, which covers a monorepo's packages. */
+    readRoots: string[];
+    /** Vite's `server.fs.deny` globs, which no module load may read. */
+    denyPatterns: string[];
+    /** False when Vite's `server.fs.strict` is off, so module loads aren't limited to the readable folders. */
+    restrictModuleLoads: boolean;
+    /** Vite's SSR resolver, which tells which file a module request would read before Vite reads it. */
+    resolveModule: (url: string, importer: string | undefined) => Promise<string | undefined>;
     log: Logger;
     writeOutput?: (stream: OutputStream, line: string) => void;
+    nodeFlags?: ReadonlySet<string>;
+    hasRegisterHooks?: boolean;
     isInspectorActive?: () => boolean;
     /** How long a finished call waits for its output to flush before returning anyway. */
     flushTimeoutMs?: number;
@@ -127,6 +144,8 @@ export const YARN_PNP_UNSUPPORTED_MESSAGE =
 
 export const MODULE_RUNNER_UNRESOLVED_MESSAGE =
     "Local execution of backend functions couldn't resolve vite/module-runner from the project's Vite.";
+
+export const IMPORT_META_RESOLVE_UNAVAILABLE_MESSAGE = `Local execution on Node.js ${process.versions.node} can't provide \`import.meta.resolve\` inside the sandbox; production runs Node 24. Upgrade to Node 22.15+ to match it.`;
 
 /** Vite's module runner from the project's own Vite, which serves it modules over `handleInvoke`. */
 export function resolveViteModuleRunner(projectRoot: string): string | undefined {
@@ -227,7 +246,7 @@ function isActionMessage(message: Record<string, unknown>): message is Record<st
 
 interface ChildRun {
     func: BackendFunction;
-    config: ChildStartConfig;
+    config: Omit<ChildStartConfig, 'installGuards'>;
     allowedConnectionIds: string[];
     executeAction: ExecuteAction;
     timeoutMs: number;
@@ -242,8 +261,14 @@ export function createChildProcessExecutor(
         projectRoot,
         childEntryPath,
         moduleRunnerPath,
+        readRoots,
+        denyPatterns,
+        restrictModuleLoads,
+        resolveModule,
         log,
         writeOutput = writeToTerminal,
+        nodeFlags = process.allowedNodeEnvironmentFlags,
+        hasRegisterHooks = 'registerHooks' in nodeModule,
         isInspectorActive = isDebuggerAttached,
         flushTimeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
     } = options;
@@ -262,10 +287,14 @@ export function createChildProcessExecutor(
     if (moduleRunnerPath === undefined) {
         return unavailable(MODULE_RUNNER_UNRESOLVED_MESSAGE);
     }
-    const moduleRunnerUrl = pathToFileURL(moduleRunnerPath).href;
+    // Node checks read access on each linked part of a path it loads, such as macOS's /var.
+    const [realChildEntryPath = childEntryPath] = withRealPath(childEntryPath).slice(-1);
+    const [realModuleRunnerPath = moduleRunnerPath] = withRealPath(moduleRunnerPath).slice(-1);
+    const moduleRunnerUrl = pathToFileURL(realModuleRunnerPath).href;
 
     const ownChildren: ChildTmpDirs = new Map();
     let closed = false;
+    let warnedImportMetaResolve = false;
     const refuseIfClosed = (func: BackendFunction) => {
         if (closed) {
             throw new Error(
@@ -286,14 +315,30 @@ export function createChildProcessExecutor(
         const createdTmpDir = fs.mkdtempSync(tmpPrefix);
         const tmpDir = fs.realpathSync.native(createdTmpDir);
         const inspect = isInspectorActive();
-        const execArgv = [`--max-old-space-size=${CHILD_MAX_OLD_SPACE_MB}`];
-        if (inspect) {
-            execArgv.push('--inspect=127.0.0.1:0');
-        }
         const env = buildChildEnv(tmpDir);
         let child: ChildProcess;
+        let readPaths: string[];
+        let sandboxArgv: string[] | undefined;
         try {
-            child = fork(childEntryPath, [], {
+            readPaths = collectReadPaths(projectRoot, childEntryPath, moduleRunnerPath, readRoots);
+            sandboxArgv = permissionModelArgv({
+                readPaths,
+                writePaths: [tmpDir, ...sharedTmpPaths()],
+                nodeFlags,
+                inspect,
+            });
+            if (sandboxArgv && !hasRegisterHooks && !warnedImportMetaResolve) {
+                warnedImportMetaResolve = true;
+                log.warn(IMPORT_META_RESOLVE_UNAVAILABLE_MESSAGE);
+            }
+            const execArgv = [
+                `--max-old-space-size=${CHILD_MAX_OLD_SPACE_MB}`,
+                ...(sandboxArgv ?? []),
+            ];
+            if (inspect) {
+                execArgv.push('--inspect=127.0.0.1:0');
+            }
+            child = fork(realChildEntryPath, [], {
                 // Not the project, so a dependency loading `.env` from the working directory finds none.
                 cwd: tmpDir,
                 env,
@@ -323,6 +368,13 @@ export function createChildProcessExecutor(
         }
 
         const resolutionScope = new Set<string>();
+        const inResolutionScope = <T>(work: () => T): T =>
+            localExecutionResolutionContext.run(resolutionScope, work);
+        const moduleLoadGuard = createModuleLoadGuard({
+            readPaths: restrictModuleLoads ? readPaths : undefined,
+            denyPatterns,
+            resolveModule: (url, importer) => inResolutionScope(() => resolveModule(url, importer)),
+        });
         return new Promise<BackendOutputs>((resolve, reject) => {
             let settled = false;
             let loaded = false;
@@ -400,10 +452,15 @@ export function createChildProcessExecutor(
                 }
             };
 
-            const inResolutionScope = <T>(work: () => T): T =>
-                localExecutionResolutionContext.run(resolutionScope, work);
-
             const onInvoke = async (id: number, request: InvokeRequest) => {
+                const [url, importer] = request.args;
+                if (request.name === 'fetchModule' && typeof url === 'string') {
+                    const refusal = await moduleLoadGuard.refusalBeforeLoad(url, importer);
+                    if (refusal) {
+                        reply({ type: 'invoke-result', id, response: refusal });
+                        return;
+                    }
+                }
                 const hotPayload: HotPayload = {
                     type: 'custom',
                     event: 'vite:invoke',
@@ -412,7 +469,8 @@ export function createChildProcessExecutor(
                 const response = await inResolutionScope(() =>
                     invokeChannel.handleInvoke(hotPayload),
                 );
-                reply({ type: 'invoke-result', id, response });
+                const checkedResponse = moduleLoadGuard.checkResponse(response);
+                reply({ type: 'invoke-result', id, response: checkedResponse });
             };
 
             const onAction = async (
@@ -537,7 +595,10 @@ export function createChildProcessExecutor(
             });
 
             startLoadTimer();
-            reply({ type: 'start', config });
+            reply({
+                type: 'start',
+                config: { ...config, installGuards: sandboxArgv === undefined },
+            });
         });
     };
 
