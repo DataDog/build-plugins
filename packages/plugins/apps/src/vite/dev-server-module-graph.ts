@@ -7,8 +7,7 @@
 import { readFile } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import { transform } from 'esbuild';
-import path from 'path';
-import type { EnvironmentModuleNode, ModuleNode, parseAst, ViteDevServer } from 'vite';
+import type { ModuleNode, parseAst, ViteDevServer } from 'vite';
 
 import {
     createParsedModuleRecord,
@@ -17,12 +16,7 @@ import {
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
 import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
-import {
-    getBackendModuleOwner,
-    isBackendSourceModule,
-    isOutsideRoot,
-    isPackageManagerModule,
-} from '../backend/backend-sources';
+import { isBackendSourceModule } from '../backend/backend-sources';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
 import { normalizeViteModuleId } from './backend-module-graph-collector';
@@ -30,8 +24,8 @@ import { normalizeViteModuleId } from './backend-module-graph-collector';
 /**
  * Rebuilds `createBackendModuleGraphCollector`'s `ParsedModuleRecord` map for the dev server
  * (no `moduleParsed` hook here), re-parsing each module from disk via `esbuild.transform`.
- * Primes each node via `transformRequest` (resolve + transform, never executes) before running
- * static checks, so a module can't dodge them by having `ssrLoadModule` already run its code.
+ * Primes each node via `transformRequest` (resolve + transform, never executes), so its imports
+ * are known and checked before a call's process runs any of its code.
  */
 export async function collectModuleGraphFromServer(
     server: ViteDevServer,
@@ -41,74 +35,8 @@ export async function collectModuleGraphFromServer(
     parse: typeof parseAst,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
-    const staleAppModules = trackStaleAppModules(server, buildRoot);
-    try {
-        await walkModuleGraph(
-            server,
-            bareEntryId,
-            buildRoot,
-            log,
-            parse,
-            records,
-            staleAppModules.record,
-        );
-    } finally {
-        staleAppModules.uncache();
-    }
+    await walkModuleGraph(server, bareEntryId, buildRoot, log, parse, records);
     return records;
-}
-
-// Priming refills an edited module's transformResult, which Vite 6+'s SSR runner reads as "cached
-// evaluation still current", so each stale module the walk primes is un-cached again after it.
-function trackStaleAppModules(server: ViteDevServer, buildRoot: string) {
-    // Vite 5 has no environment graph; its ssrLoadModule reads ssrModule, which priming never sets.
-    const ssrGraph = server.environments?.ssr?.moduleGraph;
-    if (!ssrGraph) {
-        return { record: () => {}, uncache: () => {} };
-    }
-    const isStale = (node: EnvironmentModuleNode) => {
-        // Untransformed and never invalidated means never run, so there's no stale evaluation.
-        const wasInvalidated = node.lastInvalidationTimestamp || node.lastHMRTimestamp;
-        if (!node.id || node.transformResult || !wasInvalidated) {
-            return false;
-        }
-        // Package dependencies stay cached: re-running an SDK would drop its once-per-server setup.
-        // Relative to the root so an app under node_modules still counts; outside it, the full path
-        // decides, so a hoisted sibling package isn't mistaken for app code.
-        const moduleId = normalizeDevServerModuleId(node.id);
-        const relativePath = path.relative(buildRoot, moduleId);
-        // Vite ids always use forward slashes; path.normalize gives the platform separator.
-        const pathToClassify = isOutsideRoot(relativePath)
-            ? path.normalize(moduleId)
-            : relativePath;
-        // A package that provides backend functions is backend code like the app's, so its edited
-        // modules re-run too, even when it's installed under node_modules.
-        return (
-            !isPackageManagerModule(pathToClassify) ||
-            getBackendModuleOwner(moduleId, buildRoot).kind === 'backend-package'
-        );
-    };
-    // Scanned upfront too: another plugin's transform hook can pre-transform its imports and
-    // refill a stale module before the walk reaches it.
-    const staleBeforeWalk = new Set<EnvironmentModuleNode>();
-    ssrGraph.idToModuleMap.forEach((node) => {
-        if (isStale(node)) {
-            staleBeforeWalk.add(node);
-        }
-    });
-    const primedStaleModules = new Set<EnvironmentModuleNode>();
-    return {
-        // Checked again right before priming, to catch a file saved mid-walk.
-        record: (id: string) => {
-            const node = ssrGraph.getModuleById(id);
-            if (node && (staleBeforeWalk.has(node) || isStale(node))) {
-                primedStaleModules.add(node);
-            }
-        },
-        // Reverts only the priming: invalidateModule would also re-run importers that are current.
-        uncache: () =>
-            primedStaleModules.forEach((node) => ssrGraph.updateModuleTransformResult(node, null)),
-    };
 }
 
 async function walkModuleGraph(
@@ -118,12 +46,10 @@ async function walkModuleGraph(
     log: Logger,
     parse: typeof parseAst,
     records: Map<string, ParsedModuleRecord>,
-    beforePrime: (id: string) => void,
 ): Promise<void> {
     const visited = new Set<string>();
     const pending: ModuleNode[] = [];
     const prime = async (id: string) => {
-        beforePrime(id);
         await server.transformRequest(id, { ssr: true });
     };
 

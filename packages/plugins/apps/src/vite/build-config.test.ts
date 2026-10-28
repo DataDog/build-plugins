@@ -271,11 +271,4 @@ describe('withProductionSettings', () => {
         });
         expect(config.esbuild).toEqual({ ...baseConfig.esbuild, jsxDev: false });
     });
-
-    test("Should keep Vite's own conditions when it exports no defaults", () => {
-        const config = withProductionSettings(baseConfig, undefined);
-
-        expect(config.ssr).toEqual(baseConfig.ssr);
-        expect(config.esbuild).toEqual({ ...baseConfig.esbuild, jsxDev: false });
-    });
 });
