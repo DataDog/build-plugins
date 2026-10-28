@@ -4,8 +4,10 @@
 
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
+    ALLOWED_HOSTS_HINT,
     checkDevServerRequest,
     createViteHostCheck,
+    getRequestHost,
     MISSING_HOST_MESSAGE,
 } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import type { IncomingHttpHeaders } from 'http';
@@ -373,6 +375,25 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         expect(rejection?.message).toContain('"[fe80::zz]"');
     });
 
+    test("Should escape a Host's non-ASCII characters in the rejection message", () => {
+        const rejection = checkDevServerRequest(
+            { host: 'evil\u009b2J\u0085.example:5173', 'content-type': json },
+            isHostAllowed,
+        );
+
+        expect(rejection?.message).toContain('"evil\\u009b2J\\u0085.example"');
+        expect(rejection?.message).toMatch(/^[\x20-\x7e]*$/);
+    });
+
+    test('Should end a refused-host message with the allowedHosts hint', () => {
+        const rejection = checkDevServerRequest(
+            { host: 'tunnel.example:5173', 'content-type': json },
+            isHostAllowed,
+        );
+
+        expect(rejection?.message.split(ALLOWED_HOSTS_HINT)[1]).toBe('');
+    });
+
     test('Should treat an empty Host header as missing, even under a "." allowedHosts entry', () => {
         const dotConfig = withServer({ allowedHosts: ['.'] });
         const allowDot = createViteHostCheck(dotConfig);
@@ -390,5 +411,30 @@ describe('dev-server-request-guard — checkDevServerRequest', () => {
         );
 
         expect(rejection?.statusCode).toBe(403);
+    });
+});
+
+describe('dev-server-request-guard — getRequestHost', () => {
+    const cases: { description: string; headers: IncomingHttpHeaders; expected?: string }[] = [
+        {
+            description: 'read Host',
+            headers: { host: 'localhost:5173' },
+            expected: 'localhost:5173',
+        },
+        {
+            description: 'read :authority from an HTTP/2 request',
+            headers: { ':authority': 'localhost:5173' },
+            expected: 'localhost:5173',
+        },
+        {
+            description: 'prefer Host over :authority',
+            headers: { host: 'a.localhost', ':authority': 'b.localhost' },
+            expected: 'a.localhost',
+        },
+        { description: 'return nothing without either', headers: {}, expected: undefined },
+    ];
+
+    test.each(cases)('Should $description', ({ headers, expected }) => {
+        expect(getRequestHost(headers)).toBe(expected);
     });
 });

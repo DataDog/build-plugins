@@ -39,6 +39,7 @@
         "./*": "./src/*.ts"
     },
     "scripts": {
+        "check-app-csp-drift": "node ./scripts/check-app-csp-drift.js",
         "typecheck": "tsc -b tsconfig.client.json --emitDeclarationOnly && tsc --noEmit"
     },
     "dependencies": {

@@ -15,6 +15,9 @@ export interface HostCheckConfig {
 
 export const MISSING_HOST_MESSAGE = 'Blocked request with no Host header.';
 
+export const ALLOWED_HOSTS_HINT =
+    'If you trust this host, add it to `server.allowedHosts` in vite.config.js.';
+
 export interface RequestRejection {
     statusCode: 403 | 415;
     message: string;
@@ -116,23 +119,34 @@ function isJsonContentType(contentType: string | undefined): boolean {
     return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
 }
 
+// HTTP/2 requests carry :authority and no Host.
+export function getRequestHost(headers: IncomingHttpHeaders): string | undefined {
+    const authority = headers[':authority'];
+    return headers.host ?? (typeof authority === 'string' ? authority : undefined);
+}
+
+// Node decodes a Host as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
+function quoteHostname(hostname: string): string {
+    return JSON.stringify(hostname).replace(
+        /[^\x20-\x7e]/g,
+        (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    );
+}
+
 export function checkDevServerRequest(
     headers: IncomingHttpHeaders,
     isHostAllowed: HostCheck,
 ): RequestRejection | undefined {
     const { origin } = headers;
-    // HTTP/2 requests carry :authority and no Host.
-    const authority = headers[':authority'];
-    const host = headers.host ?? (typeof authority === 'string' ? authority : undefined);
+    const host = getRequestHost(headers);
     if (!host) {
         return { statusCode: 403, message: MISSING_HOST_MESSAGE };
     }
     if (!isHostAllowed(host)) {
-        const hostname = getHostname(host);
-        const quotedHostname = JSON.stringify(hostname);
+        const quotedHostname = quoteHostname(getHostname(host));
         return {
             statusCode: 403,
-            message: `Blocked request. This host (${quotedHostname}) is not allowed. To allow it, add it to \`server.allowedHosts\` in vite.config.js.`,
+            message: `Blocked request. This host (${quotedHostname}) is not allowed. ${ALLOWED_HOSTS_HINT}`,
         };
     }
     if (origin !== undefined && !isSameOriginAsHost(origin, host)) {
