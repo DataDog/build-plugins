@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { createBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
@@ -317,10 +318,11 @@ function createTestMiddleware(
         longPolling?: CreateDevServerMiddlewareArgs[5];
         projectRoot?: CreateDevServerMiddlewareArgs[6];
         log?: CreateDevServerMiddlewareArgs[7];
-        mode?: CreateDevServerMiddlewareArgs[8];
-        isHostAllowed?: CreateDevServerMiddlewareArgs[9];
-        serverConditions?: CreateDevServerMiddlewareArgs[10];
-        executeLocally?: CreateDevServerMiddlewareArgs[11];
+        runStaticChecks?: CreateDevServerMiddlewareArgs[8];
+        mode?: CreateDevServerMiddlewareArgs[9];
+        isHostAllowed?: CreateDevServerMiddlewareArgs[10];
+        serverConditions?: CreateDevServerMiddlewareArgs[11];
+        executeLocally?: CreateDevServerMiddlewareArgs[12];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -334,6 +336,7 @@ function createTestMiddleware(
         overrides.longPolling ?? mockLongPolling,
         overrides.projectRoot ?? '/project',
         overrides.log ?? mockLog,
+        overrides.runStaticChecks ?? createBackendStaticChecks(overrides.log ?? mockLog),
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
         overrides.serverConditions ?? defaultServerConditions,
@@ -824,7 +827,13 @@ describe('Dev Server Middleware', () => {
                 await emitModuleParsed(config, func.absolutePath, source);
                 return { output: [] };
             });
-            const upload = await buildBackendFunctions(uploadBuild, [func], '/project', mockLog);
+            const upload = await buildBackendFunctions(
+                uploadBuild,
+                [func],
+                '/project',
+                mockLog,
+                createBackendStaticChecks(mockLog),
+            );
             rmSync(upload.outDir);
             mockBuildWithParsedBackend();
             const functionName = encodeQueryName(func);
@@ -1698,6 +1707,7 @@ describe('Dev Server Middleware', () => {
                     mockLongPolling,
                     '/project',
                     mockLog,
+                    createBackendStaticChecks(mockLog),
                     'development',
                     localOnlyHostCheck,
                     defaultServerConditions,

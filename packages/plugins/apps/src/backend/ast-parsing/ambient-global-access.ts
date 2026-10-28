@@ -111,7 +111,7 @@ function resolvesToAmbientGlobal(
     return false;
 }
 
-function staticMemberName(
+export function staticMemberName(
     node: MemberExpression,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
@@ -122,11 +122,11 @@ function staticMemberName(
 }
 
 // A defaulted property value (`{ x = fallback }`) is an AssignmentPattern wrapping the real binding — unwrap it so a defaulted alias is treated the same as a bare one.
-function unwrapDefaultValue(value: Property['value']): Property['value'] {
+export function unwrapDefaultValue(value: Property['value']): Property['value'] {
     return value.type === 'AssignmentPattern' ? value.left : value;
 }
 
-function staticPropertyName(
+export function staticPropertyName(
     property: Property,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {

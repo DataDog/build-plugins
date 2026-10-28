@@ -10,6 +10,7 @@
  */
 
 import { getAuthenticatedRequest } from '@dd/apps-plugin/auth';
+import { createBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { buildBackendFunctions } from '@dd/apps-plugin/vite/build-backend-functions';
 import { collectModuleGraphFromServer } from '@dd/apps-plugin/vite/dev-server-module-graph';
 import { createViteHostCheck } from '@dd/apps-plugin/vite/dev-server-request-guard';
@@ -249,6 +250,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -295,6 +297,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -335,6 +338,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -422,12 +426,11 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         // collectModuleGraphFromServer appends LOCAL_EXECUTION_LOAD_SUFFIX internally, so this
         // closure only handles the bare id — matching vite/index.ts's real wiring.
         const getAllowedConnectionIds = async (entryId: string) => {
-            const log = getMockLogger();
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
                 FIXTURE_ROOT,
-                log,
+                createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
@@ -448,6 +451,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -474,12 +478,11 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // must read each module's original source from disk instead of the transformed output.
     test('Should recognize a connectionId-scoped action-catalog call and allow it, not silently reject it', async () => {
         const getAllowedConnectionIds = async (entryId: string) => {
-            const log = getMockLogger();
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
                 FIXTURE_ROOT,
-                log,
+                createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
@@ -500,6 +503,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -542,6 +546,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             log,
+            createBackendStaticChecks(log),
             'development',
             createViteHostCheck(server.config),
             defaultServerConditions,
@@ -570,12 +575,11 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
         const getAllowedConnectionIds = async (entryId: string) => {
-            const log = getMockLogger();
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
                 FIXTURE_ROOT,
-                log,
+                createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
             return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
@@ -596,6 +600,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             mockLongPolling,
             FIXTURE_ROOT,
             getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             'development',
             isHostAllowed,
             defaultServerConditions,
@@ -642,7 +647,13 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
     async function buildUploadAndVerify(workingDir: string, func: BackendFunction) {
         const log = getMockLogger();
         process.env.NODE_ENV = 'production';
-        const upload = await buildBackendFunctions(build, [func], workingDir, log);
+        const upload = await buildBackendFunctions(
+            build,
+            [func],
+            workingDir,
+            log,
+            createBackendStaticChecks(log),
+        );
         let uploadCode: string;
         try {
             const [uploadPath] = [...upload.outputs.values()];
@@ -671,6 +682,7 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
             mockLongPolling,
             workingDir,
             log,
+            createBackendStaticChecks(log),
             DEV_VERIFY_MODE,
             isHostAllowed,
             defaultServerConditions,
