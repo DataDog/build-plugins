@@ -76,7 +76,12 @@ export const createRequestData = async (options: {
     const rawStream = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
 
     const bodyBuffer = new Uint8Array(await new Response(rawStream).arrayBuffer());
-    const data = new Blob([bodyBuffer]).stream();
+    const data = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(bodyBuffer);
+            controller.close();
+        },
+    });
 
     const headers = {
         'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
