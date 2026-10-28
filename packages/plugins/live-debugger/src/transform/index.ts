@@ -511,7 +511,7 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // collect, and keeps the bare call whose function ID RUM privacy leaves inline.
     const probeDecl = `let ${probeVarName} = globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION} !== void 0 && ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
-    const catchBlock = `catch(e) { if (${probeVarName}) $dd_throw(${probeVarName}, e, ${receiverArg}${argsArg}); throw e; }`;
+    const catchBlock = `catch($dd_e) { if (${probeVarName}) $dd_throw(${probeVarName}, $dd_e, ${receiverArg}${argsArg}); throw $dd_e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
