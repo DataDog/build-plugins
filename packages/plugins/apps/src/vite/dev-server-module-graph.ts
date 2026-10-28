@@ -5,7 +5,6 @@
 /* eslint-disable no-await-in-loop */
 
 import { readFile } from '@dd/core/helpers/fs';
-import type { Logger } from '@dd/core/types';
 import { transform } from 'esbuild';
 import type { ModuleNode, parseAst, ViteDevServer } from 'vite';
 
@@ -15,7 +14,7 @@ import {
     resolveStaticModuleSources,
     unsupportedModuleGraphDependency,
 } from '../backend/ast-parsing/module-graph';
-import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { isBackendSourceModule } from '../backend/backend-sources';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
@@ -31,11 +30,11 @@ export async function collectModuleGraphFromServer(
     server: ViteDevServer,
     bareEntryId: string,
     buildRoot: string,
-    log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
     parse: typeof parseAst,
 ): Promise<ReadonlyMap<string, ParsedModuleRecord>> {
     const records = new Map<string, ParsedModuleRecord>();
-    await walkModuleGraph(server, bareEntryId, buildRoot, log, parse, records);
+    await walkModuleGraph(server, bareEntryId, buildRoot, runStaticChecks, parse, records);
     return records;
 }
 
@@ -43,7 +42,7 @@ async function walkModuleGraph(
     server: ViteDevServer,
     bareEntryId: string,
     buildRoot: string,
-    log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
     parse: typeof parseAst,
     records: Map<string, ParsedModuleRecord>,
 ): Promise<void> {
@@ -139,7 +138,7 @@ async function walkModuleGraph(
         if (record) {
             // No build-time moduleParsed hook here (Rollup-only), so this is what catches a
             // restricted global locally instead of only at publish time.
-            runBackendStaticChecks(record.ast, record.id, log, record.scopeAnalysis);
+            runStaticChecks(record.ast, record.id, record.scopeAnalysis);
             records.set(record.id, record);
         }
 

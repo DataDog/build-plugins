@@ -12,6 +12,7 @@ import type { build } from 'vite';
 
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
+import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type {
@@ -146,6 +147,7 @@ async function bundleBackendFunction(
     func: BackendFunction,
     projectRoot: string,
     log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
 ): Promise<BundleResult> {
     const displayName = formatRef(func);
     const virtualId = `${DEV_VIRTUAL_PREFIX}${displayName}`;
@@ -163,7 +165,7 @@ async function bundleBackendFunction(
 
     const staticChecksPlugin = createBackendStaticChecksPlugin(
         projectRoot,
-        log,
+        runStaticChecks,
         connectionIdCollector.getModuleRecords,
     );
     const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
@@ -832,13 +834,14 @@ export function createDevServerMiddleware(
     longPolling: LongPollingConfig,
     projectRoot: string,
     log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
     mode: string,
     isHostAllowed: HostCheck,
     serverConditions: readonly string[],
     executeLocally?: LocalExecutor,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
+        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log, runStaticChecks);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
     const oversizedFunctionsWarned = new Set<string>();
 

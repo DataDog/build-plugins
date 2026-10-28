@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createParsedModuleRecord } from '@dd/apps-plugin/backend/ast-parsing/module-graph';
+import { createBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
 import { NODE_BACKEND_RUNTIME } from '@dd/apps-plugin/constants';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
@@ -33,7 +34,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should accept a module importing a Node built-in and calling fetch', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -48,7 +49,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should reject a module using Deno', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -63,7 +64,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should allow a module with no restricted globals', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -78,7 +79,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip modules under node_modules', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -93,7 +94,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip virtual modules', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -114,7 +115,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip modules with no source (external/synthetic modules)', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -135,7 +136,7 @@ describe('Backend Functions - backend static checks plugin', () => {
         }
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map([[moduleId, record]]),
         );
         const throwIfParsed: typeof parseAst = () => {
@@ -154,7 +155,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should fall back to parsing when no record exists for the module', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -169,7 +170,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should throw a checks-specific error, not a connection-ID-collector-specific one, when the fallback parse fails', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
