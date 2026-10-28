@@ -1096,26 +1096,6 @@ export function exemptFetchFromBlockedScope<Rest extends unknown[], Result>(
     return (id, ...rest) => runExemptForStringId(id, () => fetchModule(id, ...rest));
 }
 
-// Vite 5 has no environment API; its module fetch calls these container methods, looked up per call.
-const PLUGIN_CONTAINER_ID_ARG_INDEXES: Record<string, number> = {
-    resolveId: 0,
-    load: 0,
-    transform: 1,
-};
-
-export function exemptPluginContainerFromBlockedScope(container: object): void {
-    for (const [method, idIndex] of Object.entries(PLUGIN_CONTAINER_ID_ARG_INDEXES)) {
-        const original: unknown = Reflect.get(container, method);
-        if (typeof original !== 'function') {
-            continue;
-        }
-        const exempt = function (this: unknown, ...args: unknown[]): Promise<unknown> {
-            return runExemptForStringId(args[idIndex], () => Reflect.apply(original, this, args));
-        };
-        Reflect.set(container, method, exempt);
-    }
-}
-
 function closeScope(scope: BlockedScope): void {
     scope.closed = true;
     deregisterIfIdle(scope);
