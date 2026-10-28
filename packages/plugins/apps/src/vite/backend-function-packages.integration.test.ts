@@ -20,7 +20,7 @@ import { parseAst } from 'rollup/parseAst';
 import { pathToFileURL } from 'url';
 import { build, createServer, type ViteDevServer } from 'vite';
 
-import { ARCHIVE_FILENAME } from '../constants';
+import { ARCHIVE_FILENAME, NODE_BACKEND_RUNTIME } from '../constants';
 import type { AppsManifest } from '../types';
 
 import {
@@ -689,9 +689,9 @@ describe('Backend functions shipped by a package: refusals and subfolders', () =
         }
     }, 30000);
 
-    test("Should reject a banned import in an opted-in library's backend code", async () => {
+    test("Should reject a global the Node backend runtime lacks in an opted-in library's backend code", async () => {
         await expect(buildApp(appRoot, 'banned.ts')).rejects.toThrow(
-            'Importing Node built-in module "fs" is not supported in backend function code',
+            `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
     }, 30000);
 });

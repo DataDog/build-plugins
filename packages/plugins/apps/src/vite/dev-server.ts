@@ -742,7 +742,7 @@ async function handleExecuteAction(
     }
 }
 
-/** Handle POST /__dd/executeActionViaCloud: bundle and execute via the production round trip (queue + Deno subprocess). */
+/** Handle POST /__dd/executeActionViaCloud: bundle and execute via the production round trip. */
 async function handleExecuteActionViaCloud(
     req: IncomingMessage,
     res: ServerResponse,
