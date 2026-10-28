@@ -624,8 +624,10 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(authSpy).not.toHaveBeenCalled();
     });
 
-    const transformBackendFile = (code: string) => {
-        const plugin = getVitePlugin(defaultOptions);
+    const transformBackendFile = (
+        code: string,
+        plugin: ReturnType<typeof getVitePlugin> = getVitePlugin(defaultOptions),
+    ) => {
         const handler = getTransformHandler(plugin);
         const resolveMock = jest.fn(async () => null);
         const loadMock = jest.fn(async () => null);
@@ -659,6 +661,41 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(() =>
             transformBackendFile('export function myHandler() { return Deno.cwd(); }'),
         ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
+    });
+
+    test('Should warn about a process.env read once per plugin instance', async () => {
+        const code = 'export function myHandler() { return process.env.STRIPE_KEY; }';
+        const firstPlugin = getVitePlugin(defaultOptions);
+        const secondPlugin = getVitePlugin(defaultOptions);
+
+        await transformBackendFile(code, firstPlugin);
+        await transformBackendFile(code, firstPlugin);
+        await transformBackendFile(code, secondPlugin);
+
+        const warnings = mockLogFn.mock.calls.filter(
+            ([message, level]) => level === 'warn' && String(message).includes('process.env'),
+        );
+        expect(warnings).toHaveLength(2);
+    });
+
+    test('Should warn about a process.env read once across the transform and the backend builds', async () => {
+        const code =
+            'export function myHandler() { return process.env.STRIPE_KEY; } export function otherFunc() {}';
+        mockViteBuild.mockImplementation(async (config) => {
+            await emitModuleParsed(config, '/build/src/backend/myHandler.backend.ts', code);
+            return mockBuildResult();
+        });
+        const plugin = getVitePlugin(defaultOptions);
+
+        await transformBackendFile(code, plugin);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        expect(mockViteBuild).toHaveBeenCalledTimes(2);
+        const warnings = mockLogFn.mock.calls.filter(
+            ([message, level]) => level === 'warn' && String(message).includes('process.env'),
+        );
+        expect(warnings).toHaveLength(1);
     });
 
     // Regression test: without the suffix check, ssrLoadModule() would get the proxy stub instead of the real function body.
