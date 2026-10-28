@@ -14,6 +14,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     functionTypes: undefined,
     namedOnly: false,
     decorators: 'legacy',
+    exceptionReplay: false,
 };
 
 /**

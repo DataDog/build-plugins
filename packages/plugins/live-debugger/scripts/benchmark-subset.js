@@ -180,6 +180,7 @@ function benchmarkFile(filePath, repeatCount, buildRoot) {
             functionTypes: undefined,
             namedOnly: false,
             decorators: 'legacy',
+            exceptionReplay: false,
         }),
     );
 
