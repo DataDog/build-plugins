@@ -2162,12 +2162,12 @@ describe('process.env lint rule for tests', () => {
         },
         {
             description: 'apply to Jest fixture files',
-            file: 'packages/plugins/apps/src/vite/local-execution.process-exit.fixture.ts',
+            file: 'packages/tests/src/_jest/nockResetA.fixture.ts',
             expected: 1,
         },
         {
             description: 'apply to Jest fixtures modules',
-            file: 'packages/plugins/apps/src/vite/local-execution.fixtures.ts',
+            file: 'packages/plugins/apps/src/vite/local-execution-process.fixtures.ts',
             expected: 1,
         },
     ];

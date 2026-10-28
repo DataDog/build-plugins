@@ -18,16 +18,13 @@ import worker_threads from 'worker_threads';
 import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
 import {
     ALREADY_GUARDED,
-    exemptFetchFromBlockedScope,
     FOREIGN_GUARD_MESSAGE,
     FS_WRITE_BLOCKED_MESSAGE,
     getSharedContext,
-    gracefulFsPredatesGuards,
     guardWorker,
     installGuardedProperty,
     installGuards,
     networkGuardSymbol,
-    NON_STRING_MODULE_ID_MESSAGE,
     runBlocked,
 } from './network-guard';
 
@@ -2013,37 +2010,6 @@ describe('installGuards', () => {
         expect(attempts).toEqual(['threw', 'threw']);
     });
 
-    // graceful-fs publishes this queue on the real fs when it loads, and its clone copies fs's functions.
-    test.each([
-        { marker: true, expected: true },
-        { marker: false, expected: false },
-    ])(
-        'Should report whether graceful-fs patched fs before the guards installed (marker: $marker)',
-        ({ marker, expected }) => {
-            const bundlePath = buildGuardBundle('network-guard-graceful-marker.bundle.cjs');
-            const probeScript = [
-                "const fs = require('fs');",
-                "if (process.argv[2] === 'true') Object.defineProperty(fs, Symbol.for('graceful-fs.queue'), { get: () => [] });",
-                'const guard = require(process.argv[1]);',
-                'guard.installGuards();',
-                'console.log(JSON.stringify(guard.gracefulFsPredatesGuards()));',
-            ].join('\n');
-
-            const output = child_process.execFileSync(
-                process.execPath,
-                ['-e', probeScript, bundlePath, String(marker)],
-                {
-                    encoding: 'utf8',
-                    env: { PATH: process.env.PATH },
-                },
-            );
-            const predates: unknown = JSON.parse(output);
-
-            expect(predates).toBe(expected);
-            expect(gracefulFsPredatesGuards).toEqual(expect.any(Function));
-        },
-    );
-
     // The null-device handle that hands over FileHandle's prototype is closed at install, unawaited.
     test('Should not crash the process when closing the FileHandle it inspects at install rejects', () => {
         const bundlePath = buildGuardBundle('network-guard-close-rejects.bundle.cjs');
@@ -2136,43 +2102,6 @@ describe('mixed plugin versions', () => {
         const running = freshRunBlocked(async () => 'ran');
 
         await expect(running).resolves.toBe('ran');
-    });
-});
-
-describe('exemptFetchFromBlockedScope', () => {
-    test("Should run a wrapped module fetch outside the run's blocked scope while the run itself stays blocked", async () => {
-        const hookOutput = path.join(probeDir, 'fetch-hook.txt');
-        const afterFetchPath = path.join(probeDir, 'after-fetch.txt');
-        const fetchModule = async (id: string) => {
-            fs.writeFileSync(hookOutput, id);
-            return id;
-        };
-        const exemptFetch = exemptFetchFromBlockedScope(fetchModule);
-
-        const fetched = await runBlocked(async () => {
-            const result = await exemptFetch('/src/lazy.ts');
-            expect(() => fs.writeFileSync(afterFetchPath, 'data')).toThrow(
-                FS_WRITE_BLOCKED_MESSAGE,
-            );
-            return result;
-        });
-        const hookContent = fs.readFileSync(hookOutput, 'utf8');
-        const afterFetchWritten = fs.existsSync(afterFetchPath);
-
-        expect(fetched).toBe('/src/lazy.ts');
-        expect(hookContent).toBe('/src/lazy.ts');
-        expect(afterFetchWritten).toBe(false);
-    });
-
-    test('Should reject a non-string module id without calling the real fetch', async () => {
-        const fetchModule = jest.fn(async (id: string) => id);
-        const exemptFetch = exemptFetchFromBlockedScope(fetchModule);
-        const nonStringId: unknown = { toString: () => '/src/lazy.ts' };
-
-        const fetching = Reflect.apply(exemptFetch, undefined, [nonStringId]);
-
-        await expect(fetching).rejects.toThrow(NON_STRING_MODULE_ID_MESSAGE);
-        expect(fetchModule).not.toHaveBeenCalled();
     });
 });
 

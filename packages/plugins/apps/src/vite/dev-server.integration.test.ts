@@ -19,7 +19,6 @@ import {
     EXECUTE_ACTION_ROUTE,
 } from '@dd/apps-plugin/vite/dev-server';
 import { DEV_CLIENT_SRC, getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plugin/vite/index';
-import { FS_WRITE_BLOCKED_MESSAGE } from '@dd/apps-plugin/vite/network-guard';
 import * as fsHelpers from '@dd/core/helpers/fs';
 import { outputFileSync, readFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
@@ -30,10 +29,10 @@ import {
     getContextMock,
     getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import nock from 'nock';
-import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 import {
@@ -50,13 +49,30 @@ import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE } from '../constants';
 
-import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
+import {
+    buildLocalExecutionChild,
+    removeLocalExecutionChild,
+} from './local-execution-process.fixtures';
+import { createChildProcessExecutor, resolveViteModuleRunner } from './local-execution-process';
 
 // Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
 // entry and no `parseAst`; the published build keeps the real import.
 jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
 }));
+
+let mockChildEntryPath = '';
+jest.mock('@dd/apps-plugin/vite/local-execution-child-path', () => ({
+    getLocalExecutionChildPath: () => mockChildEntryPath,
+}));
+
+beforeAll(async () => {
+    mockChildEntryPath = await buildLocalExecutionChild();
+});
+
+afterAll(() => {
+    removeLocalExecutionChild();
+});
 
 const FIXTURE_ROOT = path.resolve(
     __dirname,
@@ -159,6 +175,23 @@ function mockRuntimeContextHydration() {
         });
 }
 
+const makeChildExecutor = (devServer: ViteDevServer) => {
+    const moduleRunnerPath = resolveViteModuleRunner(FIXTURE_ROOT);
+    return createChildProcessExecutor({
+        invokeChannel: devServer.environments.ssr.hot,
+        projectRoot: FIXTURE_ROOT,
+        childEntryPath: mockChildEntryPath,
+        moduleRunnerPath,
+        readRoots: devServer.config.server.fs.allow,
+        denyPatterns: devServer.config.server.fs.deny,
+        restrictModuleLoads: true,
+        resolveModule: async (url, importer) =>
+            (await devServer.environments.ssr.pluginContainer.resolveId(url, importer))?.id,
+        log: getMockLogger(),
+        writeOutput: () => {},
+    });
+};
+
 describe('Dev Server Middleware — real end-to-end local execution', () => {
     let server: ViteDevServer;
 
@@ -209,7 +242,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            server.ssrLoadModule.bind(server),
             () => [getRuntimeUsersFunc],
             async () => [],
             auth,
@@ -220,6 +252,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -255,7 +288,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            server.ssrLoadModule.bind(server),
             () => [nestedImportFunc],
             async () => [],
             auth,
@@ -266,6 +298,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -295,7 +328,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            server.ssrLoadModule.bind(server),
             () => [viaHelperFunc],
             async () => [],
             auth,
@@ -306,6 +338,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -347,11 +380,45 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.result).toEqual({ data: { value: 'real-middleware-value' } });
     }, 30000);
 
+    test('Should run each call through the real configureServer-installed middleware in its own fresh child process', async () => {
+        const countCallsFunc: BackendFunction = {
+            relativePath: 'childState',
+            name: 'countCalls',
+            absolutePath: path.join(FIXTURE_ROOT, 'childState.backend.ts'),
+            allowedConnectionIds: [],
+        };
+        await server.ssrLoadModule(countCallsFunc.absolutePath);
+
+        const results = [];
+        for (let i = 0; i < 2; i++) {
+            // beforeEach mocks the first call's hydration.
+            if (i > 0) {
+                mockRuntimeContextHydration();
+            }
+            const req = createMockRequest('/__dd/executeAction', {
+                functionName: encodeQueryName(countCallsFunc),
+                args: [0],
+            });
+            const res = createMockResponse();
+            server.middlewares(req, res, jest.fn());
+            // eslint-disable-next-line no-await-in-loop
+            await res.done;
+            expect(res.statusCode).toBe(200);
+            results.push(JSON.parse(res.getBody()).result.data);
+        }
+
+        expect(results).toEqual([
+            expect.objectContaining({ calls: 1, globalCalls: 1 }),
+            expect.objectContaining({ calls: 1, globalCalls: 1 }),
+        ]);
+        expect(results[0].pid).not.toBe(process.pid);
+        expect(results[0].pid).not.toBe(results[1].pid);
+    }, 30000);
+
     // Uses noSdkFunc since every other function here already has a warm moduleGraph node from
     // an earlier test, which would mask this invariant: on a cold entry, Vite only registers
     // the node under its fully-resolved (suffixed) id, not the bare path.
     test('Should compute allowed connection IDs on the very first request for an entry, with no prior priming import', async () => {
-        const loadModule = server.ssrLoadModule.bind(server);
         // collectModuleGraphFromServer appends LOCAL_EXECUTION_LOAD_SUFFIX internally, so this
         // closure only handles the bare id — matching vite/index.ts's real wiring.
         const getAllowedConnectionIds = async (entryId: string) => {
@@ -374,7 +441,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            loadModule,
             () => [noSdkFunc],
             getAllowedConnectionIds,
             auth,
@@ -385,6 +451,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         const req = createMockRequest('/__dd/executeAction', {
@@ -406,7 +473,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // collectActionCatalogImports's `ImportDeclaration` search can't parse, so the collector
     // must read each module's original source from disk instead of the transformed output.
     test('Should recognize a connectionId-scoped action-catalog call and allow it, not silently reject it', async () => {
-        const loadModule = server.ssrLoadModule.bind(server);
         const getAllowedConnectionIds = async (entryId: string) => {
             const log = getMockLogger();
             const moduleGraph = await collectModuleGraphFromServer(
@@ -427,7 +493,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            loadModule,
             () => [actionCatalogCallFunc],
             getAllowedConnectionIds,
             auth,
@@ -438,6 +503,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         // The connection-ID collector is under test here, not the preview-async round trip
@@ -466,11 +532,9 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     }, 30000);
 
     test('Should return a real bundle with the connection IDs it uses from /__dd/debugBundle as JSON', async () => {
-        const loadModule = server.ssrLoadModule.bind(server);
         const log = getMockLogger();
         const middleware = createDevServerMiddleware(
             build,
-            loadModule,
             () => [actionCatalogCallFunc],
             async () => [],
             { site: 'datadoghq.com' },
@@ -505,7 +569,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // A dynamic import sits between two static ones, so resolution must come from the AST
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
-        const loadModule = server.ssrLoadModule.bind(server);
         const getAllowedConnectionIds = async (entryId: string) => {
             const log = getMockLogger();
             const moduleGraph = await collectModuleGraphFromServer(
@@ -526,7 +589,6 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const isHostAllowed = createViteHostCheck(server.config);
         const middleware = createDevServerMiddleware(
             build,
-            loadModule,
             () => [mixedImportsFunc],
             getAllowedConnectionIds,
             auth,
@@ -537,6 +599,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            makeChildExecutor(server),
         );
 
         const apiScope = nock('https://api.datadoghq.com')
@@ -601,7 +664,6 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
         const isHostAllowed = createViteHostCheck({ server: { allowedHosts: [] }, preview: {} });
         const middleware = createDevServerMiddleware(
             build,
-            async () => ({}),
             () => [func],
             async () => [],
             { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
@@ -765,7 +827,6 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
 
 // Uses its own dev server rooted in a temp dir, since writing files under the shared fixtures tree
 // would race other test files that copy that whole tree in parallel.
-const FAKE_SDK_NAME = 'dd-fake-stateful-sdk';
 
 describe('Dev client module', () => {
     const startDevServer = async (base: string, extraPlugins: Plugin[] = []) => {
@@ -859,6 +920,10 @@ describe('Dev Server Middleware — editing files between local executions', () 
         const seed = `apps-edit-then-execute-${process.pid}`;
         const root = getTempWorkingDir(seed);
         editRoot = root;
+        // A call's process loads modules through the project's own Vite module runner.
+        const viteDir = path.dirname(require.resolve('vite/package.json'));
+        fs.mkdirSync(path.join(root, 'node_modules'), { recursive: true });
+        fs.symlinkSync(viteDir, path.join(root, 'node_modules', 'vite'), 'dir');
 
         const context = getContextMock({ buildRoot: root });
         const appsPlugin: Plugin = {
@@ -884,8 +949,6 @@ describe('Dev Server Middleware — editing files between local executions', () 
             },
             plugins: [appsPlugin],
             optimizeDeps: { noDiscovery: true },
-            // Bundled into the SSR graph like the real SDKs, so its evaluation can be cached or re-run.
-            ssr: { noExternal: [FAKE_SDK_NAME] },
         });
     });
 
@@ -1047,62 +1110,6 @@ describe('Dev Server Middleware — editing files between local executions', () 
             result: { data: versionsInEveryBranch('v2') },
         });
     }, 30000);
-
-    test('Should keep an invalidated package dependency cached, so its state survives an edit', async () => {
-        const sdkDir = path.join(editServer.config.root, 'node_modules', FAKE_SDK_NAME);
-        const sdkManifest = JSON.stringify({
-            name: FAKE_SDK_NAME,
-            type: 'module',
-            main: 'index.js',
-        });
-        const sdkManifestPath = path.join(sdkDir, 'package.json');
-        const sdkEntryPath = path.join(sdkDir, 'index.js');
-        outputFileSync(sdkManifestPath, sdkManifest);
-        outputFileSync(
-            sdkEntryPath,
-            'let calls = 0;\nexport function bump() { calls += 1; return calls; }\n',
-        );
-        const file = path.join(editServer.config.root, 'sdkEntry.backend.ts');
-        const func = backendFunctionAt(file, 'callSdk');
-        const sourceFor = (version: string) =>
-            `import { bump } from '${FAKE_SDK_NAME}';\nexport async function callSdk() { return ['${version}', bump()]; }\n`;
-        const initialSource = sourceFor('v1');
-        outputFileSync(file, initialSource);
-        await editServer.ssrLoadModule(file);
-        const first = await execute(func);
-        expect(first.body).toEqual({ success: true, result: { data: ['v1', 1] } });
-
-        const editedSource = sourceFor('v2');
-        await editFile(file, editedSource);
-        // Invalidates the SDK too, as a tsconfig.json change would.
-        editServer.environments.ssr.moduleGraph.invalidateAll();
-        mockRuntimeContextHydration();
-        const second = await execute(func);
-
-        expect(second.body).toEqual({ success: true, result: { data: ['v2', 2] } });
-    }, 30000);
-
-    test('Should keep module state across unchanged executions after an edit', async () => {
-        const file = path.join(editServer.config.root, 'countingEntry.backend.ts');
-        const func = backendFunctionAt(file, 'countCalls');
-        const sourceFor = (start: number) =>
-            `let calls = ${start};\nexport async function countCalls() { calls += 1; return calls; }\n`;
-        const initialSource = sourceFor(0);
-        outputFileSync(file, initialSource);
-        await editServer.ssrLoadModule(file);
-        const countCalls = async () => {
-            mockRuntimeContextHydration();
-            const { body } = await execute(func);
-            return body.result.data;
-        };
-        await countCalls();
-
-        const editedStart = 100;
-        const editedSource = sourceFor(editedStart);
-        await editFile(file, editedSource);
-        const afterEdit = [await countCalls(), await countCalls(), await countCalls()];
-        expect(afterEdit).toEqual([editedStart + 1, editedStart + 2, editedStart + 3]);
-    }, 30000);
 });
 
 describe('Dev Server Middleware — SSR import warmup warnings', () => {
@@ -1176,143 +1183,6 @@ describe('Dev Server Middleware — SSR import warmup warnings', () => {
         },
         30000,
     );
-});
-
-const LAZY_PACKAGE_NAME = 'dd-fake-lazy-package';
-
-// Its own server, since the exemption lives in the real configureServer hook, and the recording
-// plugin below must not see other tests' modules.
-describe('Dev Server Middleware — dynamic imports inside a backend function', () => {
-    let root = '';
-    let transformCacheDir = '';
-    let lazyServer: ViteDevServer;
-    const transformWrites: string[] = [];
-
-    beforeAll(async () => {
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-        const tmpBase = os.tmpdir();
-        const rootPrefix = path.join(tmpBase, 'dd-apps-dynamic-import-');
-        // Real path, since Vite resolves symlinks (e.g. macOS's /var) and buildRoot must match.
-        const createdRoot = fs.mkdtempSync(rootPrefix);
-        root = fs.realpathSync(createdRoot);
-        const packageDir = path.join(root, 'node_modules', LAZY_PACKAGE_NAME);
-        const sourceDir = path.join(root, 'src');
-        fs.mkdirSync(packageDir, { recursive: true });
-        fs.mkdirSync(sourceDir, { recursive: true });
-        const packageManifest = JSON.stringify({
-            name: LAZY_PACKAGE_NAME,
-            type: 'module',
-            main: 'index.js',
-        });
-        const packageManifestPath = path.join(packageDir, 'package.json');
-        const packageEntryPath = path.join(packageDir, 'index.js');
-        const lazyModulePath = path.join(packageDir, 'lazy-dep.js');
-        fs.writeFileSync(packageManifestPath, packageManifest);
-        fs.writeFileSync(
-            packageEntryPath,
-            "export async function loadLazy() { return (await import('./lazy-dep.js')).value; }\n",
-        );
-        // Its top-level write runs when the module is evaluated, which must stay blocked.
-        fs.writeFileSync(
-            lazyModulePath,
-            [
-                "import fs from 'fs';",
-                "let evaluationWrite = 'allowed';",
-                "try { fs.writeFileSync(process.env.DD_TEST_LAZY_WRITE_PATH, 'x'); } catch (err) { evaluationWrite = err.message; }",
-                'export const value = evaluationWrite;',
-            ].join('\n'),
-        );
-
-        // Outside the OS temp dir, so the write only succeeds if the transform runs exempt.
-        transformCacheDir = makeProbeDirOutsideTmp('dd-apps-transform-cache-');
-        // Stands in for a project plugin that writes a cache file while transforming a module.
-        const cacheWritingPlugin: Plugin = {
-            name: 'dd-test-cache-writing-plugin',
-            transform(_code, id) {
-                if (!id.includes('lazy-dep')) {
-                    return null;
-                }
-                const cachePath = path.join(transformCacheDir, 'transform-cache.json');
-                try {
-                    fs.writeFileSync(cachePath, '{}');
-                    transformWrites.push('written');
-                } catch (err) {
-                    transformWrites.push(err instanceof Error ? err.message : String(err));
-                }
-                return null;
-            },
-        };
-        const appsPlugin: Plugin = {
-            name: 'dd-apps-test',
-            ...getVitePlugin({
-                bundler: { build, defaultServerConditions },
-                context: getContextMock({ buildRoot: root }),
-                options: { include: [], longPolling: mockLongPolling },
-            }),
-        };
-        lazyServer = await createServer({
-            configFile: false,
-            root,
-            logLevel: 'silent',
-            server: { middlewareMode: true, hmr: false, watch: { ignored: ['**/*'] } },
-            plugins: [appsPlugin, cacheWritingPlugin],
-            optimizeDeps: { noDiscovery: true },
-            ssr: { noExternal: [LAZY_PACKAGE_NAME] },
-        });
-    });
-
-    afterAll(async () => {
-        delete process.env.DD_TEST_LAZY_WRITE_PATH;
-        await lazyServer?.close();
-        if (root) {
-            rmSync(root);
-        }
-        if (transformCacheDir) {
-            rmSync(transformCacheDir);
-        }
-    });
-
-    afterEach(() => {
-        nock.cleanAll();
-    });
-
-    test('Should let a project plugin write while Vite transforms a module the function imports dynamically, but keep its evaluation blocked', async () => {
-        const outsideTmpDir = makeProbeDirOutsideTmp('dd-apps-dynamic-import-write-');
-        try {
-            const evaluationWritePath = path.join(outsideTmpDir, 'evaluation-write.txt');
-            process.env.DD_TEST_LAZY_WRITE_PATH = evaluationWritePath;
-            const file = path.join(root, 'src', 'lazyEntry.backend.ts');
-            fs.writeFileSync(
-                file,
-                `import { loadLazy } from '${LAZY_PACKAGE_NAME}';\nexport async function callLazy() { return loadLazy(); }\n`,
-            );
-            await lazyServer.ssrLoadModule(file);
-            const func: BackendFunction = {
-                relativePath: 'src/lazyEntry',
-                name: 'callLazy',
-                absolutePath: file,
-                allowedConnectionIds: [],
-            };
-            mockRuntimeContextHydration();
-            const functionName = encodeQueryName(func);
-            const req = createMockRequest('/__dd/executeAction', { functionName, args: [] });
-            const res = createMockResponse();
-
-            lazyServer.middlewares(req, res, jest.fn());
-            await res.done;
-            const rawBody = res.getBody();
-            const body: unknown = JSON.parse(rawBody);
-
-            const evaluationWritten = fs.existsSync(evaluationWritePath);
-
-            expect(body).toEqual({ success: true, result: { data: FS_WRITE_BLOCKED_MESSAGE } });
-            expect(evaluationWritten).toBe(false);
-            expect(transformWrites).toEqual(['written']);
-        } finally {
-            rmSync(outsideTmpDir);
-        }
-    }, 30000);
 });
 
 describe('Dev Server Middleware — request origin and host checks over real HTTP', () => {
@@ -1502,4 +1372,105 @@ describe('Dev Server Middleware — request origin and host checks over real HTT
         },
         30000,
     );
+});
+
+describe('Dev Server Middleware — calls in flight when the dev server closes or restarts', () => {
+    const spinForeverFunc: BackendFunction = {
+        relativePath: 'childState',
+        name: 'spinForever',
+        absolutePath: path.join(FIXTURE_ROOT, 'childState.backend.ts'),
+        allowedConnectionIds: [],
+    };
+    const countCallsFunc: BackendFunction = { ...spinForeverFunc, name: 'countCalls' };
+    // Under the call timeout, so only the server's own shutdown can end the call this fast.
+    const SHUTDOWN_DEADLINE_MS = 5000;
+
+    const createAppServer = () =>
+        createServer({
+            configFile: false,
+            root: FIXTURE_ROOT,
+            logLevel: 'silent',
+            server: { middlewareMode: true, hmr: false },
+            plugins: [
+                {
+                    name: 'dd-apps-test',
+                    ...getVitePlugin({
+                        bundler: { build, defaultServerConditions },
+                        context: getContextMock({ buildRoot: FIXTURE_ROOT }),
+                        options: { include: [], tags: [], longPolling: mockLongPolling },
+                    }),
+                },
+            ],
+            optimizeDeps: { noDiscovery: true },
+        });
+
+    const callChildPids = () => {
+        try {
+            const pgrepArgs = ['-P', String(process.pid), '-f', 'local-execution-child'];
+            const output = execFileSync('pgrep', pgrepArgs, { encoding: 'utf8' });
+            return output.split('\n').filter(Boolean);
+        } catch {
+            return [];
+        }
+    };
+
+    const call = (server: ViteDevServer, func: BackendFunction, args: unknown[]) => {
+        mockRuntimeContextHydration();
+        const req = createMockRequest('/__dd/executeAction', {
+            functionName: encodeQueryName(func),
+            args,
+        });
+        const res = createMockResponse();
+        server.middlewares(req, res, jest.fn());
+        return res;
+    };
+
+    const startSpinningCall = async (server: ViteDevServer) => {
+        await server.ssrLoadModule(spinForeverFunc.absolutePath);
+        const res = call(server, spinForeverFunc, []);
+        while (callChildPids().length === 0) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        return res;
+    };
+
+    const settlesWithin = (done: Promise<void>, timeoutMs: number) => {
+        const deadline = new Promise((resolve) => setTimeout(resolve, timeoutMs, 'still running'));
+        const settled = done.then(() => 'settled');
+        return Promise.race([settled, deadline]);
+    };
+
+    afterEach(() => {
+        nock.cleanAll();
+    });
+
+    test('Should end a call still in flight when its dev server closes', async () => {
+        const server = await createAppServer();
+        const res = await startSpinningCall(server);
+
+        await server.close();
+
+        await expect(settlesWithin(res.done, SHUTDOWN_DEADLINE_MS)).resolves.toBe('settled');
+        expect(res.statusCode).toBe(500);
+        expect(callChildPids()).toEqual([]);
+    }, 30000);
+
+    test("Should end the old server's calls on restart and keep serving new ones", async () => {
+        const server = await createAppServer();
+        try {
+            const res = await startSpinningCall(server);
+
+            await server.restart();
+
+            await expect(settlesWithin(res.done, SHUTDOWN_DEADLINE_MS)).resolves.toBe('settled');
+            expect(res.statusCode).toBe(500);
+            await server.ssrLoadModule(countCallsFunc.absolutePath);
+            const next = call(server, countCallsFunc, [0]);
+            await next.done;
+            expect(next.statusCode).toBe(200);
+        } finally {
+            await server.close();
+        }
+    }, 30000);
 });

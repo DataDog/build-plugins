@@ -53,13 +53,10 @@ import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
+import { getLocalExecutionChildPath } from './local-execution-child-path';
+import type { ChildProcessExecutor } from './local-execution-process';
+import { createChildProcessExecutor, resolveViteModuleRunner } from './local-execution-process';
 import { localExecutionResolutionContext } from './local-execution';
-import {
-    exemptFetchFromBlockedScope,
-    GRACEFUL_FS_UNGUARDED_WARNING,
-    gracefulFsPredatesGuards,
-    installGuards,
-} from './network-guard';
 import { createParameterCollector } from './parameter-collector';
 import { loadViteParseAst } from './vite-parse-ast';
 import { assertSupportedVite } from './vite-version';
@@ -268,9 +265,6 @@ export const getVitePlugin = ({
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
                 // A restarted dev server shares this process: read the manifests afresh.
                 forgetBackendModuleOwners();
-                // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
-                // require(), which throws "Cannot use import statement outside a module";
-                // ssr.noExternal forces Vite's SSR transform instead.
                 // Only the dev server pre-bundles dependencies or loads modules through SSR; the
                 // nested backend builds configure their own resolution (see build-config.ts).
                 if (command !== 'serve') {
@@ -403,9 +397,9 @@ export const getVitePlugin = ({
                     return null;
                 }
 
-                // The other half of the scoping: the store is only populated while a local
-                // execution's own loadModule call is in flight (see configureServer), so an
-                // unrelated SSR resolution never inherits a marker from an earlier execution.
+                // The other half of the scoping: the store is only populated while a call's module
+                // runner request is in flight (see local-execution-process.ts), so an unrelated SSR
+                // resolution never inherits a marker from an earlier execution.
                 const subgraphImporters = localExecutionResolutionContext.getStore();
                 const isPartOfSuffixedSubgraph =
                     !!importer &&
@@ -494,7 +488,7 @@ export const getVitePlugin = ({
                     return null;
                 }
                 if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
-                    // Local execution needs the real function body, not the proxy stub below — real loads always go through ssrLoadModule, which runs in SSR, so this only fires for that legitimate path.
+                    // Local execution needs the real function body, not the proxy stub below — a call's module runner always fetches through the SSR environment, so this only fires for that legitimate path.
                     return null;
                 }
                 // Any other case (no query, a spoofed client-side import reusing the suffix, or an unrecognized query) falls through to the safe proxy-stub generation below. Strip the query first so it registers under the file's real (unsuffixed) relativePath/query-name, not a duplicate.
@@ -680,36 +674,45 @@ export const getVitePlugin = ({
                 );
             }
             // Without auth nothing executes, and dev-verify sends every execution to the cloud.
-            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
-                // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
-                // predate it. A failure must not stop the server: each execution installs again, failing closed.
-                try {
-                    installGuards();
-                } catch (error) {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(
-                        `Could not install the backend function sandbox guards yet: ${reason}`,
-                    );
-                }
-                if (gracefulFsPredatesGuards()) {
-                    log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
-                }
+            const runsLocally = doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE;
+            const childEntryPath = getLocalExecutionChildPath();
+            const moduleRunnerPath = resolveViteModuleRunner(context.buildRoot);
+            const executeLocally: ChildProcessExecutor | undefined = runsLocally
+                ? createChildProcessExecutor({
+                      invokeChannel: server.environments.ssr.hot,
+                      projectRoot: context.buildRoot,
+                      childEntryPath,
+                      moduleRunnerPath,
+                      readRoots: server.config.server.fs?.allow ?? [],
+                      denyPatterns: server.config.server.fs?.deny ?? [],
+                      restrictModuleLoads: server.config.server.fs?.strict !== false,
+                      resolveModule: async (url, importer) => {
+                          const resolved = await server.environments.ssr.pluginContainer.resolveId(
+                              url,
+                              importer,
+                          );
+                          return resolved?.id;
+                      },
+                      log,
+                  })
+                : undefined;
+            if (executeLocally) {
+                // A restart starts the new server before closing this one, so each server ends only its own calls.
+                const closeServer = server.close.bind(server);
+                server.close = async () => {
+                    executeLocally.close();
+                    await closeServer();
+                };
                 // Started here so an unusable Vite is reported at startup; each execution reuses
                 // this load, or retries it after a failure.
                 loadViteParseAst().catch((error: unknown) => {
                     const reason = error instanceof Error ? error.message : String(error);
                     log.warn(`Local execution can't parse backend modules: ${reason}`);
                 });
-                const ssrEnvironment = server.environments?.ssr;
-                if (ssrEnvironment) {
-                    const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
-                    ssrEnvironment.fetchModule = exemptFetchFromBlockedScope(fetchModule);
-                }
             }
 
-            const loadModule = server.ssrLoadModule.bind(server);
-            // Safe to call before `loadModule` runs anything: collectModuleGraphFromServer primes
-            // each node itself via `transformRequest`, since `moduleParsed` (production's
+            // Safe to call before a call's process loads anything: collectModuleGraphFromServer
+            // primes each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
             const getAllowedConnectionIds = async (entryId: string) => {
                 const parseAst = await loadViteParseAst();
@@ -725,7 +728,6 @@ export const getVitePlugin = ({
             const isHostAllowed = createViteHostCheck(server.config);
             const middleware = createDevServerMiddleware(
                 bundler.build,
-                loadModule,
                 getBackendFunctions,
                 getAllowedConnectionIds,
                 auth,
@@ -736,6 +738,7 @@ export const getVitePlugin = ({
                 server.config.mode,
                 isHostAllowed,
                 bundler.defaultServerConditions,
+                executeLocally,
             );
             server.middlewares.use((req, res, next) => {
                 revalidateBackendFunctionFile(req);

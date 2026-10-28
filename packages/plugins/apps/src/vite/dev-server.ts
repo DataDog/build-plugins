@@ -29,8 +29,10 @@ import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin'
 import { getBaseBackendBuildConfig, withProductionSettings } from './build-config';
 import type { HostCheck } from './dev-server-request-guard';
 import { checkDevServerRequest } from './dev-server-request-guard';
-import type { ExecuteAction, GetRuntimeContext, LoadModule } from './local-execution';
-import { DEFAULT_TIMEOUT_MS, executeColdActionLocally } from './local-execution';
+import type { LocalExecutor } from './local-execution-process';
+import { FunctionThrewError, throwActionFailure } from './local-execution-shared';
+import type { ExecuteAction, GetRuntimeContext } from './local-execution';
+import { DEFAULT_TIMEOUT_MS } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
 
 interface BundleResult {
@@ -327,6 +329,17 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
+/** Callers that arrive while a run is in flight share its result instead of starting their own. */
+function shareInFlight<T>(): (run: () => Promise<T>) => Promise<T> {
+    let pending: Promise<T> | undefined;
+    return (run) => {
+        pending ??= run().finally(() => {
+            pending = undefined;
+        });
+        return pending;
+    };
+}
+
 /**
  * Resolves the serializable `$` context exposed by an authenticated preview execution. The
  * platform response is deliberately kept opaque here; local-execution validates the identity
@@ -352,9 +365,8 @@ function makeGetRuntimeContextRemotely(
         });
         try {
             // The request signal cancels active fetches and our own retry delays. Racing the whole
-            // operation also releases the local-execution queue if doRequest is already sleeping
-            // inside async-retry, whose backoff timer does not observe AbortSignal. Promise.race
-            // keeps observing submitQuery's eventual settlement after the deadline wins.
+            // operation also fails the call on time if doRequest is already sleeping inside
+            // async-retry, whose backoff timer does not observe AbortSignal.
             const outputs = await Promise.race([
                 submitQuery(
                     {
@@ -428,9 +440,21 @@ function makeExecuteActionRemotely(
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             log.error(`$.Actions call to "${fqn}" failed: ${message}`);
+            if (error instanceof QueryExecutionError) {
+                throwActionFailure(error.detail);
+            }
             throw error;
         }
     };
+}
+
+/** A query that ran and failed; `detail` is what a deployed `$.Actions` call rejects with. */
+class QueryExecutionError extends Error {
+    readonly detail: string;
+    constructor(details: string) {
+        super(details ? `Query execution failed: ${details}` : 'Query execution failed');
+        this.detail = details || this.message;
+    }
 }
 
 interface PollResult {
@@ -490,8 +514,11 @@ async function pollQueryExecution(
 
         // Check for error responses.
         if (result.errors?.length) {
-            const details = result.errors.map((e) => e.detail || e.title).join('; ');
-            throw new Error(`Query execution failed: ${details}`);
+            const details = result.errors
+                .map((e) => e.detail || e.title)
+                .filter(Boolean)
+                .join('; ');
+            throw new QueryExecutionError(details);
         }
 
         const attrs = result.data?.attributes;
@@ -553,7 +580,12 @@ function guardAuthenticated(
 /** Shared catch-block shape for every handler below: an `HttpError` carries its own status code, anything else is a 500. `label` is omitted for handlers with no `log` in scope. */
 function handleHttpError(res: ServerResponse, error: unknown, log?: Logger, label?: string): void {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
-    const message = error instanceof Error ? error.message : 'Internal server error';
+    const message =
+        error instanceof FunctionThrewError
+            ? `Execution failed: ${error.detail}`
+            : error instanceof Error
+              ? error.message
+              : 'Internal server error';
     if (log && label) {
         log.debug(`Error handling ${label}: ${message}`);
     }
@@ -656,9 +688,9 @@ async function handleDebugBundle(
 }
 
 /**
- * Handles POST /__dd/executeAction — imports a backend function's real file and executes
- * it in-process (see local-execution.ts), with no bundling. Auth is checked upfront by the
- * caller in `createDevServerMiddleware`, matching production's auth-before-execution ordering.
+ * Handles POST /__dd/executeAction — runs a backend function's real file with no bundling, in its
+ * own child process (see local-execution-process.ts). Auth is checked upfront by the caller in
+ * `createDevServerMiddleware`, matching production's auth-before-execution ordering.
  */
 async function handleExecuteAction(
     req: IncomingMessage,
@@ -667,43 +699,42 @@ async function handleExecuteAction(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
-    loadModule: LoadModule,
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
-    projectRoot: string,
     log: Logger,
+    executeLocally: LocalExecutor | undefined,
+    shareRuntimeContext: (run: GetRuntimeContext) => Promise<unknown>,
 ): Promise<void> {
     try {
+        if (!executeLocally) {
+            throw new Error('Local execution is not set up on this dev server.');
+        }
         const { func, args } = await parseAndLookupFunction(req, functionsByName);
         const displayName = formatRef(func);
 
         log.debug(`Executing action locally: ${displayName} with args`);
 
-        // Priming and connection-ID collection must happen inside the same serialization
-        // boundary as execution — see executeColdActionLocally's doc comment for why.
         const executeAction = makeExecuteActionRemotely(
             auth,
             doAuthenticatedRequest,
             longPolling,
             log,
         );
-        const getRuntimeContext = makeGetRuntimeContextRemotely(
+        const getRuntimeContextRemotely = makeGetRuntimeContextRemotely(
             auth,
             doAuthenticatedRequest,
             longPolling,
             log,
         );
-        const result = await executeColdActionLocally(
+        const getRuntimeContext = () => shareRuntimeContext(getRuntimeContextRemotely);
+        const result = await executeLocally({
             func,
-            projectRoot,
             args,
             executeAction,
             getRuntimeContext,
-            loadModule,
             getAllowedConnectionIds,
-            log,
-            DEFAULT_TIMEOUT_MS,
+            timeoutMs: DEFAULT_TIMEOUT_MS,
             longPolling,
-        );
+        });
 
         sendSuccess(res, result);
     } catch (error: unknown) {
@@ -794,7 +825,6 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
  */
 export function createDevServerMiddleware(
     viteBuild: typeof build,
-    loadModule: LoadModule,
     getBackendFunctions: () => BackendFunction[],
     getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
     auth: AuthConfig,
@@ -805,6 +835,7 @@ export function createDevServerMiddleware(
     mode: string,
     isHostAllowed: HostCheck,
     serverConditions: readonly string[],
+    executeLocally?: LocalExecutor,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log);
@@ -830,6 +861,8 @@ export function createDevServerMiddleware(
             log,
             oversizedFunctionsWarned,
         );
+    // One query for a burst of parallel calls, so they don't each count against production's limit.
+    const shareRuntimeContext = shareInFlight<unknown>();
     const runLocally: RouteHandler = (req, res, functionsByName) =>
         guardAuthenticated(res, doAuthenticatedRequest, (authedRequest) =>
             handleExecuteAction(
@@ -839,10 +872,10 @@ export function createDevServerMiddleware(
                 auth,
                 authedRequest,
                 longPolling,
-                loadModule,
                 getAllowedConnectionIds,
-                projectRoot,
                 log,
+                executeLocally,
+                shareRuntimeContext,
             ),
         );
     const routeHandlers: Record<DevServerRoute, RouteHandler> = {

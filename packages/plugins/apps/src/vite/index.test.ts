@@ -54,6 +54,7 @@ import {
 
 import * as buildPackage from './build-package';
 import * as devServer from './dev-server';
+import * as localExecutionProcess from './local-execution-process';
 import * as networkGuard from './network-guard';
 import { MIN_VITE_VERSION, unsupportedViteMessage } from './vite-version';
 
@@ -103,7 +104,11 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
+    close?: () => Promise<void>;
     config: { mode: string } & HostCheckConfig;
+    environments?: {
+        ssr: { hot: { handleInvoke: () => Promise<unknown> }; config: { dev: object } };
+    };
 };
 
 function fakeServerConfig(mode: string): FakeViteDevServer['config'] {
@@ -121,7 +126,9 @@ function getConfigureServer(
         throw new Error('Expected plugin.configureServer to be the plain function-hook form');
     }
     return function callConfigureServer(server: FakeViteDevServer): void {
-        Reflect.apply(configureServer, undefined, [server]);
+        const ssr = { hot: { handleInvoke: async () => ({}) }, config: { dev: {} } };
+        const fullServer = { close: async () => {}, environments: { ssr }, ...server };
+        Reflect.apply(configureServer, undefined, [fullServer]);
     };
 }
 
@@ -499,6 +506,8 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
@@ -528,6 +537,8 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -556,6 +567,8 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -1451,16 +1464,21 @@ describe('Backend Functions - getVitePlugin', () => {
 
     // Without auth both endpoints are off, and dev-verify sends every execution to the cloud.
     test.each([
-        { scenario: 'no authentication', mode: 'development', withAuth: false, installs: 0 },
-        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, installs: 0 },
-        { scenario: 'local execution', mode: 'development', withAuth: true, installs: 1 },
+        { scenario: 'no authentication', mode: 'development', withAuth: false, runsLocally: false },
+        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, runsLocally: false },
+        { scenario: 'local execution', mode: 'development', withAuth: true, runsLocally: true },
     ])(
-        'Should install the sandbox guards only when local execution can run ($scenario)',
-        ({ mode, withAuth, installs }) => {
+        'Should run backend functions in child processes only when local execution can run ($scenario)',
+        ({ mode, withAuth, runsLocally }) => {
             const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
+            const installGuards = jest.spyOn(networkGuard, 'installGuards');
+            const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
+            const createExecutor = jest.spyOn(localExecutionProcess, 'createChildProcessExecutor');
+            const runnerPath = '/build/node_modules/vite/dist/node/module-runner.js';
+            const resolveRunner = jest
+                .spyOn(localExecutionProcess, 'resolveViteModuleRunner')
+                .mockReturnValue(runnerPath);
+            const hot = { handleInvoke: jest.fn(async () => ({})) };
             const configureServer = getConfigureServer(plugin);
             const restoreEnv = clearDatadogEnv();
             if (withAuth) {
@@ -1473,81 +1491,28 @@ describe('Backend Functions - getVitePlugin', () => {
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
                     config: fakeServerConfig(mode),
+                    environments: { ssr: { hot, config: { dev: {} } } },
                 });
 
-                expect(installGuards).toHaveBeenCalledTimes(installs);
+                const executeLocally = createMiddleware.mock.calls[0]?.at(-1);
+                expect(typeof executeLocally).toBe(runsLocally ? 'function' : 'undefined');
+                const executorOptions = createExecutor.mock.calls.map(([options]) => ({
+                    invokeChannel: options.invokeChannel,
+                    moduleRunnerPath: options.moduleRunnerPath,
+                }));
+                const expectedOptions = { invokeChannel: hot, moduleRunnerPath: runnerPath };
+                expect(executorOptions).toEqual(runsLocally ? [expectedOptions] : []);
+                // The dev server's own fs and subprocess APIs stay unpatched: calls run elsewhere.
+                expect(installGuards).not.toHaveBeenCalled();
             } finally {
                 restoreEnv();
                 installGuards.mockRestore();
+                createMiddleware.mockRestore();
+                createExecutor.mockRestore();
+                resolveRunner.mockRestore();
             }
         },
     );
-
-    test.each([
-        { predates: true, warns: true },
-        { predates: false, warns: false },
-    ])(
-        'Should warn that fs-extra/graceful-fs loaded before the dev server is unguarded (predates: $predates)',
-        ({ predates, warns }) => {
-            const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
-            const gracefulFsPredatesGuards = jest
-                .spyOn(networkGuard, 'gracefulFsPredatesGuards')
-                .mockReturnValue(predates);
-            const configureServer = getConfigureServer(plugin);
-            const restoreEnv = clearDatadogEnv();
-            process.env.DD_API_KEY = 'test-api-key';
-            process.env.DD_APP_KEY = 'test-app-key';
-
-            try {
-                configureServer({
-                    middlewares: { use: jest.fn() },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                });
-                const warned = mockLogFn.mock.calls.some(
-                    ([text, level]) =>
-                        level === 'warn' && text === networkGuard.GRACEFUL_FS_UNGUARDED_WARNING,
-                );
-
-                expect(warned).toBe(warns);
-            } finally {
-                restoreEnv();
-                installGuards.mockRestore();
-                gracefulFsPredatesGuards.mockRestore();
-            }
-        },
-    );
-
-    // Each local execution installs again and fails closed, so the server itself must still start.
-    test('Should keep the dev server starting when installing the sandbox guards throws', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const installGuards = jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => {
-            throw new Error('Cannot redefine property: cpSync');
-        });
-        const use = jest.fn();
-        const configureServer = getConfigureServer(plugin);
-        const restoreEnv = clearDatadogEnv();
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-
-        try {
-            expect(() =>
-                configureServer({
-                    middlewares: { use },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                }),
-            ).not.toThrow();
-            expect(installGuards).toHaveBeenCalled();
-            expect(use).toHaveBeenCalledTimes(1);
-        } finally {
-            restoreEnv();
-            installGuards.mockRestore();
-        }
-    });
 
     test("Should hand the middleware Vite's default server conditions", () => {
         const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
@@ -1562,7 +1527,7 @@ describe('Backend Functions - getVitePlugin', () => {
         configureServer({ middlewares: { use }, ssrLoadModule, config });
 
         const [middlewareArgs] = middlewareSpy.mock.calls;
-        const passedConditions = middlewareArgs.at(-1);
+        const passedConditions = middlewareArgs.at(-2);
         expect(passedConditions).toBe(defaultServerConditions);
     });
 
