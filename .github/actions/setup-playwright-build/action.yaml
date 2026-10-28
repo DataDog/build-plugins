@@ -1,5 +1,10 @@
 name: Setup Playwright build
 description: Install dependencies, Playwright browsers, and prebuilt plugins for Playwright jobs.
+inputs:
+  browsers-preinstalled:
+    description: Set when running in the Playwright image, which already has the browsers and their system packages.
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -19,6 +24,7 @@ runs:
 
     - name: Cache playwright binaries
       id: cache-playwright-binaries
+      if: inputs.browsers-preinstalled != 'true'
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
@@ -31,6 +37,7 @@ runs:
       shell: bash
 
     - name: Install playwright
+      if: inputs.browsers-preinstalled != 'true'
       run: yarn workspace @dd/tests playwright install --with-deps
       shell: bash
 
@@ -40,7 +47,7 @@ runs:
       shell: bash
 
     - name: Save playwright cache
-      if: always() && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
+      if: always() && inputs.browsers-preinstalled != 'true' && steps.cache-playwright-binaries.outputs.cache-hit != 'true'
       uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
