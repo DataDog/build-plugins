@@ -14,6 +14,24 @@ export async function callHttpWithoutAwaiting() {
     return 'returned';
 }
 
+export async function catchHttpFailure(connectionId?: string, withInputs = true) {
+    try {
+        await $.Actions.http.request(withInputs ? { inputs: {}, connectionId } : { connectionId });
+        return 'no error';
+    } catch (error) {
+        return error instanceof Error ? { type: 'Error', value: error.message } : { type: typeof error, value: error };
+    }
+}
+
+export async function callHttpReportingPid() {
+    return { pid: process.pid, result: await $.Actions.http.request({ inputs: {} }) };
+}
+
+export async function throwValue(kind: 'error' | 'string') {
+    const failure = kind === 'error' ? new Error('plain error x') : 'plain string failure';
+    throw failure;
+}
+
 export async function callHttpWithMap() {
     return $.Actions.http.request({ inputs: { headers: new Map([['a', 'b']]) } });
 }

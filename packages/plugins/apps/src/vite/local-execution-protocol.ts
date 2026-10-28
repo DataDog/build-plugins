@@ -22,7 +22,7 @@ export type ParentMessage =
     | { type: 'start'; config: ChildStartConfig }
     | { type: 'invoke-result'; id: number; response: unknown }
     | { type: 'action-result'; id: number; ok: true; value: unknown }
-    | { type: 'action-result'; id: number; ok: false; message: string };
+    | { type: 'action-result'; id: number; ok: false; message: string; thrownString: boolean };
 
 export type ChildMessage =
     | { type: 'invoke'; id: number; payload: unknown }
@@ -36,7 +36,7 @@ export type ChildMessage =
       }
     | { type: 'loaded' }
     | { type: 'result'; data: unknown }
-    | { type: 'error'; message: string };
+    | { type: 'error'; message: string; detail?: string };
 
 // The child trusts the dev server, so this only tells the message kinds apart.
 export function isParentMessage(message: unknown): message is ParentMessage {
