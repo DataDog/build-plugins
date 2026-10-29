@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { IncomingHttpHeaders } from 'http';
-import { isIP } from 'net';
+import { BlockList, isIP } from 'net';
 import type { ResolvedPreviewOptions, ResolvedServerOptions } from 'vite';
 
 export type HostCheck = (hostHeader: string) => boolean;
@@ -14,6 +14,8 @@ export interface HostCheckConfig {
 }
 
 export const MISSING_HOST_MESSAGE = 'Blocked request with no Host header.';
+export const ORIGIN_MISMATCH_MESSAGE =
+    "Blocked request. Only the dev server's own origin can call this endpoint.";
 
 export interface RequestRejection {
     statusCode: 403 | 415;
@@ -112,6 +114,61 @@ function isSameOriginAsHost(origin: string, hostHeader: string): boolean {
     }
 }
 
+// Loopback plus the unspecified addresses, which browsers also route to this machine.
+const LOCAL_ADDRESSES = new BlockList();
+LOCAL_ADDRESSES.addSubnet('127.0.0.0', 8, 'ipv4');
+LOCAL_ADDRESSES.addAddress('0.0.0.0', 'ipv4');
+LOCAL_ADDRESSES.addAddress('::1', 'ipv6');
+LOCAL_ADDRESSES.addAddress('::', 'ipv6');
+
+// Parsed like the Origin comparison parses it, so `127.1` and `[0:0::1]` count as local.
+function isLocalHost(hostHeader: string): boolean {
+    if (NON_AUTHORITY_CHARACTERS_RE.test(hostHeader)) {
+        return false;
+    }
+    let hostname: string;
+    try {
+        hostname = new URL(`http://${hostHeader}`).hostname.replace(/\.+$/, '');
+    } catch {
+        return false;
+    }
+    if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+        return true;
+    }
+    if (hostname.startsWith('[')) {
+        const ipv6Address = hostname.slice(1, -1);
+        return LOCAL_ADDRESSES.check(ipv6Address, 'ipv6');
+    }
+    return isIP(hostname) === 4 && LOCAL_ADDRESSES.check(hostname, 'ipv4');
+}
+
+// A proxy that rewrites Host to a local name sends the public host in X-Forwarded-Host. Page
+// scripts can't set Sec-Fetch-Site, so it keeps a cross-site page from naming its own host there.
+function getForwardedHost(headers: IncomingHttpHeaders, host: string): string | undefined {
+    const forwardedHosts = headers['x-forwarded-host'];
+    if (
+        typeof forwardedHosts !== 'string' ||
+        headers['sec-fetch-site'] !== 'same-origin' ||
+        !isLocalHost(host)
+    ) {
+        return undefined;
+    }
+    // A proxy that appends to the header adds its value last; earlier ones can come from the client.
+    const forwardedHost = forwardedHosts.split(',').at(-1)?.trim();
+    if (!forwardedHost || isLocalHost(forwardedHost)) {
+        return undefined;
+    }
+    return forwardedHost;
+}
+
+function isOwnOrigin(origin: string, headers: IncomingHttpHeaders, host: string): boolean {
+    if (isSameOriginAsHost(origin, host)) {
+        return true;
+    }
+    const forwardedHost = getForwardedHost(headers, host);
+    return forwardedHost !== undefined && isSameOriginAsHost(origin, forwardedHost);
+}
+
 function isJsonContentType(contentType: string | undefined): boolean {
     return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
 }
@@ -135,10 +192,10 @@ export function checkDevServerRequest(
             message: `Blocked request. This host (${quotedHostname}) is not allowed. To allow it, add it to \`server.allowedHosts\` in vite.config.js.`,
         };
     }
-    if (origin !== undefined && !isSameOriginAsHost(origin, host)) {
+    if (origin !== undefined && !isOwnOrigin(origin, headers, host)) {
         return {
             statusCode: 403,
-            message: "Blocked request. Only the dev server's own origin can call this endpoint.",
+            message: ORIGIN_MISMATCH_MESSAGE,
         };
     }
     if (!isJsonContentType(headers['content-type'])) {

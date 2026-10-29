@@ -1307,6 +1307,57 @@ describe('Dev Server Middleware — request origin and host checks over real HTT
     }, 30000);
 
     test.each([
+        { secFetchSite: 'same-origin', expectedStatus: 200 },
+        { secFetchSite: ['same-origin', 'same-origin'], expectedStatus: 403 },
+        { secFetchSite: 'cross-site', expectedStatus: 403 },
+    ])(
+        'Should answer $expectedStatus to a request behind a proxy that rewrites Host to loopback, with Sec-Fetch-Site $secFetchSite',
+        async ({ secFetchSite, expectedStatus }) => {
+            const previewHost = `app-${port}${previewSuffix}`;
+            const response = await postDebugBundle({
+                Host: `localhost:${port}`,
+                'X-Forwarded-Host': previewHost,
+                Origin: `https://${previewHost}`,
+                'Content-Type': 'application/json',
+                'Sec-Fetch-Site': secFetchSite,
+            });
+
+            expect(response.status).toBe(expectedStatus);
+        },
+        30000,
+    );
+
+    test.each([
+        {
+            description: 'a client value followed by the proxy value',
+            forwardedHosts: (previewHost: string) => ['client-claimed.example', previewHost],
+            expectedStatus: 200,
+        },
+        {
+            description: 'the proxy value followed by another',
+            forwardedHosts: (previewHost: string) => [previewHost, 'proxy.internal.example'],
+            expectedStatus: 403,
+        },
+        { description: 'missing', forwardedHosts: () => [], expectedStatus: 403 },
+    ])(
+        'Should answer $expectedStatus behind a Host-rewriting proxy when X-Forwarded-Host is $description',
+        async ({ forwardedHosts, expectedStatus }) => {
+            const previewHost = `app-${port}${previewSuffix}`;
+            const forwardedHostValues = forwardedHosts(previewHost);
+            const response = await postDebugBundle({
+                Host: `localhost:${port}`,
+                'X-Forwarded-Host': forwardedHostValues,
+                Origin: `https://${previewHost}`,
+                'Content-Type': 'application/json',
+                'Sec-Fetch-Site': 'same-origin',
+            });
+
+            expect(response.status).toBe(expectedStatus);
+        },
+        30000,
+    );
+
+    test.each([
         {
             description: 'a cross-site Origin',
             headers: (p: number) => ({
