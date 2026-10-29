@@ -21,32 +21,16 @@ describe('Apps Plugin - loadViteParseAst', () => {
         await expect(loading).resolves.toBe(parseAst);
     });
 
-    test("Should fail with its own message when Vite's CJS entry throws on parseAst", async () => {
-        const cjsVite = { version: '6.4.3' };
-        const getParseAst = jest.fn(() => {
-            throw new Error('parseAst is not available in the CJS build of Vite.');
-        });
-        Object.defineProperty(cjsVite, 'parseAst', { get: getParseAst, enumerable: true });
-        jest.doMock('vite', () => cjsVite);
-        const loadViteParseAst = await importLoader();
-
-        const loading = loadViteParseAst();
-        await expect(loading).rejects.toThrow("Couldn't load parseAst from Vite 6.4.3");
-        expect(getParseAst).toHaveBeenCalled();
-    });
-
     test('Should fail with the Vite version when Vite has no parseAst', async () => {
-        jest.doMock('vite', () => ({ version: '4.5.0' }));
+        jest.doMock('vite', () => ({ version: '7.3.7' }));
         const loadViteParseAst = await importLoader();
 
         const loading = loadViteParseAst();
-        await expect(loading).rejects.toThrow(
-            "Couldn't load parseAst from Vite 4.5.0; local execution needs Vite 5 or later, loaded through its ESM entry.",
-        );
+        await expect(loading).rejects.toThrow("Couldn't load parseAst from Vite 7.3.7.");
     });
 
     test('Should reuse one load across calls', async () => {
-        jest.doMock('vite', () => ({ parseAst: jest.fn(), version: '6.4.3' }));
+        jest.doMock('vite', () => ({ parseAst: jest.fn(), version: '7.3.7' }));
         const loadViteParseAst = await importLoader();
 
         const first = loadViteParseAst();
@@ -56,7 +40,7 @@ describe('Apps Plugin - loadViteParseAst', () => {
     });
 
     test('Should retry the load after a failure instead of caching it', async () => {
-        const viteMock: { version: string; parseAst?: jest.Mock } = { version: '6.4.3' };
+        const viteMock: { version: string; parseAst?: jest.Mock } = { version: '7.3.7' };
         jest.doMock('vite', () => viteMock);
         const loadViteParseAst = await importLoader();
 

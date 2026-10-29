@@ -20,6 +20,9 @@ export const BACKEND_FILE_WITH_QUERY_RE = new RegExp(
 /** Vite's `--mode` for `npm run dev:verify`; read via `server.config.mode` since `import.meta.env.MODE` breaks Jest's CommonJS transform. */
 export const DEV_VERIFY_MODE = 'dev-verify';
 
+export const NODE_BACKEND_RUNTIME = 'Node backend runtime';
+export const NODE_BACKEND_RUNTIME_NODE_MAJOR = 24;
+
 export const BACKEND_CODE_EXTENSIONS = [
     '.ts',
     '.tsx',

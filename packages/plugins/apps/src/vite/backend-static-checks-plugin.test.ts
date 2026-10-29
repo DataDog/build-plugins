@@ -3,7 +3,9 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { createParsedModuleRecord } from '@dd/apps-plugin/backend/ast-parsing/module-graph';
-import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
+import { createBackendStaticChecks } from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
+import { NODE_BACKEND_RUNTIME } from '@dd/apps-plugin/constants';
+import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { parseAst } from 'rollup/parseAst';
 
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
@@ -29,55 +31,40 @@ describe('Backend Functions - backend static checks plugin', () => {
         jest.clearAllMocks();
     });
 
-    test('Should reject a module importing a Node built-in', () => {
+    test('Should accept a module importing a Node built-in and calling fetch', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
         expect(() =>
             callModuleParsed(plugin, {
                 id: '/project/src/backend/helpers/http.js',
-                code: "import fs from 'fs';\nexport function readIt() { return fs.readFileSync('/etc/passwd'); }",
+                code: "import fs from 'fs';\nexport function readIt() { fs.readFileSync('/etc/hosts'); return fetch('https://example.com'); }",
             }),
-        ).toThrow('Importing Node built-in module "fs" is not supported in backend function code');
+        ).not.toThrow();
     });
 
-    test('Should reject a module calling a restricted global', () => {
+    test('Should reject a module using Deno', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
         expect(() =>
             callModuleParsed(plugin, {
                 id: '/project/src/backend/helpers/http.js',
-                code: 'export function callIt() { return fetch("https://example.com"); }',
+                code: 'export function cwd() { return Deno.cwd(); }',
             }),
-        ).toThrow('Using "fetch" is not supported in backend function code');
+        ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
     });
 
-    test('Should warn on a module referencing crypto or Intl', () => {
+    test('Should allow a module with no restricted globals', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
-            () => new Map(),
-        );
-
-        callModuleParsed(plugin, {
-            id: '/project/src/backend/helpers/id.js',
-            code: 'export function makeId() { return crypto.randomUUID(); }',
-        });
-
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
-    });
-
-    test('Should allow a module with no restricted imports or globals', () => {
-        const plugin = createBackendStaticChecksPlugin(
-            '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -92,7 +79,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip modules under node_modules', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -107,7 +94,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip virtual modules', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -128,7 +115,7 @@ describe('Backend Functions - backend static checks plugin', () => {
     test('Should skip modules with no source (external/synthetic modules)', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -142,14 +129,14 @@ describe('Backend Functions - backend static checks plugin', () => {
 
     test('Should reuse an already-parsed module record instead of re-parsing', () => {
         const moduleId = '/project/src/backend/helpers/http.js';
-        const ast = parseAst('export function callIt() { return fetch("https://example.com"); }');
+        const ast = parseAst('export function callIt() { return Deno.cwd(); }');
         const record = createParsedModuleRecord(moduleId, '/project', ast, []);
         if (!record) {
             throw new Error('Expected a module record to be created for this test.');
         }
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map([[moduleId, record]]),
         );
         const throwIfParsed: typeof parseAst = () => {
@@ -162,28 +149,28 @@ describe('Backend Functions - backend static checks plugin', () => {
                 { id: moduleId, code: 'this code is never read when a record already exists' },
                 throwIfParsed,
             ),
-        ).toThrow('Using "fetch" is not supported in backend function code');
+        ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
     });
 
     test('Should fall back to parsing when no record exists for the module', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
         expect(() =>
             callModuleParsed(plugin, {
                 id: '/project/src/backend/helpers/http.js',
-                code: 'export function callIt() { return fetch("https://example.com"); }',
+                code: 'export function callIt() { return Deno.cwd(); }',
             }),
-        ).toThrow('Using "fetch" is not supported in backend function code');
+        ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
     });
 
     test('Should throw a checks-specific error, not a connection-ID-collector-specific one, when the fallback parse fails', () => {
         const plugin = createBackendStaticChecksPlugin(
             '/project',
-            getMockLogger(),
+            createBackendStaticChecks(getMockLogger()),
             () => new Map(),
         );
 
@@ -193,7 +180,7 @@ describe('Backend Functions - backend static checks plugin', () => {
                 code: 'export function callIt( {',
             }),
         ).toThrow(
-            /Unsupported module source .*: unparseable module source .* could hide a Node-builtin import or restricted-global access/,
+            /Unsupported module source .*: unparseable module source .* could hide a restricted-global access/,
         );
     });
 });

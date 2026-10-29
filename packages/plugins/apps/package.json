@@ -25,6 +25,12 @@
                 "format": [
                     "esm"
                 ]
+            },
+            "local-execution-child": {
+                "entry": "./src/vite/local-execution-child.ts",
+                "format": [
+                    "esm"
+                ]
             }
         }
     },
@@ -40,13 +46,16 @@
         "esbuild": "0.25.8",
         "eslint-scope": "7.2.2",
         "glob": "11.1.0",
-        "jszip": "3.10.1"
+        "jszip": "3.10.1",
+        "picomatch": "4.0.7",
+        "semver": "7.7.2"
     },
     "devDependencies": {
         "@types/eslint-scope": "3.7.7",
         "@types/estree": "1.0.8",
         "@types/node": "^20",
-        "graceful-fs": "4.2.11",
+        "@types/picomatch": "4.0.2",
+        "@types/semver": "7.5.8",
         "rollup": "4.60.4",
         "typescript": "5.4.3",
         "vite": "6.4.3"
