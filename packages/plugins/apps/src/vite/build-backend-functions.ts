@@ -9,6 +9,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import type { build } from 'vite';
 
+import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
@@ -32,6 +33,7 @@ export async function buildBackendFunctions(
     functions: BackendFunction[],
     buildRoot: string,
     log: Logger,
+    runStaticChecks: RunBackendStaticChecks,
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
@@ -58,7 +60,7 @@ export async function buildBackendFunctions(
 
             const staticChecksPlugin = createBackendStaticChecksPlugin(
                 buildRoot,
-                log,
+                runStaticChecks,
                 connectionIdCollector.getModuleRecords,
             );
             const baseConfig = getBaseBackendBuildConfig(

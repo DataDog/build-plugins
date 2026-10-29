@@ -4,6 +4,7 @@
 
 import type { PluginOptions, Options } from '@dd/core/types';
 import { PLUGIN_NAME as ERROR_TRACKING_PLUGIN_NAME } from '@dd/error-tracking-plugin';
+import { getUnsupportedViteWarning } from '@dd/factory/helpers/vite-version';
 import { buildPluginFactory } from '@dd/factory';
 
 const invokeFactory = (opts: Options): PluginOptions[] => {
@@ -91,6 +92,65 @@ describe('Factory', () => {
                 output: { enable: 1 },
             });
             expect(hasPlugin(plugins, 'output')).toBe(true);
+        });
+    });
+
+    describe('Vite version', () => {
+        let warn: jest.SpyInstance;
+
+        beforeEach(() => {
+            warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        });
+
+        afterEach(() => {
+            warn.mockRestore();
+        });
+
+        const cases: {
+            description: string;
+            framework: 'vite' | 'esbuild';
+            version: string;
+            warns: boolean;
+        }[] = [
+            { description: 'Vite 5', framework: 'vite', version: '5.4.21', warns: true },
+            { description: 'Vite 6.3', framework: 'vite', version: '6.3.5', warns: true },
+            { description: 'Vite 6.4', framework: 'vite', version: '6.4.3', warns: false },
+            { description: 'Vite 8', framework: 'vite', version: '8.3.4', warns: false },
+            { description: 'Vite 9', framework: 'vite', version: '9.0.0', warns: true },
+            {
+                description: 'another bundler with a low version',
+                framework: 'esbuild',
+                version: '0.25.8',
+                warns: false,
+            },
+        ];
+
+        test.each(cases)(
+            'Should warn about an unsupported Vite only when it is one: $description',
+            ({ framework, version, warns }) => {
+                const factory = buildPluginFactory({ bundler: { version }, version: '1.0.0' });
+                factory.raw({ logLevel: 'warn' }, { framework });
+                const warnings = warn.mock.calls.map(([message]) => String(message));
+                const viteWarnings = warnings.filter((message) =>
+                    message.includes("Datadog's Vite plugin"),
+                );
+                const expected = getUnsupportedViteWarning(version);
+                const matching = viteWarnings.filter(
+                    (message) => expected !== undefined && message.endsWith(expected),
+                );
+                const count = warns ? 1 : 0;
+                expect(viteWarnings).toHaveLength(count);
+                expect(matching).toHaveLength(count);
+            },
+        );
+
+        test('Should not print the warning when logs are off', () => {
+            const factory = buildPluginFactory({
+                bundler: { version: '5.4.21' },
+                version: '1.0.0',
+            });
+            factory.raw({ logLevel: 'none' }, { framework: 'vite' });
+            expect(warn).not.toHaveBeenCalled();
         });
     });
 });

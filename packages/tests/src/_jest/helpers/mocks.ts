@@ -2,11 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-/* global NodeJS */
-
-import type { BackendFunction } from '@dd/apps-plugin/backend/types';
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '@dd/apps-plugin/constants';
-import type { LoadModule } from '@dd/apps-plugin/vite/local-execution';
 import { DEFAULT_SITE } from '@dd/core/constants';
 import {
     checkFile,
@@ -126,25 +121,6 @@ export const getMockTimeLogger = (overrides: Partial<TimeLogger> = {}): TimeLogg
     };
 
     return mockTimer;
-};
-
-/**
- * Builds a `loadModule`-shaped resolver returning `exports` for `func`'s suffixed absolute
- * path (see `LOCAL_EXECUTION_LOAD_SUFFIX`) and rejecting any other specifier, matching a real
- * loader when only the target module is resolvable.
- */
-export const moduleResolverFor = (
-    func: BackendFunction,
-    exports: Record<string, unknown>,
-): LoadModule => {
-    return async (specifier: string) => {
-        if (specifier === func.absolutePath + LOCAL_EXECUTION_LOAD_SUFFIX) {
-            return exports;
-        }
-        const error: NodeJS.ErrnoException = new Error(`Cannot find module '${specifier}'`);
-        error.code = 'MODULE_NOT_FOUND';
-        throw error;
-    };
 };
 
 /**

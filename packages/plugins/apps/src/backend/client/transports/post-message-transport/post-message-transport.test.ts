@@ -381,6 +381,21 @@ describe('postMessageTransport', () => {
         expect(remainingListeners).toBe(0);
     });
 
+    test('Should wait for a run that ends at the server limit, after forwarding and response delays', async () => {
+        jest.useFakeTimers();
+        const serverRunLimitMs = 5 * 60 * 1000;
+        const forwardingAndResponseMs = 10_000;
+        const { posted, reply } = installFakeWindow({});
+
+        const result = postMessageTransport(QUERY_NAME, ARGS);
+        const outcome = result.catch((error: unknown) => error);
+        const message = await posted;
+        await jest.advanceTimersByTimeAsync(serverRunLimitMs + forwardingAndResponseMs);
+        reply(message.requestId, 'ok');
+
+        await expect(outcome).resolves.toBe('ok');
+    });
+
     test("Should accept the parent's response from any origin when it posted with '*'", async () => {
         const { postMessage, posted, reply, parent } = installFakeWindow({});
 

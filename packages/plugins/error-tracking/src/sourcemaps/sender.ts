@@ -153,6 +153,7 @@ export const upload = async (
                         auth: { apiKey: context.apiKey },
                         url: intakeUrl,
                         method: 'POST',
+                        retryFetchErrors: true,
                         getData: getData(payload, defaultHeaders),
                         // On retry we store the error as a warning.
                         onRetry: (error: Error, attempt: number) => {

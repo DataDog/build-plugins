@@ -354,6 +354,8 @@ export type RequestOpts = {
     signal?: AbortSignal;
     // Defaults to the global at call time; pass a captured reference to ignore later reassignment.
     fetchImpl?: typeof fetch;
+    // Opt in only when replaying a request after an ambiguous network failure is safe.
+    retryFetchErrors?: boolean;
 };
 
 export type ResolvedEntry = { name?: string; resolved: string; original: string };

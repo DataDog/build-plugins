@@ -65,7 +65,7 @@ const runInLeakDir = (leakDir: string, fixtureGlobals: string, setupFilesAfterEn
 };
 
 // Node 22 handles the same leak without touching the interceptors, so neither case can tell
-// anything apart there. They run before Node 22, which covers the Node 20 the repo pins.
+// anything apart there. They only run on a Node older than 22.
 const nodeMajorVersion = process.versions.node.split('.')[0];
 const describeBeforeNode22 = Number(nodeMajorVersion) < 22 ? describe : describe.skip;
 const INTERCEPTOR_WARNING = /JEST-01.*accessed on \[\w*Interceptor\]/;
