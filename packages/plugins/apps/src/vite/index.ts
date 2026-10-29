@@ -19,7 +19,7 @@ import {
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { runBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { createBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
@@ -40,6 +40,8 @@ import {
     BACKEND_FILE_WITH_QUERY_RE,
     DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
+    NODE_BACKEND_RUNTIME,
+    NODE_BACKEND_RUNTIME_NODE_MAJOR,
     PLUGIN_NAME,
 } from '../constants';
 import { PARAMETERS_MODULE } from '../parameters/extract-parameters';
@@ -53,21 +55,17 @@ import { buildAppPackage } from './build-package';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
+import { getLocalExecutionChildPath } from './local-execution-child-path';
+import type { ChildProcessExecutor } from './local-execution-process';
+import { createChildProcessExecutor, resolveViteModuleRunner } from './local-execution-process';
 import { localExecutionResolutionContext } from './local-execution';
-import {
-    exemptFetchFromBlockedScope,
-    exemptPluginContainerFromBlockedScope,
-    GRACEFUL_FS_UNGUARDED_WARNING,
-    gracefulFsPredatesGuards,
-    installGuards,
-} from './network-guard';
 import { createParameterCollector } from './parameter-collector';
 import { loadViteParseAst } from './vite-parse-ast';
+import { assertSupportedVite } from './vite-version';
 
 export type ViteBundler = {
     build: typeof build;
-    // Vite 6 and later.
-    defaultServerConditions?: readonly string[];
+    defaultServerConditions: readonly string[];
 };
 
 export interface VitePluginOptions {
@@ -143,6 +141,20 @@ export const SSR_WARMUP_SETTING = 'environments.ssr.dev.preTransformRequests';
 const FRONTEND_PROXY_ID_PREFIX = '\0dd-apps-backend-proxy:';
 const FRONTEND_PROXY_ID_SUFFIX = '/proxy';
 const FRONTEND_PROXY_ID_RE = new RegExp(`^${FRONTEND_PROXY_ID_PREFIX}`);
+
+// Local execution runs on the developer's own Node; WebSocket is a default global from Node 22.
+export const MIN_LOCAL_NODE_MAJOR = 22;
+
+export function localNodeWarning(nodeVersion: string): string | undefined {
+    const major = Number.parseInt(nodeVersion, 10);
+    if (major < MIN_LOCAL_NODE_MAJOR) {
+        return `Node ${nodeVersion} has no global WebSocket, which backend functions get on the ${NODE_BACKEND_RUNTIME}; use Node ${MIN_LOCAL_NODE_MAJOR} or later to run them locally.`;
+    }
+    if (major !== NODE_BACKEND_RUNTIME_NODE_MAJOR) {
+        return `Your local Node version "${nodeVersion}" doesn't match the ${NODE_BACKEND_RUNTIME}'s Node version "${NODE_BACKEND_RUNTIME_NODE_MAJOR}", so backend functions may behave differently locally.`;
+    }
+    return undefined;
+}
 
 /**
  * Has the browser revalidate a requested backend function file, as it does the app's own modules.
@@ -222,6 +234,7 @@ export const getVitePlugin = ({
     options,
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
+    const runStaticChecks = createBackendStaticChecks(log);
     const { auth } = context;
 
     context.inject({
@@ -239,11 +252,8 @@ export const getVitePlugin = ({
         () => parametersModuleId,
     );
 
-    // Vite 6 invokes closeBundle when a dev server's plugin container closes,
-    // not only for production builds. configureServer only runs for dev
-    // servers, so use it to mark the session and skip packaging there — a
-    // dev exit must not rebuild backend functions or replace the production
-    // package with dev-session-derived output.
+    // Vite also invokes closeBundle when a dev server closes; configureServer marks the dev session
+    // so its exit doesn't rebuild backend functions or replace the production package.
     let devServerActive = false;
     let hasNoticedSsrWarmupOverride = false;
     let serverPreTransformRequests: boolean | undefined;
@@ -264,13 +274,14 @@ export const getVitePlugin = ({
             // After other plugins' config hooks, so it sees a server.preTransformRequests they set.
             order: 'post',
             handler(userConfig, { command }) {
+                // Tests run with mock bundler versions.
+                if (context.env !== 'test') {
+                    assertSupportedVite(this, context.bundler.version);
+                }
                 isBuild = command === 'build';
                 serverPreTransformRequests = userConfig.server?.preTransformRequests;
                 // A restarted dev server shares this process: read the manifests afresh.
                 forgetBackendModuleOwners();
-                // These SDKs ship ESM-only, but ssrLoadModule externalizes node_modules with a plain
-                // require(), which throws "Cannot use import statement outside a module";
-                // ssr.noExternal forces Vite's SSR transform instead.
                 // Only the dev server pre-bundles dependencies or loads modules through SSR; the
                 // nested backend builds configure their own resolution (see build-config.ts).
                 if (command !== 'serve') {
@@ -330,7 +341,7 @@ export const getVitePlugin = ({
                 allowPackageRoots(config.server.fs.allow, backendPackages);
             }
         },
-        // Only Vite 6+ calls this hook, and only it sees the SSR options merged with the defaults.
+        // Unlike the config hook, it sees the SSR options merged with the defaults.
         configEnvironment(name, environmentOptions, { command, isPreview }) {
             if (name !== 'ssr' || command !== 'serve' || isPreview) {
                 return undefined;
@@ -403,9 +414,9 @@ export const getVitePlugin = ({
                     return null;
                 }
 
-                // The other half of the scoping: the store is only populated while a local
-                // execution's own loadModule call is in flight (see configureServer), so an
-                // unrelated SSR resolution never inherits a marker from an earlier execution.
+                // The other half of the scoping: the store is only populated while a call's module
+                // runner request is in flight (see local-execution-process.ts), so an unrelated SSR
+                // resolution never inherits a marker from an earlier execution.
                 const subgraphImporters = localExecutionResolutionContext.getStore();
                 const isPartOfSuffixedSubgraph =
                     !!importer &&
@@ -460,10 +471,6 @@ export const getVitePlugin = ({
                         );
                     }
                 }
-                // Vite < 6.3 ignores hook filters.
-                if (!FRONTEND_PROXY_ID_RE.test(id)) {
-                    return null;
-                }
                 const sourceId = frontendProxySources.get(
                     id.slice(FRONTEND_PROXY_ID_PREFIX.length, -FRONTEND_PROXY_ID_SUFFIX.length),
                 );
@@ -479,8 +486,8 @@ export const getVitePlugin = ({
             },
         },
         transform: {
-            // Only an optimization: Vite < 6.3 ignores it, and it can't express build-root-relative
-            // exclusions or a package's opt-in.
+            // Only an optimization: it can't express build-root-relative exclusions or a
+            // package's opt-in.
             filter: { id: { include: [BACKEND_FILE_WITH_QUERY_RE] } },
             // For each .backend.* file, parse its named exports, register
             // them as backend functions, and replace the module with a
@@ -498,7 +505,7 @@ export const getVitePlugin = ({
                     return null;
                 }
                 if (id.endsWith(LOCAL_EXECUTION_LOAD_SUFFIX) && transformOptions?.ssr) {
-                    // Local execution needs the real function body, not the proxy stub below — real loads always go through ssrLoadModule, which runs in SSR, so this only fires for that legitimate path.
+                    // Local execution needs the real function body, not the proxy stub below — a call's module runner always fetches through the SSR environment, so this only fires for that legitimate path.
                     return null;
                 }
                 // Any other case (no query, a spoofed client-side import reusing the suffix, or an unrecognized query) falls through to the safe proxy-stub generation below. Strip the query first so it registers under the file's real (unsuffixed) relativePath/query-name, not a duplicate.
@@ -507,10 +514,9 @@ export const getVitePlugin = ({
 
                 const ast = this.parse(code);
                 const program = ensureProgram(ast, normalizedId);
-                // Shared so the checks below don't each independently re-walk the same AST to build the same scope graph.
                 const scopeAnalysis = analyzeModuleScope(program);
-                // Runs even for a file with zero exports, to catch a banned import/global as soon as it's written.
-                runBackendStaticChecks(ast, normalizedId, log, scopeAnalysis);
+                // Runs even for a file with zero exports, to catch a restricted global as soon as it's written.
+                runStaticChecks(ast, normalizedId, scopeAnalysis);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
                     // Only a genuinely no-query id can be trusted as a real re-transform of this
@@ -629,6 +635,7 @@ export const getVitePlugin = ({
                     backendFunctions,
                     context.buildRoot,
                     log,
+                    runStaticChecks,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
@@ -684,19 +691,38 @@ export const getVitePlugin = ({
                 );
             }
             // Without auth nothing executes, and dev-verify sends every execution to the cloud.
-            if (doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE) {
-                // As early as a dev server allows, so fewer fs wrappers (e.g. graceful-fs clones)
-                // predate it. A failure must not stop the server: each execution installs again, failing closed.
-                try {
-                    installGuards();
-                } catch (error) {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    log.warn(
-                        `Could not install the backend function sandbox guards yet: ${reason}`,
-                    );
-                }
-                if (gracefulFsPredatesGuards()) {
-                    log.warn(GRACEFUL_FS_UNGUARDED_WARNING);
+            const runsLocally = doAuthenticatedRequest && server.config.mode !== DEV_VERIFY_MODE;
+            const childEntryPath = getLocalExecutionChildPath();
+            const moduleRunnerPath = resolveViteModuleRunner(context.buildRoot);
+            const executeLocally: ChildProcessExecutor | undefined = runsLocally
+                ? createChildProcessExecutor({
+                      invokeChannel: server.environments.ssr.hot,
+                      projectRoot: context.buildRoot,
+                      childEntryPath,
+                      moduleRunnerPath,
+                      readRoots: server.config.server.fs?.allow ?? [],
+                      denyPatterns: server.config.server.fs?.deny ?? [],
+                      restrictModuleLoads: server.config.server.fs?.strict !== false,
+                      resolveModule: async (url, importer) => {
+                          const resolved = await server.environments.ssr.pluginContainer.resolveId(
+                              url,
+                              importer,
+                          );
+                          return resolved?.id;
+                      },
+                      log,
+                  })
+                : undefined;
+            if (executeLocally) {
+                // A restart starts the new server before closing this one, so each server ends only its own calls.
+                const closeServer = server.close.bind(server);
+                server.close = async () => {
+                    executeLocally.close();
+                    await closeServer();
+                };
+                const nodeWarning = localNodeWarning(process.versions.node);
+                if (nodeWarning) {
+                    log.warn(nodeWarning);
                 }
                 // Started here so an unusable Vite is reported at startup; each execution reuses
                 // this load, or retries it after a failure.
@@ -704,18 +730,10 @@ export const getVitePlugin = ({
                     const reason = error instanceof Error ? error.message : String(error);
                     log.warn(`Local execution can't parse backend modules: ${reason}`);
                 });
-                const ssrEnvironment = server.environments?.ssr;
-                if (ssrEnvironment) {
-                    const fetchModule = ssrEnvironment.fetchModule.bind(ssrEnvironment);
-                    ssrEnvironment.fetchModule = exemptFetchFromBlockedScope(fetchModule);
-                } else if (server.pluginContainer) {
-                    exemptPluginContainerFromBlockedScope(server.pluginContainer);
-                }
             }
 
-            const loadModule = server.ssrLoadModule.bind(server);
-            // Safe to call before `loadModule` runs anything: collectModuleGraphFromServer primes
-            // each node itself via `transformRequest`, since `moduleParsed` (production's
+            // Safe to call before a call's process loads anything: collectModuleGraphFromServer
+            // primes each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
             const getAllowedConnectionIds = async (entryId: string) => {
                 const parseAst = await loadViteParseAst();
@@ -723,7 +741,7 @@ export const getVitePlugin = ({
                     server,
                     entryId,
                     context.buildRoot,
-                    log,
+                    runStaticChecks,
                     parseAst,
                 );
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
@@ -731,7 +749,6 @@ export const getVitePlugin = ({
             const isHostAllowed = createViteHostCheck(server.config);
             const middleware = createDevServerMiddleware(
                 bundler.build,
-                loadModule,
                 getBackendFunctions,
                 getAllowedConnectionIds,
                 auth,
@@ -739,9 +756,11 @@ export const getVitePlugin = ({
                 options.longPolling,
                 context.buildRoot,
                 log,
+                runStaticChecks,
                 server.config.mode,
                 isHostAllowed,
                 bundler.defaultServerConditions,
+                executeLocally,
             );
             server.middlewares.use((req, res, next) => {
                 revalidateBackendFunctionFile(req);

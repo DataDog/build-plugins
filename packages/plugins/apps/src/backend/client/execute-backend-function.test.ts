@@ -69,6 +69,41 @@ describe('executeBackendFunction', () => {
         );
     });
 
+    it("should throw with the dev server's error, as a deployed app does", async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: false,
+            status: 500,
+            text: async () =>
+                JSON.stringify({ success: false, error: 'Execution failed: plain error x' }),
+        });
+
+        const error = await executeBackendFunction('testFunction', []).catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(BackendFunctionError);
+        expect(error).toMatchObject({
+            message: 'Execution failed: plain error x',
+            functionName: 'testFunction',
+            statusCode: 500,
+        });
+    });
+
+    it.each([
+        ['a non-string error', JSON.stringify({ success: false, error: 42 })],
+        ['an empty error', JSON.stringify({ success: false, error: '' })],
+        ['a success body', JSON.stringify({ success: true, error: 'unused' })],
+        ['JSON that is not an object', 'null'],
+    ])('should keep the status and raw body for %s', async (_label, body) => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: false,
+            status: 500,
+            text: async () => body,
+        });
+
+        await expect(executeBackendFunction('testFunction', [])).rejects.toThrow(
+            `Backend function "testFunction" failed with status 500: ${body}`,
+        );
+    });
+
     it('should throw BackendFunctionError when response contains error field', async () => {
         const mockResponse = {
             error: 'Function execution failed',

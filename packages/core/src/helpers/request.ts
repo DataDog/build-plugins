@@ -70,14 +70,22 @@ export const createRequestData = async (options: {
     // and auto-generated headers (boundary) that we can forward while piping through gzip.
     const req = new Request('fake://url', { method: 'POST', body: form });
 
-    // Use Web Streams pipeThrough instead of Node.js pipe() to keep the pipeline lazy.
-    // Node.js pipe() immediately puts the source into flowing mode (starts reading blobs
-    // via process.nextTick), which races with cleanup of file-backed blobs after the
-    // request completes. Web Streams only start reading when the output is consumed.
-    const data = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
+    // Consume serialization and optional compression fully before starting fetch, so
+    // reading file-backed blobs and compressing them happen outside the HTTP request's
+    // body-receive deadline. The buffered payload uses memory for each concurrent upload.
+    const rawStream = zip ? req.body!.pipeThrough(new CompressionStream('gzip')) : req.body!;
+
+    const bodyBuffer = new Uint8Array(await new Response(rawStream).arrayBuffer());
+    const data = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(bodyBuffer);
+            controller.close();
+        },
+    });
 
     const headers = {
         'Content-Encoding': zip ? 'gzip' : 'multipart/form-data',
+        'Content-Length': String(bodyBuffer.byteLength),
         ...defaultHeaders,
         ...Object.fromEntries(req.headers.entries()),
     };
@@ -87,6 +95,21 @@ export const createRequestData = async (options: {
 
 export const ERROR_CODES_NO_RETRY = [400, 401, 403, 404, 405, 409, 413];
 export const NB_RETRIES = 5;
+
+export const isRetriableFetchError = (error: unknown, signal?: AbortSignal): boolean => {
+    if (signal?.aborted) {
+        return false;
+    }
+    if (error === null || typeof error !== 'object') {
+        return false;
+    }
+    if ('name' in error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+        return false;
+    }
+    // Prefer bounded retries over dropping uploads because a recoverable error code
+    // is unknown. Permanent fetch failures may also exhaust the retry budget.
+    return true;
+};
 
 // Do a retriable fetch.
 export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
@@ -99,6 +122,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         onResponse,
         signal,
         fetchImpl = fetch,
+        retryFetchErrors = false,
     } = opts;
     const retryOpts: retry.Options = {
         retries: opts.retries === 0 ? 0 : opts.retries || NB_RETRIES,
@@ -109,15 +133,17 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
 
     return retry(async (bail: (e: Error) => void, attempt: number) => {
         let response: Response;
+        let requestInit: RequestInit;
+        let requestHeaders: RequestInit['headers'];
         try {
-            const requestInit: RequestInit = {
+            requestInit = {
                 method,
                 // This is needed for sending body in NodeJS' Fetch.
                 // https://github.com/nodejs/node/issues/46221
                 duplex: 'half',
                 signal,
             };
-            let requestHeaders: RequestInit['headers'] = {
+            requestHeaders = {
                 'X-Datadog-Origin': 'build-plugins',
             };
 
@@ -141,12 +167,22 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
                 requestInit.body = data;
                 requestHeaders = { ...requestHeaders, ...headers };
             }
-
-            response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
         } catch (error: any) {
             // We don't want to retry if there is a non-fetch related error.
             bail(error);
-            // bail(error) throws so the return is never executed.
+            // bail rejects the retry promise; return to stop this attempt.
+            return {} as T;
+        }
+
+        try {
+            response = await fetchImpl(url, { ...requestInit, headers: requestHeaders });
+        } catch (error: any) {
+            if (retryFetchErrors && isRetriableFetchError(error, signal)) {
+                throw error;
+            }
+            // Preserve immediate failure unless retries are opted into; respect cancellation.
+            bail(error);
+            // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
         }
 
@@ -164,7 +200,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
             }
             if (ERROR_CODES_NO_RETRY.includes(response.status)) {
                 bail(new Error(errorMessage));
-                // bail(error) throws so the return is never executed.
+                // bail rejects the retry promise; return to stop this attempt.
                 return {} as T;
             } else {
                 // Trigger the retry.
@@ -188,7 +224,7 @@ export const doRequest = async <T>(opts: RequestOpts): Promise<T> => {
         } catch (error: any) {
             // We don't want to retry on parsing errors.
             bail(error);
-            // bail(error) throws so the return is never executed.
+            // bail rejects the retry promise; return to stop this attempt.
             return {} as T;
         }
     }, retryOpts);

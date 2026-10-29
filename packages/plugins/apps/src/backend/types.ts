@@ -13,5 +13,5 @@ export interface BackendFunction {
     allowedConnectionIds: string[];
 }
 
-/** Shape of a backend function's result, shared by the remote (dev-server.ts) and in-process (local-execution.ts) paths — mirrors the app-builder query response's `{ data: <value> }` wrapper. */
+/** Shape of a backend function's result, shared by the remote (dev-server.ts) and local (local-execution-process.ts) paths — mirrors the app-builder query response's `{ data: <value> }` wrapper. */
 export type BackendOutputs = { data: unknown };

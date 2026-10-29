@@ -465,6 +465,9 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             expect(warnings).toHaveLength(0);
             expect(errors).toHaveLength(0);
             expect(doRequestMock).toHaveBeenCalledTimes(1);
+            expect(doRequestMock).toHaveBeenCalledWith(
+                expect.objectContaining({ retryFetchErrors: true }),
+            );
         });
 
         test('Should alert in case of errors', async () => {

@@ -198,7 +198,7 @@ describe('Request Helpers', () => {
             expect(scope.isDone()).toBe(true);
         });
 
-        test('Should bail on unrelated errors', async () => {
+        test('Should eventually fail when getData reuses a consumed stream', async () => {
             const { doRequest } = await import('@dd/core/helpers/request');
             const scope = nock(API_URL).post(API_PATH).reply(503);
             // Creating the data stream outside should make the fetch invocation fail
@@ -206,9 +206,176 @@ describe('Request Helpers', () => {
             const data = getDataStream();
 
             await expect(async () => {
-                await doRequest({ ...requestOpts, getData: () => ({ data, headers: {} }) });
+                await doRequest({
+                    ...requestOpts,
+                    retries: 2,
+                    minTimeout: 1,
+                    maxTimeout: 1,
+                    getData: () => ({ data, headers: {} }),
+                });
             }).rejects.toThrow('Response body object should not be disturbed or locked');
             expect(scope.isDone()).toBe(true);
+        });
+
+        test.each([undefined, false])(
+            'Should not replay a POST when retryFetchErrors is %s',
+            async (retryFetchErrors) => {
+                const { doRequest } = await import('@dd/core/helpers/request');
+                const error = new TypeError('fetch failed', {
+                    cause: Object.assign(new Error('socket closed'), { code: 'ECONNRESET' }),
+                });
+                const fetchImpl = jest.fn().mockRejectedValue(error);
+                const onRetry = jest.fn();
+
+                await expect(
+                    doRequest({
+                        ...requestOpts,
+                        retryFetchErrors,
+                        fetchImpl,
+                        onRetry,
+                        minTimeout: 1,
+                        maxTimeout: 1,
+                    }),
+                ).rejects.toBe(error);
+                expect(fetchImpl).toHaveBeenCalledTimes(1);
+                expect(onRetry).not.toHaveBeenCalled();
+            },
+        );
+
+        test.each(['ECONNRESET', 'EPIPE', 'UNKNOWN_NETWORK_CODE'])(
+            'Should recover from fetch network error %s',
+            async (code) => {
+                const { doRequest } = await import('@dd/core/helpers/request');
+                const onRetryMock = jest.fn();
+                const connResetCause = Object.assign(new Error(`write ${code}`), { code });
+                const fetchFailedError = Object.assign(new TypeError('fetch failed'), {
+                    cause: connResetCause,
+                });
+                const fetchImpl = jest
+                    .fn()
+                    .mockRejectedValueOnce(fetchFailedError)
+                    .mockResolvedValueOnce(new Response('{"data":"ok"}'));
+
+                const response = await doRequest({
+                    ...requestOpts,
+                    retries: 2,
+                    retryFetchErrors: true,
+                    minTimeout: 1,
+                    maxTimeout: 5,
+                    onRetry: onRetryMock,
+                    fetchImpl,
+                });
+
+                expect(response).toEqual({ data: 'ok' });
+                expect(fetchImpl).toHaveBeenCalledTimes(2);
+                expect(onRetryMock).toHaveBeenCalledTimes(1);
+                expect(onRetryMock).toHaveBeenCalledWith(fetchFailedError, 1);
+            },
+        );
+
+        test.each(['AbortError', 'TimeoutError'])(
+            'Should bail on %s without an aborted signal',
+            async (name) => {
+                const { doRequest } = await import('@dd/core/helpers/request');
+                const error = Object.assign(new Error('cancelled'), { name });
+                const fetchImpl = jest.fn().mockRejectedValue(error);
+                const onRetry = jest.fn();
+
+                await expect(
+                    doRequest({
+                        url: API_URL,
+                        retryFetchErrors: true,
+                        fetchImpl,
+                        onRetry,
+                        minTimeout: 1,
+                        maxTimeout: 1,
+                    }),
+                ).rejects.toBe(error);
+                expect(fetchImpl).toHaveBeenCalledTimes(1);
+                expect(onRetry).not.toHaveBeenCalled();
+            },
+        );
+
+        test.each([
+            'CERT_HAS_EXPIRED',
+            'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+            'DEPTH_ZERO_SELF_SIGNED_CERT',
+            'ENOTFOUND',
+            'UND_ERR_INVALID_ARG',
+            'UND_ERR_NOT_SUPPORTED',
+            'UND_ERR_REQ_CONTENT_LENGTH_MISMATCH',
+            'UNKNOWN_NETWORK_CODE',
+            undefined,
+        ])('Should use bounded retries for fetch failed with cause %s', async (code) => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const error = new TypeError('fetch failed');
+            if (code) {
+                Object.assign(error, { cause: Object.assign(new Error(code), { code }) });
+            }
+            const fetchImpl = jest.fn().mockRejectedValue(error);
+            const onRetry = jest.fn();
+
+            await expect(
+                doRequest({
+                    url: API_URL,
+                    fetchImpl,
+                    onRetry,
+                    retryFetchErrors: true,
+                    retries: 2,
+                    minTimeout: 1,
+                    maxTimeout: 1,
+                }),
+            ).rejects.toBe(error);
+            expect(fetchImpl).toHaveBeenCalledTimes(3);
+            expect(onRetry).toHaveBeenCalledTimes(2);
+        });
+
+        test('Should bail on getData rejection even with a transient error code', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const error = Object.assign(new Error('preparation failed'), { code: 'ECONNRESET' });
+            const getData = jest.fn().mockRejectedValue(error);
+            const fetchImpl = jest.fn();
+            const onRetry = jest.fn();
+
+            await expect(
+                doRequest({
+                    url: API_URL,
+                    retryFetchErrors: true,
+                    getData,
+                    fetchImpl,
+                    onRetry,
+                    minTimeout: 1,
+                    maxTimeout: 1,
+                }),
+            ).rejects.toBe(error);
+            expect(getData).toHaveBeenCalledTimes(1);
+            expect(fetchImpl).not.toHaveBeenCalled();
+            expect(onRetry).not.toHaveBeenCalled();
+        });
+
+        test('Should bail without retrying when AbortSignal is aborted', async () => {
+            const { doRequest } = await import('@dd/core/helpers/request');
+            const onRetryMock = jest.fn();
+            const controller = new AbortController();
+            controller.abort();
+            const abortError = Object.assign(new Error('The operation was aborted'), {
+                name: 'AbortError',
+            });
+            const fetchImpl = jest.fn().mockRejectedValue(abortError);
+
+            await expect(
+                doRequest({
+                    ...requestOpts,
+                    retries: 3,
+                    retryFetchErrors: true,
+                    signal: controller.signal,
+                    onRetry: onRetryMock,
+                    fetchImpl,
+                }),
+            ).rejects.toThrow('The operation was aborted');
+
+            expect(fetchImpl).toHaveBeenCalledTimes(1);
+            expect(onRetryMock).not.toHaveBeenCalled();
         });
 
         test('Should add authentication headers when using API and APP keys.', async () => {
@@ -291,5 +458,77 @@ describe('Request Helpers', () => {
                 }),
             );
         });
+    });
+
+    describe('isRetriableFetchError', () => {
+        test.each([null, undefined, 'fetch failed', 42, false])(
+            'rejects non-object errors: %p',
+            async (error) => {
+                const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+                expect(isRetriableFetchError(error)).toBe(false);
+            },
+        );
+
+        test.each(['AbortError', 'TimeoutError'])('rejects %s without a signal', async (name) => {
+            const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+            expect(isRetriableFetchError({ name })).toBe(false);
+        });
+
+        test('rejects errors when the signal is aborted', async () => {
+            const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+            const controller = new AbortController();
+            controller.abort();
+            expect(isRetriableFetchError(new Error('fetch failed'), controller.signal)).toBe(false);
+        });
+
+        test.each([
+            {},
+            new Error('fetch failed'),
+            { code: 'UNKNOWN_CODE' },
+            { cause: { code: 'UNKNOWN_CODE' } },
+        ])('accepts non-cancellation objects regardless of error code: %p', async (error) => {
+            const { isRetriableFetchError } = await import('@dd/core/helpers/request');
+            expect(isRetriableFetchError(error)).toBe(true);
+        });
+    });
+
+    describe('createRequestData', () => {
+        test.each([true, false])(
+            'Should materialize a valid multipart body with zip=%s',
+            async (zip) => {
+                const { createRequestData } = await import('@dd/core/helpers/request');
+
+                const { data, headers } = await createRequestData({
+                    getForm: () => {
+                        const form = new FormData();
+                        form.append(
+                            'event',
+                            new Blob([JSON.stringify({ service: 'web-ui' })], {
+                                type: 'application/json',
+                            }),
+                            'event',
+                        );
+                        return form;
+                    },
+                    defaultHeaders: { 'DD-EVP-ORIGIN': 'rspack-build-plugin_sourcemaps' },
+                    zip,
+                });
+
+                expect(headers['Content-Encoding']).toBe(zip ? 'gzip' : 'multipart/form-data');
+                expect(headers['DD-EVP-ORIGIN']).toBe('rspack-build-plugin_sourcemaps');
+                expect(Number(headers['Content-Length'])).toBeGreaterThan(0);
+
+                const bytes = new Uint8Array(await new Response(data).arrayBuffer());
+                expect(String(bytes.byteLength)).toBe(headers['Content-Length']);
+                const body = new Blob([bytes]).stream();
+                const decodedBody = zip ? body.pipeThrough(new DecompressionStream('gzip')) : body;
+                const form = await new Response(decodedBody, {
+                    headers: { 'Content-Type': headers['content-type'] },
+                }).formData();
+                const event = form.get('event') as File;
+                expect(event.name).toBe('event');
+                expect(JSON.parse(await event.text())).toEqual({ service: 'web-ui' });
+            },
+        );
     });
 });

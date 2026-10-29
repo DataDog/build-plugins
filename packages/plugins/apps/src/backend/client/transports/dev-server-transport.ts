@@ -8,6 +8,26 @@ import { BackendFunctionError } from '../types';
 
 const ENDPOINT = '/__dd/executeAction';
 
+function parseErrorMessage(body: string): string | undefined {
+    try {
+        const parsed: unknown = JSON.parse(body);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'success' in parsed &&
+            parsed.success === false &&
+            'error' in parsed &&
+            typeof parsed.error === 'string' &&
+            parsed.error !== ''
+        ) {
+            return parsed.error;
+        }
+    } catch {
+        return undefined;
+    }
+    return undefined;
+}
+
 export const devServerTransport: BackendFunctionTransport = async <TData>(
     functionName: string,
     args: unknown[],
@@ -39,7 +59,10 @@ export const devServerTransport: BackendFunctionTransport = async <TData>(
         let errorMessage = `Backend function "${functionName}" failed with status ${response.status}`;
         try {
             const errorBody = await response.text();
-            if (errorBody) {
+            const parsedMessage = parseErrorMessage(errorBody);
+            if (parsedMessage !== undefined) {
+                errorMessage = parsedMessage;
+            } else if (errorBody) {
                 errorMessage += `: ${errorBody}`;
             }
         } catch {

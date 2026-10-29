@@ -18,17 +18,16 @@ type BaseBackendBuildConfig = ReturnType<typeof getBaseBackendBuildConfig>;
 /**
  * Vite takes export conditions, `import.meta.env.DEV`/`PROD` and the JSX dev transform from
  * `process.env.NODE_ENV`, which a dev server sets to development. Pinning them makes a bundle built
- * there match a `vite build` upload, which runs under production. `serverConditions` is Vite's
- * `defaultServerConditions`, which Vite 5 doesn't export; no option pins its missing-peer stub.
+ * there match a `vite build` upload, which runs under production. No option pins Vite's stub for a
+ * missing optional peer dependency.
  */
 export function withProductionSettings(
     config: BaseBackendBuildConfig,
-    serverConditions: readonly string[] | undefined,
+    serverConditions: readonly string[],
 ): BaseBackendBuildConfig {
-    const conditions = serverConditions?.map((condition) =>
+    const conditions = serverConditions.map((condition) =>
         condition === DEV_PROD_CONDITION ? 'production' : condition,
     );
-    const resolve = conditions && { resolve: { ...config.ssr?.resolve, conditions } };
     return {
         ...config,
         define: {
@@ -38,7 +37,7 @@ export function withProductionSettings(
         },
         // Vite 8 converts esbuild options to Oxc's, jsxDev included.
         esbuild: { ...config.esbuild, jsxDev: false },
-        ssr: { ...config.ssr, ...resolve },
+        ssr: { ...config.ssr, resolve: { ...config.ssr?.resolve, conditions } },
     };
 }
 

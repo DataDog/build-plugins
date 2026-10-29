@@ -2,6 +2,8 @@
 
 A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned by `@datadog/apps-cli`.
 
+It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with an upgrade hint.
+
 > [!WARNING]
 > The Apps plugin is in **alpha** and is likely to break in most setups.
 
@@ -14,6 +16,8 @@ A Vite plugin that builds a deployable Datadog Apps package. Publishing is owned
 -   [Development server authentication](#development-server-authentication)
 -   [Development server requests](#development-server-requests)
 -   [Cloud execution](#cloud-execution)
+-   [Local execution](#local-execution)
+-   [Backend function runtime](#backend-function-runtime)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -41,7 +45,7 @@ apps?: {
 
 ## Backend functions
 
-Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject Node built-in imports and network globals such as `fetch` in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
+Each named export of a `.backend.ts` (or `.tsx`, `.js`, `.jsx`) module in your app is a backend function. The frontend gets a proxy that executes it through Datadog. `vite build` bundles each function on its own into the package. `vite dev` executes it locally through `/__dd/executeAction`. Static checks reject globals the [Node backend runtime](#backend-function-runtime) lacks in backend code and the modules it imports. Static `connectionId`s passed to `@datadog/action-catalog` calls become the function's allowed connections.
 
 ### Backend functions from packages
 
@@ -88,9 +92,30 @@ To call one by hand, send that content type, for example `curl -X POST -H 'Conte
 
 ## Cloud execution
 
-Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Two cases still follow the dev server's `NODE_ENV`: package export conditions on Vite 5, which doesn't export its default server conditions, and Vite's stub for an optional peer dependency the app hasn't installed.
+Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Vite's stub for an optional peer dependency the app hasn't installed still follows the dev server's `NODE_ENV`.
 
 When Datadog rejects a bundle as longer than the `jsFunctionWithActions` `script` input accepts, the dev server answers with a 413 naming the function, its size and Datadog's answer, and warns once per function until the dev server restarts.
+
+## Local execution
+
+`/__dd/executeAction` runs each backend function call the way production does: in a fresh Node process of its own, in parallel with other calls.
+
+-   **Fresh state**: module-level variables and globals start over on every call.
+-   **Concurrency**: calls run in parallel, with no local limit, so a large burst starts that many processes. Production's concurrency limits vary by org, and `dev:verify` runs against them. A call that starts while another call's runtime context (`$`) query is in flight shares that query instead of sending its own.
+-   **Timeout**: a call that runs past its time budget is killed, even inside a synchronous loop.
+-   **Sandbox**: Node's [permission model](https://nodejs.org/api/permissions.html) lets a call read the project, its `node_modules` folders and the packages linked from them, Vite and Vite's [`server.fs.allow`](https://vite.dev/config/server-options#server-fs-allow) folders, and write only to its own temp dir (`os.tmpdir()`), which is also its working directory, and `/tmp`, so a project inside `/tmp` is writable too. A refused read or write throws `ERR_ACCESS_DENIED`, not `ENOENT`, so code that tolerates only a missing file fails locally. Modules loaded through Vite, though not `fs` reads or a native `require`, refuse files matching Vite's [`server.fs.deny`](https://vite.dev/config/server-options#server-fs-deny), such as `.env`, and, unless `server.fs.strict` is `false`, files outside those folders. It refuses subprocesses, worker threads and native addons, allows the network, and caps the heap at 256 MB. A refusal the function lets reach its result fails the call with a message that points to `dev:verify`, since production may allow it, and names the path for a file refusal, or Node's reason for an API that needs full access, such as `fs.symlink` on Node 24. On a Node without [`module.registerHooks`](https://nodejs.org/api/module.html#moduleregisterhooksoptions), added in Node 22.15, modules get no `import.meta.resolve`, which Vite resolves on a worker thread there, and the dev server warns once. A known gap, from Node's [documented limitations](https://nodejs.org/api/permissions.html#limitations-and-known-issues): "Symbolic links will be followed even to locations outside of the set of paths that access has been granted to." Here, a symlink in a writable folder (the call's temp dir or `/tmp`) lets a call read or write wherever it points, project files included. Local execution is a parity aid, not a security boundary.
+-   **Environment**: a call sees no variables from the dev server's environment, keys included, except Node's TLS and time zone settings (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `TZ`), plus `SystemRoot` on Windows, and no Node options from `NODE_OPTIONS`. Vite still inlines `import.meta.env` and `define` values into the code it serves. `$.Actions` calls go back to the dev server, which holds the credentials and checks each call's connection against the function's allowed connections.
+-   **Logs**: a call's `stdout` and `stderr` reach the dev server's terminal line by line, each prefixed with its call, for example `[getGreeting#3]`.
+-   **Debugging**: when the dev server runs under a debugger (`--inspect`), each call's process listens on a random local port and prints its `Debugger listening on ws://…` URL with its prefix. Attach to that URL to debug the call; calls don't time out while the dev server is under a debugger.
+-   **Older Node**: on a Node without the permission model, or without `--allow-inspector` while debugging, a call's process runs unrestricted, and the dev server warns once that production's limits aren't enforced locally.
+
+Local execution doesn't support Yarn Plug'n'Play, whose packages load through hooks a call's process doesn't get: each call fails with a hint to set `nodeLinker: node-modules` or use `dev:verify`.
+
+## Backend function runtime
+
+Backend functions run on the Node backend runtime, and the plugin's build-time and dev-server checks follow its rules: backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The checks fail only where the missing global would throw: any bare use but `typeof Deno`, or using `globalThis.Deno` as an object, function or class, even after a feature check or a polyfill install, so use an imported polyfill by its name. Feature checks such as `if (globalThis.EventSource)` and destructuring defaults pass. The checks follow a binding the global is declared or destructured into, but not a plain assignment such as `d = globalThis.Deno`, a `let` or parameter alias of `globalThis`, a bulk copy such as `{ ...globalThis }`, or a value that is stored in an object, array or class field, exported, returned or passed on. Local execution runs on your own Node, while the Node backend runtime runs Node 24, so the dev server warns once at start on another major version, and on one before Node 22, which lacks the global `WebSocket`.
+
+The checks also warn, without failing the build, about `process.env` reads: in production, the Node backend runtime doesn't pass your own environment variables or Custom Credentials to backend functions, so those reads don't see your values there. They catch direct reads: `process.env.X`, `process.env[key]`, a destructure of `process.env`, an `env`, default or namespace import from `process` or `node:process`, and a `const` bound to `process.env` or to an `env` destructured from `process`. Like the other checks, they cover only the app's own code and opted-in packages, so an SDK that reads `process.env` (for example, for a default API key) doesn't warn.
 
 ## Package output
 
