@@ -6,7 +6,7 @@ Developer notes for the Live Debugger plugin.
 
 <!-- #toc -->
 -   [Development workflow](#development-workflow)
--   [Symbol table](#symbol-table)
+-   [Symbols](#symbols)
 -   [Consumer build canary](#consumer-build-canary)
     -   [Fresh checkouts and CI](#fresh-checkouts-and-ci)
     -   [Excalidraw target](#excalidraw-target)
@@ -45,27 +45,27 @@ Generated code should keep the dormant runtime path small: call `$dd_probes(func
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
-## Symbol table
+## Symbols
 
-The plugin lists the instrumented functions that ship in a build and uploads them to Datadog's Symbol Database. Each entry has the function ID, a display name, the path relative to the git repository root, and the original line range. The code lives in [`src/symbol-table`](./src/symbol-table).
+The plugin collects the symbols of the instrumented functions that ship in a build and uploads them to Datadog's Symbol Database. Each function has its ID, a display name, the path relative to the git repository root, and the original line range. The code lives in [`src/symbol-table`](./src/symbol-table).
 
-The upload is on by default, and the README lists [what it needs](./README.md#symbol-upload). When it can't happen, the table isn't generated either, so the build does no extra work. To inspect the table, set `DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH` to a file path: the plugin then also writes the table there, in the format of the upload's file part.
+The upload is on by default, and the README lists [what it needs](./README.md#symbol-upload). When it can't happen, the symbols aren't collected either, so the build does no extra work. To inspect the symbols, set `DD_LIVE_DEBUGGER_SYMBOLS_PATH` to a file path: the plugin then also writes them there, in the format of the upload's file part.
 
 ```bash
-DD_LIVE_DEBUGGER_SYMBOL_TABLE_PATH=/tmp/symbol-table.json yarn build
+DD_LIVE_DEBUGGER_SYMBOLS_PATH=/tmp/live-debugger-symbols.json yarn build
 ```
 
-The dump is never written inside the bundler's output directory, and neither generation nor upload ever fails the build: problems are logged as warnings.
+The dump is never written inside the bundler's output directory, and neither collecting nor uploading the symbols ever fails the build: problems are logged as warnings.
 
 How it works:
 
 - After a one-off build, outside watch mode and dev servers, the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
 - Every instrumented function has exactly one `$dd_probes('<id>')` call at the start of its body and one `$dd_throw(` call at its end. The scan pairs them like brackets, which also gives each function's parent.
 - The transform anchors the `$dd_probes` call to the original body's opening brace, which gives the start line through the chunk's final source map. The end line is the last mapped position up to the `$dd_throw` call: for block bodies that's the closing brace. The code appended after an arrow function's expression body has no mapping, and minifiers leave some tokens unmapped, so the closest mapped token before it is used instead.
-- The path and display name come from the function ID. Query strings are removed, Yarn PnP virtual paths and symlinks are resolved, and the path is made relative to the git root. Without a git repository, the table is skipped.
+- The path and display name come from the function ID. Query strings are removed, Yarn PnP virtual paths and symlinks are resolved, and the path is made relative to the git root. Without a git repository, no symbols are collected.
 - Each chunk's debug ID is read from the runtime bootstrap, when debug IDs are enabled, to record which chunks contain each file.
 
-When changing instrumentation output, keep exactly one `$dd_probes` call at the start and one `$dd_throw` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the table on every bundler.
+When changing instrumentation output, keep exactly one `$dd_probes` call at the start and one `$dd_throw` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the symbols on every bundler.
 
 Known limitations:
 
