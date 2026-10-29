@@ -20,14 +20,32 @@ import { parseAst } from 'rollup/parseAst';
 import { pathToFileURL } from 'url';
 import { build, createServer, type ViteDevServer } from 'vite';
 
-import { ARCHIVE_FILENAME } from '../constants';
+import { ARCHIVE_FILENAME, NODE_BACKEND_RUNTIME } from '../constants';
 import type { AppsManifest } from '../types';
+
+import {
+    buildLocalExecutionChild,
+    removeLocalExecutionChild,
+} from './local-execution-process.fixtures';
 
 // Jest compiles loadViteParseAst's dynamic import into a `require`, which gets Vite's CJS
 // entry and no `parseAst`; the published build keeps the real import.
 jest.mock('@dd/apps-plugin/vite/vite-parse-ast', () => ({
     loadViteParseAst: async () => parseAst,
 }));
+
+let mockChildEntryPath = '';
+jest.mock('@dd/apps-plugin/vite/local-execution-child-path', () => ({
+    getLocalExecutionChildPath: () => mockChildEntryPath,
+}));
+
+beforeAll(async () => {
+    mockChildEntryPath = await buildLocalExecutionChild();
+});
+
+afterAll(() => {
+    removeLocalExecutionChild();
+});
 
 const FIXTURES_DIR = path.resolve(__dirname, '../../../../tests/src/_jest/fixtures');
 const PROJECT_DIR = path.join(FIXTURES_DIR, 'apps_backend_library_project');
@@ -71,6 +89,8 @@ async function assembleApp(
         await fsp.mkdir(path.dirname(linkPath), { recursive: true });
         await fsp.symlink(checkout, linkPath, 'dir');
     };
+    // A call's process loads modules through the project's own Vite module runner.
+    await link(path.dirname(require.resolve('vite/package.json')), 'vite');
     const linkedPlainCheckout = path.join(tempDir, 'linked-plain-lib');
     await copy(path.join(PROJECT_DIR, 'packages/linked-plain-lib'), linkedPlainCheckout);
     await link(linkedPlainCheckout, 'linked-plain-backend-lib');
@@ -669,9 +689,9 @@ describe('Backend functions shipped by a package: refusals and subfolders', () =
         }
     }, 30000);
 
-    test("Should reject a banned import in an opted-in library's backend code", async () => {
+    test("Should reject a global the Node backend runtime lacks in an opted-in library's backend code", async () => {
         await expect(buildApp(appRoot, 'banned.ts')).rejects.toThrow(
-            'Importing Node built-in module "fs" is not supported in backend function code',
+            `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
     }, 30000);
 });

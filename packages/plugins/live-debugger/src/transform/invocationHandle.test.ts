@@ -38,6 +38,7 @@ interface ExitRecord {
     kind: 'return' | 'throw';
     handle: InvocationHandle | undefined;
     value: unknown;
+    args: Record<string, unknown> | undefined;
     locals: Record<string, unknown> | undefined;
 }
 
@@ -101,6 +102,7 @@ const createProbeRuntime = (
                 kind: 'return',
                 handle: handle as InvocationHandle | undefined,
                 value,
+                args,
                 locals,
             };
             runtime.exits.push(record);
@@ -111,6 +113,7 @@ const createProbeRuntime = (
                 kind: 'throw',
                 handle: handle as InvocationHandle | undefined,
                 value: error,
+                args,
                 locals: undefined,
             };
             runtime.exits.push(record);
@@ -240,6 +243,25 @@ describe('invocation handle forwarding', () => {
             const thrownText = String(exit.value);
             expect(thrownText).toBe('Error: boom');
             expect(output.result).toBe('boom');
+        });
+
+        it('should pass the error and a parameter named e to $dd_throw separately', () => {
+            // A generated catch binding named `e` would shadow the parameter in the
+            // arguments object passed to `$dd_throw`.
+            const code = "function f(e) { throw new Error('boom'); }";
+            const script = 'try { f(1); } catch (caught) { out.result = caught; }';
+            const { runtime, output } = runInstrumented(code, script, true);
+
+            expect(runtime.exits).toHaveLength(1);
+
+            const exit = runtime.exits[0];
+
+            expect(exit.kind).toBe('throw');
+            expect(exit.args).toEqual({ e: 1 });
+            const thrownText = String(exit.value);
+            expect(thrownText).toBe('Error: boom');
+            // The caller receives the same error object `$dd_throw` was given.
+            expect(output.result).toBe(exit.value);
         });
 
         test.each(allCases)(

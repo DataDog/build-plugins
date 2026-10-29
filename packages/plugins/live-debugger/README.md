@@ -99,7 +99,6 @@ The Live Debugger plugin automatically instruments all JavaScript functions in y
 Each instrumented function gets:
 - A unique, stable function ID (format: `<file-path>;<function-name>`)
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
-- Deferred parameter-capture helpers (`$dd_e<N>`)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking with variable state at throw time via `$dd_throw()`
@@ -123,7 +122,7 @@ function add(a, b) {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
         return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
 }
 ```
 
@@ -267,7 +266,7 @@ If a file uses the decorator style that is **not** selected, it fails to parse a
 When `true`, every instrumented function also reports the exceptions that leave it, whether or not a probe is active, so the Browser Debugger SDK can capture the arguments of each frame an error passes through (Exception Replay). The catch block of each instrumented function gets an extra call:
 
 ```javascript
-catch($dd_err) { if ($dd_p0) $dd_throw($dd_p0, $dd_err, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.js;add', $dd_err, this, {a, b}); throw $dd_err; }
+catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.js;add', $dd_e, this, {a, b}); throw $dd_e; }
 ```
 
 The call only runs when an exception leaves the function and Exception Replay is enabled in the SDK, so it adds no measurable cost to calls that don't throw. It repeats each function's ID, which adds 120 to 140 bytes per instrumented function to the uncompressed output, but compresses well. See [Bundle size impact](#bundle-size-impact).
@@ -350,7 +349,7 @@ function add(a, b) {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0);
-    } catch(e) { if ($dd_p0) $dd_throw($dd_p0, e, this, {a, b}); throw e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
 }
 ```
 

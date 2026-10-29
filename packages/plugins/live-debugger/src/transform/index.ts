@@ -529,13 +529,11 @@ function injectInstrumentation(
     // a probe is active, so the SDK can capture the arguments of each frame the exception passes
     // through. It's a separate `if` rather than an `else`, so a frame still gets its Exception
     // Replay snapshot when a probe is active. The guard and the bare call with a literal function
-    // ID follow `$dd_probes`, for the same reasons. Its catch binding can't shadow a parameter
-    // named `e`, which the hooks would otherwise capture as the exception.
-    const errorVar = exceptionReplay ? '$dd_err' : 'e';
+    // ID follow `$dd_probes`, for the same reasons.
     const catchHook = exceptionReplay
-        ? ` if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', ${errorVar}, ${receiverArg}${argsArg});`
+        ? ` if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}${argsArg});`
         : '';
-    const catchBlock = `catch(${errorVar}) { if (${probeVarName}) $dd_throw(${probeVarName}, ${errorVar}, ${receiverArg}${argsArg});${catchHook} throw ${errorVar}; }`;
+    const catchBlock = `catch($dd_e) { if (${probeVarName}) $dd_throw(${probeVarName}, $dd_e, ${receiverArg}${argsArg});${catchHook} throw $dd_e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
