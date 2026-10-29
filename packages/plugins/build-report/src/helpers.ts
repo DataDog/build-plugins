@@ -9,9 +9,8 @@ import path from 'path';
 // Will match any last part of a path after a dot or slash and is a word character.
 const EXTENSION_RX = /\.(?!.*(?:\.|\/|\\))(\w{1,})/g;
 
-// Will match any type of query characters.
-// "?" or "%3F" (url encoded "?") or "|"
-const QUERY_RX = /(\?|%3F|\|)+/gi;
+// Will match "?" or "%3F" (url encoded "?")
+const QUERY_RX = /(\?|%3F)+/gi;
 
 const getExtension = (filepath: string) => {
     // Reset RX first.
@@ -68,16 +67,24 @@ export const cleanReport = <T = string>(
 // Careful with this and webpack/rspack as loaders may add "|" before and after the filepath.
 export const cleanPath = (filepath: string) => {
     return (
-        filepath
-            // [webpack] Only keep the loaded part of a loader query.
-            .split('!')
-            .pop()!
+        cleanIdentifier(filepath)
             // Remove query parameters.
             .split(QUERY_RX)
             .shift()!
             // Remove leading, invisible characters,
             // sometimes added in rollup by the commonjs plugin.
             .replace(/^[^\w\s.,!@#$%^&*()=+~`\-/\\]+/, '')
+    );
+};
+
+export const cleanIdentifier = (identifier: string) => {
+    return (
+        identifier // [webpack] Only keep the loaded part of a loader query.
+            .split('!')
+            .pop()!
+            // [webpack] Remove some loader prefix.
+            .split('|')
+            .pop()!
     );
 };
 
@@ -106,13 +113,7 @@ export const cleanName = (absoluteOutDir: string, filepath: string) => {
     }
 
     return (
-        removeCommonPrefix(
-            filepath
-                // [webpack] Only keep the loaded part of a loader query.
-                .split('!')
-                .pop()!,
-            absoluteOutDir,
-        )
+        removeCommonPrefix(cleanIdentifier(filepath), absoluteOutDir)
             // Remove node_modules path.
             .split('node_modules')
             .pop()!
