@@ -23,13 +23,11 @@ import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
 import type { BackendFunction } from './backend/types';
-import { ARCHIVE_FILENAME } from './constants';
+import { ARCHIVE_FILENAME, NODE_BACKEND_RUNTIME } from './constants';
 import type { AppsOptionsWithDefaults } from './types';
 import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
 import { buildAppPackage, MANIFEST_DIR_PREFIX } from './vite/build-package';
 
-// Another test file in this Jest worker can install the guards, which makes fs.promises.mkdtemp
-// non-configurable for jest.spyOn, so the mock comes from the module registry instead.
 jest.mock('fs/promises', () => {
     const actual = jest.requireActual<typeof import('fs/promises')>('fs/promises');
     return { ...actual, mkdtemp: jest.fn(actual.mkdtemp) };
@@ -390,28 +388,26 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         );
     });
 
-    test('Should reject a Node builtin import inside a helper module reachable from a backend function', async () => {
+    test('Should reject Deno inside a helper module reachable from a backend function', async () => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
 
         // The entry file alone is clean; only importing a local helper is visible from here.
         const entryCode = `
-            import { readSecret } from './helpers/fs-helper.js';
+            import { readSecret } from './helpers/deno-helper.js';
 
             export function greet() {
                 return readSecret();
             }
         `;
-        // Only the nested backend build's module graph walk sees this Node builtin import; the outer transform never reaches the helper.
+        // Only the nested backend build's module graph walk sees this helper; the outer transform never reaches it.
         const helperCode = `
-            import fs from 'fs';
-
             export function readSecret() {
-                return fs.readFileSync('/etc/passwd', 'utf8');
+                return Deno.readTextFileSync('/etc/passwd');
             }
         `;
-        const helperId = '/project/src/backend/helpers/fs-helper.js';
+        const helperId = '/project/src/backend/helpers/deno-helper.js';
         const viteBuild = jest.fn().mockImplementation(async (config) => {
             await emitModuleParsed(config, '/project/src/backend/greet.backend.js', entryCode);
             await emitModuleParsed(config, helperId, helperCode);
@@ -431,7 +427,7 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
         const plugins = getPlugins(args);
         const transform = extractViteTransform(plugins);
         const resolveMock = jest.fn(async (specifier: string) =>
-            specifier === './helpers/fs-helper.js' ? { id: helperId } : null,
+            specifier === './helpers/deno-helper.js' ? { id: helperId } : null,
         );
         const loadMock = jest.fn(async () => null);
         const addWatchFileMock = jest.fn();
@@ -448,15 +444,23 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
 
         const closeBundleResult = extractCloseBundle(plugins)();
         await expect(closeBundleResult).rejects.toThrow(
-            'Importing Node built-in module "fs" is not supported in backend function code',
+            `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
         await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
     });
 
-    test('Should reject a bare fetch() call inside a helper module reachable from a backend function', async () => {
+    test('Should accept fetch and a Node built-in import inside a helper module reachable from a backend function', async () => {
         jest.spyOn(assets, 'collectAssets').mockResolvedValue([
             { absolutePath: '/project/dist/index.js', relativePath: 'dist/index.js' },
         ]);
+        const createArchive = jest
+            .spyOn(archive, 'createArchive')
+            .mockImplementation(async (archiveAssets) => ({
+                archivePath: '/tmp/dd-apps-790/datadog-app-assets.zip',
+                assets: archiveAssets,
+                size: 30,
+                decompressedSize: 100,
+            }));
 
         const entryCode = `
             import { getEcho } from './helpers/http-helper.js';
@@ -466,8 +470,10 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             }
         `;
         const helperCode = `
+            import os from 'node:os';
+
             export function getEcho() {
-                return fetch('https://example.com');
+                return fetch('https://example.com/' + os.hostname());
             }
         `;
         const helperId = '/project/src/backend/helpers/http-helper.js';
@@ -505,11 +511,10 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             '/project/src/backend/greet.backend.js',
         );
 
-        const closeBundleResult = extractCloseBundle(plugins)();
-        await expect(closeBundleResult).rejects.toThrow(
-            'Using "fetch" is not supported in backend function code',
-        );
-        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX]);
+        await extractCloseBundle(plugins)();
+
+        expect(createArchive).toHaveBeenCalledTimes(1);
+        await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 
     test('Should remove the backend output directory when packaging the app fails', async () => {

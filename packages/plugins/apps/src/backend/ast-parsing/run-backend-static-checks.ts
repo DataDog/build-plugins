@@ -6,18 +6,20 @@ import type { Logger } from '@dd/core/types';
 import type { BaseNode } from 'estree';
 
 import type { ModuleScopeAnalysis } from './module-scope';
-import { rejectNodeBuiltinImports } from './reject-node-builtin-imports';
-import { rejectRestrictedGlobals } from './reject-restricted-globals';
-import { warnAboutDivergentGlobals } from './warn-divergent-globals';
+import { rejectGlobalsMissingFromNode } from './reject-globals-missing-from-node';
+import { type WarnedEnvReads, warnAboutEnvReads } from './warn-env-reads';
 
-/** Runs every static check (banned Node built-ins, restricted globals, divergent-global warnings) against a single module; shared by index.ts and backend-static-checks-plugin.ts so the two call sites can't drift. */
-export function runBackendStaticChecks(
+export type RunBackendStaticChecks = (
     ast: BaseNode,
     filePath: string,
-    log: Logger,
     scopeAnalysis: ModuleScopeAnalysis,
-): void {
-    rejectNodeBuiltinImports(ast, filePath);
-    rejectRestrictedGlobals(ast, filePath, scopeAnalysis);
-    warnAboutDivergentGlobals(ast, filePath, log, scopeAnalysis);
+) => void;
+
+/** Create one per plugin instance and share it across call sites, so the checks can't drift and each warning shows once. */
+export function createBackendStaticChecks(log: Logger): RunBackendStaticChecks {
+    const warnedEnvReads: WarnedEnvReads = new Map();
+    return (ast, filePath, scopeAnalysis) => {
+        rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
+        warnAboutEnvReads(ast, filePath, log, scopeAnalysis, warnedEnvReads);
+    };
 }

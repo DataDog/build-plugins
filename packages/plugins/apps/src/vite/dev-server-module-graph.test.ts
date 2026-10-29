@@ -2,14 +2,18 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
+import {
+    createBackendStaticChecks,
+    type RunBackendStaticChecks,
+} from '@dd/apps-plugin/backend/ast-parsing/run-backend-static-checks';
+import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseAst } from 'rollup/parseAst';
 import type { ViteDevServer } from 'vite';
 
-import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
+import { LOCAL_EXECUTION_LOAD_SUFFIX, NODE_BACKEND_RUNTIME } from '../constants';
 
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
 
@@ -49,354 +53,17 @@ function makeFakeServer(
     } as unknown as ViteDevServer;
 }
 
-interface FakeEnvironmentNode {
-    id: string;
-    transformResult: unknown;
-    lastInvalidationTimestamp: number;
-    lastHMRTimestamp: number;
-}
-
-const fakeEnvironmentNode = (
-    id: string,
-    state: 'edited' | 'hmr-updated' | 'current' | 'never-loaded',
-): FakeEnvironmentNode => ({
-    id,
-    transformResult: state === 'current' ? { code: '' } : null,
-    lastInvalidationTimestamp: state === 'edited' ? 1 : 0,
-    lastHMRTimestamp: state === 'hmr-updated' ? 1 : 0,
-});
-
-// A Vite 6+ SSR environment graph where priming refills a node's transformResult.
-function withSsrEnvironmentGraph(
-    server: ViteDevServer,
-    nodes: FakeEnvironmentNode[],
-    onPrime: (id: string) => void = () => {},
-) {
-    const entries = nodes.map((node): [string, FakeEnvironmentNode] => [node.id, node]);
-    const idToModuleMap = new Map(entries);
-    const updateModuleTransformResult = jest.fn((node: FakeEnvironmentNode, result: unknown) => {
-        node.transformResult = result;
-    });
-    const moduleGraph = {
-        idToModuleMap,
-        getModuleById: (id: string) => idToModuleMap.get(id),
-        updateModuleTransformResult,
-    };
-    Object.assign(server, {
-        environments: { ssr: { moduleGraph } },
-        transformRequest: async (id: string) => {
-            onPrime(id);
-            const node = idToModuleMap.get(id);
-            if (node) {
-                node.transformResult = { code: '' };
-            }
-            return null;
-        },
-    });
-    return { updateModuleTransformResult };
-}
-
 describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
-    describe('un-caching stale modules the walk primed', () => {
-        const DEPENDENCY_ID = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
-        const OUTSIDE_ROOT_ID = path.join(FIXTURE_ROOT, '../shared/util.ts');
-        const SDK_ID = path.join(FIXTURE_ROOT, 'node_modules/@datadog/apps-backend/index.js');
-        const resolveToDependency = async () => ({ id: DEPENDENCY_ID });
-        const collect = (server: ViteDevServer) => {
-            const log = getMockLogger();
-            return collectModuleGraphFromServer(server, ENTRY_ID, FIXTURE_ROOT, log, parseAst);
-        };
-        const entryImporting = (...dependencyIds: string[]): FakeModuleNode => {
-            const dependencies = dependencyIds.map((id) => ({
-                id,
-                file: id,
-                importedModules: new Set<FakeModuleNode>(),
-            }));
-            return {
-                id: SUFFIXED_ENTRY_ID,
-                file: ENTRY_ID,
-                importedModules: new Set(dependencies),
-            };
-        };
-
-        test('Should un-cache an edited entry the walk primed', async () => {
-            const server = makeFakeServer(resolveToDependency);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'edited');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [entry]);
-
-            await collect(server);
-
-            expect(updateModuleTransformResult).toHaveBeenCalledWith(entry, null);
-            expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should un-cache an edited dependency and the entry Vite invalidated with it', async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'edited');
-            const dependency = fakeEnvironmentNode(DEPENDENCY_ID, 'edited');
-            withSsrEnvironmentGraph(server, [entry, dependency]);
-
-            await collect(server);
-
-            expect(dependency.transformResult).toBeNull();
-            expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should un-cache a module Vite invalidated through HMR', async () => {
-            const server = makeFakeServer(resolveToDependency);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'hmr-updated');
-            withSsrEnvironmentGraph(server, [entry]);
-
-            await collect(server);
-
-            expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should un-cache an edited dependency outside the build root, e.g. a workspace package', async () => {
-            const entryNode = entryImporting(OUTSIDE_ROOT_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const outsideRoot = fakeEnvironmentNode(OUTSIDE_ROOT_ID, 'edited');
-            withSsrEnvironmentGraph(server, [entry, outsideRoot]);
-
-            await collect(server);
-
-            expect(outsideRoot.transformResult).toBeNull();
-        });
-
-        test('Should un-cache edited app modules when the app itself lives under node_modules', async () => {
-            const nestedRoot = path.join(FIXTURE_ROOT, 'node_modules/nested-app');
-            const nestedEntryId = path.join(nestedRoot, 'helper.ts');
-            const server = makeFakeServer(resolveToDependency);
-            const entry = fakeEnvironmentNode(
-                nestedEntryId + LOCAL_EXECUTION_LOAD_SUFFIX,
-                'edited',
-            );
-            withSsrEnvironmentGraph(server, [entry]);
-            const log = getMockLogger();
-
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
-
-            expect(entry.transformResult).toBeNull();
-        });
-
-        // A directory named like `..gen` is still inside the root, not a parent-directory path.
-        test('Should un-cache an edited module in a `..`-prefixed directory of an app under node_modules', async () => {
-            const nestedRoot = path.join(FIXTURE_ROOT, 'node_modules/nested-app');
-            const dotPrefixedEntryId = path.join(nestedRoot, '..gen/helper.ts');
-            const server = makeFakeServer(resolveToDependency);
-            const entry = fakeEnvironmentNode(
-                dotPrefixedEntryId + LOCAL_EXECUTION_LOAD_SUFFIX,
-                'edited',
-            );
-            withSsrEnvironmentGraph(server, [entry]);
-            const log = getMockLogger();
-
-            await collectModuleGraphFromServer(
-                server,
-                dotPrefixedEntryId,
-                nestedRoot,
-                log,
-                parseAst,
-            );
-
-            expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should leave a hoisted sibling package cached when the app itself lives under node_modules', async () => {
-            const nestedRoot = path.join(FIXTURE_ROOT, 'node_modules/nested-app');
-            const nestedEntryId = path.join(nestedRoot, 'helper.ts');
-            const hoistedSdkId = path.join(
-                FIXTURE_ROOT,
-                'node_modules/@datadog/apps-backend/index.js',
-            );
-            const nestedSuffixedEntryId = nestedEntryId + LOCAL_EXECUTION_LOAD_SUFFIX;
-            // Reads the real fixture source, so the walk reaches the hoisted import.
-            const nestedEntryNode: FakeModuleNode = {
-                id: nestedSuffixedEntryId,
-                file: ENTRY_ID,
-                importedModules: new Set([
-                    { id: hoistedSdkId, file: hoistedSdkId, importedModules: new Set() },
-                ]),
-            };
-            const server = makeFakeServer(resolveToDependency, nestedEntryNode);
-            Object.assign(server.moduleGraph, {
-                getModuleById: (id: string) =>
-                    id === nestedSuffixedEntryId ? nestedEntryNode : undefined,
-            });
-            const entry = fakeEnvironmentNode(nestedSuffixedEntryId, 'current');
-            const hoistedSdk = fakeEnvironmentNode(hoistedSdkId, 'edited');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [
-                entry,
-                hoistedSdk,
-            ]);
-            const log = getMockLogger();
-
-            await collectModuleGraphFromServer(server, nestedEntryId, nestedRoot, log, parseAst);
-
-            expect(updateModuleTransformResult).not.toHaveBeenCalled();
-        });
-
-        test('Should un-cache a dependency saved while the walk is running', async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const dependency = fakeEnvironmentNode(DEPENDENCY_ID, 'current');
-            const saveDependencyWhenEntryPrimes = (id: string) => {
-                if (id === SUFFIXED_ENTRY_ID) {
-                    dependency.transformResult = null;
-                    dependency.lastInvalidationTimestamp += 1;
-                }
-            };
-            withSsrEnvironmentGraph(server, [entry, dependency], saveDependencyWhenEntryPrimes);
-
-            await collect(server);
-
-            expect(dependency.transformResult).toBeNull();
-        });
-
-        test("Should un-cache an edited dependency that another plugin's transform refilled before the walk primed it", async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const dependency = fakeEnvironmentNode(DEPENDENCY_ID, 'edited');
-            // Like a transform hook on the entry that pre-transforms its own imports.
-            const transformImportsWhenEntryPrimes = (id: string) => {
-                if (id === SUFFIXED_ENTRY_ID) {
-                    dependency.transformResult = { code: '' };
-                }
-            };
-            withSsrEnvironmentGraph(server, [entry, dependency], transformImportsWhenEntryPrimes);
-
-            await collect(server);
-
-            expect(dependency.transformResult).toBeNull();
-        });
-
-        // Arises when an untaken dynamic import's target is edited and the importer runs again.
-        test('Should un-cache an edited dependency without re-running an importer that is current', async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const dependency = fakeEnvironmentNode(DEPENDENCY_ID, 'edited');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [
-                entry,
-                dependency,
-            ]);
-
-            await collect(server);
-
-            expect(dependency.transformResult).toBeNull();
-            expect(entry.transformResult).not.toBeNull();
-            expect(updateModuleTransformResult).not.toHaveBeenCalledWith(entry, null);
-        });
-
-        // Vite invalidated it, so the runner would re-run it without the walk, and it isn't an SDK.
-        test('Should un-cache an invalidated virtual module the walk primed', async () => {
-            const virtualModuleId = '\0virtual:dd-generated-config';
-            const entryNode: FakeModuleNode = {
-                id: SUFFIXED_ENTRY_ID,
-                file: ENTRY_ID,
-                importedModules: new Set([{ id: virtualModuleId, importedModules: new Set() }]),
-            };
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const virtualModule = fakeEnvironmentNode(virtualModuleId, 'edited');
-            withSsrEnvironmentGraph(server, [entry, virtualModule]);
-
-            await collect(server);
-
-            expect(virtualModule.transformResult).toBeNull();
-        });
-
-        test('Should leave a stale module the walk never primed alone', async () => {
-            const server = makeFakeServer(resolveToDependency);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const unrelated = fakeEnvironmentNode(OUTSIDE_ROOT_ID, 'edited');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [
-                entry,
-                unrelated,
-            ]);
-
-            await collect(server);
-
-            expect(updateModuleTransformResult).not.toHaveBeenCalled();
-        });
-
-        test('Should leave modules that were already current cached', async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const dependency = fakeEnvironmentNode(DEPENDENCY_ID, 'current');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [
-                entry,
-                dependency,
-            ]);
-
-            await collect(server);
-
-            expect(updateModuleTransformResult).not.toHaveBeenCalled();
-        });
-
-        test('Should leave a module Vite never invalidated cached, e.g. an untaken dynamic import', async () => {
-            const entryNode = entryImporting(DEPENDENCY_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const neverLoaded = fakeEnvironmentNode(DEPENDENCY_ID, 'never-loaded');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [
-                entry,
-                neverLoaded,
-            ]);
-
-            await collect(server);
-
-            expect(updateModuleTransformResult).not.toHaveBeenCalled();
-        });
-
-        test('Should leave an invalidated package dependency cached so an SDK keeps its setup', async () => {
-            const entryNode = entryImporting(SDK_ID);
-            const server = makeFakeServer(resolveToDependency, entryNode);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'current');
-            const sdk = fakeEnvironmentNode(SDK_ID, 'edited');
-            const { updateModuleTransformResult } = withSsrEnvironmentGraph(server, [entry, sdk]);
-
-            await collect(server);
-
-            expect(updateModuleTransformResult).not.toHaveBeenCalled();
-            expect(sdk.transformResult).not.toBeNull();
-        });
-
-        test('Should still un-cache an edited module when the walk fails partway', async () => {
-            const server = makeFakeServer(async () => null);
-            const entry = fakeEnvironmentNode(SUFFIXED_ENTRY_ID, 'edited');
-            withSsrEnvironmentGraph(server, [entry]);
-
-            const collecting = collect(server);
-
-            await expect(collecting).rejects.toThrow(/unresolvable import specifier/);
-            expect(entry.transformResult).toBeNull();
-        });
-
-        test('Should complete on a server without an SSR environment graph (Vite 5)', async () => {
-            const server = makeFakeServer(resolveToDependency);
-
-            const collecting = collect(server);
-
-            await expect(collecting).resolves.toBeInstanceOf(Map);
-        });
-    });
-
     test('Should fail closed, not fall back to the raw specifier, when resolveId fails to resolve a static import', async () => {
         const server = makeFakeServer(async () => null);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -409,13 +76,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         const resolvedPath = path.join(FIXTURE_ROOT, 'getRuntimeUsers.backend.ts');
         const server = makeFakeServer(async () => ({ id: resolvedPath }));
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -431,13 +98,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => null, entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -466,13 +133,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
             };
             const server = makeFakeServer(async () => null, entryNode);
 
-            const log = getMockLogger();
+            const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
             const collecting = collectModuleGraphFromServer(
                 server,
                 ENTRY_ID,
                 FIXTURE_ROOT,
-                log,
+                runStaticChecks,
                 parseAst,
             );
 
@@ -494,13 +161,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: rawImportPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -529,13 +196,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         };
         const server = makeFakeServer(async () => ({ id: sharedFile }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -555,13 +222,13 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
         entryNode.importedModules.add(entryNode);
         const server = makeFakeServer(async () => ({ id: resolvedPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const records = await collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
@@ -570,34 +237,124 @@ describe('dev-server-module-graph — collectModuleGraphFromServer', () => {
     });
 
     // The production build path checks every app-local module transitively, not just the
-    // .backend.ts entry — local execution must reject the same banned helper the same way.
-    test('Should reject a helper module transitively imported by a backend entry when it imports a banned Node builtin', async () => {
-        const entryPath = path.join(FIXTURE_ROOT, 'viaBannedHelper.backend.ts');
-        const bannedHelperPath = path.join(FIXTURE_ROOT, 'helperWithBannedImport.ts');
-        const bannedHelperNode: FakeModuleNode = {
-            id: bannedHelperPath,
-            file: bannedHelperPath,
+    // .backend.ts entry — local execution must reject the same helper the same way.
+    test('Should reject a helper module transitively imported by a backend entry when it uses Deno, which Node lacks', async () => {
+        const entryPath = path.join(FIXTURE_ROOT, 'viaDenoHelper.backend.ts');
+        const denoHelperPath = path.join(FIXTURE_ROOT, 'helperUsingDeno.ts');
+        const denoHelperNode: FakeModuleNode = {
+            id: denoHelperPath,
+            file: denoHelperPath,
             importedModules: new Set(),
         };
         const entryNode: FakeModuleNode = {
             id: SUFFIXED_ENTRY_ID,
             file: entryPath,
-            importedModules: new Set([bannedHelperNode]),
+            importedModules: new Set([denoHelperNode]),
         };
-        const server = makeFakeServer(async () => ({ id: bannedHelperPath }), entryNode);
+        const server = makeFakeServer(async () => ({ id: denoHelperPath }), entryNode);
 
-        const log = getMockLogger();
+        const runStaticChecks = createBackendStaticChecks(getMockLogger());
 
         const collecting = collectModuleGraphFromServer(
             server,
             ENTRY_ID,
             FIXTURE_ROOT,
-            log,
+            runStaticChecks,
             parseAst,
         );
 
         await expect(collecting).rejects.toThrow(
-            /Importing Node built-in module "fs" is not supported/,
+            `"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`,
         );
+    });
+
+    describe('warning on process.env reads', () => {
+        let tempDir: string;
+        let envReadingFile: string;
+
+        beforeAll(() => {
+            const osTempDir = tmpdir();
+            const tempDirPrefix = path.join(osTempDir, 'dev-server-module-graph-env-');
+            tempDir = mkdtempSync(tempDirPrefix);
+            envReadingFile = path.join(tempDir, 'charge.ts');
+            writeFileSync(
+                envReadingFile,
+                'export function charge(): string | undefined { return process.env.STRIPE_KEY; }',
+            );
+        });
+
+        afterAll(() => {
+            rmSync(tempDir, { recursive: true, force: true });
+        });
+
+        let runStaticChecks: RunBackendStaticChecks;
+
+        beforeEach(() => {
+            runStaticChecks = createBackendStaticChecks(getMockLogger());
+        });
+
+        const collectEnvReadingEntry = () => {
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+            return collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                runStaticChecks,
+                parseAst,
+            );
+        };
+
+        const warnLogs = () =>
+            mockLogFn.mock.calls
+                .filter(([, level]) => level === 'warn')
+                .map(([message]) => String(message));
+
+        test('Should warn about a process.env read once', async () => {
+            await collectEnvReadingEntry();
+
+            const warnings = warnLogs();
+            expect(warnings).toEqual([expect.stringContaining('process.env.STRIPE_KEY')]);
+        });
+
+        test('Should not warn about a node_modules dependency that reads process.env', async () => {
+            const cleanEntryFile = path.join(tempDir, 'entry.ts');
+            writeFileSync(cleanEntryFile, 'export function entry(): number { return 1; }');
+            const dependencyId = path.join(FIXTURE_ROOT, 'node_modules/stripe-config/index.ts');
+            const dependencyNode: FakeModuleNode = {
+                id: dependencyId,
+                file: envReadingFile,
+                importedModules: new Set(),
+            };
+            const entryNode: FakeModuleNode = {
+                id: SUFFIXED_ENTRY_ID,
+                file: cleanEntryFile,
+                importedModules: new Set([dependencyNode]),
+            };
+            const server = makeFakeServer(async () => null, entryNode);
+
+            await collectModuleGraphFromServer(
+                server,
+                ENTRY_ID,
+                FIXTURE_ROOT,
+                runStaticChecks,
+                parseAst,
+            );
+
+            const warnings = warnLogs();
+            expect(warnings).toEqual([]);
+        });
+
+        test('Should not warn again when a later local run collects the same module', async () => {
+            await collectEnvReadingEntry();
+            await collectEnvReadingEntry();
+
+            const warnings = warnLogs();
+            expect(warnings).toHaveLength(1);
+        });
     });
 });

@@ -4,9 +4,11 @@
 
 import type * as eslintScope from 'eslint-scope';
 import type {
+    BaseNode,
+    Node as EstreeNode,
     Expression,
+    Identifier,
     MemberExpression,
-    ObjectExpression,
     ObjectPattern,
     PrivateIdentifier,
     Program,
@@ -18,7 +20,7 @@ import type {
 import { resolveIdentifier } from './module-scope';
 import type { ModuleScopeAnalysis } from './module-scope';
 import { isVariableDeclaratorNode, staticStringValue } from './type-guards';
-import { walkAst } from './walk-ast';
+import { parentsOf, walkAst } from './walk-ast';
 
 const GLOBAL_THIS_NAME = 'globalThis';
 const NODE_GLOBAL_ALIAS_NAME = 'global';
@@ -109,7 +111,7 @@ function resolvesToAmbientGlobal(
     return false;
 }
 
-function staticMemberName(
+export function staticMemberName(
     node: MemberExpression,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
@@ -120,11 +122,11 @@ function staticMemberName(
 }
 
 // A defaulted property value (`{ x = fallback }`) is an AssignmentPattern wrapping the real binding — unwrap it so a defaulted alias is treated the same as a bare one.
-function unwrapDefaultValue(value: Property['value']): Property['value'] {
+export function unwrapDefaultValue(value: Property['value']): Property['value'] {
     return value.type === 'AssignmentPattern' ? value.left : value;
 }
 
-function staticPropertyName(
+export function staticPropertyName(
     property: Property,
     scopeAnalysis: ModuleScopeAnalysis,
 ): string | undefined {
@@ -183,43 +185,61 @@ function findDeclaredVariable(
     return scopeAnalysis.scopeManager.getDeclaredVariables(declarator)[0];
 }
 
-// Standard-library statics that reify every property VALUE of their argument at once (see the CallExpression visitor below). `Object.keys`/`Reflect.ownKeys` are excluded since they return only name strings, not values. Matched by identifier name only — a locally-shadowed `Object`/`Reflect` is an accepted gap.
-const BULK_COPY_CALLS: ReadonlyArray<{ readonly object: string; readonly property: string }> = [
-    { object: 'Object', property: 'assign' },
-    { object: 'Object', property: 'values' },
-    { object: 'Object', property: 'entries' },
-    { object: 'Object', property: 'getOwnPropertyDescriptors' },
-];
-
-function matchBulkCopyCall(
-    callee: Expression | Super,
-    scopeAnalysis: ModuleScopeAnalysis,
-): { readonly object: string; readonly property: string } | undefined {
-    if (callee.type !== 'MemberExpression' || callee.object.type !== 'Identifier') {
-        return undefined;
-    }
-    // staticMemberName already handles both a plain identifier property (`.assign`) and a
-    // computed access resolving to a static string (`["assign"]`) — reusing it here (instead of
-    // requiring callee.property.type === 'Identifier') closes a gap where `Object["assign"](...)`
-    // evaded detection entirely.
-    const propertyName = staticMemberName(callee, scopeAnalysis);
-    if (!propertyName) {
-        return undefined;
-    }
-    const objectName = callee.object.name;
-    return BULK_COPY_CALLS.find(
-        (candidate) => candidate.object === objectName && candidate.property === propertyName,
-    );
-}
-
 export interface AmbientGlobalAccessHandlers {
-    /** A specific restricted/divergent name was reached by name. */
+    /** A watched name was reached where its absence throws. */
     onNamedAccess(name: string): void;
-    /** Every ambient global was copied at once (a rest destructure, an object spread, or a bulk-copy call like `Object.assign`/`Object.values`), with no specific name to report. */
-    onBulkCopy(): void;
 }
 
-// Walks every syntactic form that can reach the ambient global object and reports matching names; shared by `rejectRestrictedGlobals` and `warnAboutDivergentGlobals`.
+function isPattern(node: BaseNode): boolean {
+    return node.type === 'ObjectPattern' || node.type === 'ArrayPattern';
+}
+
+// A missing global reads as undefined, which throws once it's used as an object, function or class.
+// A `?.` earlier in the same chain short-circuits the rest of it.
+function throwsWhenUndefined(
+    node: BaseNode,
+    parentOf: (node: BaseNode) => EstreeNode | undefined,
+): boolean {
+    let current = node;
+    let shortCircuited = false;
+    for (let parent = parentOf(current); parent; parent = parentOf(current)) {
+        if (
+            (parent.type === 'MemberExpression' && parent.object === current) ||
+            (parent.type === 'CallExpression' && parent.callee === current)
+        ) {
+            shortCircuited ||= parent.optional;
+            if (!shortCircuited) {
+                return true;
+            }
+        } else if (parent.type === 'ChainExpression') {
+            shortCircuited = false;
+        } else {
+            return (
+                (parent.type === 'NewExpression' && parent.callee === current) ||
+                (parent.type === 'TaggedTemplateExpression' && parent.tag === current) ||
+                ((parent.type === 'ClassDeclaration' || parent.type === 'ClassExpression') &&
+                    parent.superClass === current) ||
+                (parent.type === 'BinaryExpression' &&
+                    parent.right === current &&
+                    (parent.operator === 'instanceof' || parent.operator === 'in')) ||
+                (parent.type === 'ForOfStatement' && parent.right === current) ||
+                (parent.type === 'SpreadElement' &&
+                    parentOf(parent)?.type !== 'ObjectExpression') ||
+                (parent.type === 'VariableDeclarator' &&
+                    parent.init === current &&
+                    isPattern(parent.id)) ||
+                ((parent.type === 'AssignmentExpression' || parent.type === 'AssignmentPattern') &&
+                    parent.right === current &&
+                    isPattern(parent.left))
+            );
+        }
+        current = parent;
+    }
+    return false;
+}
+
+// Reports watched names reached on the ambient global object, by name or through an alias, where their
+// absence throws; bulk copies such as `{ ...globalThis }` aren't followed.
 export function forEachAmbientGlobalAccess(
     program: Program,
     scopeAnalysis: ModuleScopeAnalysis,
@@ -227,27 +247,70 @@ export function forEachAmbientGlobalAccess(
     handlers: AmbientGlobalAccessHandlers,
 ): void {
     forOfAmbientAliases = new Set();
+    let parentMap: Map<BaseNode, EstreeNode> | undefined;
+    const parentOf = (node: BaseNode) => {
+        parentMap ??= parentsOf(program);
+        return parentMap.get(node);
+    };
+    const followedBindings = new Set<eslintScope.Variable>();
 
+    // A binding written only here holds the missing global, so it throws wherever the global would have.
+    const bindingThrows = (binding: Identifier): boolean => {
+        const variable = scopeAnalysis.referencesByIdentifier.get(binding)?.resolved;
+        if (!variable || followedBindings.has(variable)) {
+            return false;
+        }
+        followedBindings.add(variable);
+        const { references } = variable;
+        return (
+            references.every(
+                (reference) => !reference.isWrite() || reference.identifier === binding,
+            ) &&
+            references.some((reference) => reference.isRead() && reachThrows(reference.identifier))
+        );
+    };
+
+    const reachThrows = (node: BaseNode): boolean => {
+        const parent = parentOf(node);
+        if (
+            parent?.type === 'VariableDeclarator' &&
+            parent.init === node &&
+            parent.id.type === 'Identifier'
+        ) {
+            return bindingThrows(parent.id);
+        }
+        return throwsWhenUndefined(node, parentOf);
+    };
+
+    // An undeclared bare name throws a ReferenceError on any use but `typeof`.
     for (const [identifier, reference] of scopeAnalysis.referencesByIdentifier) {
         if (!names.has(identifier.name) || reference.resolved) {
             continue;
         }
-        handlers.onNamedAccess(identifier.name);
+        const parent = parentOf(identifier);
+        if (parent?.type !== 'UnaryExpression' || parent.operator !== 'typeof') {
+            handlers.onNamedAccess(identifier.name);
+        }
     }
 
     // Shared by both `const { x } = globalThis`-style destructures and a for-of loop's inline destructure below — the per-property checking is identical once the source is known to be the ambient global.
     const checkDestructuredPattern = (pattern: ObjectPattern) => {
         for (const property of pattern.properties) {
             if (property.type === 'RestElement') {
-                handlers.onBulkCopy();
                 continue;
             }
             const name = staticPropertyName(property, scopeAnalysis);
-            if (name && names.has(name)) {
+            const { value } = property;
+            // A default (`{ EventSource = P }`) fills the gap; a nested pattern destructures undefined.
+            const isWatched = !!name && names.has(name);
+            if (
+                isWatched &&
+                (value.type === 'Identifier' ? bindingThrows(value) : isPattern(value))
+            ) {
                 handlers.onNamedAccess(name);
             }
             // `const { globalThis: { fetch } } = globalThis` is a real self-reference, so recurse the same way resolvesToAmbientGlobal's MemberExpression case does — otherwise a name nested inside a `globalThis`/`global` key escapes detection.
-            const nestedPattern = unwrapDefaultValue(property.value);
+            const nestedPattern = unwrapDefaultValue(value);
             if (
                 name &&
                 isAmbientGlobalReceiverName(name) &&
@@ -271,7 +334,7 @@ export function forEachAmbientGlobalAccess(
                 return;
             }
             const name = staticMemberName(node, scopeAnalysis);
-            if (name && names.has(name)) {
+            if (name && names.has(name) && reachThrows(node)) {
                 handlers.onNamedAccess(name);
             }
         },
@@ -337,35 +400,6 @@ export function forEachAmbientGlobalAccess(
                 checkDestructuredPattern(bindingPattern);
             } else if (bindingIdentifierVariable) {
                 forOfAmbientAliases.add(bindingIdentifierVariable);
-            }
-        },
-        // Mirrors a rest-destructure — `{ ...globalThis }` copies every ambient global just as `const { ...x } = globalThis` does.
-        ObjectExpression(node: ObjectExpression) {
-            for (const property of node.properties) {
-                if (
-                    property.type === 'SpreadElement' &&
-                    resolvesToAmbientGlobal(property.argument, scopeAnalysis)
-                ) {
-                    handlers.onBulkCopy();
-                }
-            }
-        },
-        // Built-in statics like `Object.assign({}, globalThis)` reify every property at once — the same threat as a rest-destructure or spread, but with no named-property access for the visitors above to see. Scoped to this known list, not a user-defined equivalent or an aliased `Object`/`Reflect`.
-        CallExpression(node) {
-            const match = matchBulkCopyCall(node.callee, scopeAnalysis);
-            if (!match) {
-                return;
-            }
-            // Object.assign's first argument is the write target, not a source — checking it would
-            // reject harmless calls like Object.assign(globalThis, { marker: true }).
-            const sourceArguments =
-                match.property === 'assign' ? node.arguments.slice(1) : node.arguments;
-            const hasAmbientArgument = sourceArguments.some(
-                (arg) =>
-                    arg.type !== 'SpreadElement' && resolvesToAmbientGlobal(arg, scopeAnalysis),
-            );
-            if (hasAmbientArgument) {
-                handlers.onBulkCopy();
             }
         },
     });

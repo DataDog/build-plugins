@@ -10,12 +10,14 @@ import {
     DEV_CLIENT_RESOLVED_RE,
     DEV_CLIENT_SRC,
     getVitePlugin,
+    localNodeWarning,
+    MIN_LOCAL_NODE_MAJOR,
     SSR_WARMUP_SETTING,
 } from '@dd/apps-plugin/vite/index';
 import type { ViteBundler } from '@dd/apps-plugin/vite/index';
 import { localExecutionResolutionContext } from '@dd/apps-plugin/vite/local-execution';
 import * as fsHelpers from '@dd/core/helpers/fs';
-import { rmSync } from '@dd/core/helpers/fs';
+import type { Env } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import {
@@ -26,7 +28,6 @@ import {
     mockLogFn,
 } from '@dd/tests/_jest/helpers/mocks';
 import { emitModuleParsed } from '@dd/tests/_jest/helpers/moduleParsed';
-import fs from 'fs';
 import type { IncomingMessage, ServerResponse } from 'http';
 import nock from 'nock';
 import path from 'path';
@@ -35,6 +36,8 @@ import type { PluginContext } from 'rollup';
 import { createUnplugin } from 'unplugin';
 import {
     createServer,
+    resolveConfig,
+    version as installedViteVersion,
     type ConfigEnv,
     type EnvironmentOptions,
     type Plugin as VitePlugin,
@@ -49,14 +52,18 @@ import {
     BACKEND_FILE_WITH_QUERY_RE,
     DEV_VERIFY_MODE,
     LOCAL_EXECUTION_LOAD_SUFFIX,
+    NODE_BACKEND_RUNTIME,
+    NODE_BACKEND_RUNTIME_NODE_MAJOR,
 } from '../constants';
 
 import * as buildPackage from './build-package';
 import * as devServer from './dev-server';
-import { makeProbeDirOutsideTmp } from './network-guard.fixtures';
-import * as networkGuard from './network-guard';
+import * as localExecutionProcess from './local-execution-process';
+import { MIN_VITE_VERSION, unsupportedViteMessage } from './vite-version';
 
 type TransformHandler = (code: string, id: string, transformOptions?: { ssr?: boolean }) => unknown;
+
+const NODE_WITHOUT_WEBSOCKET = `${MIN_LOCAL_NODE_MAJOR - 1}.7.3`;
 
 // Narrows `plugin.transform` to the object-hook form via a runtime check, since tests need to access both `handler` and `filter` without an `as` cast.
 function getTransformObject(plugin: ReturnType<typeof getVitePlugin>) {
@@ -102,8 +109,11 @@ type DevServerMiddleware = (req: IncomingMessage, res: ServerResponse, next: () 
 type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
+    close?: () => Promise<void>;
     config: { mode: string } & HostCheckConfig;
-    pluginContainer?: object;
+    environments?: {
+        ssr: { hot: { handleInvoke: () => Promise<unknown> }; config: { dev: object } };
+    };
 };
 
 function fakeServerConfig(mode: string): FakeViteDevServer['config'] {
@@ -121,7 +131,9 @@ function getConfigureServer(
         throw new Error('Expected plugin.configureServer to be the plain function-hook form');
     }
     return function callConfigureServer(server: FakeViteDevServer): void {
-        Reflect.apply(configureServer, undefined, [server]);
+        const ssr = { hot: { handleInvoke: async () => ({}) }, config: { dev: {} } };
+        const fullServer = { close: async () => {}, environments: { ssr }, ...server };
+        Reflect.apply(configureServer, undefined, [fullServer]);
     };
 }
 
@@ -257,6 +269,7 @@ function getResolveIdHandler(plugin: ReturnType<typeof getVitePlugin>): Function
 const mockViteBuild = jest.fn();
 const mockVite = {
     build: mockViteBuild,
+    defaultServerConditions: [],
     transformWithEsbuild: jest.fn(),
 } as unknown as ViteBundler;
 const mockInject = jest.fn();
@@ -323,6 +336,36 @@ describe('Backend Functions - getVitePlugin', () => {
     afterEach(() => {
         nock.cleanAll();
     });
+
+    const runtimeMajor = `"${NODE_BACKEND_RUNTIME_NODE_MAJOR}"`;
+    const nodeVersionCases = [
+        { version: `${MIN_LOCAL_NODE_MAJOR - 2}.19.4`, warns: true, mentions: ['WebSocket'] },
+        { version: NODE_WITHOUT_WEBSOCKET, warns: true, mentions: ['WebSocket'] },
+        { version: `${MIN_LOCAL_NODE_MAJOR}.0.0`, warns: true, mentions: [runtimeMajor] },
+        {
+            version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR - 1}.0.0`,
+            warns: true,
+            mentions: [runtimeMajor],
+        },
+        { version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR}.0.0`, warns: false, mentions: [] },
+        { version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR}.13.1`, warns: false, mentions: [] },
+        {
+            version: `${NODE_BACKEND_RUNTIME_NODE_MAJOR + 1}.0.0`,
+            warns: true,
+            mentions: [runtimeMajor],
+        },
+    ];
+    test.each(nodeVersionCases)(
+        'Should warn about local Node $version (warns: $warns)',
+        ({ version, warns, mentions }) => {
+            const warning = localNodeWarning(version);
+
+            expect(warning !== undefined).toBe(warns);
+            for (const expected of [...mentions, ...(warns ? [version] : [])]) {
+                expect(warning).toContain(expected);
+            }
+        },
+    );
 
     test('Should load the dev client as a module on pages the dev server serves', () => {
         const plugin = getVitePlugin(defaultOptions);
@@ -498,12 +541,14 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
         // The hooks are typed with Rollup's `this: PluginContext`, but the
         // plugin closures never read `this`, so a stand-in satisfies the call.
         const thisArg = {} as unknown as PluginContext;
 
-        // Vite 6 calls closeBundle when a dev server's plugin container closes;
+        // Vite calls closeBundle when a dev server's plugin container closes;
         // starting the dev server must prevent that from packaging.
         plugin.configureServer(server);
         await plugin.closeBundle.call(thisArg);
@@ -527,6 +572,8 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -555,6 +602,8 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewares: { use: jest.fn() },
             ssrLoadModule: jest.fn(),
             config: fakeServerConfig('development'),
+            environments: { ssr: { hot: { handleInvoke: jest.fn() }, config: { dev: {} } } },
+            close: jest.fn(),
         } as unknown as ViteDevServer;
 
         plugin.configureServer(server);
@@ -575,60 +624,78 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(authSpy).not.toHaveBeenCalled();
     });
 
-    test('Should reject a backend file importing a Node built-in module', () => {
-        const plugin = getVitePlugin(defaultOptions);
+    const transformBackendFile = (
+        code: string,
+        plugin: ReturnType<typeof getVitePlugin> = getVitePlugin(defaultOptions),
+    ) => {
         const handler = getTransformHandler(plugin);
         const resolveMock = jest.fn(async () => null);
         const loadMock = jest.fn(async () => null);
         const addWatchFileMock = jest.fn();
-
-        expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    import fs from 'node:fs';
-                    export function myHandler() {
-                        return fs.readFileSync('/etc/passwd', 'utf8');
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).toThrow(
-            'Importing Node built-in module "node:fs" is not supported in backend function code',
+        return handler.call(
+            {
+                parse: parseAst,
+                resolve: resolveMock,
+                load: loadMock,
+                addWatchFile: addWatchFileMock,
+            },
+            code,
+            '/build/src/backend/myHandler.backend.ts',
         );
+    };
+
+    test('Should accept a backend file using fetch and a Node built-in module', async () => {
+        const result = await transformBackendFile(`
+            import os from 'node:os';
+            export async function myHandler() {
+                const response = await fetch('https://example.com');
+                return { host: os.hostname(), status: response.status };
+            }
+        `);
+        const transformedCode = extractTransformedCode(result);
+
+        expect(transformedCode).toEqual(expect.stringContaining('executeBackendFunction'));
     });
 
-    test('Should warn, but not reject, a backend file referencing crypto or Intl', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const handler = getTransformHandler(plugin);
-        const resolveMock = jest.fn(async () => null);
-        const loadMock = jest.fn(async () => null);
-        const addWatchFileMock = jest.fn();
-
+    test('Should reject a backend file using Deno', () => {
         expect(() =>
-            handler.call(
-                {
-                    parse: parseAst,
-                    resolve: resolveMock,
-                    load: loadMock,
-                    addWatchFile: addWatchFileMock,
-                },
-                `
-                    export function myHandler() {
-                        return crypto.randomUUID() + new Intl.NumberFormat('en-US').format(1);
-                    }
-                `,
-                '/build/src/backend/myHandler.backend.ts',
-            ),
-        ).not.toThrow();
+            transformBackendFile('export function myHandler() { return Deno.cwd(); }'),
+        ).toThrow(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
+    });
 
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('crypto'), 'warn');
-        expect(mockLogFn).toHaveBeenCalledWith(expect.stringContaining('Intl'), 'warn');
+    test('Should warn about a process.env read once per plugin instance', async () => {
+        const code = 'export function myHandler() { return process.env.STRIPE_KEY; }';
+        const firstPlugin = getVitePlugin(defaultOptions);
+        const secondPlugin = getVitePlugin(defaultOptions);
+
+        await transformBackendFile(code, firstPlugin);
+        await transformBackendFile(code, firstPlugin);
+        await transformBackendFile(code, secondPlugin);
+
+        const warnings = mockLogFn.mock.calls.filter(
+            ([message, level]) => level === 'warn' && String(message).includes('process.env'),
+        );
+        expect(warnings).toHaveLength(2);
+    });
+
+    test('Should warn about a process.env read once across the transform and the backend builds', async () => {
+        const code =
+            'export function myHandler() { return process.env.STRIPE_KEY; } export function otherFunc() {}';
+        mockViteBuild.mockImplementation(async (config) => {
+            await emitModuleParsed(config, '/build/src/backend/myHandler.backend.ts', code);
+            return mockBuildResult();
+        });
+        const plugin = getVitePlugin(defaultOptions);
+
+        await transformBackendFile(code, plugin);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (plugin as any).closeBundle();
+
+        expect(mockViteBuild).toHaveBeenCalledTimes(2);
+        const warnings = mockLogFn.mock.calls.filter(
+            ([message, level]) => level === 'warn' && String(message).includes('process.env'),
+        );
+        expect(warnings).toHaveLength(1);
     });
 
     // Regression test: without the suffix check, ssrLoadModule() would get the proxy stub instead of the real function body.
@@ -791,7 +858,7 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(mockViteBuild).toHaveBeenCalledTimes(1);
     });
 
-    describe('transform on Vite versions without native hook filter support (< 6.3)', () => {
+    describe("transform handler's own id checks, beyond its hook filter", () => {
         const transformContext = {
             parse: parseAst,
             resolve: jest.fn(async () => null),
@@ -1033,7 +1100,7 @@ describe('Backend Functions - getVitePlugin', () => {
             expect(fragmentCode).toBe(plainCode);
         });
 
-        // unplugin copies raw `vite` hooks onto the plugin, so nothing re-applies `filter` for Vite < 6.3.
+        // unplugin copies raw `vite` hooks onto the plugin, so the handler still skips non-backend ids itself.
         test('Should leave the handler unwrapped after unplugin composes the plugin, and still skip non-backend ids', () => {
             const appsVitePlugin = getVitePlugin(defaultOptions);
             const unpluginOutput = createUnplugin(() => ({
@@ -1055,7 +1122,7 @@ describe('Backend Functions - getVitePlugin', () => {
             expect(result).toBeNull();
         });
 
-        describe('native filter on a real Vite 6.3 dev server', () => {
+        describe('native filter on a real Vite dev server', () => {
             const PIPELINE_STOP_MESSAGE = 'pipeline-stop: probe finished';
             let server: ViteDevServer;
             const idsReachingHandler = new Set<string>();
@@ -1239,7 +1306,91 @@ describe('Backend Functions - getVitePlugin', () => {
         });
     });
 
-    // Exact shape: Vite 5 has no configEnvironment hook, so the warmup override must not live here.
+    describe('Vite version floor', () => {
+        const [minMajor, minMinor] = MIN_VITE_VERSION.split('.').map(Number);
+        const olderVite = `${minMajor}.${minMinor - 1}.3`;
+        const supportedVite = `${minMajor}.${minMinor}.7`;
+        const runningVite = (viteVersion: string) => ({ meta: { viteVersion } });
+        const callConfig = (env: Env, importedVersion: string, hookContext?: unknown) => {
+            const plugin = getVitePlugin({
+                ...defaultOptions,
+                context: {
+                    ...defaultOptions.context,
+                    env,
+                    bundler: { ...defaultOptions.context.bundler, version: importedVersion },
+                },
+            });
+            const { config } = plugin ?? {};
+            const handler = typeof config === 'object' && config !== null ? config.handler : config;
+            if (typeof handler !== 'function') {
+                throw new Error('Expected plugin.config to have a function handler');
+            }
+            const hookArgs = [{}, DEV_SERVER_ENV];
+            return () => Reflect.apply(handler, hookContext, hookArgs);
+        };
+
+        test.each(['production', 'development'] as const)(
+            'Should check the imported version when the config hook has no meta.viteVersion in %s',
+            (env) => {
+                const refuse = callConfig(env, olderVite);
+                const accept = callConfig(env, supportedVite);
+                const expectedMessage = unsupportedViteMessage(olderVite);
+
+                expect(refuse).toThrow(expectedMessage);
+                expect(accept).not.toThrow();
+            },
+        );
+
+        test('Should refuse when either the running Vite or the imported vite module is older', () => {
+            const olderRunningContext = runningVite(olderVite);
+            const supportedRunningContext = runningVite(supportedVite);
+            const resolveOlderRunning = callConfig(
+                'production',
+                supportedVite,
+                olderRunningContext,
+            );
+            const resolveOlderImported = callConfig(
+                'production',
+                olderVite,
+                supportedRunningContext,
+            );
+            const resolveBoth = callConfig('production', supportedVite, supportedRunningContext);
+
+            expect(resolveOlderRunning).toThrow(unsupportedViteMessage(olderVite, supportedVite));
+            expect(resolveOlderImported).toThrow(unsupportedViteMessage(supportedVite, olderVite));
+            expect(resolveBoth).not.toThrow();
+        });
+
+        test("Should accept this repo's real Vite outside the test env", async () => {
+            const plugin = getVitePlugin({
+                ...defaultOptions,
+                context: {
+                    ...defaultOptions.context,
+                    env: 'production',
+                    bundler: { ...defaultOptions.context.bundler, version: installedViteVersion },
+                },
+            });
+            const resolving = resolveConfig(
+                {
+                    configFile: false,
+                    root: __dirname,
+                    logLevel: 'silent',
+                    plugins: [{ name: 'apps', ...plugin }],
+                },
+                'serve',
+            );
+
+            await expect(resolving).resolves.toBeDefined();
+        });
+
+        test("Should skip the floor in this repo's test env", () => {
+            const resolve = callConfig('test', olderVite);
+
+            expect(resolve).not.toThrow();
+        });
+    });
+
+    // Exact shape: the warmup override lives in configEnvironment, not here.
     test('Should force @datadog/apps-backend and @datadog/action-catalog through the SSR transform pipeline instead of externalizing them', () => {
         // These SDKs ship ESM-only, but Vite's dev-server SSR mode externalizes node_modules by
         // default (a plain require()), which throws "Cannot use import statement outside a
@@ -1366,188 +1517,79 @@ describe('Backend Functions - getVitePlugin', () => {
 
     // Without auth both endpoints are off, and dev-verify sends every execution to the cloud.
     test.each([
-        { scenario: 'no authentication', mode: 'development', withAuth: false, installs: 0 },
-        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, installs: 0 },
-        { scenario: 'local execution', mode: 'development', withAuth: true, installs: 1 },
+        { scenario: 'no authentication', mode: 'development', withAuth: false, runsLocally: false },
+        { scenario: 'dev-verify mode', mode: DEV_VERIFY_MODE, withAuth: true, runsLocally: false },
+        { scenario: 'local execution', mode: 'development', withAuth: true, runsLocally: true },
     ])(
-        'Should install the sandbox guards only when local execution can run ($scenario)',
-        ({ mode, withAuth, installs }) => {
+        'Should run backend functions in child processes and check local Node only when local execution can run ($scenario)',
+        ({ mode, withAuth, runsLocally }) => {
             const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
+            const createMiddleware = jest.spyOn(devServer, 'createDevServerMiddleware');
+            const createExecutor = jest.spyOn(localExecutionProcess, 'createChildProcessExecutor');
+            const runnerPath = '/build/node_modules/vite/dist/node/module-runner.js';
+            const resolveRunner = jest
+                .spyOn(localExecutionProcess, 'resolveViteModuleRunner')
+                .mockReturnValue(runnerPath);
+            const hot = { handleInvoke: jest.fn(async () => ({})) };
             const configureServer = getConfigureServer(plugin);
+            const realVersion = Object.getOwnPropertyDescriptor(process.versions, 'node');
             const restoreEnv = clearDatadogEnv();
-            if (withAuth) {
-                process.env.DD_API_KEY = 'test-api-key';
-                process.env.DD_APP_KEY = 'test-app-key';
-            }
 
             try {
+                Object.defineProperty(process.versions, 'node', {
+                    value: NODE_WITHOUT_WEBSOCKET,
+                    configurable: true,
+                });
+                if (withAuth) {
+                    process.env.DD_API_KEY = 'test-api-key';
+                    process.env.DD_APP_KEY = 'test-app-key';
+                }
                 configureServer({
                     middlewares: { use: jest.fn() },
                     ssrLoadModule: jest.fn(),
                     config: fakeServerConfig(mode),
+                    environments: { ssr: { hot, config: { dev: {} } } },
                 });
 
-                expect(installGuards).toHaveBeenCalledTimes(installs);
+                const executeLocally = createMiddleware.mock.calls[0]?.at(-1);
+                expect(typeof executeLocally).toBe(runsLocally ? 'function' : 'undefined');
+                const executorOptions = createExecutor.mock.calls.map(([options]) => ({
+                    invokeChannel: options.invokeChannel,
+                    moduleRunnerPath: options.moduleRunnerPath,
+                }));
+                const expectedOptions = { invokeChannel: hot, moduleRunnerPath: runnerPath };
+                expect(executorOptions).toEqual(runsLocally ? [expectedOptions] : []);
+                const warning = localNodeWarning(NODE_WITHOUT_WEBSOCKET);
+                const warnings = mockLogFn.mock.calls.filter(([message]) => message === warning);
+                expect(warnings).toEqual(runsLocally ? [[warning, 'warn']] : []);
             } finally {
                 restoreEnv();
-                installGuards.mockRestore();
+                createMiddleware.mockRestore();
+                createExecutor.mockRestore();
+                resolveRunner.mockRestore();
+                if (realVersion) {
+                    Object.defineProperty(process.versions, 'node', realVersion);
+                }
             }
         },
     );
 
-    test.each([
-        { predates: true, warns: true },
-        { predates: false, warns: false },
-    ])(
-        'Should warn that fs-extra/graceful-fs loaded before the dev server is unguarded (predates: $predates)',
-        ({ predates, warns }) => {
-            const plugin = getVitePlugin(defaultOptions);
-            const installGuards = jest
-                .spyOn(networkGuard, 'installGuards')
-                .mockImplementation(() => undefined);
-            const gracefulFsPredatesGuards = jest
-                .spyOn(networkGuard, 'gracefulFsPredatesGuards')
-                .mockReturnValue(predates);
-            const configureServer = getConfigureServer(plugin);
-            const restoreEnv = clearDatadogEnv();
-            process.env.DD_API_KEY = 'test-api-key';
-            process.env.DD_APP_KEY = 'test-app-key';
-
-            try {
-                configureServer({
-                    middlewares: { use: jest.fn() },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                });
-                const warned = mockLogFn.mock.calls.some(
-                    ([text, level]) =>
-                        level === 'warn' && text === networkGuard.GRACEFUL_FS_UNGUARDED_WARNING,
-                );
-
-                expect(warned).toBe(warns);
-            } finally {
-                restoreEnv();
-                installGuards.mockRestore();
-                gracefulFsPredatesGuards.mockRestore();
-            }
-        },
-    );
-
-    // Each local execution installs again and fails closed, so the server itself must still start.
-    test('Should keep the dev server starting when installing the sandbox guards throws', () => {
-        const plugin = getVitePlugin(defaultOptions);
-        const installGuards = jest.spyOn(networkGuard, 'installGuards').mockImplementation(() => {
-            throw new Error('Cannot redefine property: cpSync');
-        });
+    test("Should hand the middleware Vite's default server conditions", () => {
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const defaultServerConditions = ['module', 'node'];
+        const bundler = { ...mockVite, defaultServerConditions };
+        const plugin = getVitePlugin({ ...defaultOptions, bundler });
+        const configureServer = getConfigureServer(plugin);
         const use = jest.fn();
-        const configureServer = getConfigureServer(plugin);
-        const restoreEnv = clearDatadogEnv();
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
+        const ssrLoadModule = jest.fn();
+        const config = fakeServerConfig(DEV_VERIFY_MODE);
 
-        try {
-            expect(() =>
-                configureServer({
-                    middlewares: { use },
-                    ssrLoadModule: jest.fn(),
-                    config: fakeServerConfig('development'),
-                }),
-            ).not.toThrow();
-            expect(installGuards).toHaveBeenCalled();
-            expect(use).toHaveBeenCalledTimes(1);
-        } finally {
-            restoreEnv();
-            installGuards.mockRestore();
-        }
+        configureServer({ middlewares: { use }, ssrLoadModule, config });
+
+        const [middlewareArgs] = middlewareSpy.mock.calls;
+        const passedConditions = middlewareArgs.at(-2);
+        expect(passedConditions).toBe(defaultServerConditions);
     });
-
-    // Vite 5 has no environment API, so a run's dynamic import calls the plugin container directly.
-    test("Should run a Vite 5 plugin container's resolveId, load and transform outside a run's blocked scope", async () => {
-        const cacheDir = makeProbeDirOutsideTmp('dd-vite5-container-');
-        // A class, like Vite 5.4's PluginContainer, so the methods live on the prototype and use `this`.
-        class FakePluginContainer {
-            readonly calls: unknown[][] = [];
-            async resolveId(...args: unknown[]) {
-                return this.record('resolveId', args);
-            }
-            async load(...args: unknown[]) {
-                return this.record('load', args);
-            }
-            async transform(...args: unknown[]) {
-                return this.record('transform', args);
-            }
-            record(method: string, args: unknown[]) {
-                const cacheFile = path.join(cacheDir, `${method}.json`);
-                fs.writeFileSync(cacheFile, '{}');
-                this.calls.push([method, ...args]);
-                return method;
-            }
-        }
-        const pluginContainer = new FakePluginContainer();
-        const plugin = getVitePlugin(defaultOptions);
-        const configureServer = getConfigureServer(plugin);
-        const restoreEnv = clearDatadogEnv();
-        process.env.DD_API_KEY = 'test-api-key';
-        process.env.DD_APP_KEY = 'test-app-key';
-
-        try {
-            configureServer({
-                middlewares: { use: jest.fn() },
-                ssrLoadModule: jest.fn(),
-                config: fakeServerConfig('development'),
-                pluginContainer,
-            });
-            const inRunPath = path.join(cacheDir, 'in-run.txt');
-            const results = await networkGuard.runBlocked(async () => {
-                const ssr = { ssr: true };
-                const resolved = await pluginContainer.resolveId('/src/lazy.ts', undefined, ssr);
-                const loaded = await pluginContainer.load('/src/lazy.ts', ssr);
-                const transformed = await pluginContainer.transform('code', '/src/lazy.ts', ssr);
-                expect(() => fs.writeFileSync(inRunPath, 'data')).toThrow(
-                    networkGuard.FS_WRITE_BLOCKED_MESSAGE,
-                );
-                return [resolved, loaded, transformed];
-            });
-            const cacheFiles = fs.readdirSync(cacheDir).sort();
-
-            expect(results).toEqual(['resolveId', 'load', 'transform']);
-            expect(pluginContainer.calls).toEqual([
-                ['resolveId', '/src/lazy.ts', undefined, { ssr: true }],
-                ['load', '/src/lazy.ts', { ssr: true }],
-                ['transform', 'code', '/src/lazy.ts', { ssr: true }],
-            ]);
-            expect(cacheFiles).toEqual(['load.json', 'resolveId.json', 'transform.json']);
-        } finally {
-            restoreEnv();
-            rmSync(cacheDir);
-        }
-    });
-
-    const serverConditionCases = [
-        { vite: 'Vite 6 and later', defaultServerConditions: ['module', 'node'] },
-        { vite: 'Vite 5', defaultServerConditions: undefined },
-    ];
-    test.each(serverConditionCases)(
-        'Should hand the middleware the default server conditions of $vite',
-        ({ defaultServerConditions }) => {
-            const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
-            const bundler = { ...mockVite, defaultServerConditions };
-            const plugin = getVitePlugin({ ...defaultOptions, bundler });
-            const configureServer = getConfigureServer(plugin);
-            const use = jest.fn();
-            const ssrLoadModule = jest.fn();
-            const config = fakeServerConfig(DEV_VERIFY_MODE);
-
-            configureServer({ middlewares: { use }, ssrLoadModule, config });
-
-            const [middlewareArgs] = middlewareSpy.mock.calls;
-            const passedConditions = middlewareArgs.at(-1);
-            expect(passedConditions).toBe(defaultServerConditions);
-        },
-    );
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.
     test('Should route /__dd/executeAction to the cloud path when configureServer sees a dev-verify server.config.mode', async () => {
