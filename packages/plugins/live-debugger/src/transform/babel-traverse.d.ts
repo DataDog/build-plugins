@@ -16,8 +16,15 @@ declare module '@babel/traverse' {
 
     type VisitorHandler<T extends t.Node> = (path: BabelPath<T>) => void;
 
+    // Handlers called when the traversal enters a node and when it leaves it.
+    interface VisitorHandlers<T extends t.Node> {
+        enter?: VisitorHandler<T>;
+        exit?: VisitorHandler<T>;
+    }
+
     interface Visitor {
-        Function?: VisitorHandler<t.Function>;
+        Class?: VisitorHandler<t.Class> | VisitorHandlers<t.Class>;
+        Function?: VisitorHandler<t.Function> | VisitorHandlers<t.Function>;
     }
 
     function traverse(ast: object, visitor: Visitor): void;

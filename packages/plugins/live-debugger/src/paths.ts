@@ -49,37 +49,31 @@ export const getRepositoryRoot = (buildRoot: string): string | undefined => {
     return realpathSync(repositoryRoot);
 };
 
-const isOutside = (relativePath: string) =>
-    relativePath === '' ||
-    relativePath === '..' ||
-    relativePath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativePath);
+// Whether a relative path, with either separator, points outside the directory it's relative to.
+export const isOutsideRoot = (relativePath: string): boolean => {
+    const posixPath = toPosixPath(relativePath);
+    return posixPath === '..' || posixPath.startsWith('../') || path.isAbsolute(relativePath);
+};
 
 export const isInsideDirectory = (filepath: string, directory: string): boolean => {
     const relativePath = path.relative(directory, filepath);
-    return relativePath === '' || !isOutside(relativePath);
+    return !isOutsideRoot(relativePath);
 };
 
 /**
- * Return a function that converts the module path of a function ID to a path relative to the
- * repository root, or to undefined when the module is outside the repository.
+ * Return the path part of the function IDs of a module: its file, without query string or Yarn PnP
+ * virtual folders, relative to `root`. Symlinks are only resolved for files outside `root`, which
+ * keeps the file system out of the common case.
  */
-export const createSourceFileResolver = (buildRoot: string, repositoryRoot: string) => {
-    const cache = new Map<string, string | undefined>();
+export const getFunctionIdPath = (moduleId: string, root: string): string => {
+    const moduleFile = stripQuery(moduleId);
+    const unvirtualizedPath = resolveYarnVirtualPath(moduleFile);
+    const relativePath = path.relative(root, unvirtualizedPath);
+    if (!isOutsideRoot(relativePath)) {
+        return toPosixPath(relativePath);
+    }
 
-    return (modulePath: string): string | undefined => {
-        if (cache.has(modulePath)) {
-            return cache.get(modulePath);
-        }
-
-        const moduleFile = stripQuery(modulePath);
-        const absolutePath = path.resolve(buildRoot, moduleFile);
-        const unvirtualizedPath = resolveYarnVirtualPath(absolutePath);
-        const realPath = realpathSync(unvirtualizedPath);
-        const relativePath = path.relative(repositoryRoot, realPath);
-        const sourceFile = isOutside(relativePath) ? undefined : toPosixPath(relativePath);
-
-        cache.set(modulePath, sourceFile);
-        return sourceFile;
-    };
+    const realPath = realpathSync(unvirtualizedPath);
+    const realRelativePath = path.relative(root, realPath);
+    return toPosixPath(realRelativePath);
 };
