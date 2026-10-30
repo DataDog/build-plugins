@@ -47,8 +47,13 @@ export const outputJson = async (filepath: string, data: any) => {
     const writable = fs.createWriteStream(filepath);
     const readable = new JsonStreamStringify(data, undefined, 2);
     const prom = new Promise<void>((resolve, reject) => {
-        readable.on('end', () => {
+        // Resolve once the data is on disk, not when it's been read.
+        writable.on('finish', () => {
             resolve();
+        });
+
+        writable.on('error', (err) => {
+            reject(err);
         });
 
         readable.on('error', (err) => {
@@ -57,6 +62,15 @@ export const outputJson = async (filepath: string, data: any) => {
     });
     readable.pipe(writable);
     return prom;
+};
+
+// Return the canonical path, with symlinks resolved, or the input path if it doesn't exist.
+export const realpathSync = (filepath: string) => {
+    try {
+        return fs.realpathSync(filepath);
+    } catch {
+        return filepath;
+    }
 };
 
 export const outputJsonSync = (filepath: string, data: any) => {
