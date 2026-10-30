@@ -119,6 +119,12 @@ function isJsonContentType(contentType: string | undefined): boolean {
     return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
 }
 
+// HTTP/2 requests carry :authority and no Host.
+export function getRequestHost(headers: IncomingHttpHeaders): string | undefined {
+    const authority = headers[':authority'];
+    return headers.host ?? (typeof authority === 'string' ? authority : undefined);
+}
+
 // Node decodes a Host as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
 function quoteHostname(hostname: string): string {
     return JSON.stringify(hostname).replace(
@@ -132,9 +138,7 @@ export function checkDevServerRequest(
     isHostAllowed: HostCheck,
 ): RequestRejection | undefined {
     const { origin } = headers;
-    // HTTP/2 requests carry :authority and no Host.
-    const authority = headers[':authority'];
-    const host = headers.host ?? (typeof authority === 'string' ? authority : undefined);
+    const host = getRequestHost(headers);
     if (!host) {
         return { statusCode: 403, message: MISSING_HOST_MESSAGE };
     }
