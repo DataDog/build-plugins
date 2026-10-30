@@ -201,6 +201,12 @@ describe('Source Code Context', () => {
     }) => {
         await userFlow(`${devServerUrl}/${suiteName}-omit-version`, page, bundler);
 
+        // The RUM SDK consumes the registered contexts when it starts: read them before.
+        const entryContexts = await getContexts(page);
+        await page.click('#load_chunk');
+        await page.waitForFunction(() => window.chunkLoaded === true);
+        const allContexts = await getContexts(page);
+
         await page.evaluate((version) => {
             (globalThis as any).rum_events = [];
             (globalThis as any).DD_RUM.init({
@@ -215,10 +221,6 @@ describe('Source Code Context', () => {
             });
         }, SERVICE_VERSION);
 
-        const entryContexts = await getContexts(page);
-        await page.click('#load_chunk');
-        await page.waitForFunction(() => window.chunkLoaded === true);
-        const allContexts = await getContexts(page);
         await page.click('#trigger_entry_error');
         await page.click('#trigger_chunk_error');
 
@@ -230,6 +232,7 @@ describe('Source Code Context', () => {
         const chunkError = events.find(predicate('chunk_error'));
 
         // The entry registers the version, the async chunks only their debug IDs.
+        expect(entryContexts.length).toBeGreaterThan(0);
         expect(entryContexts.every((context) => context.version === SERVICE_VERSION)).toBe(true);
         const chunkContexts = allContexts.slice(entryContexts.length);
         expect(chunkContexts.length).toBeGreaterThan(0);
