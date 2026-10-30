@@ -10,11 +10,12 @@ import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
 import { LIVE_DEBUGGER_THROW_FUNCTION, SKIP_INSTRUMENTATION_COMMENT } from '../constants';
+import { getFunctionIdPath } from '../paths';
 import type { DecoratorSyntax, FunctionKind } from '../types';
 
 import type { BabelPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
-import { generateFunctionId, getFunctionName } from './functionId';
+import { createFunctionIdGenerator, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
 import { getLocalVariableDeclarations, getParameterNames } from './scopeTracker';
 import type { LocalVariableDeclaration } from './scopeTracker';
@@ -206,7 +207,8 @@ interface ConstructorThisAliasTarget {
 export interface TransformOptions {
     code: string;
     filePath: string;
-    buildRoot: string;
+    // Function ID paths are relative to it: the git repository root, or the build root outside one.
+    repositoryRoot: string;
     honorSkipComments: boolean;
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
@@ -243,8 +245,15 @@ export interface TransformResult {
  * Uses Babel to parse and read the AST, then MagicString for injection.
  */
 export function transformCode(options: TransformOptions): TransformResult {
-    const { code, filePath, buildRoot, honorSkipComments, functionTypes, namedOnly, decorators } =
-        options;
+    const {
+        code,
+        filePath,
+        repositoryRoot,
+        honorSkipComments,
+        functionTypes,
+        namedOnly,
+        decorators,
+    } = options;
 
     let failedCount = 0;
     let instrumentedCount = 0;
@@ -288,137 +297,141 @@ export function transformCode(options: TransformOptions): TransformResult {
     const constructorBodyStartsByNode = new Map<BabelTypes.Node, number>();
     const constructorsUsingThisAlias = new Set<BabelTypes.Node>();
     const superCallsByConstructorNode = new Map<BabelTypes.Node, SuperCallTarget[]>();
-    const anonymousCountByParent = new Map<BabelTypes.Node, number>();
+    const functionIdPath = getFunctionIdPath(filePath, repositoryRoot);
+    const functionIds = createFunctionIdGenerator(functionIdPath, babelTypes);
     let probeVarCounter = 0;
 
     // @babel/parser and @babel/traverse bundle separate copies of @babel/types,
     // causing a structural type mismatch. The cast is safe: parse() returns a
     // valid AST that traverse() accepts at runtime.
     traverse(ast as unknown as BabelTypes.Node, {
-        Function(path: BabelPath<BabelTypes.Function>) {
-            totalFunctions++;
+        Class: {
+            enter(path: BabelPath<BabelTypes.Class>) {
+                functionIds.enterClass(path);
+            },
+            exit() {
+                functionIds.exit();
+            },
+        },
+        Function: {
+            enter(path: BabelPath<BabelTypes.Function>) {
+                totalFunctions++;
+                // Before the skip checks, so skipped functions don't change the IDs of other functions.
+                const functionId = functionIds.enterFunction(path);
 
-            const derivedConstructor = getDerivedConstructor(path, babelTypes);
-            if (derivedConstructor) {
-                constructorBodyStartsByNode.set(derivedConstructor, derivedConstructor.body.start!);
-                superCallsByConstructorNode.set(
-                    derivedConstructor,
-                    getSuperCallTargets(derivedConstructor.body.body, babelTypes),
-                );
-            }
-
-            if (!canInstrumentFunction(path, babelTypes)) {
-                skippedUnsupportedCount++;
-                return;
-            }
-
-            if (
-                honorSkipComments &&
-                shouldSkipFunction(path, SKIP_INSTRUMENTATION_COMMENT, babelTypes)
-            ) {
-                skippedByCommentCount++;
-                return;
-            }
-
-            if (functionTypes && !functionTypes.includes(getFunctionKind(path.node, babelTypes))) {
-                skippedUnsupportedCount++;
-                return;
-            }
-
-            if (namedOnly && !getFunctionName(path, babelTypes)) {
-                skippedUnsupportedCount++;
-                return;
-            }
-
-            // O(1) anonymous sibling index via pre-indexed Map
-            let anonymousSiblingIndex = 0;
-            if (!getFunctionName(path, babelTypes)) {
-                const parentNode = path.parentPath?.node;
-                if (parentNode) {
-                    anonymousSiblingIndex = anonymousCountByParent.get(parentNode) || 0;
-                    anonymousCountByParent.set(parentNode, anonymousSiblingIndex + 1);
-                }
-            }
-
-            const functionId = generateFunctionId(
-                filePath,
-                buildRoot,
-                path,
-                anonymousSiblingIndex,
-                babelTypes,
-            );
-
-            try {
-                const node = path.node;
-                const idx = probeVarCounter++;
-                const probeVarName = `$dd_p${idx}`;
-                const entryVars = getParameterNames(node, babelTypes);
-                const localVars = getLocalVariableDeclarations(node, babelTypes);
-
-                const isExpressionBody =
-                    babelTypes.isArrowFunctionExpression(node) &&
-                    !babelTypes.isBlockStatement(node.body);
-                const hasSequenceExpressionBody =
-                    isExpressionBody && babelTypes.isSequenceExpression(node.body);
-                const constructorPath = getDerivedConstructorForLexicalThis(path, babelTypes);
-                const useThisAlias = constructorPath != null;
-                if (constructorPath) {
-                    constructorsUsingThisAlias.add(constructorPath.node);
+                const derivedConstructor = getDerivedConstructor(path, babelTypes);
+                if (derivedConstructor) {
                     constructorBodyStartsByNode.set(
-                        constructorPath.node,
-                        constructorPath.node.body.start!,
+                        derivedConstructor,
+                        derivedConstructor.body.start!,
+                    );
+                    superCallsByConstructorNode.set(
+                        derivedConstructor,
+                        getSuperCallTargets(derivedConstructor.body.body, babelTypes),
                     );
                 }
 
-                const returns: ReturnInfo[] = [];
-                const needsTrailingReturn =
-                    isExpressionBody ||
-                    !babelTypes.isBlockStatement(node.body) ||
-                    !alwaysReturns(node.body.body, babelTypes);
-                if (!isExpressionBody && babelTypes.isBlockStatement(node.body)) {
-                    collectReturnStatements(code, node.body.body, returns, babelTypes, false);
+                if (!canInstrumentFunction(path, babelTypes)) {
+                    skippedUnsupportedCount++;
+                    return;
                 }
 
-                let directivesEnd: number | undefined;
                 if (
-                    !isExpressionBody &&
-                    babelTypes.isBlockStatement(node.body) &&
-                    node.body.directives.length > 0
+                    honorSkipComments &&
+                    shouldSkipFunction(path, SKIP_INSTRUMENTATION_COMMENT, babelTypes)
                 ) {
-                    const lastDirective = node.body.directives[node.body.directives.length - 1];
-                    directivesEnd = lastDirective.end!;
+                    skippedByCommentCount++;
+                    return;
                 }
 
-                targets.push({
-                    bodyStart: node.body.start!,
-                    bodyPrefixStart: getExpressionBodyPrefixStart(code, node.body),
-                    bodyEnd: node.body.end!,
-                    functionEnd: node.end!,
-                    isExpressionBody,
-                    hasSequenceExpressionBody,
-                    aliasesExpressionBodySuperCall:
-                        useThisAlias &&
-                        isExpressionBody &&
-                        isSuperCallExpression(node.body, babelTypes),
-                    needsTrailingReturn,
-                    useThisAlias,
-                    bodyParenStart:
-                        isExpressionBody && typeof node.body.extra?.parenStart === 'number'
-                            ? node.body.extra.parenStart
-                            : undefined,
-                    directivesEnd,
-                    functionId,
-                    probeVarName,
-                    probeIdx: String(idx),
-                    entryVars,
-                    localVars,
-                    returns,
-                });
+                if (
+                    functionTypes &&
+                    !functionTypes.includes(getFunctionKind(path.node, babelTypes))
+                ) {
+                    skippedUnsupportedCount++;
+                    return;
+                }
 
-                instrumentedCount++;
-            } catch (error) {
-                failedCount++;
-            }
+                if (namedOnly && !getFunctionName(path, babelTypes)) {
+                    skippedUnsupportedCount++;
+                    return;
+                }
+
+                try {
+                    const node = path.node;
+                    const idx = probeVarCounter++;
+                    const probeVarName = `$dd_p${idx}`;
+                    const entryVars = getParameterNames(node, babelTypes);
+                    const localVars = getLocalVariableDeclarations(node, babelTypes);
+
+                    const isExpressionBody =
+                        babelTypes.isArrowFunctionExpression(node) &&
+                        !babelTypes.isBlockStatement(node.body);
+                    const hasSequenceExpressionBody =
+                        isExpressionBody && babelTypes.isSequenceExpression(node.body);
+                    const constructorPath = getDerivedConstructorForLexicalThis(path, babelTypes);
+                    const useThisAlias = constructorPath != null;
+                    if (constructorPath) {
+                        constructorsUsingThisAlias.add(constructorPath.node);
+                        constructorBodyStartsByNode.set(
+                            constructorPath.node,
+                            constructorPath.node.body.start!,
+                        );
+                    }
+
+                    const returns: ReturnInfo[] = [];
+                    const needsTrailingReturn =
+                        isExpressionBody ||
+                        !babelTypes.isBlockStatement(node.body) ||
+                        !alwaysReturns(node.body.body, babelTypes);
+                    if (!isExpressionBody && babelTypes.isBlockStatement(node.body)) {
+                        collectReturnStatements(code, node.body.body, returns, babelTypes, false);
+                    }
+
+                    let directivesEnd: number | undefined;
+                    if (
+                        !isExpressionBody &&
+                        babelTypes.isBlockStatement(node.body) &&
+                        node.body.directives.length > 0
+                    ) {
+                        const lastDirective = node.body.directives[node.body.directives.length - 1];
+                        directivesEnd = lastDirective.end!;
+                    }
+
+                    targets.push({
+                        bodyStart: node.body.start!,
+                        bodyPrefixStart: getExpressionBodyPrefixStart(code, node.body),
+                        bodyEnd: node.body.end!,
+                        functionEnd: node.end!,
+                        isExpressionBody,
+                        hasSequenceExpressionBody,
+                        aliasesExpressionBodySuperCall:
+                            useThisAlias &&
+                            isExpressionBody &&
+                            isSuperCallExpression(node.body, babelTypes),
+                        needsTrailingReturn,
+                        useThisAlias,
+                        bodyParenStart:
+                            isExpressionBody && typeof node.body.extra?.parenStart === 'number'
+                                ? node.body.extra.parenStart
+                                : undefined,
+                        directivesEnd,
+                        functionId,
+                        probeVarName,
+                        probeIdx: String(idx),
+                        entryVars,
+                        localVars,
+                        returns,
+                    });
+
+                    instrumentedCount++;
+                } catch (error) {
+                    failedCount++;
+                }
+            },
+            exit() {
+                functionIds.exit();
+            },
         },
     });
 

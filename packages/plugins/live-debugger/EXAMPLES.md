@@ -28,7 +28,7 @@ A few conventions used throughout:
 -   [Arrow inside a super call argument](#arrow-inside-a-super-call-argument)
 -   [Arrow whose body is a super call](#arrow-whose-body-is-a-super-call)
 -   [Function expressions keep their own this](#function-expressions-keep-their-own-this)
--   [Anonymous function IDs](#anonymous-function-ids)
+-   [Function IDs](#function-ids)
 -   [What is not instrumented](#what-is-not-instrumented)
 <!-- #toc -->
 
@@ -323,7 +323,7 @@ class Button extends Component {
     constructor(props) {
         let $dd_t;
         const handleClick = () => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/Button.js;handleClick');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/Button.js;Button.constructor/handleClick');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = this.props.onClick();
@@ -341,8 +341,7 @@ class Button extends Component {
 
 An arrow nested in the `super(...)` argument is instrumented with the `$dd_t` receiver, and the
 surrounding `super(...)` call is wrapped to capture the receiver. This arrow is anonymous, so its
-ID uses the `<anonymous>@<line>:<column>:<index>` form (see [Anonymous function IDs](#anonymous-function-ids));
-the exact numbers depend on the original source position.
+ID names it `<anonymous>` (see [Function IDs](#function-ids)).
 
 ```js
 // Before
@@ -357,7 +356,7 @@ class Widget extends Base {
     constructor(items) {
         let $dd_t;
         ($dd_t = super(items.map((x) => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;<anonymous>@4:16:0');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/<anonymous>');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
@@ -388,7 +387,7 @@ class Widget extends Base {
     constructor(args) {
         let $dd_t;
         const init = () => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;init');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/init');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = ($dd_t = super(args));
@@ -420,7 +419,7 @@ class Widget extends Base {
 class Widget extends Base {
     constructor(items) {
         const double = function(x) {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;double');
+            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/double');
             try {
                 let $dd_rv0;
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
@@ -432,25 +431,42 @@ class Widget extends Base {
 }
 ```
 
-## Anonymous function IDs
+## Function IDs
 
-Named functions get the ID `<file-path>;<function-name>`. Anonymous functions — including
-callbacks that are not assigned to a variable, property, or method — instead use:
+A function's ID is the path of its file, relative to the git repository root, followed by `;`
+and the function's qualified name. Without a git repository, the path is relative to the build
+root instead.
 
-```
-<file-path>;<anonymous>@<line>:<column>:<sibling-index>
-```
+The qualified name is the function's own name, prefixed by the qualified name of the closest
+named function or class around it: `<class>.` for methods and class properties, `<function>/`
+otherwise. Getters and setters end with `:get` and `:set`, and functions without a name are
+`<anonymous>`. Anonymous functions and classes don't prefix the names of the functions inside
+them, and neither do object literals. For example, in `src/cart.js`:
 
-where `<line>` and `<column>` are the function's position in the original source and
-`<sibling-index>` disambiguates multiple anonymous functions that share the same parent node.
-For example, the callback in `[1, 2].map((x) => x * 2)` might become:
+| Function | ID |
+| --- | --- |
+| `function add() {}` | `src/cart.js;add` |
+| `total` in `class Cart { total() {} }` | `src/cart.js;Cart.total` |
+| The `size` getter in `class Cart { get size() {} }` | `src/cart.js;Cart.size:get` |
+| The arrow in `class Cart { handler = () => {} }` | `src/cart.js;Cart.handler` |
+| The callback in `function doubleAll(xs) { return xs.map((x) => x * 2); }` | `src/cart.js;doubleAll/<anonymous>` |
+| `open` in `function make() { return class Box { open() {} }; }` | `src/cart.js;make/Box.open` |
+
+When several functions of a file have the same qualified name, such as two callbacks in the same
+function, the second one gets `#1`, the third one `#2`, and so on, in source order:
 
 ```js
-let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;<anonymous>@1:11:0');
+function load() {
+    // src/cart.js;load/<anonymous>
+    fetchItems().then((items) => render(items));
+    // src/cart.js;load/<anonymous>#1
+    fetchPrices().then((prices) => render(prices));
+}
 ```
 
-> Setting [`liveDebugger.namedOnly`](./README.md#livedebuggernamedonly) to `true` skips
-> anonymous callbacks entirely, so only the `<file-path>;<function-name>` form is produced.
+IDs don't depend on line numbers, so a function keeps its ID when the code around it changes. It
+gets a new ID when it's renamed, when it moves to another file, function, or class, or when a
+function with the same qualified name is added before it.
 
 ## What is not instrumented
 

@@ -24,7 +24,7 @@ const CORPUS_PACKAGES = [
     'picomatch',
 ];
 
-const BASE_OPTIONS: Omit<TransformOptions, 'code' | 'filePath' | 'buildRoot'> = {
+const BASE_OPTIONS: Omit<TransformOptions, 'code' | 'filePath' | 'repositoryRoot'> = {
     honorSkipComments: true,
     functionTypes: undefined,
     namedOnly: false,
@@ -65,7 +65,7 @@ describe('transformCode on real-world code', () => {
                 ...BASE_OPTIONS,
                 code,
                 filePath,
-                buildRoot: packageRoot,
+                repositoryRoot: packageRoot,
             });
 
             expect(result.failedCount).toBe(0);
