@@ -122,6 +122,8 @@ export const getXpackPlugin =
             const hookCb = () => {
                 for (const chunk of compilation.chunks) {
                     const isEntry = chunk.canBeInitial();
+                    // A chunk with a runtime, like a worker's, is the first to run in its realm.
+                    const isInitial = isEntry || chunk.hasRuntime();
                     // Per-chunk content (e.g. context snippets) keys off the chunk
                     // content hash, the only chunk source available at this stage.
                     const chunkSource = chunk.contentHash?.javascript ?? chunk.hash;
@@ -140,11 +142,13 @@ export const getXpackPlugin =
                             sourceOrHash: chunkSource,
                             fileName,
                             isEntry,
+                            isInitial,
                         });
                         const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
                             sourceOrHash: chunkSource,
                             fileName,
                             isEntry,
+                            isInitial,
                         });
 
                         if (banner === '' && footer === '') {

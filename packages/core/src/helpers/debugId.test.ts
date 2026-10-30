@@ -33,8 +33,18 @@ describe('Debug ID Helpers', () => {
     describe('getChunkDebugId', () => {
         test('should derive the debug ID from the chunk source or hash only', () => {
             const sourceOrHash = 'console.log("chunk");';
-            const entryChunk = { sourceOrHash, fileName: 'main.js', isEntry: true };
-            const otherChunk = { sourceOrHash, fileName: 'chunk.js', isEntry: false };
+            const entryChunk = {
+                sourceOrHash,
+                fileName: 'main.js',
+                isEntry: true,
+                isInitial: true,
+            };
+            const otherChunk = {
+                sourceOrHash,
+                fileName: 'chunk.js',
+                isEntry: false,
+                isInitial: false,
+            };
 
             const expected = stringToUUID(sourceOrHash);
 

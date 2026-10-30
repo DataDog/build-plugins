@@ -309,10 +309,12 @@ if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
 }
 ```
 
-- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
+- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set, and from chunks that are loaded lazily (see below).
 - `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
 
 The global is defined even when both fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
+
+The first chunk to execute is always an initial one: an entry, a chunk an entry statically imports, or a chunk with its own runtime, like a worker's. So only those chunks carry the `version`. Lazily loaded chunks don't, which keeps their content, and their content-hashed file names, identical across builds that only change the version: browsers keep them cached across deploys.
 
 ### Invocation handles
 

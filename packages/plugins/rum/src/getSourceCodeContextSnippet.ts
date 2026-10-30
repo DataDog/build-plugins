@@ -54,9 +54,18 @@ export const getSourceCodeContextSnippet = (
     if (contextOptions.debugId === true) {
         debugId = chunk ? getChunkDebugId(chunk) : randomUUID();
     }
+    // A context without a service attributes the chunk to the app itself. When its version is
+    // the one the RUM SDK is initialized with, events from async chunks get it from the SDK, so
+    // it can stay in initial chunks only: async chunks then keep their content, and their hashed
+    // file name, across builds that only change the version.
+    const omitVersion =
+        contextOptions.omitVersionFromAsyncChunks === true &&
+        !contextOptions.service &&
+        chunk !== undefined &&
+        !chunk.isInitial;
     const context: SourceCodeContext = {
         service: contextOptions.service,
-        version: contextOptions.version,
+        version: omitVersion ? undefined : contextOptions.version,
         // The `dd` prefix lets upload tools locate the value and send it as sourcemap metadata.
         ddDebugId: debugId,
     };

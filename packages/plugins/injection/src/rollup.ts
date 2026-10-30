@@ -8,40 +8,71 @@ import type { Logger, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import MagicString from 'magic-string';
 import path from 'path';
-import type { RenderedChunk } from 'rollup';
+import type { RenderedChunk, RenderChunkHook } from 'rollup';
 
-import { getContentToInject, isFileSupported, warnUnsupportedFile } from './helpers';
+import {
+    getContentToInject,
+    getInitialFiles,
+    isFileSupported,
+    warnUnsupportedFile,
+} from './helpers';
 import type { ContentsToInject } from './types';
 
 // Use "INJECTED_FILE" so it get flagged by isInjectionFile().
 const TO_INJECT_ID = INJECTED_FILE;
 const TO_INJECT_SUFFIX = '?inject-proxy';
 
+type RenderedChunks = Parameters<RenderChunkHook>[3]['chunks'];
+
+// Static imports evaluate before the importer, so a chunk an entry statically imports
+// runs before the entry's own banner: it is initial too.
+const getInitialChunks = (chunks: RenderedChunks): Set<string> => {
+    const entryFiles = Object.values(chunks)
+        .filter((chunk) => chunk.isEntry)
+        .map((chunk) => chunk.fileName);
+    return getInitialFiles(entryFiles, (file) => chunks[file]?.imports ?? []);
+};
+
 export const getRollupPlugin = (
     log: Logger,
     contentsToInject: ContentsToInject,
 ): PluginOptions['rollup'] => {
+    // Every chunk of an output shares the same `meta.chunks`, compute its initial chunks once.
+    const initialChunksCache = new WeakMap<RenderedChunks, Set<string>>();
+    const isInitialChunk = (chunk: RenderedChunk, chunks: RenderedChunks): boolean => {
+        let initialChunks = initialChunksCache.get(chunks);
+        if (!initialChunks) {
+            initialChunks = getInitialChunks(chunks);
+            initialChunksCache.set(chunks, initialChunks);
+        }
+        return chunk.isEntry || initialChunks.has(chunk.fileName);
+    };
+
     return {
         renderChunk: {
             // Keep BEFORE and AFTER injections in their requested positions even when another
             // plugin, such as Terser, transforms or reorders the chunk.
             order: 'post',
-            handler(code, chunk: RenderedChunk) {
+            handler(code, chunk: RenderedChunk, outputOptions, meta) {
                 const { base, ext } = path.parse(chunk.fileName);
                 if (!isFileSupported(ext)) {
                     warnUnsupportedFile(log, ext, base);
                     return null;
                 }
 
+                const isInitial = isInitialChunk(chunk, meta.chunks);
+
                 const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
                     sourceOrHash: code,
                     fileName: chunk.fileName,
                     isEntry: chunk.isEntry,
+                    isInitial,
                 });
                 const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
                     sourceOrHash: code,
                     fileName: chunk.fileName,
                     isEntry: chunk.isEntry,
+                    isInitial,
                 });
 
                 if (!banner && !footer) {

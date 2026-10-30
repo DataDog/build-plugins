@@ -40,6 +40,14 @@ const getDebugIds = async (page: Page): Promise<string[]> => {
     );
 };
 
+const getContexts = async (page: Page): Promise<Array<Record<string, unknown>>> => {
+    return page.evaluate(() =>
+        Object.values((globalThis as any)['DD_SOURCE_CODE_CONTEXT'] || {}).map(
+            (ctx: unknown) => ctx as Record<string, unknown>,
+        ),
+    );
+};
+
 async function build(
     publicDir: string,
     suiteName: string,
@@ -70,6 +78,18 @@ const serviceVersionPluginConfig = {
     },
 };
 
+// The app's own version, the RUM SDK is initialized with it too.
+const omitVersionPluginConfig = {
+    ...defaultConfig,
+    rum: {
+        sourceCodeContext: {
+            debugId: true as const,
+            version: SERVICE_VERSION,
+            omitVersionFromAsyncChunks: true,
+        },
+    },
+};
+
 describe('Source Code Context', () => {
     // Build our fixture project.
     beforeAll(async ({ publicDir, bundlers, suiteName }) => {
@@ -80,6 +100,7 @@ describe('Source Code Context', () => {
             bundlers,
             serviceVersionPluginConfig,
         );
+        await build(publicDir, `${suiteName}-omit-version`, bundlers, omitVersionPluginConfig);
     });
 
     test('Should inject DD_SOURCE_CODE_CONTEXT global variable', async ({
@@ -170,6 +191,52 @@ describe('Source Code Context', () => {
 
         expect(entryError).toMatchObject({ version: SERVICE_VERSION, service: SERVICE_NAME });
         expect(chunkError).toMatchObject({ version: SERVICE_VERSION, service: SERVICE_NAME });
+    });
+
+    test('Should keep the version of events from async chunks without it', async ({
+        page,
+        bundler,
+        suiteName,
+        devServerUrl,
+    }) => {
+        await userFlow(`${devServerUrl}/${suiteName}-omit-version`, page, bundler);
+
+        await page.evaluate((version) => {
+            (globalThis as any).rum_events = [];
+            (globalThis as any).DD_RUM.init({
+                clientToken: '<CLIENT_TOKEN>',
+                applicationId: '<APP_ID>',
+                version,
+                enableExperimentalFeatures: ['source_code_context'],
+                beforeSend: (event: any) => {
+                    (globalThis as any).rum_events.push(event);
+                    return true;
+                },
+            });
+        }, SERVICE_VERSION);
+
+        const entryContexts = await getContexts(page);
+        await page.click('#load_chunk');
+        await page.waitForFunction(() => window.chunkLoaded === true);
+        const allContexts = await getContexts(page);
+        await page.click('#trigger_entry_error');
+        await page.click('#trigger_chunk_error');
+
+        const events = await getRUMEvents(page);
+
+        const predicate = (message: string) => (event: any) =>
+            event.type === 'error' && event.error.message === message;
+        const entryError = events.find(predicate('entry_error'));
+        const chunkError = events.find(predicate('chunk_error'));
+
+        // The entry registers the version, the async chunks only their debug IDs.
+        expect(entryContexts.every((context) => context.version === SERVICE_VERSION)).toBe(true);
+        const chunkContexts = allContexts.slice(entryContexts.length);
+        expect(chunkContexts.length).toBeGreaterThan(0);
+        expect(chunkContexts.every((context) => context.version === undefined)).toBe(true);
+        // Events from both still get the app's version.
+        expect(entryError).toMatchObject({ version: SERVICE_VERSION });
+        expect(chunkError).toMatchObject({ version: SERVICE_VERSION });
     });
 
     test('Should register a distinct debug_id for a dynamically loaded chunk', async ({

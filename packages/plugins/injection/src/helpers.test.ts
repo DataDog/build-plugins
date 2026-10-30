@@ -4,6 +4,7 @@
 
 import { InjectPosition, type ToInjectItem } from '@dd/core/types';
 import {
+    getInitialFiles,
     prepareInjections,
     processDistantFile,
     processLocalFile,
@@ -168,5 +169,39 @@ describe('Injection Plugin Helpers', () => {
                 processDistantFile('https://example.com/delayed-distant-file.js', 1),
             ).rejects.toThrow('Timeout');
         });
+    });
+});
+
+describe('getInitialFiles', () => {
+    // entry imports shared and lazy, lazy imports lazyShared, shared imports deep.
+    const staticImports: Record<string, string[]> = {
+        'entry.js': ['shared.js'],
+        'shared.js': ['deep.js', 'entry.js'],
+        'lazy.js': ['lazyShared.js'],
+    };
+    const getStaticImports = (file: string) => staticImports[file] ?? [];
+
+    const cases = [
+        {
+            description: 'return the entries and the files they statically import',
+            entryFiles: ['entry.js'],
+            expected: ['deep.js', 'entry.js', 'shared.js'],
+        },
+        {
+            description: 'return nothing without entries',
+            entryFiles: [],
+            expected: [],
+        },
+        {
+            description: 'follow the static imports of every entry',
+            entryFiles: ['entry.js', 'lazy.js'],
+            expected: ['deep.js', 'entry.js', 'lazy.js', 'lazyShared.js', 'shared.js'],
+        },
+    ];
+
+    test.each(cases)('should $description', ({ entryFiles, expected }) => {
+        const initialFiles = getInitialFiles(entryFiles, getStaticImports);
+
+        expect([...initialFiles].sort()).toEqual(expected);
     });
 });

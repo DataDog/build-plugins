@@ -175,11 +175,13 @@ Follow the specific documentation for each bundler:
                   debugId: true;
                   service?: string;
                   version?: string;
+                  omitVersionFromAsyncChunks?: boolean;
               }
             | {
                   debugId?: false;
                   service: string;
                   version?: string;
+                  omitVersionFromAsyncChunks?: boolean;
               };
     };
 }
@@ -499,11 +501,13 @@ datadogWebpackPlugin({
                   debugId: true,
                   service?: string,
                   version?: string,
+                  omitVersionFromAsyncChunks?: boolean,
               }
             | {
                   debugId?: false,
                   service: string,
                   version?: string,
+                  omitVersionFromAsyncChunks?: boolean,
               },
     }
 });

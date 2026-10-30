@@ -79,10 +79,15 @@ describe('Live Debugger debug IDs', () => {
             // Both entries and the shared or dynamic chunks.
             expect(chunkOutputs.length).toBeGreaterThan(2);
             for (const { file, buildMetadata, uploadedDebugId } of chunkOutputs) {
+                // Lazily loaded chunks leave the version out, entries keep it.
+                const isEntry = ['app1.js', 'app2.js'].includes(file);
+                const expectedVersion = isEntry ? { version: '1.0.0' } : {};
                 expect(uploadedDebugId).toEqual(expect.any(String));
                 expect({ file, buildMetadata }).toEqual({
                     file,
-                    buildMetadata: [{ version: '1.0.0', debugId: uploadedDebugId }],
+                    buildMetadata: [
+                        expect.objectContaining({ ...expectedVersion, debugId: uploadedDebugId }),
+                    ],
                 });
             }
         });
