@@ -149,6 +149,11 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2]
+    # Browsers and their system packages are baked into the image, so no apt download per run.
+    # Keep the tag in sync with @playwright/test in packages/tests/package.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.1-noble
+      options: --user 1001 --ipc=host
     env:
       FORCE_COLOR: true
 
@@ -156,6 +161,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - uses: ./.github/actions/setup-playwright-build
+        with:
+          browsers-preinstalled: true
 
       # Best effort telemetry credentials: fork PRs can't federate a token.
       - name: Get Datadog credentials
