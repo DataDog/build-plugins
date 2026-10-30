@@ -17,12 +17,13 @@ export const getUnsupportedViteWarning = (version: unknown): string | undefined 
         return undefined;
     }
 
+    const supported = `Datadog's Vite plugin supports Vite ${MIN_VITE_VERSION} to ${MAX_VITE_MAJOR}.x (found ${version})`;
     if (semver.lt(parsed, MIN_VITE_VERSION)) {
-        return `Vite ${version} is deprecated in Datadog's Vite plugin: please upgrade to Vite ${MIN_VITE_LINE} or later.`;
+        return `${supported}: please upgrade to Vite ${MIN_VITE_LINE} or later.`;
     }
 
     if (parsed.major > MAX_VITE_MAJOR) {
-        return `Datadog's Vite plugin is tested up to Vite ${MAX_VITE_MAJOR}.x (found ${version}).`;
+        return `${supported}.`;
     }
 
     return undefined;

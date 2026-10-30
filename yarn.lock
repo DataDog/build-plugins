@@ -1890,7 +1890,7 @@ __metadata:
     "@babel/parser": ^7.24.5
     "@babel/traverse": ^7.24.5
     "@babel/types": ^7.24.5
-    vite: ">= 5.x <= 8.x"
+    vite: ">=6.4.0 <9"
   peerDependenciesMeta:
     "@babel/parser":
       optional: true
