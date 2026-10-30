@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type * as eslintScope from 'eslint-scope';
 import type { Expression, ObjectExpression, Property, SimpleCallExpression } from 'estree';
 
 import {
@@ -10,10 +11,16 @@ import {
 } from './action-catalog-call-sites';
 import { collectActionCatalogImports } from './action-catalog-imports';
 import type { ParsedModuleRecord } from './module-graph';
-import { resolveStaticStringValue } from './static-string-resolution';
+import {
+    collectMutatedImportedObjectVariables,
+    resolveStaticStringValue,
+} from './static-string-resolution';
 import { walkModuleGraph } from './walk-module-graph';
 
 const CONNECTION_ID_PROPERTY = 'connectionId';
+// `__proto__` can supply a connectionId from a prototype, and toJSON or then can replace the
+// options when they are serialized or awaited.
+const OPTION_HOOK_KEYS: ReadonlySet<string> = new Set(['__proto__', 'toJSON', 'then']);
 
 type ConnectionIdProperty = Property & { value: Expression };
 
@@ -27,6 +34,11 @@ export function extractConnectionIdsFromModuleGraph(
     buildRoot: string,
 ): string[] {
     const connectionIds = new Set<string>();
+    let mutatedImportedObjectVariables: Set<eslintScope.Variable> | undefined;
+    const getMutatedImportedObjectVariables = () => {
+        mutatedImportedObjectVariables ??= collectMutatedImportedObjectVariables(modules);
+        return mutatedImportedObjectVariables;
+    };
 
     // Walk the already-parsed records from this backend entry's build. The
     // extraction cost is linear in reachable app-local modules, without
@@ -36,7 +48,12 @@ export function extractConnectionIdsFromModuleGraph(
         const scopeAnalysis = analyzeActionCatalogScopes(record.scopeAnalysis, imports);
 
         for (const callSite of findActionCatalogCallSites(record.ast, scopeAnalysis, record.id)) {
-            const connectionId = extractConnectionIdFromActionCall(callSite, modules, record);
+            const connectionId = extractConnectionIdFromActionCall(
+                callSite,
+                modules,
+                record,
+                getMutatedImportedObjectVariables,
+            );
             // `''` is a valid declared connectionId, not "none" — only the absence of a
             // `connectionId` property (`undefined`) means no restriction to record.
             if (connectionId !== undefined) {
@@ -52,6 +69,7 @@ function extractConnectionIdFromActionCall(
     node: SimpleCallExpression,
     modules: ReadonlyMap<string, ParsedModuleRecord>,
     record: ParsedModuleRecord,
+    getMutatedImportedObjectVariables: () => ReadonlySet<eslintScope.Variable>,
 ): string | undefined {
     const [firstArg] = node.arguments;
     if (!firstArg || firstArg.type !== 'ObjectExpression') {
@@ -63,7 +81,13 @@ function extractConnectionIdFromActionCall(
         return undefined;
     }
 
-    const result = resolveStaticStringValue(modules, record.id, connectionIdProperty.value);
+    const mutatedImportedObjectVariables = getMutatedImportedObjectVariables();
+    const result = resolveStaticStringValue(
+        modules,
+        record.id,
+        connectionIdProperty.value,
+        mutatedImportedObjectVariables,
+    );
     if (result.kind === 'resolved') {
         return result.value;
     }
@@ -102,6 +126,10 @@ function findConnectionIdProperty(
         if (property.computed) {
             throw unsupportedActionCatalogCall(filePath, 'computed object property keys');
         }
+        const key = getStaticPropertyKey(property);
+        if (key !== undefined && OPTION_HOOK_KEYS.has(key) && !isInertProtoKey(key, property)) {
+            throw unsupportedActionCatalogCall(filePath, `a "${key}" property`);
+        }
         if (isConnectionIdKey(property)) {
             if (connectionIdProperty) {
                 throw unsupportedActionCatalogCall(filePath, 'multiple connectionId properties');
@@ -128,6 +156,15 @@ function hasExpressionValue(property: Property): property is ConnectionIdPropert
         value.type !== 'ArrayPattern' &&
         value.type !== 'RestElement' &&
         value.type !== 'AssignmentPattern'
+    );
+}
+
+// A shorthand `__proto__` is an own property, and a null prototype supplies nothing.
+function isInertProtoKey(key: string, property: Property): boolean {
+    const { value } = property;
+    return (
+        key === '__proto__' &&
+        (property.shorthand || (value.type === 'Literal' && value.value === null))
     );
 }
 
