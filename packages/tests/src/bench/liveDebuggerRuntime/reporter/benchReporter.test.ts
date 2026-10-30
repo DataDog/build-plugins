@@ -96,7 +96,7 @@ describe('Live Debugger runtime benchmark reporter', () => {
             '| --- | --- | --- | ---: |',
             '| chrome | Tiny | caution (outliers) | <= 0.05 ns |',
             '',
-            '[What do the Tiny and Hot workloads represent?](https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures)',
+            '[What do the workloads represent?](https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures)',
             '',
             'Browser Debugger SDK: `7.4.0` · built 2026-06-23 · S3 ETag `0766e1c8`',
             '',

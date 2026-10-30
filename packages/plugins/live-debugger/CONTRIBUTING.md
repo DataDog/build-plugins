@@ -222,11 +222,11 @@ For a faster loop, pass a browser project:
 yarn workspace @dd/tests bench:live-debugger:runtime --project chrome
 ```
 
-The terminal output prints one row per browser and workload (`Tiny`, `Hot`). Browser projects run serially to reduce CPU contention. The benchmark uses one fixed bundler so the report focuses on runtime overhead, not on bundler-to-bundler differences.
+The terminal output prints one row per browser and workload (`Tiny`, `Hot`, `Throw`). Browser projects run serially to reduce CPU contention. The benchmark uses one fixed bundler so the report focuses on runtime overhead, not on bundler-to-bundler differences.
 
 ### What it measures
 
-In this benchmark, a **workload** is a small, repeatable piece of JavaScript chosen to exercise a particular runtime shape. It is not a complete application or a traffic profile. The harness repeats the code enough times to measure it reliably, then reports the result per instrumented function call. `Tiny` and `Hot` describe how the code is used, not the size of the application.
+In this benchmark, a **workload** is a small, repeatable piece of JavaScript chosen to exercise a particular runtime shape. It is not a complete application or a traffic profile. The harness repeats the code enough times to measure it reliably, then reports the result per instrumented function call. The workload names describe how the code is used, not the size of the application.
 
 Each sample measures three variants:
 
@@ -236,14 +236,15 @@ Each sample measures three variants:
 
 The reporter estimates overhead from `instrumented - control`. That direct paired difference avoids the old correlated-interval comparison against the shared baseline sample. The `control - baseline` result is still shown as the A/A diagnostic; it should be centered around zero if the browser session is quiet enough to trust.
 
-There are two workloads because one number cannot describe every runtime shape:
+There are three workloads because one number cannot describe every runtime shape:
 
 - **Tiny** calls one very small instrumented function. It is the best row for answering: "what is the smallest cost we can measure for one dormant instrumented call?" Since the function does almost no work, its baseline time is tiny too. That means a small nanosecond cost can look like a large percentage.
 - **Hot** runs an uninstrumented loop that calls a small instrumented kernel many times. It is the best row for answering: "what happens when an instrumented function sits on a hot path?" This row includes the cost of the dormant hooks and any optimizer disruption from the instrumented function shape, such as losing an inlining opportunity.
+- **Throw** calls one instrumented function that throws every time, from an uninstrumented caller that catches the error. It is the best row for answering: "what does it cost when an exception passes through a dormant instrumented function?" The instrumented function catches the exception and throws it again, so it is thrown twice, and throwing is slow in all major engines. Expect this row to read in hundreds or thousands of nanoseconds. The cost is paid per throw and per instrumented function the exception passes through, so it matters for code that throws as part of normal control flow, not for code that rarely throws.
 
-Read them together. `Tiny` shows the minimum cost and the measurement floor. `Hot` shows the repeated-call hot-path cost. If `Hot` is higher than `Tiny` in nanoseconds per call, the gap is the extra cost from the hot-path shape in this benchmark. If `Tiny` is higher in percentage, that usually means the denominator is much smaller, not that `Tiny` has a larger absolute cost.
+Read `Tiny` and `Hot` together. `Tiny` shows the minimum cost and the measurement floor. `Hot` shows the repeated-call hot-path cost. If `Hot` is higher than `Tiny` in nanoseconds per call, the gap is the extra cost from the hot-path shape in this benchmark. If `Tiny` is higher in percentage, that usually means the denominator is much smaller, not that `Tiny` has a larger absolute cost.
 
-Real applications contain a mixture of these shapes. An instrumented function called occasionally is closer to the concern measured by `Tiny`; a small helper called repeatedly from a rendering, event-processing, or data-processing loop is closer to `Hot`. An application itself is therefore not "Tiny" or "Hot." These rows are controlled reference points, not predictions of whole-application slowdown. The real impact also depends on how many instrumented functions run, how often they run, how much useful work surrounds each call, and how the browser optimizes that code. In practice, frequently executed paths deserve the most attention because even a small per-call cost can accumulate there.
+Real applications contain a mixture of these shapes. An instrumented function called occasionally is closer to the concern measured by `Tiny`; a small helper called repeatedly from a rendering, event-processing, or data-processing loop is closer to `Hot`. A function that throws as part of normal control flow, such as a validator whose caller catches the error, is closer to `Throw`. An application itself is therefore not "Tiny," "Hot," or "Throw." These rows are controlled reference points, not predictions of whole-application slowdown. The real impact also depends on how many instrumented functions run, how often they run, how much useful work surrounds each call, and how the browser optimizes that code. In practice, frequently executed paths deserve the most attention because even a small per-call cost can accumulate there.
 
 ### How to interpret the results
 
@@ -253,7 +254,7 @@ Start with three columns:
 - **quality**: whether the row is safe to read. `clean` means use the row, `caution` means it is usable but worth rerunning if the number matters, and `unreliable` means rerun before drawing conclusions.
 - **overhead upper**: the same result as a workload-level percentage. Use this as context, not as the main comparison between `Tiny` and `Hot`.
 
-Prefer the nanosecond number when comparing workloads. It puts `Tiny` and `Hot` on the same per-call scale. The percentage can look inverted because it divides by the workload's baseline time. `Tiny` does almost no work, so a small absolute cost can become a large percentage. `Hot` does more baseline work, so a larger absolute cost can still be a smaller percentage.
+Prefer the nanosecond number when comparing workloads. It puts `Tiny` and `Hot` on the same per-call scale. The percentage can look inverted because it divides by the workload's baseline time. `Tiny` does almost no work, so a small absolute cost can become a large percentage. `Hot` does more baseline work, so a larger absolute cost can still be a smaller percentage. `Throw` divides by the cost of an uninstrumented throw, so its percentage says how much slower a throw becomes, not how much slower the function is when it returns normally.
 
 Example: if `Tiny` reports `<= 1.5 ns` and `Hot` reports `<= 5.0 ns`, the benchmark is saying the hot-path shape costs more per instrumented call. If those same rows report `Tiny <= 40%` and `Hot <= 5%`, that does not contradict the nanosecond result. It only means `Tiny` started from a much smaller baseline.
 
