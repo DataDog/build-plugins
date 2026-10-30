@@ -23,10 +23,15 @@ export type HttpGetResponse = {
 };
 
 // headersDistinct keeps a repeated header's values apart, so a response's policies can be counted.
-export const httpGet = (port: number, urlPath: string, headers: http.OutgoingHttpHeaders = {}) =>
+export const httpRequest = (
+    port: number,
+    method: string,
+    urlPath: string,
+    headers: http.OutgoingHttpHeaders = {},
+) =>
     new Promise<HttpGetResponse>((resolve, reject) => {
-        const options = { host: '127.0.0.1', port, path: urlPath, headers, agent: false };
-        const req = http.get(options, (res) => {
+        const options = { host: '127.0.0.1', port, method, path: urlPath, headers, agent: false };
+        const req = http.request(options, (res) => {
             const chunks: Buffer[] = [];
             res.on('data', (chunk: Buffer) => {
                 chunks.push(chunk);
@@ -42,4 +47,8 @@ export const httpGet = (port: number, urlPath: string, headers: http.OutgoingHtt
             });
         });
         req.on('error', reject);
+        req.end();
     });
+
+export const httpGet = (port: number, urlPath: string, headers: http.OutgoingHttpHeaders = {}) =>
+    httpRequest(port, 'GET', urlPath, headers);

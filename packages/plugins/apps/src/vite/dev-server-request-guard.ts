@@ -125,9 +125,9 @@ export function getRequestHost(headers: IncomingHttpHeaders): string | undefined
     return headers.host ?? (typeof authority === 'string' ? authority : undefined);
 }
 
-// Node decodes a Host as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
-function quoteHostname(hostname: string): string {
-    return JSON.stringify(hostname).replace(
+// Node decodes Host and URL as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
+export function quoteForTerminal(text: string): string {
+    return JSON.stringify(text).replace(
         /[^\x20-\x7e]/g,
         (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
     );
@@ -143,7 +143,7 @@ export function checkDevServerRequest(
         return { statusCode: 403, message: MISSING_HOST_MESSAGE };
     }
     if (!isHostAllowed(host)) {
-        const quotedHostname = quoteHostname(getHostname(host));
+        const quotedHostname = quoteForTerminal(getHostname(host));
         return {
             statusCode: 403,
             message: `Blocked request. This host (${quotedHostname}) is not allowed. ${ALLOWED_HOSTS_HINT}`,
