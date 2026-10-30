@@ -18,6 +18,7 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Cloud execution](#cloud-execution)
 -   [Local execution](#local-execution)
 -   [Backend function runtime](#backend-function-runtime)
+-   [Development server Content Security Policy](#development-server-content-security-policy)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -118,6 +119,30 @@ Local execution doesn't support Yarn Plug'n'Play, whose packages load through ho
 Backend functions run on the Node backend runtime, and the plugin's build-time and dev-server checks follow its rules: backend functions may import Node built-ins and use Node's network globals such as `fetch` and `WebSocket`, but not `XMLHttpRequest`, `EventSource` or `Deno`, which Node doesn't expose by default. The checks fail only where the missing global would throw: any bare use but `typeof Deno`, or using `globalThis.Deno` as an object, function or class, even after a feature check or a polyfill install, so use an imported polyfill by its name. Feature checks such as `if (globalThis.EventSource)` and destructuring defaults pass. The checks follow a binding the global is declared or destructured into, but not a plain assignment such as `d = globalThis.Deno`, a `let` or parameter alias of `globalThis`, a bulk copy such as `{ ...globalThis }`, or a value that is stored in an object, array or class field, exported, returned or passed on. Local execution runs on your own Node, while the Node backend runtime runs Node 24, so the dev server warns once at start on another major version, and on one before Node 22, which lacks the global `WebSocket`.
 
 The checks also warn, without failing the build, about `process.env` reads: in production, the Node backend runtime doesn't pass your own environment variables or Custom Credentials to backend functions, so those reads don't see your values there. They catch direct reads: `process.env.X`, `process.env[key]`, a destructure of `process.env`, an `env`, default or namespace import from `process` or `node:process`, and a `const` bound to `process.env` or to an `env` destructured from `process`. Like the other checks, they cover only the app's own code and opted-in packages, so an SDK that reads `process.env` (for example, for a default API key) doesn't warn.
+
+## Development server Content Security Policy
+
+The dev server sends its HTML pages and worker scripts with the Datadog Apps Content Security Policy that uploaded apps get, as `Content-Security-Policy-Report-Only`: it reports what the policy would block and doesn't block it. A policy already on the response, for example from `server.headers`, is kept. The policy blocks:
+
+-   content and requests from `http:` URLs, and `ws:` connections;
+-   `data:` scripts, styles, workers and frames, and `blob:` fonts;
+-   `<object>` content and web app manifests;
+-   a `<base>` that points to another origin, and `http:` form submissions.
+
+Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
+
+Known gaps:
+
+-   On an uploaded app's origin, the app can't frame its own pages, and only GET requests for its built files succeed, so form posts and [`server.proxy`](https://vite.dev/config/server-options#server-proxy) paths work only on the dev server. The policy allows them, so the dev server doesn't report them.
+-   What Vite inlines only in a build, such as a `?worker&inline` worker, isn't covered.
+-   Paths under [`server.proxy`](https://vite.dev/config/server-options#server-proxy) are left alone, even when a `bypass` hands the request back to Vite.
+-   In middleware mode, HTML from the host server's own routes gets the policy too.
+-   HTML that another plugin's own dev-server middleware sends isn't covered, since this plugin's middleware runs after normal-order plugins' middlewares.
+-   Worker scripts are recognized by their `Sec-Fetch-Dest` request header, which Safari sends from version 16.4.
+-   Under Vitest, the policy is off.
+-   Tools that serve their own HTML through Vite (`appType: 'custom'`, for example Storybook) aren't covered, since they aren't uploaded as apps.
+-   The HMR WebSocket source also admits `http:` requests to the dev server's own host and port.
+-   Violations inside a worker, in pages Vite doesn't transform (such as files in `public/`) and in Vite 8's bundled dev mode go only to the browser's own console error.
 
 ## Package output
 
