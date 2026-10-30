@@ -131,6 +131,9 @@ export type ChunkInfo = {
     sourceOrHash: string;
     fileName: string;
     isEntry: boolean;
+    // Whether the chunk loads at startup: an entry or a chunk an entry statically imports.
+    // Initial chunks run before any lazily loaded chunk of the same build.
+    isInitial: boolean;
 };
 
 // Static string, lazy async loader (e.g. file fetch), or per-chunk code generator.

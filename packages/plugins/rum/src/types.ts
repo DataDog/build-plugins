@@ -11,12 +11,14 @@ type DebugIdSourceCodeContextOptions = {
     debugId: true;
     service?: string;
     version?: string;
+    omitVersionFromAsyncChunks?: boolean;
 };
 
 type ServiceVersionSourceCodeContextOptions = {
     debugId?: false;
     service: string;
     version?: string;
+    omitVersionFromAsyncChunks?: boolean;
 };
 
 export type SourceCodeContextOptions =

@@ -19,6 +19,7 @@ Interact with Real User Monitoring (RUM) directly from your build system.
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
 -   [Source Code Context](#source-code-context)
     -   [rum.sourceCodeContext.debugId](#rumsourcecodecontextdebugid)
+    -   [rum.sourceCodeContext.omitVersionFromAsyncChunks](#rumsourcecodecontextomitversionfromasyncchunks)
 <!-- #toc -->
 
 ## Configuration
@@ -39,11 +40,13 @@ rum?: {
               debugId: true;
               service?: string;
               version?: string;
+              omitVersionFromAsyncChunks?: boolean;
           }
         | {
               debugId?: false;
               service: string;
               version?: string;
+              omitVersionFromAsyncChunks?: boolean;
           };
 }
 ```
@@ -135,3 +138,23 @@ The existing `rum.sourceCodeContext.debugId` configuration remains supported. Se
 > default: `false`
 
 Inject a deterministic debug ID into each JavaScript bundle. The RUM SDK uses it to associate stack frames with source maps.
+
+### rum.sourceCodeContext.omitVersionFromAsyncChunks
+
+> default: `false`
+
+Only write `rum.sourceCodeContext.version` into initial chunks (entries and the chunks they statically import) when the context has no `service`.
+
+The version changes on every build. Written into every chunk, it changes the content, and so the content-hashed file name, of every chunk on every deploy, even of chunks whose code didn't change: returning users download the whole app again. With this option, lazily loaded chunks stay identical across builds that only change the version.
+
+The RUM SDK applies a chunk's `version` to the events coming from that chunk. Without one, it uses the `version` it was initialized with. So only enable this option when `rum.sourceCodeContext.version` is the version the RUM SDK is initialized with, which is usually the case for an application built without `service`. It has no effect on contexts with a `service`, like micro-frontends: their events need their own version.
+
+```ts
+rum: {
+    sourceCodeContext: {
+        debugId: true,
+        version: '1.2.3',
+        omitVersionFromAsyncChunks: true,
+    },
+}
+```

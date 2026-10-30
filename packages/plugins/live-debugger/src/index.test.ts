@@ -479,7 +479,8 @@ describe('getPlugins', () => {
     const chunk: ChunkInfo = {
         sourceOrHash: 'console.log("chunk");',
         fileName: 'chunk.js',
-        isEntry: false,
+        isEntry: true,
+        isInitial: true,
     };
 
     // Return what the runtime bootstrap injected by the plugin renders for `chunk`.

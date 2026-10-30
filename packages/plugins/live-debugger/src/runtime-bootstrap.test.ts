@@ -10,10 +10,11 @@ import { getRuntimeBootstrap } from './runtime-bootstrap';
 
 const BUILD_METADATA_GLOBAL = '__DD_LIVE_DEBUGGER_BUILD__';
 
-const getChunk = (sourceOrHash: string): ChunkInfo => ({
+const getChunk = (sourceOrHash: string, isInitial: boolean = true): ChunkInfo => ({
     sourceOrHash,
     fileName: `${sourceOrHash}.js`,
-    isEntry: false,
+    isEntry: isInitial,
+    isInitial,
 });
 
 // Run the given chunk bootstraps, in order, in the same fresh global scope and return it.
@@ -28,6 +29,7 @@ const runInFreshGlobal = (...codes: string[]): vm.Context => {
 describe('getRuntimeBootstrap', () => {
     const chunk = getChunk('console.log("chunk");');
     const chunkDebugId = getChunkDebugId(chunk);
+    const asyncChunk = getChunk('console.log("async chunk");', false);
 
     const cases = [
         {
@@ -52,6 +54,18 @@ describe('getRuntimeBootstrap', () => {
             description: 'expose empty build metadata without a version or debug IDs',
             options: { version: undefined, debugId: false },
             chunk,
+            expected: {},
+        },
+        {
+            description: 'expose only the chunk debug ID in a lazily loaded chunk',
+            options: { version: '1.0.0', debugId: true },
+            chunk: asyncChunk,
+            expected: { debugId: getChunkDebugId(asyncChunk) },
+        },
+        {
+            description: 'expose nothing in a lazily loaded chunk when debug IDs are disabled',
+            options: { version: '1.0.0', debugId: false },
+            chunk: asyncChunk,
             expected: {},
         },
         {
@@ -98,5 +112,30 @@ describe('getRuntimeBootstrap', () => {
         const firstChunkDebugId = getChunkDebugId(firstChunk);
 
         expect(globalScope[BUILD_METADATA_GLOBAL].debugId).toBe(firstChunkDebugId);
+    });
+
+    test('should not depend on the version in lazily loaded chunks', () => {
+        const firstBuildCode = getRuntimeBootstrap({ version: '1.0.0', debugId: true })(asyncChunk);
+        const secondBuildCode = getRuntimeBootstrap({ version: '2.0.0', debugId: true })(
+            asyncChunk,
+        );
+
+        expect(secondBuildCode).toBe(firstBuildCode);
+    });
+
+    test('should expose the version once lazily loaded chunks run after an initial one', () => {
+        const bootstrap = getRuntimeBootstrap({ version: '1.0.0', debugId: true });
+        const initialChunk = getChunk('initial chunk');
+        const initialChunkCode = bootstrap(initialChunk);
+        const asyncChunkCode = bootstrap(asyncChunk);
+
+        const globalScope = runInFreshGlobal(initialChunkCode, asyncChunkCode);
+        const serializedBuildMetadata = JSON.stringify(globalScope[BUILD_METADATA_GLOBAL]);
+        const buildMetadata = JSON.parse(serializedBuildMetadata);
+
+        expect(buildMetadata).toEqual({
+            version: '1.0.0',
+            debugId: getChunkDebugId(initialChunk),
+        });
     });
 });

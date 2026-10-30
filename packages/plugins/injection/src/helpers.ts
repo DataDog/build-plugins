@@ -61,6 +61,26 @@ export function hasBeforeAfterInjection(contentsToInject: ContentToInject[]) {
     );
 }
 
+// The files loaded at startup: the entries and every file they statically import, transitively.
+export const getInitialFiles = (
+    entryFiles: string[],
+    getStaticImports: (file: string) => string[],
+): Set<string> => {
+    const initialFiles = new Set<string>(entryFiles);
+    const toVisit = [...entryFiles];
+    let file = toVisit.pop();
+    while (file !== undefined) {
+        for (const importedFile of getStaticImports(file)) {
+            if (!initialFiles.has(importedFile)) {
+                initialFiles.add(importedFile);
+                toVisit.push(importedFile);
+            }
+        }
+        file = toVisit.pop();
+    }
+    return initialFiles;
+};
+
 export function hasChunkInjection(contentsToInject: ContentToInject[]) {
     return contentsToInject.some((content) => content.injectIntoAllChunks);
 }
