@@ -1587,9 +1587,9 @@ describe('Backend Functions - getVitePlugin', () => {
             middlewareCount: 1,
         },
         {
-            description: 'register the app CSP for the default app type',
+            description: 'register the app CSP and origin-gap warnings for the default app type',
             appType: undefined,
-            middlewareCount: 2,
+            middlewareCount: 3,
         },
     ];
 
@@ -1695,8 +1695,8 @@ describe('Backend Functions - getVitePlugin', () => {
         });
         restoreEnv();
 
-        expect(use).toHaveBeenCalledTimes(2);
-        const [registeredMiddleware] = use.mock.calls[1];
+        expect(use).toHaveBeenCalledTimes(3);
+        const [registeredMiddleware] = use.mock.calls[2];
         if (!isDevServerMiddleware(registeredMiddleware)) {
             throw new Error(
                 'Expected middlewares.use to have been called with a middleware function',
