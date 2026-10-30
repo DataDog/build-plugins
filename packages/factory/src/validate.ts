@@ -58,6 +58,9 @@ const validateMetadata = (metadata: BuildMetadata | undefined): string[] => {
     if (metadata.version !== undefined && typeof metadata.version !== 'string') {
         errors.push('metadata.version must be a string');
     }
+    if (metadata.service !== undefined && typeof metadata.service !== 'string') {
+        errors.push('metadata.service must be a string');
+    }
     return errors;
 };
 

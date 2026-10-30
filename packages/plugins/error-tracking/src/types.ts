@@ -24,7 +24,9 @@ type ServiceVersionSourcemapsOptions = SourcemapsUploadOptions & {
     // Optional: when omitted, the validator falls back to the shared
     // top-level `metadata.version`. At least one of the two must be set.
     releaseVersion?: string;
-    service: string;
+    // Optional: when omitted, the validator falls back to the shared
+    // top-level `metadata.service`. At least one of the two must be set.
+    service?: string;
 };
 
 export type SourcemapsOptions = DebugIdSourcemapsOptions | ServiceVersionSourcemapsOptions;

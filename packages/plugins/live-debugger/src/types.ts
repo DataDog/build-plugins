@@ -35,6 +35,10 @@ export type LiveDebuggerOptions = {
 
 export type LiveDebuggerOptionsWithDefaults = {
     version: string | undefined;
+    // From the top-level `metadata.service`.
+    service: string | undefined;
+    // Whether git data is collected (see the top-level `enableGit` option).
+    enableGit: boolean;
     // Whether output chunks get a debug ID (see `rum.sourceCodeContext.debugId`).
     debugId: boolean;
     include: (string | RegExp)[];

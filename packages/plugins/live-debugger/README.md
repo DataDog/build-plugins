@@ -11,11 +11,13 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 <!-- #toc -->
 -   [Prerequisites](#prerequisites)
     -   [Source maps](#source-maps)
+    -   [Service and version](#service-and-version)
     -   [Required peer dependencies](#required-peer-dependencies)
 -   [Limitations during Preview](#limitations-during-preview)
 -   [Configuration](#configuration)
 -   [How it works](#how-it-works)
     -   [liveDebugger.enable](#livedebuggerenable)
+    -   [metadata.service](#metadataservice)
     -   [metadata.version](#metadataversion)
     -   [liveDebugger.include](#livedebuggerinclude)
     -   [liveDebugger.exclude](#livedebuggerexclude)
@@ -24,6 +26,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
+-   [Symbol upload](#symbol-upload)
 -   [Skipped function types](#skipped-function-types)
 -   [Bundle size impact](#bundle-size-impact)
 -   [Runtime requirements](#runtime-requirements)
@@ -42,6 +45,10 @@ Datadog resolves the deployed build and its source code through the [debug ID in
 - Generate source maps in your bundler, and set `debugId: true` and `upload: true` in the top-level [`sourcemaps`](/#sourcemaps) option. Existing [`errorTracking.sourcemaps`](/packages/plugins/error-tracking#sourcemaps-upload) configurations must upload by debug ID rather than by service and version.
 - Keep [`enableGit`](/#enablegit) enabled (the default) and build from a Git checkout of the deployed commit. Set [`gitRepositoryUrl`](/#gitrepositoryurl) if CI clones through a mirror or proxy.
 - Set [`auth.site`](/#authsite) to the site that the [Browser Debugger SDK](https://github.com/DataDog/browser-sdk/tree/main/packages/browser-debugger#prerequisites) sends data to, and use an API key from the same organization as the SDK's client token.
+
+### Service and version
+
+Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload).
 
 ### Required peer dependencies
 
@@ -88,7 +95,9 @@ liveDebugger?: {
 }
 ```
 
-Live Debugger also reads the build version from the top-level [`metadata.version`](#metadataversion) option.
+Live Debugger also reads the build's service and version from the top-level [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion) options.
+
+After each production build, the plugin [uploads symbols](#symbol-upload) to Datadog, which Live Debugger needs to add logpoints to your browser application.
 
 ## How it works
 
@@ -134,6 +143,21 @@ Enable or disable the plugin without removing its configuration.
 
 Must be a boolean. Non-boolean values are coerced today but will be rejected in a future major release.
 
+### metadata.service
+
+> default: `undefined`
+
+The service of the browser application, as reported by the Browser Debugger SDK. Set it at the top level of your Datadog plugin configuration:
+
+```ts
+datadogBuildPlugins({
+    metadata: { service: 'my-app', version: '1.0.0' },
+    liveDebugger: {},
+});
+```
+
+[Symbols](#symbol-upload) are uploaded for this service, and Live Debugger looks them up by the service the SDK reports, so the two must match. Live Debugger injects the value into the runtime-visible [build metadata](#build-metadata), so the Browser Debugger SDK uses it as the default `service` during `init()`.
+
 ### metadata.version
 
 > default: `undefined`
@@ -149,7 +173,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-Set `metadata.version` when you want version-specific probe targeting.
+[Symbols](#symbol-upload) are only uploaded when `metadata.version` is set. It also enables version-specific probe targeting.
 
 ### liveDebugger.include
 
@@ -265,6 +289,19 @@ liveDebugger: {
 }
 ```
 
+## Symbol upload
+
+To let you add logpoints to your browser application, Live Debugger needs to know which functions each build contains. After each production build, the plugin uploads nonsensitive symbols and metadata to Datadog: the names of the instrumented functions, the files they're in, and their line numbers.
+
+The upload needs:
+
+- an API key;
+- a [service](#metadataservice) and a [version](#metadataversion);
+- a git repository with a remote, and the [git integration](/README.md#enablegit) enabled;
+- source maps, for the line numbers.
+
+When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols. The upload never fails your build, and doesn't add anything to your build output.
+
 ## Skipped function types
 
 The following function types are always skipped regardless of configuration:
@@ -305,14 +342,19 @@ The plugin injects code into every output chunk that defines a `__DD_LIVE_DEBUGG
 
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
-    globalThis.__DD_LIVE_DEBUGGER_BUILD__ = { version: '1.0.0', debugId: '<debug ID of the chunk>' };
+    globalThis.__DD_LIVE_DEBUGGER_BUILD__ = {
+        version: '1.0.0',
+        service: 'my-app',
+        debugId: '<debug ID of the chunk>',
+    };
 }
 ```
 
 - `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
+- `service` is the [`metadata.service`](#metadataservice) value. It is omitted when `metadata.service` is not set.
 - `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
 
-The global is defined even when both fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
+The global is defined even when all the fields are omitted. The first chunk to execute defines it and later chunks leave it untouched. All the source maps of a build are uploaded with the same git metadata, so the debug ID of any of its chunks identifies the build's repository and commit.
 
 ### Invocation handles
 

@@ -15,7 +15,9 @@ type DebugIdSourceCodeContextOptions = {
 
 type ServiceVersionSourceCodeContextOptions = {
     debugId?: false;
-    service: string;
+    // Optional: when omitted, the validator falls back to the shared
+    // top-level `metadata.service`. At least one of the two must be set.
+    service?: string;
     version?: string;
 };
 
