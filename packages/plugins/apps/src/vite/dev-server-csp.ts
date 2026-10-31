@@ -107,13 +107,25 @@ export const getHmrWebSocketSources = (
     return [...sources];
 };
 
+// Vite skips a proxy key with no options.
+export const getProxyContexts = (proxy: CspServerConfig['server']['proxy']): string[] =>
+    Object.entries(proxy ?? {})
+        .filter(([, options]) => !!options)
+        .map(([context]) => context);
+
 // Proxied responses aren't app files; keys match the way Vite's proxy matches them.
-const isProxiedUrl = (proxy: CspServerConfig['server']['proxy'], url: string) =>
-    Object.entries(proxy ?? {}).some(
-        ([context, options]) =>
-            !!options &&
-            ((context.startsWith('^') && new RegExp(context).test(url)) || url.startsWith(context)),
-    );
+export const createProxyMatcher = (
+    proxy: CspServerConfig['server']['proxy'],
+): ((url: string) => boolean) => {
+    const matchers = getProxyContexts(proxy).map((context) => {
+        if (context.startsWith('^')) {
+            const pattern = new RegExp(context);
+            return (url: string) => pattern.test(url) || url.startsWith(context);
+        }
+        return (url: string) => url.startsWith(context);
+    });
+    return (url) => matchers.some((matches) => matches(url));
+};
 
 const isHtmlContentType = (contentType: unknown): boolean =>
     String(contentType ?? '')
@@ -143,10 +155,11 @@ const isTlsSocket = (socket: Socket | undefined): boolean =>
  * production would block shows up in dev before upload. A policy already on the response stays.
  */
 export const createAppCspMiddleware = (config: CspServerConfig) => {
+    const isProxiedUrl = createProxyMatcher(config.server.proxy);
     return (req: IncomingMessage, res: ServerResponse, next: () => void): void => {
         const hasHeaderApi =
             typeof res.getHeader === 'function' && typeof res.setHeader === 'function';
-        if (!hasHeaderApi || isProxiedUrl(config.server.proxy, req.url ?? '')) {
+        if (!hasHeaderApi || isProxiedUrl(req.url ?? '')) {
             next();
             return;
         }

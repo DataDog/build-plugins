@@ -131,15 +131,17 @@ The dev server sends its HTML pages and worker scripts with the Datadog Apps Con
 
 Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
 
+Some requests the policy allows still fail once the app is uploaded: an uploaded app can't frame its own pages, and its origin answers only GET requests for its built files. So the dev server warns in the terminal, once per rule and path, about a page framed by its own origin and about a non-GET request to its own origin outside the plugin's own `/__dd/` routes, and once at startup when [`server.proxy`](https://vite.dev/config/server-options#server-proxy) is set.
+
 Known gaps:
 
--   On an uploaded app's origin, the app can't frame its own pages, and only GET requests for its built files succeed, so form posts and [`server.proxy`](https://vite.dev/config/server-options#server-proxy) paths work only on the dev server. The policy allows them, so the dev server doesn't report them.
+-   The `server.proxy` warning also fires for an app that proxies a path such as `/api` in dev but calls a full `https:` URL once uploaded.
 -   What Vite inlines only in a build, such as a `?worker&inline` worker, isn't covered.
 -   Paths under [`server.proxy`](https://vite.dev/config/server-options#server-proxy) are left alone, even when a `bypass` hands the request back to Vite.
--   In middleware mode, HTML from the host server's own routes gets the policy too.
+-   In middleware mode, the host server's own routes get the policy on their HTML and the warnings on their non-GET requests too.
 -   HTML that another plugin's own dev-server middleware sends isn't covered, since this plugin's middleware runs after normal-order plugins' middlewares.
--   Worker scripts are recognized by their `Sec-Fetch-Dest` request header, which Safari sends from version 16.4.
--   Under Vitest, the policy is off.
+-   Worker scripts and same-origin frames are recognized by their `Sec-Fetch-*` request headers, which Safari sends from version 16.4.
+-   Under Vitest, the policy and the warnings are off.
 -   Tools that serve their own HTML through Vite (`appType: 'custom'`, for example Storybook) aren't covered, since they aren't uploaded as apps.
 -   The HMR WebSocket source also admits `http:` requests to the dev server's own host and port.
 -   Violations inside a worker, in pages Vite doesn't transform (such as files in `public/`) and in Vite 8's bundled dev mode go only to the browser's own console error.

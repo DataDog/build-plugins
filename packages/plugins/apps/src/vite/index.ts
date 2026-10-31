@@ -61,6 +61,7 @@ import {
 } from './dev-server-csp-violations';
 import { createAppCspMiddleware, SELF_SERVED_APP_TYPE } from './dev-server-csp';
 import { collectModuleGraphFromServer } from './dev-server-module-graph';
+import { createOriginGapMiddleware, getProxyWarning } from './dev-server-origin-gaps';
 import { createViteHostCheck } from './dev-server-request-guard';
 import { createDevServerMiddleware } from './dev-server';
 import { getLocalExecutionChildPath } from './local-execution-child-path';
@@ -703,6 +704,12 @@ export const getVitePlugin = ({
             if (isAppCspActive) {
                 const appCspMiddleware = createAppCspMiddleware(server.config);
                 server.middlewares.use(appCspMiddleware);
+                const originGapMiddleware = createOriginGapMiddleware(server.config, log);
+                server.middlewares.use(originGapMiddleware);
+                const proxyWarning = getProxyWarning(server.config);
+                if (proxyWarning) {
+                    log.warn(proxyWarning);
+                }
             }
             if (server.environments?.ssr?.config.dev.preTransformRequests) {
                 log.warn(
