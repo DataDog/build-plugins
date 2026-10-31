@@ -9,6 +9,7 @@ import { Command, Option, UsageError } from 'clipanion';
 import os from 'os';
 import path from 'path';
 
+import { formatCheckoutAlert } from './alert';
 import { checkoutTarget, getCheckoutRef } from './checkout';
 import { NETWORK_RETRY_DELAYS_MS, runCanary, StreamingCommandRunner } from './runner';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
@@ -19,12 +20,19 @@ import {
     resolveToolchain,
 } from './toolchain';
 import { INSTRUMENTED_VARIANTS } from './types';
-import type { CanaryReport, CanaryTarget, InterruptSignal, MetricComparison } from './types';
+import type {
+    AlertOptions,
+    CanaryReport,
+    CanaryTarget,
+    InterruptSignal,
+    MetricComparison,
+} from './types';
 
 const SUPPORTED_TARGETS = getCanaryTargetNames().join(', ');
 const REPORT_FILE = 'report.json';
 const LOGS_DIRECTORY = 'logs';
 const TOOLCHAIN_FILE = 'toolchain.env';
+const ALERT_FILE = 'slack-message.txt';
 
 const getTargetOrThrow = (name: string): CanaryTarget => {
     const target = getCanaryTarget(name);
@@ -44,6 +52,18 @@ const getLogDirectory = (
     return artifactsDirectory
         ? path.resolve(artifactsDirectory, LOGS_DIRECTORY, command)
         : undefined;
+};
+
+// GitLab sets these in every job, so alerts can link back to the run.
+const getAlertLinks = (): AlertOptions['links'] => {
+    return {
+        job: process.env.CI_JOB_URL,
+        pipeline: process.env.CI_PIPELINE_URL,
+    };
+};
+
+const getAlertPath = (artifactsDirectory: string | undefined): string | undefined => {
+    return artifactsDirectory ? path.resolve(artifactsDirectory, ALERT_FILE) : undefined;
 };
 
 const getRunId = (): string => {
@@ -148,7 +168,7 @@ class Canary extends Command {
     });
 
     artifactsDirectory = Option.String('--artifacts-dir', {
-        description: `Directory for ${REPORT_FILE} (unless --report is set) and a log file per command in logs/canary/.`,
+        description: `Directory for ${REPORT_FILE} (unless --report is set), a log file per command in logs/canary/, and ${ALERT_FILE} when the run fails.`,
     });
 
     async execute(): Promise<number> {
@@ -163,6 +183,9 @@ class Canary extends Command {
         const runId = getRunId();
         const logDirectory = getLogDirectory(this.artifactsDirectory, 'canary');
         const commandRunner = new StreamingCommandRunner(logDirectory);
+        const alertPath = getAlertPath(this.artifactsDirectory);
+        const alertLinks = getAlertLinks();
+        const alert = alertPath ? { path: alertPath, links: alertLinks } : undefined;
         let interruption: InterruptSignal | undefined;
         const handleSignal = (signal: InterruptSignal): void => {
             interruption = signal;
@@ -175,6 +198,7 @@ class Canary extends Command {
 
         try {
             const report = await runCanary({
+                alert,
                 buildPluginsRoot: ROOT,
                 cleanup: this.cleanup,
                 install: this.install,
@@ -246,7 +270,7 @@ class CanaryCheckout extends Command {
     });
 
     artifactsDirectory = Option.String('--artifacts-dir', {
-        description: `Directory for ${TOOLCHAIN_FILE} and a log file per command in logs/checkout/.`,
+        description: `Directory for ${TOOLCHAIN_FILE}, a log file per command in logs/checkout/, and ${ALERT_FILE} when it fails.`,
     });
 
     async execute(): Promise<number> {
@@ -295,6 +319,18 @@ class CanaryCheckout extends Command {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.context.stderr.write(`\n[Canary] ${message}\n`);
+            const alertPath = getAlertPath(this.artifactsDirectory);
+            if (alertPath) {
+                const links = getAlertLinks();
+                const alert = formatCheckoutAlert({
+                    links,
+                    message,
+                    ref,
+                    repository: target.repository.name,
+                    target: target.id,
+                });
+                await outputFile(alertPath, alert);
+            }
             return 1;
         }
     }

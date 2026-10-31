@@ -9,7 +9,7 @@ import { LIVE_DEBUGGER_CATCH_FUNCTION, LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd
 import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
-import { SKIP_INSTRUMENTATION_COMMENT } from '../constants';
+import { LIVE_DEBUGGER_THROW_FUNCTION, SKIP_INSTRUMENTATION_COMMENT } from '../constants';
 import type { DecoratorSyntax, FunctionKind } from '../types';
 
 import type { BabelPath, BabelTypesModule } from './babel-path.types';
@@ -533,7 +533,7 @@ function injectInstrumentation(
     const catchHook = exceptionReplay
         ? ` if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}${argsArg});`
         : '';
-    const catchBlock = `catch($dd_e) { if (${probeVarName}) $dd_throw(${probeVarName}, $dd_e, ${receiverArg}${argsArg});${catchHook} throw $dd_e; }`;
+    const catchBlock = `catch($dd_e) { if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e, ${receiverArg}${argsArg});${catchHook} throw $dd_e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
