@@ -18,6 +18,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     functionTypes: undefined,
     namedOnly: false,
     decorators: 'legacy',
+    exceptionReplay: false,
 };
 
 describe('transformCode', () => {
@@ -1439,6 +1440,37 @@ describe('transformCode', () => {
                     '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }',
                     '}',
                 ),
+            );
+        });
+
+        it('should call the Exception Replay hook from the catch block when exceptionReplay is enabled', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                exceptionReplay: true,
+                code: 'function add(a, b) { return a + b; }',
+            });
+
+            expect(normalizeCode(result.code)).toBe(
+                normalizeCode(
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
+                    '  try {',
+                    '    let $dd_rv0;',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
+                    "  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;add', $dd_e, this, {a, b}); throw $dd_e; }",
+                    '}',
+                ),
+            );
+        });
+
+        it('should call the Exception Replay hook without arguments for a function without parameters', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                exceptionReplay: true,
+                code: 'function getTime() { return Date.now(); }',
+            });
+
+            expect(result.code).toContain(
+                "catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;getTime', $dd_e, this); throw $dd_e; }",
             );
         });
 

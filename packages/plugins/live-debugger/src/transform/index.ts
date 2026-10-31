@@ -5,7 +5,7 @@
 import type { ParserPlugin } from '@babel/parser';
 import type _traverse from '@babel/traverse';
 import type * as BabelTypes from '@babel/types';
-import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
+import { LIVE_DEBUGGER_CATCH_FUNCTION, LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 import type MagicStringType from 'magic-string';
 import type { SourceMap } from 'magic-string';
 
@@ -211,6 +211,7 @@ export interface TransformOptions {
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
     decorators: DecoratorSyntax;
+    exceptionReplay: boolean;
 }
 
 /**
@@ -243,8 +244,16 @@ export interface TransformResult {
  * Uses Babel to parse and read the AST, then MagicString for injection.
  */
 export function transformCode(options: TransformOptions): TransformResult {
-    const { code, filePath, buildRoot, honorSkipComments, functionTypes, namedOnly, decorators } =
-        options;
+    const {
+        code,
+        filePath,
+        buildRoot,
+        honorSkipComments,
+        functionTypes,
+        namedOnly,
+        decorators,
+        exceptionReplay,
+    } = options;
 
     let failedCount = 0;
     let instrumentedCount = 0;
@@ -447,7 +456,7 @@ export function transformCode(options: TransformOptions): TransformResult {
     // Process inner (deeper) functions before outer ones so same-side
     // MagicString insertions at shared positions stack in the correct order.
     for (let i = targets.length - 1; i >= 0; i--) {
-        injectInstrumentation(s, code, targets[i]);
+        injectInstrumentation(s, code, targets[i], exceptionReplay);
     }
     for (const target of constructorThisAliasTargets) {
         injectConstructorThisAlias(s, code, target);
@@ -468,7 +477,12 @@ export function transformCode(options: TransformOptions): TransformResult {
 /**
  * Inject instrumentation for a single function.
  */
-function injectInstrumentation(s: MagicStringType, code: string, target: FunctionTarget): void {
+function injectInstrumentation(
+    s: MagicStringType,
+    code: string,
+    target: FunctionTarget,
+    exceptionReplay: boolean,
+): void {
     const {
         probeVarName,
         probeIdx,
@@ -511,7 +525,15 @@ function injectInstrumentation(s: MagicStringType, code: string, target: Functio
     // collect, and keeps the bare call whose function ID RUM privacy leaves inline.
     const probeDecl = `let ${probeVarName} = globalThis.${LIVE_DEBUGGER_PROBES_FUNCTION} !== void 0 && ${LIVE_DEBUGGER_PROBES_FUNCTION}('${escapedFunctionId}');`;
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
-    const catchBlock = `catch($dd_e) { if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e, ${receiverArg}${argsArg}); throw $dd_e; }`;
+    // Exception Replay calls `$dd_catch` for every exception leaving the function, whether or not
+    // a probe is active, so the SDK can capture the arguments of each frame the exception passes
+    // through. It's a separate `if` rather than an `else`, so a frame still gets its Exception
+    // Replay snapshot when a probe is active. The guard and the bare call with a literal function
+    // ID follow `$dd_probes`, for the same reasons.
+    const catchHook = exceptionReplay
+        ? ` if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}${argsArg});`
+        : '';
+    const catchBlock = `catch($dd_e) { if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e, ${receiverArg}${argsArg});${catchHook} throw $dd_e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr

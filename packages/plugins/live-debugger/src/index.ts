@@ -82,6 +82,7 @@ export const getLiveDebuggerPlugin = (
                         functionTypes: pluginOptions.functionTypes,
                         namedOnly: pluginOptions.namedOnly,
                         decorators: pluginOptions.decorators,
+                        exceptionReplay: pluginOptions.exceptionReplay,
                     });
 
                     instrumentedCount += result.instrumentedCount;
