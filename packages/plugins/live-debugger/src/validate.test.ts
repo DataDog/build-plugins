@@ -140,24 +140,30 @@ describe('validateOptions', () => {
             expect(validateOptions(input, mockLogger).service).toBe(expected);
         });
 
+        // Everything the symbol upload needs.
+        const uploadConfig = {
+            ...makeConfig({}, { service: 'cart', version: '1.0.0' }),
+            auth: { apiKey: 'api-key' },
+        } satisfies Options;
         const gitCases = [
             {
-                description: 'collect git data with an API key',
-                input: { ...makeConfig({}), auth: { apiKey: 'api-key' } } satisfies Options,
+                description: 'collect git data with an API key, a service and a version',
+                input: uploadConfig,
                 expected: true,
             },
             {
                 description: 'not collect git data without an API key',
-                input: makeConfig({}),
+                input: { ...uploadConfig, auth: {} } satisfies Options,
+                expected: false,
+            },
+            {
+                description: 'not collect git data without a service',
+                input: { ...uploadConfig, metadata: { version: '1.0.0' } } satisfies Options,
                 expected: false,
             },
             {
                 description: 'not collect git data when git is disabled',
-                input: {
-                    ...makeConfig({}),
-                    auth: { apiKey: 'api-key' },
-                    enableGit: false,
-                } satisfies Options,
+                input: { ...uploadConfig, enableGit: false } satisfies Options,
                 expected: false,
             },
         ];
