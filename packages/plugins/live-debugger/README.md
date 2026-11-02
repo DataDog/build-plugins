@@ -300,7 +300,7 @@ The upload needs:
 - a git repository with a remote, and the [git integration](/README.md#enablegit) enabled;
 - source maps, for the line numbers.
 
-When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols, except with esbuild, which doesn't tell plugins whether it's watching, so every esbuild rebuild uploads. The upload never fails your build, and doesn't add anything to your build output.
+When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols. With esbuild, they upload the first build only, because esbuild doesn't tell plugins whether it's watching. The upload never fails your build, and doesn't add anything to your build output.
 
 ## Skipped function types
 
