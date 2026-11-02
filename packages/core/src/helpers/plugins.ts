@@ -185,10 +185,14 @@ export const unserializeBuildReport = (report: SerializedBuildReport): BuildRepo
 export const shouldGetGitInfo = (options: Options): boolean => {
     // Source map uploads need git.
     const gitEnabledFromSourcemaps = !!options.errorTracking?.sourcemaps;
-    // Live Debugger symbol table uploads need git, and only happen with an API key.
+    // Live Debugger symbol table uploads need git, and only happen with an API key, a service and a version.
     const liveDebuggerConfig = options.liveDebugger;
     const isLiveDebuggerEnabled = !!liveDebuggerConfig && !!(liveDebuggerConfig.enable ?? true);
-    const gitEnabledFromLiveDebugger = isLiveDebuggerEnabled && !!options.auth?.apiKey;
+    const gitEnabledFromLiveDebugger =
+        isLiveDebuggerEnabled &&
+        !!options.auth?.apiKey &&
+        !!options.metadata?.service &&
+        !!options.metadata?.version;
     // If we have the 'enableGit' configuration at the root, use it and default to `true`.
     const gitEnabledFromRoot = options.enableGit ?? true;
     return (gitEnabledFromSourcemaps || gitEnabledFromLiveDebugger) && gitEnabledFromRoot;

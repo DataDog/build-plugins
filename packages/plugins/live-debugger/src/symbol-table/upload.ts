@@ -127,7 +127,7 @@ export const createUploadParts = async (
         const batchNum = index + 1;
         const final = batchNum === groups.length;
         const content = getFileContent({ payload, context, uploadId, batchNum, final, scopes });
-        // One part at a time, to keep memory low.
+        // One part at a time, so only one compression runs at once.
         // eslint-disable-next-line no-await-in-loop
         const file = await compress(content);
         parts.push({ batchNum, final, file });
@@ -206,6 +206,7 @@ export const uploadSymbolTable = async (
             url,
             method: 'POST',
             auth: { apiKey: context.apiKey },
+            retryFetchErrors: true,
             getData: () => getPartData(part, context, payload, uploadId),
             onRetry: (error, attempt) => {
                 log.debug(
