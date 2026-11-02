@@ -82,6 +82,17 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
             expect(result).toContain('typeof setExecuteActionImplementation');
         });
 
+        test('Should copy environment variables before calling the handler', () => {
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+            );
+            const copyIndex = result.indexOf(shared.SET_ENVIRONMENT_VARIABLES_SNIPPET);
+            expect(copyIndex).toBeGreaterThan(-1);
+            expect(copyIndex).toBeLessThan(result.indexOf('await myHandler(...args)'));
+        });
+
         test('Should not include action-catalog import', () => {
             const result = generateVirtualEntryContent(
                 'myHandler',

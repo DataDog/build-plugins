@@ -63,6 +63,27 @@ export const SET_EXECUTE_ACTION_SNIPPET = `\
                 actionFn = actionFn[part];
             }
             if (typeof actionFn !== 'function') throw new Error('Action is not a function: ' + actionId);
+            const connections = $.Environment?.connections;
+            if (
+                request && typeof request === 'object' &&
+                connections && typeof connections === 'object' &&
+                Object.hasOwn(connections, request.connectionId) &&
+                typeof connections[request.connectionId] === 'string'
+            ) {
+                request = { ...request, connectionId: connections[request.connectionId] };
+            }
             return actionFn(request);
         });
+    }`;
+
+/**
+ * Script snippet that copies the run's environment variables into process.env before the
+ * handler runs. Module-scope reads happen at import, earlier, and don't see them.
+ */
+export const SET_ENVIRONMENT_VARIABLES_SNIPPET = `\
+    const variables = $.Environment?.variables;
+    if (typeof process === 'object' && process && variables && typeof variables === 'object' && !Array.isArray(variables)) {
+        for (const [name, value] of Object.entries(variables)) {
+            if (typeof value === 'string') process.env[name] = value;
+        }
     }`;

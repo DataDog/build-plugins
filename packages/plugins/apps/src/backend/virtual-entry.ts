@@ -6,6 +6,7 @@ import {
     ACTION_CATALOG_IMPORT,
     DATADOG_APPS_BACKEND_IMPORT,
     SET_BACKEND_CONTEXT_SNIPPET,
+    SET_ENVIRONMENT_VARIABLES_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
     isActionCatalogInstalled,
     isDatadogAppsBackendInstalled,
@@ -45,6 +46,8 @@ export function generateVirtualEntryContent(
     }
     lines.push(`    // Register the $.Actions-based implementation for executeAction`);
     lines.push(SET_EXECUTE_ACTION_SNIPPET);
+    lines.push('');
+    lines.push(SET_ENVIRONMENT_VARIABLES_SNIPPET);
     lines.push('');
     lines.push('    const args = $.backendFunctionArgs ?? [];');
     lines.push(`    const result = await ${functionName}(...args);`);
