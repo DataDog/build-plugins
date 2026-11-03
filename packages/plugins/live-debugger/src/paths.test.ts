@@ -2,16 +2,21 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { mkdir, outputFile, rm } from '@dd/core/helpers/fs';
+import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
+import fsp from 'fs/promises';
+import path from 'path';
+
 import {
-    createSourceFileResolver,
+    getFunctionIdPath,
     isInsideDirectory,
+    isOutsideRoot,
     resolveYarnVirtualPath,
     stripQuery,
 } from './paths';
 
-// Paths that don't exist, so resolving symlinks leaves them unchanged.
+// A path that doesn't exist, so resolving symlinks leaves paths in it unchanged.
 const REPOSITORY_ROOT = '/does-not-exist/repo';
-const BUILD_ROOT = `${REPOSITORY_ROOT}/app`;
 
 describe('stripQuery', () => {
     const cases = [
@@ -72,38 +77,93 @@ describe('resolveYarnVirtualPath', () => {
     });
 });
 
-describe('createSourceFileResolver', () => {
+describe('getFunctionIdPath', () => {
     const cases = [
         {
             description: 'make a path relative to the repository root',
-            input: 'src/a.js',
+            input: `${REPOSITORY_ROOT}/app/src/a.js`,
             expected: 'app/src/a.js',
         },
         {
             description: 'strip the query string',
-            input: 'src/Cart.vue?vue&type=script',
+            input: `${REPOSITORY_ROOT}/app/src/Cart.vue?vue&type=script`,
             expected: 'app/src/Cart.vue',
         },
         {
-            description: 'resolve a workspace package outside the build root',
-            input: '../packages/lib/index.js',
-            expected: 'packages/lib/index.js',
-        },
-        {
             description: 'resolve a Yarn virtual path',
-            input: '../.yarn/__virtual__/lib-virtual-abc/1/packages/lib/index.js',
+            input: `${REPOSITORY_ROOT}/.yarn/__virtual__/lib-virtual-abc/1/packages/lib/index.js`,
             expected: 'packages/lib/index.js',
         },
         {
-            description: 'leave out a file outside the repository',
-            input: '../../shared/index.js',
-            expected: undefined,
+            description: 'keep a file outside the repository outside',
+            input: '/does-not-exist/shared/index.js',
+            expected: '../shared/index.js',
         },
     ];
 
     test.each(cases)('Should $description.', ({ input, expected }) => {
-        const resolveSourceFile = createSourceFileResolver(BUILD_ROOT, REPOSITORY_ROOT);
-        expect(resolveSourceFile(input)).toBe(expected);
+        expect(getFunctionIdPath(input, REPOSITORY_ROOT)).toBe(expected);
+    });
+
+    describe('with symlinks', () => {
+        let workingDir: string;
+        let repositoryRoot: string;
+
+        beforeAll(async () => {
+            const seed = `${Math.abs(jest.getSeed())}.function-id-path.${Date.now()}`;
+            workingDir = getTempWorkingDir(seed);
+            repositoryRoot = path.resolve(workingDir, 'repo');
+            const packageDir = path.resolve(repositoryRoot, 'packages/lib');
+            const packageFile = path.resolve(packageDir, 'index.js');
+            await outputFile(packageFile, 'export const lib = 1;');
+
+            // A link inside the repository, like a workspace package in node_modules.
+            const insideLink = path.resolve(repositoryRoot, 'app/node_modules/lib');
+            const insideLinkDir = path.dirname(insideLink);
+            await mkdir(insideLinkDir);
+            await fsp.symlink(packageDir, insideLink, 'dir');
+
+            // A link outside the repository.
+            const outsideLink = path.resolve(workingDir, 'linked-lib');
+            await fsp.symlink(packageDir, outsideLink, 'dir');
+        });
+
+        afterAll(async () => {
+            await rm(workingDir);
+        });
+
+        const symlinkCases = [
+            {
+                description: 'resolve a link outside the repository to its target',
+                input: 'linked-lib/index.js',
+                expected: 'packages/lib/index.js',
+            },
+            {
+                description: 'keep the path of a link inside the repository',
+                input: 'repo/app/node_modules/lib/index.js',
+                expected: 'app/node_modules/lib/index.js',
+            },
+        ];
+
+        test.each(symlinkCases)('Should $description.', ({ input, expected }) => {
+            const moduleId = path.resolve(workingDir, input);
+            expect(getFunctionIdPath(moduleId, repositoryRoot)).toBe(expected);
+        });
+    });
+});
+
+describe('isOutsideRoot', () => {
+    const cases = [
+        { description: 'accept a nested path', input: 'src/a.js', expected: false },
+        { description: 'accept a name starting with dots', input: '..a.js', expected: false },
+        { description: 'reject a parent path', input: '../a.js', expected: true },
+        { description: 'reject a Windows parent path', input: '..\\a.js', expected: true },
+        { description: 'reject the parent directory', input: '..', expected: true },
+        { description: 'reject an absolute path', input: '/repo/a.js', expected: true },
+    ];
+
+    test.each(cases)('Should $description.', ({ input, expected }) => {
+        expect(isOutsideRoot(input)).toBe(expected);
     });
 });
 

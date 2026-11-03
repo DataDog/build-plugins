@@ -104,7 +104,7 @@ After each production build, the plugin [uploads symbols](#symbol-upload) to Dat
 The Live Debugger plugin automatically instruments all JavaScript functions in your application at build time. It adds lightweight checks that can be activated at runtime without rebuilding your code.
 
 Each instrumented function gets:
-- A unique, stable function ID (format: `<file-path>;<function-name>`)
+- A function ID that identifies the function and stays the same across builds until the function is renamed or moved
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
@@ -300,7 +300,7 @@ The upload needs:
 - a git repository with a remote, and the [git integration](/README.md#enablegit) enabled;
 - source maps, for the line numbers.
 
-When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols. The upload never fails your build, and doesn't add anything to your build output.
+When something is missing, the plugin logs a warning and skips the upload. Development servers and watch mode don't upload symbols. With esbuild, they upload the first build only, because esbuild doesn't tell plugins whether it's watching. The upload never fails your build, and doesn't add anything to your build output.
 
 ## Skipped function types
 

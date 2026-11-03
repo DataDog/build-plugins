@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { isOutsideRoot } from '../paths';
 import { parseFunctionId } from '../transform/functionId';
 
 import type {
@@ -24,8 +25,9 @@ const formatPosition = (position: SourcePosition | undefined) =>
     position ? `${position.line}:${position.column}` : '';
 
 // The same function can be in several chunks, or in several output formats of the same build.
-// Functions that share an ID but are at different places are different functions (v1 IDs aren't
-// unique), so the key includes the location.
+// IDs are only unique within a module, and modules of the same file, such as a file imported with
+// different queries, can share IDs. Functions that share an ID but are at different places are
+// different functions, so the key includes the location.
 const getEntryKey = (chunkFunction: ChunkFunction, sourceFile: string) => {
     const start = formatPosition(chunkFunction.start);
     const end = formatPosition(chunkFunction.end);
@@ -64,10 +66,7 @@ const removeUnlocatedCopies = (entries: SymbolTableEntry[]): SymbolTableEntry[] 
 };
 
 // Map the output's chunks to one entry per function, deduplicated across chunks.
-export const buildSymbolTable = (
-    chunks: ChunkFunctions[],
-    resolveSourceFile: (modulePath: string) => string | undefined,
-): SymbolTableResult => {
+export const buildSymbolTable = (chunks: ChunkFunctions[]): SymbolTableResult => {
     const entries = new Map<string, SymbolTableEntry>();
     const fileChunkDebugIds = new Map<string, Set<string>>();
     const chunkDebugIds = new Set<string>();
@@ -107,9 +106,10 @@ export const buildSymbolTable = (
                 continue;
             }
 
-            const sourceFile = resolveSourceFile(parsedId.modulePath);
-            if (!sourceFile) {
-                outsideModulePaths.add(parsedId.modulePath);
+            // The transform makes the path relative to the repository root.
+            const sourceFile = parsedId.modulePath;
+            if (isOutsideRoot(sourceFile)) {
+                outsideModulePaths.add(sourceFile);
                 keys.push(undefined);
                 sourceFiles.push(undefined);
                 continue;

@@ -13,7 +13,7 @@ import type { TransformOptions } from './index';
 
 const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     filePath: '/src/utils.ts',
-    buildRoot: '/',
+    repositoryRoot: '/',
     honorSkipComments: false,
     functionTypes: undefined,
     namedOnly: false,
@@ -1132,7 +1132,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;classMethod')");
+            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.classMethod')");
         });
 
         it('should instrument only class private methods', () => {
@@ -1143,7 +1143,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;#secret')");
+            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.#secret')");
         });
 
         it('should instrument multiple selected types', () => {
@@ -1156,7 +1156,7 @@ describe('transformCode', () => {
             expect(result.instrumentedCount).toBe(3);
             expect(result.code).toContain("$dd_probes('src/utils.ts;decl')");
             expect(result.code).toContain("$dd_probes('src/utils.ts;arrow')");
-            expect(result.code).toContain("$dd_probes('src/utils.ts;classMethod')");
+            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.classMethod')");
         });
 
         it('should return original code when no functions match the filter', () => {
@@ -1288,7 +1288,7 @@ describe('transformCode', () => {
             // outer is skipped, but inner should still be instrumented
             expect(result.skippedByCommentCount).toBe(1);
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;inner')");
+            expect(result.code).toContain("$dd_probes('src/utils.ts;outer/inner')");
         });
 
         it('should skip all declarators in a multi-declarator const with a comment above', () => {
@@ -1358,6 +1358,81 @@ describe('transformCode', () => {
             expect(result.instrumentedCount).toBe(1);
             expect(result.code).toContain("$dd_probes('src/utils.ts;it\\'s')");
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
+        });
+    });
+
+    describe('function IDs', () => {
+        const PROBE_ID_RX = /\$dd_probes\('([^']*)'\)/g;
+        const getProbeIds = (code: string) => {
+            const matches = code.matchAll(PROBE_ID_RX);
+            return [...matches].map(([, functionId]) => functionId);
+        };
+
+        // The generator isn't instrumented, but its name is taken all the same.
+        const code = [
+            '[1].map(() => 1);',
+            '// @dd-no-instrumentation',
+            '[2].map(() => 2);',
+            '[3].map(function () { return 3; });',
+            '{ function* f() {} }',
+            '{ function f() { return 4; } }',
+        ].join('\n');
+
+        const cases: {
+            description: string;
+            options: Partial<TransformOptions>;
+            expected: string[];
+        }[] = [
+            {
+                description: 'number functions with the same name in source order',
+                options: {},
+                expected: [
+                    'src/utils.ts;<anonymous>',
+                    'src/utils.ts;<anonymous>#1',
+                    'src/utils.ts;<anonymous>#2',
+                    'src/utils.ts;f#1',
+                ],
+            },
+            {
+                description: 'keep the IDs of other functions when a skip comment skips one',
+                options: { honorSkipComments: true },
+                expected: [
+                    'src/utils.ts;<anonymous>',
+                    'src/utils.ts;<anonymous>#2',
+                    'src/utils.ts;f#1',
+                ],
+            },
+            {
+                description: 'keep the IDs of other functions when functionTypes skips one',
+                options: { functionTypes: ['arrowFunction', 'functionDeclaration'] },
+                expected: [
+                    'src/utils.ts;<anonymous>',
+                    'src/utils.ts;<anonymous>#1',
+                    'src/utils.ts;f#1',
+                ],
+            },
+            {
+                description: 'keep the IDs of named functions when namedOnly skips anonymous ones',
+                options: { namedOnly: true },
+                expected: ['src/utils.ts;f#1'],
+            },
+        ];
+
+        test.each(cases)('should $description', ({ options, expected }) => {
+            const result = transformCode({ ...BASE_OPTIONS, ...options, code });
+
+            expect(getProbeIds(result.code)).toEqual(expected);
+        });
+
+        it('should give the path relative to the repository root, without the query string', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function total() { return 1; }',
+                filePath: '/repo/app/src/Cart.vue?vue&type=script&lang.ts',
+                repositoryRoot: '/repo',
+            });
+
+            expect(getProbeIds(result.code)).toEqual(['app/src/Cart.vue;total']);
         });
     });
 
@@ -1558,7 +1633,7 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(items) {let $dd_t;',
                     '    ($dd_t = super(items.map((x) => {',
-                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;<anonymous>@4:16:0');",
+                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;B.constructor/<anonymous>');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
@@ -1592,7 +1667,7 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(args) {let $dd_t;',
                     '    const init = () => {',
-                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;init');",
+                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;B.constructor/init');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);',
                     '        const $dd_rv0 = ($dd_t = super(args));',
