@@ -231,6 +231,43 @@ describe('Live Debugger symbol table', () => {
             expect(uniqueFunctionIds).toEqual(outputFunctionIds[bundlerName]);
         });
 
+        test('Should give function IDs a path relative to the repository root.', () => {
+            const functionIds = outputFunctionIds[bundlerName] ?? [];
+            const unexpectedFunctionIds = functionIds.filter(
+                (functionId) =>
+                    functionId.includes('__virtual__') ||
+                    functionId.includes('?') ||
+                    functionId.startsWith('../') ||
+                    path.isAbsolute(functionId),
+            );
+
+            expect(functionIds).toEqual(
+                expect.arrayContaining([
+                    'app/src/math.js;add',
+                    'app/src/math.js;add/double',
+                    'app/src/main.js;<anonymous>',
+                    'packages/lib/index.js;libGreet',
+                    'packages/peer/index.js;peerHello',
+                ]),
+            );
+            expect(unexpectedFunctionIds).toEqual([]);
+
+            // The symbol table takes the path of each function from its ID.
+            const functionsInOtherFiles = getFunctions().filter(
+                (tableFunction) =>
+                    !tableFunction.functionId.startsWith(`${tableFunction.sourceFile};`),
+            );
+            expect(functionsInOtherFiles).toEqual([]);
+        });
+
+        test('Should give each function ID a single location.', () => {
+            const functionIds = getFunctions().map((tableFunction) => tableFunction.functionId);
+            const uniqueFunctionIds = new Set(functionIds);
+
+            expect(functionIds.length).toBeGreaterThan(0);
+            expect(uniqueFunctionIds.size).toBe(functionIds.length);
+        });
+
         test('Should describe the build.', () => {
             const table = getTable();
             expect(table?.language).toBe('browser');

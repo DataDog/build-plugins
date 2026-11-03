@@ -3,35 +3,36 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { parse } from '@babel/parser';
+import type _traverse from '@babel/traverse';
 import type * as t from '@babel/types';
 
 import type { BabelPath } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
-import { generateFunctionId, getFunctionName, parseFunctionId } from './functionId';
+import { createFunctionIdGenerator, getFunctionName, parseFunctionId } from './functionId';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
 const babelTypes = require('@babel/types') as typeof import('@babel/types');
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-const traverse = resolveCjsDefaultExport(require('@babel/traverse')) as (
-    ast: t.Node,
-    visitors: Record<string, (path: BabelPath<t.Function>) => void>,
-) => void;
+const traverse = resolveCjsDefaultExport<typeof _traverse>(require('@babel/traverse'));
 
-function parseFunctionPaths(code: string): BabelPath<t.Function>[] {
-    // The cast works around the @babel/parser bundling its own copy of
-    // @babel/types which is structurally identical but nominally distinct.
-    const ast = parse(code, {
+const MODULE_PATH = 'src/cart.js';
+
+function parseModule(code: string) {
+    return parse(code, {
         sourceType: 'module',
         plugins: ['typescript'],
-    }) as unknown as t.Node;
+    });
+}
+
+function parseFunctionPaths(code: string): BabelPath<t.Function>[] {
+    const ast = parseModule(code);
     const paths: BabelPath<t.Function>[] = [];
 
     traverse(ast, {
-        'FunctionDeclaration|FunctionExpression|ArrowFunctionExpression|ObjectMethod|ClassMethod|ClassPrivateMethod':
-            (path: BabelPath<t.Function>) => {
-                paths.push(path);
-            },
+        Function(path) {
+            paths.push(path);
+        },
     });
 
     return paths;
@@ -43,6 +44,42 @@ function parseSingleFunction(code: string): BabelPath<t.Function> {
         throw new Error(`No function found in: ${code}`);
     }
     return paths[0];
+}
+
+// The IDs of all the functions of a module, in source order, generated the way the transform does.
+function getFunctionIds(code: string): string[] {
+    const ast = parseModule(code);
+    const generator = createFunctionIdGenerator(MODULE_PATH, babelTypes);
+    const functionIds: string[] = [];
+
+    traverse(ast, {
+        Class: {
+            enter(path) {
+                generator.enterClass(path);
+            },
+            exit() {
+                generator.exit();
+            },
+        },
+        Function: {
+            enter(path) {
+                const functionId = generator.enterFunction(path);
+                functionIds.push(functionId);
+            },
+            exit() {
+                generator.exit();
+            },
+        },
+    });
+
+    return functionIds;
+}
+
+// The qualified names of all the functions of a module, without the module path.
+function getQualifiedNames(code: string): string[] {
+    const functionIds = getFunctionIds(code);
+    const prefix = `${MODULE_PATH};`;
+    return functionIds.map((functionId) => functionId.slice(prefix.length));
 }
 
 describe('getFunctionName', () => {
@@ -243,82 +280,301 @@ describe('getFunctionName', () => {
     });
 });
 
-describe('generateFunctionId', () => {
-    describe('named functions', () => {
+describe('createFunctionIdGenerator', () => {
+    test('should prefix the qualified name with the module path', () => {
+        expect(getFunctionIds('function add() {}')).toEqual(['src/cart.js;add']);
+    });
+
+    describe('qualified names', () => {
         const cases = [
             {
-                description: 'produce relative-path;name for a named function',
-                code: 'function hello() {}',
-                filePath: '/project/src/utils.ts',
-                buildRoot: '/project',
-                expected: 'src/utils.ts;hello',
+                description: 'qualify methods by their class',
+                code: 'class Cart { total() {} static create() {} #secret() {} }',
+                expected: ['Cart.total', 'Cart.create', 'Cart.#secret'],
             },
             {
-                description: 'handle a deeply nested file path',
-                code: 'function hello() {}',
-                filePath: '/project/src/features/auth/utils.ts',
-                buildRoot: '/project',
-                expected: 'src/features/auth/utils.ts;hello',
+                description: 'mark class getters and setters',
+                code: 'class Cart { get size() {} set size(value) {} static get empty() {} }',
+                expected: ['Cart.size:get', 'Cart.size:set', 'Cart.empty:get'],
             },
             {
-                description: 'handle a file at the build root',
-                code: 'function main() {}',
-                filePath: '/project/index.ts',
-                buildRoot: '/project',
-                expected: 'index.ts;main',
+                description: 'mark private getters and setters',
+                code: 'class Cart { get #count() {} set #count(value) {} }',
+                expected: ['Cart.#count:get', 'Cart.#count:set'],
+            },
+            {
+                description: 'mark object getters and setters',
+                code: 'const cart = { get size() {}, set size(value) {} };',
+                expected: ['size:get', 'size:set'],
+            },
+            {
+                description: 'qualify class property values by their class',
+                code: 'class Cart { handler = () => {}; #onClick = function () {}; static from = () => {}; }',
+                expected: ['Cart.handler', 'Cart.#onClick', 'Cart.from'],
+            },
+            {
+                description: 'name a class expression after its variable',
+                code: 'const Cart = class { total() {} };',
+                expected: ['Cart.total'],
+            },
+            {
+                description: 'name a class expression after its assignment target',
+                code: 'exports.Cart = class { total() {} };',
+                expected: ['exports.Cart.total'],
+            },
+            {
+                description: 'name a class expression after its object property',
+                code: 'const shop = { Cart: class { total() {} } };',
+                expected: ['Cart.total'],
+            },
+            {
+                description: 'qualify a class assigned to a static property by its class',
+                code: 'class Cart { static Item = class { price() {} }; }',
+                expected: ['Cart.Item.price'],
+            },
+            {
+                description: 'qualify functions by the function around them',
+                code: 'function doubleAll(items) { return items.map((item) => item * 2); }',
+                expected: ['doubleAll', 'doubleAll/<anonymous>'],
+            },
+            {
+                description: 'qualify functions by the method around them',
+                code: 'class Cart { total() { return this.items.map(() => 1); } }',
+                expected: ['Cart.total', 'Cart.total/<anonymous>'],
+            },
+            {
+                description: 'qualify a class by the function around it',
+                code: 'function make() { class Box { open() {} } return Box; }',
+                expected: ['make', 'make/Box.open'],
+            },
+            {
+                description:
+                    'qualify functions that are part of a class property value by the class',
+                code: 'class Cart { handler = debounce(() => {}); static { init(() => {}); } }',
+                expected: ['Cart/<anonymous>', 'Cart/<anonymous>#1'],
+            },
+            {
+                description: 'skip anonymous functions around a function',
+                code: '[1].forEach(function () { [2].forEach(() => { function helper() {} }); });',
+                expected: ['<anonymous>', '<anonymous>#1', 'helper'],
+            },
+            {
+                description: 'skip an immediately invoked function around a function',
+                code: '(function () { const init = () => {}; })();',
+                expected: ['<anonymous>', 'init'],
+            },
+            {
+                description: 'skip an anonymous class around a method',
+                code: 'function make() { return class { open() {} }; }',
+                expected: ['make', 'make/open'],
+            },
+            {
+                description: 'skip an anonymous default export class around a method',
+                code: 'export default class { total() {} }',
+                expected: ['total'],
+            },
+            {
+                description: 'not qualify functions by the object literal around them',
+                code: 'function setup() { return { load() {}, save: () => {} }; }',
+                expected: ['setup', 'setup/load', 'setup/save'],
+            },
+            {
+                description: 'keep the name of assignment targets',
+                code: 'function Cart() { this.total = function () {}; } Cart.prototype.size = function () {};',
+                expected: ['Cart', 'Cart/this.total', 'Cart.prototype.size'],
+            },
+            {
+                description: 'name a function without a name anonymous',
+                code: 'class Cart { [Symbol.iterator]() {} } export default function () {}',
+                expected: ['Cart.<anonymous>', '<anonymous>'],
             },
         ];
 
-        test.each(cases)('should $description', ({ code, filePath, buildRoot, expected }) => {
-            const fnPath = parseSingleFunction(code);
-            expect(generateFunctionId(filePath, buildRoot, fnPath, 0, babelTypes)).toBe(expected);
+        test.each(cases)('should $description', ({ code, expected }) => {
+            expect(getQualifiedNames(code)).toEqual(expected);
         });
     });
 
-    describe('anonymous functions', () => {
-        it('should produce <anonymous>@line:col:index for an anonymous function', () => {
-            const fnPath = parseSingleFunction('[() => {}]');
-            const line = fnPath.node.loc?.start.line ?? 0;
-            const col = fnPath.node.loc?.start.column ?? 0;
+    describe('duplicate names', () => {
+        const cases = [
+            {
+                description: 'number anonymous siblings in source order',
+                code: 'foo(() => {}); foo(() => {}); foo(() => {});',
+                expected: ['<anonymous>', '<anonymous>#1', '<anonymous>#2'],
+            },
+            {
+                description: 'number functions with the same name in different blocks',
+                code: 'if (a) { function f() {} } else { function f() {} }',
+                expected: ['f', 'f#1'],
+            },
+            {
+                description: 'number a method and a static method with the same name',
+                code: 'class Cart { load() {} static load() {} }',
+                expected: ['Cart.load', 'Cart.load#1'],
+            },
+            {
+                description: 'only number functions with the same qualified name',
+                code: 'function a() { foo(() => {}); } function b() { foo(() => {}); }',
+                expected: ['a', 'a/<anonymous>', 'b', 'b/<anonymous>'],
+            },
+            {
+                description: 'qualify functions by the numbered name of the function around them',
+                code: '{ const render = () => () => {}; } { const render = () => () => {}; }',
+                expected: ['render', 'render/<anonymous>', 'render#1', 'render#1/<anonymous>'],
+            },
+            {
+                description: 'skip suffixes that another function has as its name',
+                code: "const a = { 'f#1'() {} }; const b = { f() {} }; const c = { f() {} };",
+                expected: ['f#1', 'f', 'f#2'],
+            },
+            {
+                description: 'number a name that looks like a suffix when it is taken',
+                code: "const a = { f() {} }; const b = { f() {} }; const c = { 'f#1'() {} };",
+                expected: ['f', 'f#1', 'f#1#1'],
+            },
+        ];
 
-            expect(generateFunctionId('/p/src/a.ts', '/p', fnPath, 3, babelTypes)).toBe(
-                `src/a.ts;<anonymous>@${line}:${col}:3`,
-            );
+        test.each(cases)('should $description', ({ code, expected }) => {
+            expect(getQualifiedNames(code)).toEqual(expected);
         });
+    });
 
-        it('should differentiate anonymous siblings by index', () => {
-            const fnPath = parseSingleFunction('foo(() => {})');
-            const line = fnPath.node.loc?.start.line ?? 0;
-            const col = fnPath.node.loc?.start.column ?? 0;
+    test('should give every function of a module a different ID', () => {
+        const code = `
+            export default function () { return () => {}; }
+            export function f() {}
+            { function f() {} }
+            const o = { f() {}, 'f#1'() {}, get f() {}, set f(v) {}, [key]() {}, ['f']() {}, 42: () => {} };
+            class A {
+                constructor() { this.f = () => {}; }
+                f() {}
+                static f() {}
+                #f() {}
+                get f() {}
+                set f(v) {}
+                static { (() => {})(); }
+                f = () => {};
+                [Symbol.iterator]() {}
+                [Symbol.asyncIterator]() {}
+                'quoted name'() {}
+            }
+            const B = class { f() {} };
+            class C extends class { f() {} } { f() { return [1].map(() => [2].map(() => {})); } }
+            (function () { function f() {} })();
+            (() => { const f = () => {}; })();
+            a.b.c = function () {};
+            a.b.c = function () {};
+            obj[key] = () => {};
+            obj[key] = () => {};
+        `;
+        const functionIds = getFunctionIds(code);
+        const uniqueFunctionIds = new Set(functionIds);
+        const functionCount = parseFunctionPaths(code).length;
 
-            const id0 = generateFunctionId('/p/f.ts', '/p', fnPath, 0, babelTypes);
-            const id1 = generateFunctionId('/p/f.ts', '/p', fnPath, 1, babelTypes);
+        expect(functionIds).toHaveLength(functionCount);
+        expect(uniqueFunctionIds.size).toBe(functionCount);
+    });
 
-            expect(id0).toBe(`f.ts;<anonymous>@${line}:${col}:0`);
-            expect(id1).toBe(`f.ts;<anonymous>@${line}:${col}:1`);
-            expect(id0).not.toBe(id1);
+    describe('edits that keep IDs', () => {
+        const cases = [
+            {
+                description: 'keep IDs when a function body changes',
+                before: 'function a() { return 1; }\nfoo(() => 2);',
+                after: 'function a() {\n    const one = 1;\n    return one;\n}\nfoo(() => {\n    return 2;\n});',
+                expected: {
+                    before: ['a', '<anonymous>'],
+                    after: ['a', '<anonymous>'],
+                },
+            },
+            {
+                description: 'keep IDs when lines are added above',
+                before: 'class Cart { total() {} }\nfoo(() => 1);',
+                after: "import { x } from 'x';\n\nconsole.log(x);\n\nclass Cart { total() {} }\nfoo(() => 1);",
+                expected: {
+                    before: ['Cart.total', '<anonymous>'],
+                    after: ['Cart.total', '<anonymous>'],
+                },
+            },
+            {
+                description: 'keep IDs when functions with other names are added before them',
+                before: 'class Cart { get size() {} total() {} }',
+                after: 'function helper() {}\nclass Cart { count() {} get size() {} total() {} }',
+                expected: {
+                    before: ['Cart.size:get', 'Cart.total'],
+                    after: ['helper', 'Cart.count', 'Cart.size:get', 'Cart.total'],
+                },
+            },
+            {
+                description: 'keep IDs when an anonymous function is added to another function',
+                before: 'function a() {}\nfunction b() { foo(() => 2); }',
+                after: 'function a() { foo(() => 1); }\nfunction b() { foo(() => 2); }',
+                expected: {
+                    before: ['a', 'b', 'b/<anonymous>'],
+                    after: ['a', 'a/<anonymous>', 'b', 'b/<anonymous>'],
+                },
+            },
+            {
+                description: 'keep IDs when an anonymous sibling is added after them',
+                before: 'function load() { a.then(() => 1); }',
+                after: 'function load() { a.then(() => 1); b.then(() => 2); }',
+                expected: {
+                    before: ['load', 'load/<anonymous>'],
+                    after: ['load', 'load/<anonymous>', 'load/<anonymous>#1'],
+                },
+            },
+            {
+                description: 'keep IDs when another function is renamed',
+                before: 'function a() {}\nfunction b() { foo(() => {}); }',
+                after: 'function renamed() {}\nfunction b() { foo(() => {}); }',
+                expected: {
+                    before: ['a', 'b', 'b/<anonymous>'],
+                    after: ['renamed', 'b', 'b/<anonymous>'],
+                },
+            },
+        ];
+
+        test.each(cases)('should $description', ({ before, after, expected }) => {
+            expect(getQualifiedNames(before)).toEqual(expected.before);
+            expect(getQualifiedNames(after)).toEqual(expected.after);
         });
+    });
 
-        it('should use 0:0 when location info is missing', () => {
-            const fnPath = parseSingleFunction('foo(() => {})');
-            const original = fnPath.node.loc;
-            fnPath.node.loc = undefined as unknown as typeof original;
+    test('should shift the suffix of an anonymous function when a sibling is added before it', () => {
+        // Like a move: the callback keeps its name, but not its place among its siblings.
+        const before = getQualifiedNames('function load() { a.then(() => 1); }');
+        const after = getQualifiedNames('function load() { b.then(() => 0); a.then(() => 1); }');
 
-            expect(generateFunctionId('/p/f.ts', '/p', fnPath, 0, babelTypes)).toBe(
-                'f.ts;<anonymous>@0:0:0',
-            );
-
-            fnPath.node.loc = original;
-        });
+        expect(before).toEqual(['load', 'load/<anonymous>']);
+        expect(after).toEqual(['load', 'load/<anonymous>', 'load/<anonymous>#1']);
     });
 });
 
 describe('parseFunctionId', () => {
     const cases = [
         {
-            description: 'split a named function ID',
+            description: 'split a top-level function ID',
             input: 'src/utils.js;add',
             expected: { modulePath: 'src/utils.js', name: 'add' },
+        },
+        {
+            description: 'keep the class of a class member',
+            input: 'src/cart.js;Cart.size:get',
+            expected: { modulePath: 'src/cart.js', name: 'Cart.size:get' },
+        },
+        {
+            description: 'keep the class of a private method',
+            input: 'src/cart.js;Cart.#secret',
+            expected: { modulePath: 'src/cart.js', name: 'Cart.#secret' },
+        },
+        {
+            description: 'drop the names of the functions around the function',
+            input: 'src/cart.js;Cart.total/doubleAll/<anonymous>',
+            expected: { modulePath: 'src/cart.js', name: '<anonymous>' },
+        },
+        {
+            description: 'drop the duplicate suffix',
+            input: 'src/cart.js;render#1/double#2',
+            expected: { modulePath: 'src/cart.js', name: 'double' },
         },
         {
             description: 'keep separators that are part of the function name',
@@ -326,23 +582,18 @@ describe('parseFunctionId', () => {
             expected: { modulePath: 'src/utils.js', name: 'get;user' },
         },
         {
-            description: 'drop the location of anonymous functions',
-            input: 'src/widget.js;<anonymous>@4:16:0',
-            expected: { modulePath: 'src/widget.js', name: '<anonymous>' },
-        },
-        {
-            description: 'keep the query string of the module path',
-            input: 'src/Cart.vue?vue&type=script;total',
-            expected: { modulePath: 'src/Cart.vue?vue&type=script', name: 'total' },
-        },
-        {
             description: 'reject an ID without a module path',
             input: ';add',
             expected: undefined,
         },
+        {
+            description: 'reject an ID without a separator',
+            input: 'add',
+            expected: undefined,
+        },
     ];
 
-    test.each(cases)('Should $description.', ({ input, expected }) => {
+    test.each(cases)('should $description', ({ input, expected }) => {
         expect(parseFunctionId(input)).toEqual(expected);
     });
 });
