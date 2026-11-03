@@ -4,6 +4,7 @@
 
 import { existsSync, mkdir } from '@dd/core/helpers/fs';
 import { glob } from 'glob';
+import path from 'path';
 
 import { CanaryCommandError, runCheckedCommand, withRetries } from './runner';
 import type { CommandResult, RunCommand, TargetRepository } from './types';
@@ -91,5 +92,27 @@ export const checkoutTarget = async ({
     );
     await runGit(['checkout', '--quiet', '--detach', 'FETCH_HEAD'], `check out ${ref}`);
     const revision = await runGit(['rev-parse', 'HEAD'], 'resolve target commit');
+    return revision.output.trim();
+};
+
+// Resolves the commit of a checkout that canary-checkout didn't make, for example
+// one a CI job fetched itself so that no build-plugins code ever holds its token.
+export const resolveExistingCheckout = async ({
+    root,
+    runCommand,
+}: {
+    root: string;
+    runCommand: RunCommand;
+}): Promise<string> => {
+    if (!existsSync(path.resolve(root, '.git'))) {
+        throw new CanaryCommandError(`${root} is not a git checkout.`);
+    }
+    const revision = await runCheckedCommand(runCommand, {
+        command: 'git',
+        args: ['rev-parse', 'HEAD'],
+        cwd: root,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+        label: 'resolve target commit',
+    });
     return revision.output.trim();
 };
