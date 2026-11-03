@@ -9,10 +9,6 @@ import type { ChunkFunction, ChunkFunctions } from './types';
 const DEBUG_ID_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const DEBUG_ID_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-// Module paths are relative to the build root, `app` in the repository.
-const resolveSourceFile = (modulePath: string) =>
-    modulePath.startsWith('../../') ? undefined : `app/${modulePath.replace(/\?.*$/, '')}`;
-
 const getFunction = (
     functionId: string,
     lines: [number, number] | undefined,
@@ -35,40 +31,42 @@ describe('buildSymbolTable', () => {
         {
             description: 'list the same function once when several chunks contain it',
             chunks: [
-                getChunk(DEBUG_ID_A, [getFunction('src/a.js;add', [1, 3])]),
-                getChunk(DEBUG_ID_B, [getFunction('src/a.js;add', [1, 3])]),
+                getChunk(DEBUG_ID_A, [getFunction('app/src/a.js;add', [1, 3])]),
+                getChunk(DEBUG_ID_B, [getFunction('app/src/a.js;add', [1, 3])]),
             ],
-            expected: { functionIds: ['src/a.js;add'] },
+            expected: { functionIds: ['app/src/a.js;add'] },
         },
         {
+            // Modules of the same file with different queries can share IDs.
             description: 'keep functions that share an ID at different places',
             chunks: [
                 getChunk(DEBUG_ID_A, [
-                    getFunction('src/a.js;render', [1, 3]),
-                    getFunction('src/a.js;render', [5, 7]),
+                    getFunction('app/src/a.js;render', [1, 3]),
+                    getFunction('app/src/a.js;render', [5, 7]),
                 ]),
             ],
-            expected: { functionIds: ['src/a.js;render', 'src/a.js;render'] },
+            expected: { functionIds: ['app/src/a.js;render', 'app/src/a.js;render'] },
         },
         {
             description: 'leave out functions outside the repository and invalid IDs',
             chunks: [
                 getChunk(DEBUG_ID_A, [
-                    getFunction('../../shared/a.js;outside', [1, 3]),
+                    getFunction('../shared/a.js;outside', [1, 3]),
+                    getFunction('/elsewhere/a.js;absolute', [1, 3]),
                     getFunction('no-separator', [1, 3]),
-                    getFunction('src/a.js;inside', [1, 3]),
+                    getFunction('app/src/a.js;inside', [1, 3]),
                 ]),
             ],
             expected: {
-                functionIds: ['src/a.js;inside'],
-                outsideModulePaths: ['../../shared/a.js'],
+                functionIds: ['app/src/a.js;inside'],
+                outsideModulePaths: ['../shared/a.js', '/elsewhere/a.js'],
                 invalidFunctionIds: ['no-separator'],
             },
         },
     ];
 
     test.each(cases)('Should $description.', ({ chunks, expected }) => {
-        const result = buildSymbolTable(chunks, resolveSourceFile);
+        const result = buildSymbolTable(chunks);
         const functionIds = result.table.entries.map((entry) => entry.functionId);
         const outsideModulePaths = [...result.outsideModulePaths];
         const invalidFunctionIds = [...result.invalidFunctionIds];
@@ -81,15 +79,15 @@ describe('buildSymbolTable', () => {
     test('Should drop copies without a line range when another copy has one.', () => {
         const chunks = [
             getChunk(DEBUG_ID_A, [
-                getFunction('src/a.js;outer', undefined),
-                getFunction('src/a.js;inner', [2, 4], 0),
+                getFunction('app/src/a.js;outer', undefined),
+                getFunction('app/src/a.js;inner', [2, 4], 0),
             ]),
             getChunk(DEBUG_ID_B, [
-                getFunction('src/a.js;outer', [1, 9]),
-                getFunction('src/a.js;unmapped', undefined),
+                getFunction('app/src/a.js;outer', [1, 9]),
+                getFunction('app/src/a.js;unmapped', undefined),
             ]),
         ];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const { table } = buildSymbolTable(chunks);
         const entries = table.entries.map(({ functionId, start, parentKey }) => ({
             functionId,
             located: Boolean(start),
@@ -97,22 +95,22 @@ describe('buildSymbolTable', () => {
         }));
 
         expect(entries).toEqual([
-            { functionId: 'src/a.js;inner', located: true, hasParent: false },
-            { functionId: 'src/a.js;outer', located: true, hasParent: false },
-            { functionId: 'src/a.js;unmapped', located: false, hasParent: false },
+            { functionId: 'app/src/a.js;inner', located: true, hasParent: false },
+            { functionId: 'app/src/a.js;outer', located: true, hasParent: false },
+            { functionId: 'app/src/a.js;unmapped', located: false, hasParent: false },
         ]);
     });
 
     test('Should record which chunks contain each file.', () => {
         const chunks = [
-            getChunk(DEBUG_ID_B, [getFunction('src/a.js;add', [1, 3])]),
+            getChunk(DEBUG_ID_B, [getFunction('app/src/a.js;add', [1, 3])]),
             getChunk(DEBUG_ID_A, [
-                getFunction('src/a.js;add', [1, 3]),
-                getFunction('src/b.js;sub', [1, 3]),
+                getFunction('app/src/a.js;add', [1, 3]),
+                getFunction('app/src/b.js;sub', [1, 3]),
             ]),
             getChunk(DEBUG_ID_A, []),
         ];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const { table } = buildSymbolTable(chunks);
         const fileChunkDebugIds = Object.fromEntries(table.fileChunkDebugIds ?? []);
 
         expect(table.chunkDebugIds).toEqual([DEBUG_ID_A, DEBUG_ID_B]);
@@ -124,10 +122,10 @@ describe('buildSymbolTable', () => {
 
     test('Should leave out chunk debug IDs when a chunk with functions has none.', () => {
         const chunks = [
-            getChunk(DEBUG_ID_A, [getFunction('src/a.js;add', [1, 3])]),
-            getChunk(undefined, [getFunction('src/b.js;sub', [1, 3])]),
+            getChunk(DEBUG_ID_A, [getFunction('app/src/a.js;add', [1, 3])]),
+            getChunk(undefined, [getFunction('app/src/b.js;sub', [1, 3])]),
         ];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const { table } = buildSymbolTable(chunks);
 
         expect(table.chunkDebugIds).toBeUndefined();
         expect(table.fileChunkDebugIds).toBeUndefined();
@@ -136,13 +134,13 @@ describe('buildSymbolTable', () => {
     test('Should only nest functions under enclosing functions of the same file.', () => {
         const chunks = [
             getChunk(DEBUG_ID_A, [
-                getFunction('src/a.js;outer', [1, 9]),
+                getFunction('app/src/a.js;outer', [1, 9]),
                 // Inlined into `outer` by a minifier.
-                getFunction('src/b.js;inlined', [1, 3], 0),
-                getFunction('src/a.js;inner', [2, 4], 1),
+                getFunction('app/src/b.js;inlined', [1, 3], 0),
+                getFunction('app/src/a.js;inner', [2, 4], 1),
             ]),
         ];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const { table } = buildSymbolTable(chunks);
         const [outer, inlined, inner] = table.entries;
 
         expect(outer.parentKey).toBeUndefined();
@@ -155,13 +153,13 @@ describe('serializeSymbolTable', () => {
     test('Should convert the table to SymDB scopes in source order.', () => {
         const chunks = [
             getChunk(DEBUG_ID_A, [
-                getFunction('src/b.js;later', [10, 12]),
-                getFunction('src/b.js;outer', [1, 8]),
-                getFunction('src/b.js;<anonymous>@3:4:0', [3, 5], 1),
-                getFunction('src/a.js;unmapped', undefined),
+                getFunction('app/src/b.js;Cart.size:get', [10, 12]),
+                getFunction('app/src/b.js;outer', [1, 8]),
+                getFunction('app/src/b.js;outer/<anonymous>#1', [3, 5], 1),
+                getFunction('app/src/a.js;unmapped', undefined),
             ]),
         ];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const { table } = buildSymbolTable(chunks);
 
         expect(serializeSymbolTable(table, '1.0.0')).toEqual({
             language: 'browser',
@@ -178,7 +176,7 @@ describe('serializeSymbolTable', () => {
                             scope_type: 'FUNCTION',
                             name: 'unmapped',
                             source_file: 'app/src/a.js',
-                            language_specifics: { function_id: 'src/a.js;unmapped' },
+                            language_specifics: { function_id: 'app/src/a.js;unmapped' },
                         },
                     ],
                 },
@@ -194,7 +192,7 @@ describe('serializeSymbolTable', () => {
                             source_file: 'app/src/b.js',
                             start_line: 1,
                             end_line: 8,
-                            language_specifics: { function_id: 'src/b.js;outer' },
+                            language_specifics: { function_id: 'app/src/b.js;outer' },
                             scopes: [
                                 {
                                     scope_type: 'FUNCTION',
@@ -203,18 +201,18 @@ describe('serializeSymbolTable', () => {
                                     start_line: 3,
                                     end_line: 5,
                                     language_specifics: {
-                                        function_id: 'src/b.js;<anonymous>@3:4:0',
+                                        function_id: 'app/src/b.js;outer/<anonymous>#1',
                                     },
                                 },
                             ],
                         },
                         {
                             scope_type: 'FUNCTION',
-                            name: 'later',
+                            name: 'Cart.size:get',
                             source_file: 'app/src/b.js',
                             start_line: 10,
                             end_line: 12,
-                            language_specifics: { function_id: 'src/b.js;later' },
+                            language_specifics: { function_id: 'app/src/b.js;Cart.size:get' },
                         },
                     ],
                 },
@@ -223,8 +221,8 @@ describe('serializeSymbolTable', () => {
     });
 
     test('Should leave out the version and chunk debug IDs when unknown.', () => {
-        const chunks = [getChunk(undefined, [getFunction('src/a.js;add', [1, 3])])];
-        const { table } = buildSymbolTable(chunks, resolveSourceFile);
+        const chunks = [getChunk(undefined, [getFunction('app/src/a.js;add', [1, 3])])];
+        const { table } = buildSymbolTable(chunks);
         const payload = serializeSymbolTable(table, undefined);
 
         expect(payload).not.toHaveProperty('version');

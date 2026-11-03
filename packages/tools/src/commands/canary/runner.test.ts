@@ -2,7 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { outputFile, readFile, rm } from '@dd/core/helpers/fs';
+import { existsSync, outputFile, readFile, rm } from '@dd/core/helpers/fs';
 import os from 'os';
 import path from 'path';
 import { gzipSync } from 'zlib';
@@ -79,6 +79,29 @@ const createSyntheticTarget = (root: string, cleanupOrder: string[]): CanaryTarg
             });
         },
     };
+};
+
+const SYNTHETIC_PHASE_ID = 'webpack-production';
+
+const writeVariantOutputs = async (root: string): Promise<void> => {
+    const controlPath = path.resolve(root, 'control/app.js');
+    const allFunctionsPath = path.resolve(root, 'all-functions/app.js');
+    const namedOnlyPath = path.resolve(root, 'named-only/app.js');
+    await outputFile(controlPath, 'function app() { return 1; }');
+    await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
+    await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
+};
+
+// Finds a run ID whose variant order starts with the given variants.
+const findRunIdStartingWith = (prefix: string[]): string => {
+    for (let run = 0; run < 100; run++) {
+        const runId = `run-${run}`;
+        const order = getVariantOrder(runId, SYNTHETIC_PHASE_ID);
+        if (prefix.every((variant, index) => order[index] === variant)) {
+            return runId;
+        }
+    }
+    throw new Error(`No run ID starts with ${prefix.join(', ')}.`);
 };
 
 describe('canary runner', () => {
@@ -176,6 +199,7 @@ describe('canary runner', () => {
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const reportPath = path.resolve(TEST_ROOT, 'report.json');
         const report = await runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
             install: false,
@@ -208,7 +232,7 @@ describe('canary runner', () => {
         expect(commands).toHaveLength(6);
         expect(cleanupOrder).toEqual(['second', 'first']);
         const serialized = await readFile(reportPath);
-        expect(serialized).toContain('"schemaVersion": 2');
+        expect(serialized).toContain('"schemaVersion": 3');
         expect(serialized).toContain('"buildTool": "webpack"');
         expect(serialized).toContain('"dirty": true');
     });
@@ -239,6 +263,7 @@ describe('canary runner', () => {
             getPhases: () => [phase],
         };
         const report = await runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
             install: false,
@@ -276,6 +301,7 @@ describe('canary runner', () => {
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const reportPath = path.resolve(TEST_ROOT, 'failed-report.json');
         const promise = runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
             install: false,
@@ -292,7 +318,8 @@ describe('canary runner', () => {
         expect(cleanupOrder).toEqual(['second', 'first']);
         const serialized = await readFile(reportPath);
         expect(serialized).toContain('"status": "failed"');
-        expect(serialized).toContain('"stage": "phase:webpack-production"');
+        expect(serialized).toMatch(/"stage": "phase:webpack-production:[a-z-]+:build"/);
+        expect(serialized).toContain('"failureKind": "target"');
     });
 
     test('should install before preflight and retry a failed install', async () => {
@@ -317,6 +344,7 @@ describe('canary runner', () => {
             },
         };
         const report = await runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
             install: true,
@@ -344,6 +372,7 @@ describe('canary runner', () => {
         };
         const reportPath = path.resolve(TEST_ROOT, 'install-failed-report.json');
         const promise = runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
             install: true,
@@ -372,6 +401,7 @@ describe('canary runner', () => {
         const cleanupOrder: string[] = [];
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const promise = runCanary({
+            alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: false,
             install: false,
@@ -432,5 +462,180 @@ describe('canary runner', () => {
 
         await expect(promise).rejects.toThrow(CanaryInterruptedError);
         expect(attempts).toBe(1);
+    });
+
+    const classificationCases = [
+        {
+            description: 'blame the plugin when control passes and an instrumented build fails',
+            orderPrefix: ['control', 'all-functions'],
+            failingBuilds: ['build:all-functions'],
+            expectedKind: 'plugin',
+            expectedStage: 'phase:webpack-production:all-functions:build',
+            expectedCommands: ['build:control', 'validate:control', 'build:all-functions'],
+        },
+        {
+            description: 'build control after an instrumented build fails first',
+            orderPrefix: ['named-only'],
+            failingBuilds: ['build:named-only'],
+            expectedKind: 'plugin',
+            expectedStage: 'phase:webpack-production:named-only:build',
+            expectedCommands: ['build:named-only', 'build:control', 'validate:control'],
+        },
+        {
+            description: 'blame the target when control fails after an instrumented failure',
+            orderPrefix: ['all-functions'],
+            failingBuilds: ['build:all-functions', 'build:control'],
+            expectedKind: 'target',
+            expectedStage: 'phase:webpack-production:all-functions:build',
+            expectedCommands: ['build:all-functions', 'build:control'],
+        },
+        {
+            description: 'blame the target when control fails',
+            orderPrefix: ['control'],
+            failingBuilds: ['build:control'],
+            expectedKind: 'target',
+            expectedStage: 'phase:webpack-production:control:build',
+            expectedCommands: ['build:control'],
+        },
+    ];
+
+    test.each(classificationCases)(
+        'should $description',
+        async ({ orderPrefix, failingBuilds, expectedKind, expectedStage, expectedCommands }) => {
+            await writeVariantOutputs(TEST_ROOT);
+            const runId = findRunIdStartingWith(orderPrefix);
+            const target = createSyntheticTarget(TEST_ROOT, []);
+            const commands: string[] = [];
+            const runCommand: RunCommand = async (spec) => {
+                commands.push(spec.label);
+                const exitCode = failingBuilds.includes(spec.label) ? 1 : 0;
+                return { durationMs: 1, exitCode, output: '', signal: null };
+            };
+            const reportPath = path.resolve(TEST_ROOT, 'classified-report.json');
+            const promise = runCanary({
+                alert: undefined,
+                buildPluginsRoot: process.cwd(),
+                cleanup: true,
+                install: false,
+                networkRetryDelaysMs: [],
+                phaseSelection: 'all',
+                reportPath,
+                root: TEST_ROOT,
+                runCommand,
+                runId,
+                target,
+            });
+
+            await expect(promise).rejects.toThrow('failed with exit code 1');
+            expect(commands).toEqual(expectedCommands);
+            const serialized = await readFile(reportPath);
+            const report: unknown = JSON.parse(serialized);
+            expect(report).toMatchObject({
+                status: 'failed',
+                failureKind: expectedKind,
+                failures: [{ stage: expectedStage }],
+            });
+        },
+    );
+
+    test('should name the failing step of a variant', async () => {
+        await writeVariantOutputs(TEST_ROOT);
+        const phase: CanaryPhase = {
+            ...createSyntheticPhase(TEST_ROOT),
+            assertBuildOutput: (_result, variant) => {
+                if (variant === 'named-only') {
+                    throw new Error('No Live Debugger summary.');
+                }
+            },
+        };
+        const target: CanaryTarget = {
+            ...createSyntheticTarget(TEST_ROOT, []),
+            getPhases: () => [phase],
+        };
+        const reportPath = path.resolve(TEST_ROOT, 'output-report.json');
+        const runId = findRunIdStartingWith(['control']);
+        const promise = runCanary({
+            alert: undefined,
+            buildPluginsRoot: process.cwd(),
+            cleanup: true,
+            install: false,
+            networkRetryDelaysMs: [],
+            phaseSelection: 'all',
+            reportPath,
+            root: TEST_ROOT,
+            runCommand: async () => successfulResult(1),
+            runId,
+            target,
+        });
+
+        await expect(promise).rejects.toThrow('No Live Debugger summary.');
+        const serialized = await readFile(reportPath);
+        expect(serialized).toContain('"stage": "phase:webpack-production:named-only:output"');
+        expect(serialized).toContain('"failureKind": "plugin"');
+    });
+
+    test('should report an interrupted run as interrupted', async () => {
+        await writeVariantOutputs(TEST_ROOT);
+        const runCommand: RunCommand = async (spec) => {
+            throw new CanaryInterruptedError(`${spec.label} was interrupted by SIGTERM.`);
+        };
+        const reportPath = path.resolve(TEST_ROOT, 'interrupted-report.json');
+        const target = createSyntheticTarget(TEST_ROOT, []);
+        const promise = runCanary({
+            alert: undefined,
+            buildPluginsRoot: process.cwd(),
+            cleanup: true,
+            install: false,
+            networkRetryDelaysMs: [],
+            phaseSelection: 'all',
+            reportPath,
+            root: TEST_ROOT,
+            runCommand,
+            runId: 'interrupted-run',
+            target,
+        });
+
+        await expect(promise).rejects.toThrow(CanaryInterruptedError);
+        const serialized = await readFile(reportPath);
+        expect(serialized).toContain('"failureKind": "interrupted"');
+    });
+
+    test('should write an alert only when the run fails', async () => {
+        await writeVariantOutputs(TEST_ROOT);
+        const alertPath = path.resolve(TEST_ROOT, 'slack-message.txt');
+        const alert = {
+            path: alertPath,
+            links: {
+                job: 'https://gitlab.example/jobs/1',
+                pipeline: 'https://gitlab.example/pipelines/2',
+            },
+        };
+        const reportPath = path.resolve(TEST_ROOT, 'alert-report.json');
+        const runId = findRunIdStartingWith(['control']);
+        const target = createSyntheticTarget(TEST_ROOT, []);
+        const runWith = (exitCode: number) =>
+            runCanary({
+                alert,
+                buildPluginsRoot: process.cwd(),
+                cleanup: true,
+                install: false,
+                networkRetryDelaysMs: [],
+                phaseSelection: 'all',
+                reportPath,
+                root: TEST_ROOT,
+                runCommand: async () => ({ durationMs: 1, exitCode, output: '', signal: null }),
+                runId,
+                target,
+            });
+
+        await runWith(0);
+        expect(existsSync(alertPath)).toBe(false);
+
+        const failingRun = runWith(1);
+        await expect(failingRun).rejects.toThrow('failed with exit code 1');
+        const message = await readFile(alertPath);
+        expect(message).toContain('*Kind:* target');
+        expect(message).toContain('`phase:webpack-production:control:build`');
+        expect(message).toContain('<https://gitlab.example/jobs/1|Job log and artifacts>');
     });
 });

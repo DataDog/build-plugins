@@ -49,6 +49,11 @@ export const DEBUG_BUNDLE_ROUTE = DEBUG_BUNDLE_PATH;
 export const EXECUTE_ACTION_ROUTE = '/__dd/executeAction';
 export const EXECUTE_ACTION_VIA_CLOUD_ROUTE = '/__dd/executeActionViaCloud';
 
+// Caps the warned set so requests cycling through Host values can't grow it without bound.
+export const MAX_WARNED_REJECTIONS = 32;
+export const REJECTION_WARNINGS_CAPPED_MESSAGE =
+    "Further rejections are only logged with the Datadog plugin's `logLevel: 'debug'`.";
+
 export const DEV_SERVER_ROUTES = [
     DEBUG_BUNDLE_ROUTE,
     EXECUTE_ACTION_ROUTE,
@@ -892,6 +897,26 @@ export function createDevServerMiddleware(
         [EXECUTE_ACTION_VIA_CLOUD_ROUTE]: runViaCloud,
     };
 
+    const warnedRejections = new Set<string>();
+    let hasLoggedWarningCap = false;
+    const logRejection = (rejectionMessage: string): void => {
+        if (warnedRejections.has(rejectionMessage)) {
+            log.debug(rejectionMessage);
+            return;
+        }
+        if (warnedRejections.size < MAX_WARNED_REJECTIONS) {
+            warnedRejections.add(rejectionMessage);
+            log.warn(rejectionMessage);
+            return;
+        }
+        if (!hasLoggedWarningCap) {
+            hasLoggedWarningCap = true;
+            log.warn(`${rejectionMessage} ${REJECTION_WARNINGS_CAPPED_MESSAGE}`);
+            return;
+        }
+        log.debug(rejectionMessage);
+    };
+
     return (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const { url } = req;
         if (req.method !== 'POST' || !isDevServerRoute(url)) {
@@ -901,7 +926,7 @@ export function createDevServerMiddleware(
 
         const rejection = checkDevServerRequest(req.headers, isHostAllowed);
         if (rejection) {
-            log.debug(`Rejected POST ${url}: ${rejection.message}`);
+            logRejection(`Rejected POST ${url}: ${rejection.message}`);
             sendError(res, rejection.statusCode, rejection.message);
             return;
         }

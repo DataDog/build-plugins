@@ -104,7 +104,7 @@ After each production build, the plugin [uploads symbols](#symbol-upload) to Dat
 The Live Debugger plugin automatically instruments all JavaScript functions in your application at build time. It adds lightweight checks that can be activated at runtime without rebuilding your code.
 
 Each instrumented function gets:
-- A unique, stable function ID (format: `<file-path>;<function-name>`)
+- A function ID that identifies the function and stays the same across builds until the function is renamed or moved
 - A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
