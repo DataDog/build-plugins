@@ -63,14 +63,18 @@ export const SET_EXECUTE_ACTION_SNIPPET = `\
                 actionFn = actionFn[part];
             }
             if (typeof actionFn !== 'function') throw new Error('Action is not a function: ' + actionId);
-            const connections = $.Environment?.connections;
+            const environment = $.Environment;
+            const connections = environment?.connections;
             if (
-                request && typeof request === 'object' &&
-                connections && typeof connections === 'object' &&
-                Object.hasOwn(connections, request.connectionId) &&
-                typeof connections[request.connectionId] === 'string'
+                request && typeof request === 'object' && typeof request.connectionId === 'string' &&
+                connections && typeof connections === 'object'
             ) {
-                request = { ...request, connectionId: connections[request.connectionId] };
+                const codeId = request.connectionId.toLowerCase();
+                if (Object.hasOwn(connections, codeId) && typeof connections[codeId] === 'string') {
+                    request = { ...request, connectionId: connections[codeId] };
+                } else if (typeof environment.name === 'string' && environment.name !== 'production') {
+                    throw new Error('Connection ' + request.connectionId + ' has no binding in environment "' + environment.name + '".');
+                }
             }
             return actionFn(request);
         });

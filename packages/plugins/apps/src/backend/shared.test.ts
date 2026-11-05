@@ -143,7 +143,7 @@ describe('SET_EXECUTE_ACTION_SNIPPET', () => {
 });
 
 describe('SET_EXECUTE_ACTION_SNIPPET connection bindings', () => {
-    const CODE_ID = '11111111-1111-4111-8111-111111111111';
+    const CODE_ID = 'abcdef11-1111-4111-8111-111111111111';
     const BOUND_ID = '22222222-2222-4222-8222-222222222222';
     const OTHER_ID = '33333333-3333-4333-8333-333333333333';
     const bindings = { name: 'staging', connections: { [CODE_ID]: BOUND_ID }, variables: {} };
@@ -156,8 +156,20 @@ describe('SET_EXECUTE_ACTION_SNIPPET connection bindings', () => {
             expected: { connectionId: BOUND_ID, inputs: { a: 1 } },
         },
         {
-            description: 'keep an unbound connectionId',
+            description: 'swap a bound connectionId written in uppercase',
             environment: bindings,
+            request: { connectionId: CODE_ID.toUpperCase() },
+            expected: { connectionId: BOUND_ID },
+        },
+        {
+            description: 'keep an unbound connectionId in production',
+            environment: { ...bindings, name: 'production' },
+            request: { connectionId: OTHER_ID },
+            expected: { connectionId: OTHER_ID },
+        },
+        {
+            description: 'keep an unbound connectionId when the environment has no name',
+            environment: { connections: { [CODE_ID]: BOUND_ID } },
             request: { connectionId: OTHER_ID },
             expected: { connectionId: OTHER_ID },
         },
@@ -175,13 +187,13 @@ describe('SET_EXECUTE_ACTION_SNIPPET connection bindings', () => {
         },
         {
             description: 'ignore inherited keys such as constructor',
-            environment: { connections: {} },
+            environment: { name: 'production', connections: {} },
             request: { connectionId: 'constructor' },
             expected: { connectionId: 'constructor' },
         },
         {
             description: 'ignore a non-string bound value',
-            environment: { connections: { [CODE_ID]: 42 } },
+            environment: { name: 'production', connections: { [CODE_ID]: 42 } },
             request: { connectionId: CODE_ID },
             expected: { connectionId: CODE_ID },
         },
@@ -202,6 +214,19 @@ describe('SET_EXECUTE_ACTION_SNIPPET connection bindings', () => {
 
         expect(actionFn).toHaveBeenCalledWith(expected);
         expect(request).toEqual(original);
+    });
+
+    test.each([
+        { description: 'an unbound connectionId', connectionId: OTHER_ID },
+        { description: 'an inherited key such as constructor', connectionId: 'constructor' },
+    ])('should refuse $description outside production', async ({ connectionId }) => {
+        const actionFn = jest.fn().mockResolvedValue('ok');
+        const callback = extractRegisteredCallback({ http: { request: actionFn } }, bindings);
+
+        await expect(callback('com.datadoghq.http.request', { connectionId })).rejects.toThrow(
+            `Connection ${connectionId} has no binding in environment "staging".`,
+        );
+        expect(actionFn).not.toHaveBeenCalled();
     });
 
     test('should pass a non-object request through unchanged', async () => {
