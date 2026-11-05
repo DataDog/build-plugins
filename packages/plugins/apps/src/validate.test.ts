@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
+
 import { validateOptions } from './validate';
 
 describe('Apps Plugin - validateOptions', () => {
@@ -19,6 +21,14 @@ describe('Apps Plugin - validateOptions', () => {
     });
 
     describe('identity', () => {
+        let restoreEnv: () => void;
+        beforeEach(() => {
+            restoreEnv = clearDatadogEnv();
+        });
+        afterEach(() => {
+            restoreEnv();
+        });
+
         // As read from datadog-app.config.json, which nothing type-checks.
         const nonStringIdentity: { identifier?: string; name?: string } = JSON.parse(
             '{"identifier": 123, "name": {"en": "My App"}}',
@@ -26,6 +36,7 @@ describe('Apps Plugin - validateOptions', () => {
         const cases: {
             description: string;
             apps: { identifier?: string; name?: string };
+            env?: Record<string, string>;
             expected: { identifier?: string; name?: string };
         }[] = [
             {
@@ -48,9 +59,34 @@ describe('Apps Plugin - validateOptions', () => {
                 apps: nonStringIdentity,
                 expected: { identifier: undefined, name: undefined },
             },
+            {
+                description: 'prefer the identity the environment sets over the options',
+                apps: { identifier: 'from-config', name: 'Config Name' },
+                env: { DATADOG_APPS_IDENTIFIER: ' from-env ', DD_APPS_NAME: 'Env Name' },
+                expected: { identifier: 'from-env', name: 'Env Name' },
+            },
+            {
+                description: 'read the identity from the environment alone',
+                apps: {},
+                env: { DD_APPS_IDENTIFIER: 'from-env', DATADOG_APPS_NAME: 'Env Name' },
+                expected: { identifier: 'from-env', name: 'Env Name' },
+            },
+            {
+                description: 'prefer DATADOG_ over DD_ variables',
+                apps: {},
+                env: { DATADOG_APPS_IDENTIFIER: 'datadog', DD_APPS_IDENTIFIER: 'dd' },
+                expected: { identifier: 'datadog', name: undefined },
+            },
+            {
+                description: 'fall back to the options when the environment value is blank',
+                apps: { identifier: 'from-config', name: 'Config Name' },
+                env: { DATADOG_APPS_IDENTIFIER: '  ', DATADOG_APPS_NAME: ' ' },
+                expected: { identifier: 'from-config', name: 'Config Name' },
+            },
         ];
 
-        test.each(cases)('Should $description', ({ apps, expected }) => {
+        test.each(cases)('Should $description', ({ apps, env, expected }) => {
+            Object.assign(process.env, env);
             const { identifier, name } = validateOptions({ apps });
             expect({ identifier, name }).toEqual(expected);
         });

@@ -172,13 +172,13 @@ Additional glob patterns (relative to the project root) to include in the packag
 
 > default: none
 
-The app's `id` from `datadog-app.config.json`. Queries the development server sends to Datadog carry it as the app ID when it is a lowercase UUID, which is the form new apps get, so Datadog can attribute development runs to the app.
+The app's `id` from `datadog-app.config.json`. Queries the development server sends to Datadog carry it as the app ID when it is a lowercase UUID, which is the form new apps get, so Datadog can attribute development runs to the app. `DATADOG_APPS_IDENTIFIER` (or `DD_APPS_IDENTIFIER`) overrides it.
 
 ### apps.name
 
 > default: none
 
-The app's display name, sent with the development server's queries alongside `apps.identifier`.
+The app's display name, sent with the development server's queries alongside `apps.identifier`. `DATADOG_APPS_NAME` (or `DD_APPS_NAME`) overrides it.
 
 ### apps.tags
 
