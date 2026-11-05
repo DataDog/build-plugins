@@ -148,6 +148,8 @@ Known gaps:
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.
 
+By default, sourcemaps (`*.map`) are packaged with the frontend assets. Set `apps.excludeSourcemaps: true` to leave them out of the archive — the error-tracking plugin uploads sourcemaps to Datadog directly, so serving them with the app is rarely needed, and their size counts against the upload API's decompressed limit. Sourcemaps excluded this way also stop being fetchable from the deployed app (browser devtools can no longer load them from the served assets), so keep the default if you rely on that during debugging.
+
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write the archive to a different directory.
 
 Use `datadog-apps build` to package locally, `datadog-apps upload` to create a draft, and `datadog-apps deploy` to upload and publish. Production packaging makes no Datadog API requests. Development-server authentication is described above.

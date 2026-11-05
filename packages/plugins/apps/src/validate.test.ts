@@ -15,7 +15,13 @@ describe('Apps Plugin - validateOptions', () => {
                 jitter: true,
                 exponentialBackoff: true,
             },
+            parameters: undefined,
+            excludeSourcemaps: false,
         });
+    });
+
+    test('passes through excludeSourcemaps', () => {
+        expect(validateOptions({ apps: { excludeSourcemaps: true } }).excludeSourcemaps).toBe(true);
     });
 
     describe('longPolling', () => {
