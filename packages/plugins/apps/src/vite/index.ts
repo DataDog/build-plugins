@@ -777,6 +777,7 @@ export const getVitePlugin = ({
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
             const isHostAllowed = createViteHostCheck(server.config);
+            const appIdentity = { identifier: options.identifier, name: options.name };
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 getBackendFunctions,
@@ -790,6 +791,7 @@ export const getVitePlugin = ({
                 server.config.mode,
                 isHostAllowed,
                 bundler.defaultServerConditions,
+                appIdentity,
                 executeLocally,
             );
             server.middlewares.use((req, res, next) => {

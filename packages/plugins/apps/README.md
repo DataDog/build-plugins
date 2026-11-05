@@ -22,6 +22,8 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
+    -   [apps.identifier](#appsidentifier)
+    -   [apps.name](#appsname)
     -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
     -   [apps.parameters](#appsparameters)
@@ -33,6 +35,8 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 apps?: {
     enable?: boolean;
     include?: string[];
+    identifier?: string;
+    name?: string;
     tags?: string[];
     longPolling?: {
         maxRetries?: number;
@@ -163,6 +167,18 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
+
+### apps.identifier
+
+> default: none
+
+The app's `id` from `datadog-app.config.json`. Queries the development server sends to Datadog carry it as the app ID when it is a lowercase UUID, which is the form new apps get, so Datadog can attribute development runs to the app.
+
+### apps.name
+
+> default: none
+
+The app's display name, sent with the development server's queries alongside `apps.identifier`.
 
 ### apps.tags
 

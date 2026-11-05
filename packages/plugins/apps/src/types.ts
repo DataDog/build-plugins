@@ -37,6 +37,10 @@ export type AppsParameters = {
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
+    /** The app's `id` from `datadog-app.config.json`, used to attribute dev server runs to the app. */
+    identifier?: string;
+    /** The app's display name, used to attribute dev server runs to the app. */
+    name?: string;
     /**
      * Tags to add to the app, e.g. `team:my-team`. The package also carries a `surface:<id>` tag
      * for each surface declared by an `@datadog/apps-frontend` input the app uses.

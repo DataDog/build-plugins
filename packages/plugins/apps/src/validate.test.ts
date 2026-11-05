@@ -18,6 +18,44 @@ describe('Apps Plugin - validateOptions', () => {
         });
     });
 
+    describe('identity', () => {
+        // As read from datadog-app.config.json, which nothing type-checks.
+        const nonStringIdentity: { identifier?: string; name?: string } = JSON.parse(
+            '{"identifier": 123, "name": {"en": "My App"}}',
+        );
+        const cases: {
+            description: string;
+            apps: { identifier?: string; name?: string };
+            expected: { identifier?: string; name?: string };
+        }[] = [
+            {
+                description: 'pass the app identifier and name through, trimmed',
+                apps: { identifier: ' 5cf28549-4f3f-432b-9039-bc841ed2b1e1 ', name: ' My App ' },
+                expected: { identifier: '5cf28549-4f3f-432b-9039-bc841ed2b1e1', name: 'My App' },
+            },
+            {
+                description: 'leave blank values unset',
+                apps: { identifier: '  ', name: '' },
+                expected: { identifier: undefined, name: undefined },
+            },
+            {
+                description: 'leave absent values unset',
+                apps: {},
+                expected: { identifier: undefined, name: undefined },
+            },
+            {
+                description: 'ignore identity values that are not strings',
+                apps: nonStringIdentity,
+                expected: { identifier: undefined, name: undefined },
+            },
+        ];
+
+        test.each(cases)('Should $description', ({ apps, expected }) => {
+            const { identifier, name } = validateOptions({ apps });
+            expect({ identifier, name }).toEqual(expected);
+        });
+    });
+
     describe('longPolling', () => {
         test('Should default maxRetries, jitter and exponentialBackoff', () => {
             const result = validateOptions({ apps: {} });
