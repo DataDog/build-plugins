@@ -143,7 +143,8 @@ export function checkDevServerRequest(
         return { statusCode: 403, message: MISSING_HOST_MESSAGE };
     }
     if (!isHostAllowed(host)) {
-        const quotedHostname = quoteForTerminal(getHostname(host));
+        const hostname = getHostname(host);
+        const quotedHostname = quoteForTerminal(hostname);
         return {
             statusCode: 403,
             message: `Blocked request. This host (${quotedHostname}) is not allowed. ${ALLOWED_HOSTS_HINT}`,

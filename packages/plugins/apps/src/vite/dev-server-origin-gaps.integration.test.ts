@@ -31,7 +31,8 @@ const writeApp = (root: string) => {
         ['inner.html', '<!doctype html><html><body>inner</body></html>'],
     ];
     for (const [file, content] of files) {
-        outputFileSync(path.join(root, file), content);
+        const filePath = path.join(root, file);
+        outputFileSync(filePath, content);
     }
 };
 

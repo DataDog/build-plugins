@@ -25,7 +25,8 @@ const SAME_ORIGIN_FRAME = { 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-
 const baseConfig: CspServerConfig = { server: {} };
 
 const createRequest = ({ method, url, headers = {} }: RequestShape) => {
-    const req = new http.IncomingMessage(new net.Socket());
+    const socket = new net.Socket();
+    const req = new http.IncomingMessage(socket);
     req.method = method;
     req.url = url;
     req.headers = headers;
