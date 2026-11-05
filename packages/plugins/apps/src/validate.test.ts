@@ -17,6 +17,8 @@ describe('Apps Plugin - validateOptions', () => {
                 jitter: true,
                 exponentialBackoff: true,
             },
+            parameters: undefined,
+            excludeSourcemaps: false,
         });
     });
 
@@ -90,6 +92,10 @@ describe('Apps Plugin - validateOptions', () => {
             const { identifier, name } = validateOptions({ apps });
             expect({ identifier, name }).toEqual(expected);
         });
+    });
+
+    test('passes through excludeSourcemaps', () => {
+        expect(validateOptions({ apps: { excludeSourcemaps: true } }).excludeSourcemaps).toBe(true);
     });
 
     describe('longPolling', () => {

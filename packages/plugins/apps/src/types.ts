@@ -42,6 +42,14 @@ export type AppsOptions = {
     /** The app's display name, used to attribute dev server runs to the app. */
     name?: string;
     /**
+     * Leave `*.map` files out of the deployable package. Sourcemaps needed for
+     * error tracking are uploaded to Datadog directly by the error-tracking
+     * plugin, so serving them with the app is rarely necessary; excluding them
+     * keeps packages small and reduces the decompressed size counted against
+     * the upload API's limit. Default: `false` (maps are packaged as today).
+     */
+    excludeSourcemaps?: boolean;
+    /**
      * Tags to add to the app, e.g. `team:my-team`. The package also carries a `surface:<id>` tag
      * for each surface declared by an `@datadog/apps-frontend` input the app uses.
      */
