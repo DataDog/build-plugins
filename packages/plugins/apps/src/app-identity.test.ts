@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFile, rm } from '@dd/core/helpers/fs';
 import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
@@ -21,7 +22,7 @@ describe('readAppIdentity', () => {
 
     afterEach(async () => {
         restoreEnv();
-        await fs.rm(projectRoot, { recursive: true, force: true });
+        await rm(projectRoot);
     });
 
     const cases: {
@@ -81,7 +82,7 @@ describe('readAppIdentity', () => {
     test.each(cases)('Should $description', async ({ config, env, expected }) => {
         if (config !== undefined) {
             const configPath = path.join(projectRoot, APP_CONFIG_FILE);
-            await fs.writeFile(configPath, config);
+            await outputFile(configPath, config);
         }
         Object.assign(process.env, env);
 
