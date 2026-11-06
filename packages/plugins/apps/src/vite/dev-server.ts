@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
+import type { AppIdentity } from '../app-identity';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
@@ -23,7 +24,7 @@ import type {
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import { DEV_VERIFY_MODE } from '../constants';
-import type { AppsOptionsWithDefaults, LongPollingOptions } from '../types';
+import type { LongPollingOptions } from '../types';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
 import { createBackendStaticChecksPlugin } from './backend-static-checks-plugin';
@@ -74,7 +75,6 @@ function isDevServerRoute(url: string | undefined): url is DevServerRoute {
 
 type AuthConfig = AuthOptionsWithDefaults;
 type LongPollingConfig = Required<LongPollingOptions>;
-type AppIdentity = Pick<AppsOptionsWithDefaults, 'identifier' | 'name'>;
 
 /** JSON:API `meta` on each `preview-async` query, telling Datadog which app and dev surface ran it. */
 export type QueryMeta = {

@@ -22,8 +22,6 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
-    -   [apps.identifier](#appsidentifier)
-    -   [apps.name](#appsname)
     -   [apps.tags](#appstags)
     -   [apps.longPolling](#appslongpolling)
     -   [apps.parameters](#appsparameters)
@@ -35,8 +33,6 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 apps?: {
     enable?: boolean;
     include?: string[];
-    identifier?: string;
-    name?: string;
     tags?: string[];
     longPolling?: {
         maxRetries?: number;
@@ -96,6 +92,8 @@ The dev server's backend function endpoints (`/__dd/executeAction`, `/__dd/execu
 The dev server warns once for each distinct refusal and logs repeats at `debug`. Past a per-server cap, it warns once more to say so, then logs new refusals at `debug` too.
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
+
+The queries the dev server sends to Datadog name the app with the `id` and `name` from the project's `datadog-app.config.json`, so Datadog can attribute development runs to it. `DATADOG_APPS_IDENTIFIER` and `DATADOG_APPS_NAME` (or `DD_*`), which `datadog-apps` sets for the builds it starts, override them. The `id` is sent as the app's ID only when it is a lowercase UUID, the form new apps get.
 
 ## Cloud execution
 
@@ -169,18 +167,6 @@ Enable or disable the plugin without removing its configuration.
 > default: `[]`
 
 Additional glob patterns (relative to the project root) to include in the package. The bundler output directory is always included.
-
-### apps.identifier
-
-> default: none
-
-The app's `id` from `datadog-app.config.json`. Queries the development server sends to Datadog carry it as the app ID when it is a lowercase UUID, which is the form new apps get, so Datadog can attribute development runs to the app. `DATADOG_APPS_IDENTIFIER` (or `DD_APPS_IDENTIFIER`) overrides it.
-
-### apps.name
-
-> default: none
-
-The app's display name, sent with the development server's queries alongside `apps.identifier`. `DATADOG_APPS_NAME` (or `DD_APPS_NAME`) overrides it.
 
 ### apps.tags
 

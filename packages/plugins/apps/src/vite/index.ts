@@ -10,6 +10,7 @@ import type { IncomingMessage } from 'http';
 import path from 'path';
 import type { build } from 'vite';
 
+import { readAppIdentity } from '../app-identity';
 import {
     AUTH_GUIDANCE,
     getAuthenticatedRequest,
@@ -777,7 +778,7 @@ export const getVitePlugin = ({
                 return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
             const isHostAllowed = createViteHostCheck(server.config);
-            const appIdentity = { identifier: options.identifier, name: options.name };
+            const appIdentity = readAppIdentity(context.buildRoot, log);
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 getBackendFunctions,

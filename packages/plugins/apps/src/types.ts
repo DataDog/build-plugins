@@ -37,10 +37,6 @@ export type AppsParameters = {
 export type AppsOptions = {
     enable?: boolean;
     include?: string[];
-    /** The app's `id` from `datadog-app.config.json`, used to attribute dev server runs to the app. */
-    identifier?: string;
-    /** The app's display name, used to attribute dev server runs to the app. */
-    name?: string;
     /**
      * Leave `*.map` files out of the deployable package. Sourcemaps needed for
      * error tracking are uploaded to Datadog directly by the error-tracking

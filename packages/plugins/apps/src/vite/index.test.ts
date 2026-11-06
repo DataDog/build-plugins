@@ -46,6 +46,7 @@ import {
     type ViteDevServer,
 } from 'vite';
 
+import * as appIdentity from '../app-identity';
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -1650,24 +1651,22 @@ describe('Backend Functions - getVitePlugin', () => {
         expect(passedConditions).toBe(defaultServerConditions);
     });
 
-    test('Should hand the middleware the app identity from the apps options', () => {
+    test("Should hand the middleware the app identity read from the project's app config", () => {
         const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
-        const options = {
-            ...defaultOptions.options,
-            identifier: '5cf28549-4f3f-432b-9039-bc841ed2b1e1',
-            name: 'My App',
-        };
-        const plugin = getVitePlugin({ ...defaultOptions, options });
+        const identity = { identifier: '5cf28549-4f3f-432b-9039-bc841ed2b1e1', name: 'My App' };
+        const readIdentitySpy = jest
+            .spyOn(appIdentity, 'readAppIdentity')
+            .mockReturnValue(identity);
+        const plugin = getVitePlugin(defaultOptions);
         const configureServer = getConfigureServer(plugin);
         const config = fakeServerConfig('development');
 
         configureServer({ middlewares: { use: jest.fn() }, ssrLoadModule: jest.fn(), config });
 
+        const { buildRoot } = defaultOptions.context;
+        expect(readIdentitySpy).toHaveBeenCalledWith(buildRoot, expect.anything());
         const [middlewareArgs] = middlewareSpy.mock.calls;
-        expect(middlewareArgs[12]).toMatchObject({
-            identifier: '5cf28549-4f3f-432b-9039-bc841ed2b1e1',
-            name: 'My App',
-        });
+        expect(middlewareArgs[12]).toBe(identity);
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.

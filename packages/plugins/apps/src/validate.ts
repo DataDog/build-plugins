@@ -2,7 +2,6 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { getDDEnvValue } from '@dd/core/helpers/env';
 import type { Options } from '@dd/core/types';
 
 import { CONFIG_KEY } from './constants';
@@ -128,21 +127,11 @@ export const resolveLongPolling = (
     };
 };
 
-// Identity usually comes from datadog-app.config.json, which nothing type-checks, so a value that
-// isn't a string is ignored rather than failing the build.
-const trimString = (value: unknown): string | undefined =>
-    typeof value === 'string' ? value.trim() || undefined : undefined;
-
 export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
     const resolvedOptions = (options[CONFIG_KEY] || {}) as AppsOptions;
-    // The CLI passes its resolved identity to the builds it starts through the environment.
-    const envIdentifier = getDDEnvValue('APPS_IDENTIFIER');
-    const envName = getDDEnvValue('APPS_NAME');
 
     return {
         include: resolvedOptions.include || [],
-        identifier: trimString(envIdentifier) ?? trimString(resolvedOptions.identifier),
-        name: trimString(envName) ?? trimString(resolvedOptions.name),
         // Passed through as configured; the authored tag source cleans it, best effort.
         tags: resolvedOptions.tags,
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
