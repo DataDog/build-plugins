@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { InstrumentationOptions } from '@datadog/js-instrumentation-wasm';
-import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
+import { LIVE_DEBUGGER_CATCH_FUNCTION, LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 
 export interface TransformOutput {
     code: string;
@@ -25,7 +25,8 @@ export function buildTransformOptions(
             // them into the module's dictionary would also make every
             // instrumented function read it, which throws when the function
             // is called before its module is evaluated (circular imports).
-            excludeCallArguments: [LIVE_DEBUGGER_PROBES_FUNCTION],
+            // Exception Replay's catch hook passes the function ID too.
+            excludeCallArguments: [LIVE_DEBUGGER_PROBES_FUNCTION, LIVE_DEBUGGER_CATCH_FUNCTION],
         },
     };
     if (['esbuild', 'webpack', 'rspack'].includes(bundlerName)) {
