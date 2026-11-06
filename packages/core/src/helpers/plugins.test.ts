@@ -88,6 +88,12 @@ describe('plugins', () => {
         const pluginOptions: Options = {
             ...defaultPluginOptions,
         };
+        // Everything the Live Debugger symbol upload needs.
+        const liveDebuggerOptions: Options = {
+            ...pluginOptions,
+            metadata: { service: 'service', version: '1.0.0' },
+            liveDebugger: {},
+        };
         const sourcemapsOptions = getSourcemapsConfiguration();
         test.each([
             {
@@ -103,6 +109,36 @@ describe('plugins', () => {
             {
                 description: 'false if disabled globaly',
                 input: { ...pluginOptions, enableGit: false },
+                result: false,
+            },
+            {
+                description: 'true with Live Debugger, an API key, a service and a version',
+                input: liveDebuggerOptions,
+                result: true,
+            },
+            {
+                description: 'false with Live Debugger and no API key',
+                input: { ...liveDebuggerOptions, auth: { site: 'datadoghq.com' } },
+                result: false,
+            },
+            {
+                description: 'false with Live Debugger and no service',
+                input: { ...liveDebuggerOptions, metadata: { version: '1.0.0' } },
+                result: false,
+            },
+            {
+                description: 'false with Live Debugger and no version',
+                input: { ...liveDebuggerOptions, metadata: { service: 'service' } },
+                result: false,
+            },
+            {
+                description: 'false with Live Debugger disabled',
+                input: { ...liveDebuggerOptions, liveDebugger: { enable: false } },
+                result: false,
+            },
+            {
+                description: 'false if disabled globaly with Live Debugger',
+                input: { ...liveDebuggerOptions, enableGit: false },
                 result: false,
             },
             {

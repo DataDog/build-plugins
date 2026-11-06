@@ -120,6 +120,39 @@ describe('sourceCodeContext validation', () => {
         );
     });
 
+    test('should fall back to metadata.service when sourceCodeContext.service is unset', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { service: 'checkout', version: '1.2.3' },
+            rum: { sourceCodeContext: {} },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ service: 'checkout', version: '1.2.3' });
+    });
+
+    test('should fall back to metadata.service alongside a debug ID', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { service: 'checkout', version: '1.2.3' },
+            rum: { sourceCodeContext: { debugId: true } as const },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ debugId: true, service: 'checkout', version: '1.2.3' });
+    });
+
+    test('should prefer an explicit sourceCodeContext.service over metadata.service', () => {
+        const pluginOptions = {
+            ...defaultPluginOptions,
+            metadata: { service: 'checkout' },
+            rum: { sourceCodeContext: { service: 'cart' } },
+        };
+        const result = validateSourceCodeContextOptions(pluginOptions);
+        expect(result.errors).toHaveLength(0);
+        expect(result.config).toEqual({ service: 'cart', version: undefined });
+    });
+
     test('should fall back to metadata.version when sourceCodeContext.version is unset', () => {
         const pluginOptions = {
             ...defaultPluginOptions,
