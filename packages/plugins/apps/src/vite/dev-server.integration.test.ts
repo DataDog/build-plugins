@@ -254,6 +254,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -301,6 +302,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -342,6 +344,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -455,6 +458,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -507,6 +511,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -550,6 +555,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             createViteHostCheck(server.config),
             defaultServerConditions,
+            {},
         );
 
         const functionName = encodeQueryName(actionCatalogCallFunc);
@@ -604,6 +610,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             'development',
             isHostAllowed,
             defaultServerConditions,
+            {},
             makeChildExecutor(server),
         );
 
@@ -686,6 +693,7 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
             DEV_VERIFY_MODE,
             isHostAllowed,
             defaultServerConditions,
+            {},
         );
         const functionName = encodeQueryName(func);
         const req = createMockRequest(EXECUTE_ACTION_ROUTE, { functionName, args: ['QA'] });

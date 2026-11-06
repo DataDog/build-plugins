@@ -93,6 +93,8 @@ The dev server warns once for each distinct refusal and logs repeats at `debug`.
 
 To call one by hand, send that content type, for example `curl -X POST -H 'Content-Type: application/json' -d '{"functionName":"..."}' http://localhost:5173/__dd/debugBundle`.
 
+The queries the dev server sends to Datadog name the app with the `id` and `name` from the project's `datadog-app.config.json`, so Datadog can attribute development runs to it. `DATADOG_APPS_IDENTIFIER` and `DATADOG_APPS_NAME` (or `DD_*`), which `datadog-apps` sets for the builds it starts, override them. The `id` is sent as the app's ID only when it is a lowercase UUID, the form new apps get.
+
 ## Cloud execution
 
 Cloud execution (`dev:verify`, `/__dd/executeActionViaCloud`) bundles a backend function with the production settings a `vite build` upload gets, though the dev server runs under `NODE_ENV=development`, so it sends the bytes an upload would; `/__dd/debugBundle` returns that bundle, minified with names kept. Vite's stub for an optional peer dependency the app hasn't installed still follows the dev server's `NODE_ENV`.
