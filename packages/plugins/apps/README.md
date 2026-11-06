@@ -131,7 +131,7 @@ The dev server sends its HTML pages and worker scripts with the Datadog Apps Con
 
 Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
 
-Some requests the policy allows still fail once the app is uploaded: an uploaded app can't frame its own pages, and its origin answers only GET requests for its built files. So the dev server warns in the terminal, once per rule and path, about a page framed by its own origin and about a non-GET request to its own origin outside the plugin's own `/__dd/` routes, and once at startup when [`server.proxy`](https://vite.dev/config/server-options#server-proxy) is set.
+An uploaded app can't frame its own pages, and its origin answers only GET requests. The dev server warns when a page is framed by its own origin or sends a non-GET request to it outside `/__dd/`, and at startup when [`server.proxy`](https://vite.dev/config/server-options#server-proxy) is set.
 
 Known gaps:
 
