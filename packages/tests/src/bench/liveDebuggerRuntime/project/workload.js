@@ -32,6 +32,30 @@ function hotLoopWorkload(iteration) {
     return acc;
 }
 
+// Preallocated so the workload measures the instrumented catch and rethrow,
+// not Error construction: capturing a stack trace on every call would
+// multiply the baseline and add allocation noise without changing the
+// overhead being measured.
+const THROWN_ERROR = new Error('live-debugger-bench');
+
+// Iterations are never negative, so every call throws.
+function throwingKernel(iteration) {
+    if (iteration >= 0) {
+        throw THROWN_ERROR;
+    }
+
+    return iteration;
+}
+
+// @dd-no-instrumentation
+function throwWorkload(iteration) {
+    try {
+        return throwingKernel(iteration);
+    } catch (error) {
+        return error === THROWN_ERROR ? 1 : 0;
+    }
+}
+
 export const workloads = [
     {
         id: 'tiny',
@@ -48,5 +72,13 @@ export const workloads = [
         batchSize: 2_000,
         samples: WORKLOAD_SAMPLES,
         fn: hotLoopWorkload,
+    },
+    {
+        id: 'throw',
+        label: 'Throw',
+        instrumentedCallsPerInvocation: 1,
+        batchSize: 2_000,
+        samples: WORKLOAD_SAMPLES,
+        fn: throwWorkload,
     },
 ];
