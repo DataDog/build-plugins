@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { outputFile, rm } from '@dd/core/helpers/fs';
+import { clearDatadogEnv } from '@dd/tests/_jest/helpers/datadogEnv';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import fs from 'fs/promises';
 import os from 'os';
@@ -11,19 +12,23 @@ import path from 'path';
 import { APP_CONFIG_FILE, readAppIdentity } from './app-identity';
 
 describe('readAppIdentity', () => {
+    let restoreEnv: () => void;
     let projectRoot: string;
 
     beforeEach(async () => {
+        restoreEnv = clearDatadogEnv();
         projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'dd-apps-identity-'));
     });
 
     afterEach(async () => {
+        restoreEnv();
         await rm(projectRoot);
     });
 
     const cases: {
         description: string;
         config?: string;
+        env?: Record<string, string>;
         expected: { identifier?: string; name?: string };
     }[] = [
         {
@@ -50,13 +55,36 @@ describe('readAppIdentity', () => {
             config: '{"id": 123, "name": "  "}',
             expected: { identifier: undefined, name: undefined },
         },
+        {
+            description: 'prefer the identity the environment sets over the app config',
+            config: '{"id": "from-config", "name": "Config Name"}',
+            env: { DATADOG_APPS_IDENTIFIER: ' from-env ', DD_APPS_NAME: 'Env Name' },
+            expected: { identifier: 'from-env', name: 'Env Name' },
+        },
+        {
+            description: 'read the identity from the environment alone',
+            env: { DD_APPS_IDENTIFIER: 'from-env', DATADOG_APPS_NAME: 'Env Name' },
+            expected: { identifier: 'from-env', name: 'Env Name' },
+        },
+        {
+            description: 'prefer DATADOG_ over DD_ variables',
+            env: { DATADOG_APPS_IDENTIFIER: 'datadog', DD_APPS_IDENTIFIER: 'dd' },
+            expected: { identifier: 'datadog', name: undefined },
+        },
+        {
+            description: 'fall back to the app config when the environment value is blank',
+            config: '{"id": "from-config", "name": "Config Name"}',
+            env: { DATADOG_APPS_IDENTIFIER: '  ', DATADOG_APPS_NAME: ' ' },
+            expected: { identifier: 'from-config', name: 'Config Name' },
+        },
     ];
 
-    test.each(cases)('Should $description', async ({ config, expected }) => {
+    test.each(cases)('Should $description', async ({ config, env, expected }) => {
         if (config !== undefined) {
             const configPath = path.join(projectRoot, APP_CONFIG_FILE);
             await outputFile(configPath, config);
         }
+        Object.assign(process.env, env);
 
         const identity = readAppIdentity(projectRoot, getMockLogger());
 

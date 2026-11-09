@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getDDEnvValue } from '@dd/core/helpers/env';
 import { existsSync, readJsonSync } from '@dd/core/helpers/fs';
 import type { Logger } from '@dd/core/types';
 import path from 'path';
@@ -34,10 +35,13 @@ const readAppConfig = (projectRoot: string, log: Logger): Record<string, unknown
     return {};
 };
 
+// The env vars win because the CLI sets them, from `--identifier` too, for the builds it starts.
 export const readAppIdentity = (projectRoot: string, log: Logger): AppIdentity => {
     const config = readAppConfig(projectRoot, log);
+    const envIdentifier = getDDEnvValue('APPS_IDENTIFIER');
+    const envName = getDDEnvValue('APPS_NAME');
     return {
-        identifier: trimString(config.id),
-        name: trimString(config.name),
+        identifier: trimString(envIdentifier) ?? trimString(config.id),
+        name: trimString(envName) ?? trimString(config.name),
     };
 };
