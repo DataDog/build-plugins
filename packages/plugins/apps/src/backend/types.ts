@@ -13,5 +13,16 @@ export interface BackendFunction {
     allowedConnectionIds: string[];
 }
 
+export interface ConnectionLabelCallSite {
+    label: string;
+    /** The call's literal `connectionId`, used when the app has no connection environment config. */
+    fallbackConnectionId?: string;
+}
+
+/** A backend function after its production build, which also extracts its connection labels. */
+export interface BuiltBackendFunction extends BackendFunction {
+    connectionLabels: ConnectionLabelCallSite[];
+}
+
 /** Shape of a backend function's result, shared by the remote (dev-server.ts) and local (local-execution-process.ts) paths — mirrors the app-builder query response's `{ data: <value> }` wrapper. */
 export type BackendOutputs = { data: unknown };

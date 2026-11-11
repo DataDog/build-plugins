@@ -3,6 +3,11 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { getVitePlugin } from '@dd/apps-plugin/vite/index';
+import { LABEL_FALLBACK_CONNECTION_ID } from '@dd/tests/_jest/fixtures/apps_backend_project/connectionIds.ts';
+import {
+    type FixtureConnectionLabels,
+    importFixtureConnectionLabels,
+} from '@dd/tests/_jest/helpers/connectionLabels';
 import { getContextMock, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { build as esbuild } from 'esbuild';
 import fs from 'fs';
@@ -21,9 +26,11 @@ import {
     type ViteDevServer,
 } from 'vite';
 
-import type { BackendFunction } from '../backend/types';
+import { CONNECTION_LABELS_UPGRADE_MESSAGE } from '../backend/connection-labels';
+import type { BackendFunction, ConnectionLabelCallSite } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 
+import * as connectionLabelsHelper from './connection-labels-helper';
 import {
     NATIVE_ADDON_BLOCKED_MESSAGE,
     OUTSIDE_TEMP_WRITE_BLOCKED_MESSAGE,
@@ -214,7 +221,10 @@ describe('Local execution in a child process', () => {
         args,
         executeAction: async () => ({ unused: true }),
         getRuntimeContext: async () => previewRuntimeContext,
-        getAllowedConnectionIds: async () => func.allowedConnectionIds,
+        getConnections: async () => ({
+            connectionIds: func.allowedConnectionIds,
+            connectionLabels: [],
+        }),
         timeoutMs: 10_000,
         longPolling: DEFAULT_LONG_POLLING_CONFIG,
         ...overrides,
@@ -639,6 +649,7 @@ describe('Local execution in a child process', () => {
                     args: [CALL_TIMEOUT_MS],
                     runtimeContext: previewRuntimeContext,
                     actionCatalogInstalled: false,
+                    connectionLabelsInstalled: false,
                     appsBackendInstalled: false,
                     flushTimeoutMs: 1000,
                 };
@@ -1785,6 +1796,257 @@ export class ModuleRunner {
             },
             CALL_TIMEOUT_MS,
         );
+
+        let fixtureLabels: FixtureConnectionLabels;
+        const resolvedContext: Record<string, unknown> = { ...previewRuntimeContext };
+        const noConfigContext: Record<string, unknown> = { ...previewRuntimeContext };
+        const unmappedContext: Record<string, unknown> = { ...previewRuntimeContext };
+        // The tables below hold these objects at collection time, before the fixture's keys load.
+        beforeAll(async () => {
+            fixtureLabels = await importFixtureConnectionLabels();
+            const { CONNECTIONS_CONTEXT_KEY, HAS_CONNECTION_ENVS_CONTEXT_KEY } = fixtureLabels;
+            Object.assign(resolvedContext, {
+                [HAS_CONNECTION_ENVS_CONTEXT_KEY]: true,
+                [CONNECTIONS_CONTEXT_KEY]: { slack: 'conn-env' },
+            });
+            Object.assign(noConfigContext, {
+                [HAS_CONNECTION_ENVS_CONTEXT_KEY]: false,
+                [CONNECTIONS_CONTEXT_KEY]: {},
+            });
+            Object.assign(unmappedContext, {
+                [HAS_CONNECTION_ENVS_CONTEXT_KEY]: true,
+                [CONNECTIONS_CONTEXT_KEY]: {},
+            });
+        });
+        const withSlackLabel = (func: BackendFunction): Partial<LocalExecutionRequest> => ({
+            getConnections: async () => ({
+                connectionIds: func.allowedConnectionIds,
+                connectionLabels: [{ label: 'slack' }],
+            }),
+        });
+
+        test.each([
+            {
+                description: 'run a mapped label on the connection the server resolved',
+                name: 'postMessageByLabel',
+                runtimeContext: resolvedContext,
+                expectedConnection: 'conn-env',
+            },
+            {
+                description: 'run a label on its fallback when the app has no config',
+                name: 'postMessageByLabel',
+                runtimeContext: noConfigContext,
+                expectedConnection: LABEL_FALLBACK_CONNECTION_ID,
+            },
+            {
+                description: 'run a label on its fallback when the server sent neither key',
+                name: 'postMessageByLabel',
+                runtimeContext: previewRuntimeContext,
+                expectedConnection: LABEL_FALLBACK_CONNECTION_ID,
+            },
+            {
+                description: 'run a label-only call on the connection the server resolved',
+                name: 'postMessageByLabelOnly',
+                runtimeContext: resolvedContext,
+                expectedConnection: 'conn-env',
+            },
+            {
+                description:
+                    'keep the resolved connection after the function replaces $.HasConnectionEnvs',
+                name: 'postMessageByLabelAfterReplacingEnv',
+                runtimeContext: resolvedContext,
+                expectedConnection: 'conn-env',
+            },
+        ])(
+            'Should $description',
+            async ({ name, runtimeContext, expectedConnection }) => {
+                const { calls, executeAction } = record();
+                const execute = makeExecutor();
+                const func = fixtureFunction('actionCatalogCall', name, [
+                    LABEL_FALLBACK_CONNECTION_ID,
+                ]);
+                const request = makeRequest(func, [], {
+                    ...withSlackLabel(func),
+                    executeAction,
+                    getRuntimeContext: async () => runtimeContext,
+                });
+
+                await expect(execute(request)).resolves.toEqual({
+                    data: { echoedConnection: expectedConnection },
+                });
+                expect(calls).toEqual([
+                    {
+                        fqn: 'com.datadoghq.slack.chat.postMessage',
+                        inputs: { text: 'hi' },
+                        connectionId: expectedConnection,
+                    },
+                ]);
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        const failClosedCases: {
+            description: string;
+            name: string;
+            runtimeContext: Record<string, unknown>;
+            labels: ConnectionLabelCallSite[];
+            message: string;
+        }[] = [
+            {
+                description: 'an unmapped label when the app has a config',
+                name: 'postMessageByLabel',
+                runtimeContext: unmappedContext,
+                labels: [{ label: 'slack' }],
+                message: 'Connection label "slack" is not mapped in this connection environment',
+            },
+            {
+                description: 'a label-only call when the app has no config',
+                name: 'postMessageByLabelOnly',
+                runtimeContext: noConfigContext,
+                labels: [{ label: 'slack' }],
+                message:
+                    'Connection label "slack" has no fallback connectionId and the app has no connection environment config',
+            },
+            {
+                description: "a resolved connection for a label the function doesn't list",
+                name: 'postMessageByLabelOnly',
+                runtimeContext: resolvedContext,
+                labels: [],
+                message:
+                    'used connection "conn-env", which is not in this function\'s allowed connections',
+            },
+        ];
+
+        test.each(failClosedCases)(
+            'Should fail closed on $description before reaching the dev server',
+            async ({ name, runtimeContext, labels, message }) => {
+                const { calls, executeAction } = record();
+                const execute = makeExecutor();
+                const func = fixtureFunction('actionCatalogCall', name, [
+                    LABEL_FALLBACK_CONNECTION_ID,
+                ]);
+                const request = makeRequest(func, [], {
+                    executeAction,
+                    getRuntimeContext: async () => runtimeContext,
+                    getConnections: async () => ({
+                        connectionIds: func.allowedConnectionIds,
+                        connectionLabels: labels,
+                    }),
+                });
+
+                await expect(execute(request)).rejects.toThrow(message);
+                expect(calls).toEqual([]);
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        // `postMessage` uses `conn-1` directly, so only the widening can allow it.
+        const makeWideningRequest = (
+            hasConnectionEnvs: boolean,
+            labels: ConnectionLabelCallSite[],
+        ): LocalExecutionRequest => {
+            const func = fixtureFunction('actionCatalogCall', 'postMessage', []);
+            return makeRequest(func, [], {
+                executeAction: record().executeAction,
+                getRuntimeContext: async () => ({
+                    ...previewRuntimeContext,
+                    [fixtureLabels.HAS_CONNECTION_ENVS_CONTEXT_KEY]: hasConnectionEnvs,
+                    [fixtureLabels.CONNECTIONS_CONTEXT_KEY]: { slack: 'conn-1' },
+                }),
+                getConnections: async () => ({ connectionIds: [], connectionLabels: labels }),
+            });
+        };
+
+        test(
+            'Should allow a connection resolved for one of its labels',
+            async () => {
+                const request = makeWideningRequest(true, [{ label: 'slack' }]);
+                await expect(makeExecutor()(request)).resolves.toEqual({
+                    data: { echoedConnection: 'conn-1' },
+                });
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        test.each([
+            {
+                description: 'resolved connections when the app has no config',
+                hasConnectionEnvs: false,
+                labels: [{ label: 'slack' }],
+            },
+            {
+                description: "a connection resolved for a label it doesn't list",
+                hasConnectionEnvs: true,
+                labels: [{ label: 'jira' }],
+            },
+        ])(
+            'Should not allow $description',
+            async ({ hasConnectionEnvs, labels }) => {
+                const request = makeWideningRequest(hasConnectionEnvs, labels);
+                await expect(makeExecutor()(request)).rejects.toThrow(
+                    `used connection "conn-1", which is not in this function's allowed connections: []`,
+                );
+            },
+            CALL_TIMEOUT_MS,
+        );
+
+        describe('on an action-catalog without the connection label helper', () => {
+            beforeEach(() => {
+                jest.spyOn(connectionLabelsHelper, 'loadConnectionLabelsHelper').mockResolvedValue({
+                    helper: undefined,
+                    labelRule: { unavailableReason: CONNECTION_LABELS_UPGRADE_MESSAGE },
+                });
+            });
+
+            afterEach(() => {
+                jest.restoreAllMocks();
+            });
+
+            test(
+                'Should run a call without a label unchanged',
+                async () => {
+                    const { calls, executeAction } = record();
+                    const execute = makeExecutor();
+                    const func = fixtureFunction('actionCatalogCall', 'postMessage', ['conn-1']);
+                    await expect(
+                        execute(makeRequest(func, [], { executeAction })),
+                    ).resolves.toEqual({ data: { echoedConnection: 'conn-1' } });
+                    expect(calls).toEqual([
+                        {
+                            fqn: 'com.datadoghq.slack.chat.postMessage',
+                            inputs: { text: 'hi' },
+                            connectionId: 'conn-1',
+                        },
+                    ]);
+                },
+                CALL_TIMEOUT_MS,
+            );
+
+            test.each([
+                { description: 'a label call', name: 'postMessageByLabel' },
+                { description: 'a label-only call', name: 'postMessageByLabelOnly' },
+            ])(
+                'Should fail $description, asking to upgrade',
+                async ({ name }) => {
+                    const { calls, executeAction } = record();
+                    const execute = makeExecutor();
+                    const func = fixtureFunction('actionCatalogCall', name, [
+                        LABEL_FALLBACK_CONNECTION_ID,
+                    ]);
+                    const request = makeRequest(func, [], {
+                        ...withSlackLabel(func),
+                        executeAction,
+                        getRuntimeContext: async () => resolvedContext,
+                    });
+
+                    await expect(execute(request)).rejects.toThrow(
+                        CONNECTION_LABELS_UPGRADE_MESSAGE,
+                    );
+                    expect(calls).toEqual([]);
+                },
+                CALL_TIMEOUT_MS,
+            );
+        });
 
         test.each([
             {

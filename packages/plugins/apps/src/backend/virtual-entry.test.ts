@@ -4,6 +4,7 @@
 
 import * as shared from '@dd/apps-plugin/backend/shared';
 import {
+    BACKEND_FUNCTION_ALIAS,
     generateDevVirtualEntryContent,
     generateVirtualEntryContent,
 } from '@dd/apps-plugin/backend/virtual-entry';
@@ -26,8 +27,11 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/backend/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
-            expect(result).toContain('import { myHandler } from "/src/backend/handler.ts"');
+            expect(result).toContain(
+                `import { myHandler as ${BACKEND_FUNCTION_ALIAS} } from "/src/backend/handler.ts"`,
+            );
         });
 
         test('Should export an async main($) function', () => {
@@ -35,6 +39,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain('export async function main($)');
         });
@@ -44,6 +49,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain('globalThis.$ = $');
         });
@@ -53,6 +59,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain('const args = $.backendFunctionArgs ?? [];');
             // The previous design textually substituted args into a single-quoted
@@ -69,8 +76,9 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
-            expect(result).toContain('await myHandler(...args)');
+            expect(result).toContain(`await ${BACKEND_FUNCTION_ALIAS}(...args)`);
         });
 
         test('Should include the setExecuteActionImplementation bridge snippet', () => {
@@ -78,6 +86,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain('typeof setExecuteActionImplementation');
         });
@@ -87,8 +96,9 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
-            expect(result).not.toContain('@datadog/action-catalog');
+            expect(result).not.toContain("from '@datadog/action-catalog");
         });
 
         test('Should not include Datadog Apps backend context setup', () => {
@@ -96,6 +106,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).not.toContain('@datadog/apps-backend/runtime');
             expect(result).not.toContain('setBackend(buildRuntimeFromJsFunctionWithActions($))');
@@ -113,6 +124,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain(
                 "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution'",
@@ -124,9 +136,35 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             expect(result).toContain('typeof setExecuteActionImplementation');
         });
+
+        test.each([
+            { description: 'import the connection label helper', installed: true },
+            { description: 'not import the helper an older version lacks', installed: false },
+        ])('Should $description', ({ installed }) => {
+            const result = generateVirtualEntryContent(
+                'myHandler',
+                '/src/handler.ts',
+                PROJECT_ROOT,
+                installed,
+            );
+            expect(result.includes(shared.CONNECTION_LABELS_IMPORT)).toBe(installed);
+        });
+    });
+
+    test('Should not import the connection label helper without action-catalog', () => {
+        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(false);
+        jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(false);
+        const result = generateVirtualEntryContent(
+            'myHandler',
+            '/src/handler.ts',
+            PROJECT_ROOT,
+            true,
+        );
+        expect(result).not.toContain('@datadog/action-catalog/connection-labels');
     });
 
     describe('with @datadog/apps-backend', () => {
@@ -140,6 +178,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
 
             expect(result).toContain(
@@ -149,10 +188,39 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
             expect(
                 result.indexOf('setBackend(buildRuntimeFromJsFunctionWithActions($))'),
             ).toBeGreaterThan(result.indexOf('globalThis.$ = $'));
-            expect(result.indexOf('await myHandler(...args)')).toBeGreaterThan(
+            expect(result.indexOf(`await ${BACKEND_FUNCTION_ALIAS}(...args)`)).toBeGreaterThan(
                 result.indexOf('setBackend(buildRuntimeFromJsFunctionWithActions($))'),
             );
         });
+    });
+
+    test.each([
+        'readResolvedConnections',
+        'swapConnectionLabel',
+        'setExecuteActionImplementation',
+        'setBackend',
+        'buildRuntimeFromJsFunctionWithActions',
+    ])('Should not redeclare a generated import when the function is named %s', (functionName) => {
+        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+        jest.spyOn(shared, 'isDatadogAppsBackendInstalled').mockReturnValue(true);
+        const result = generateVirtualEntryContent(
+            functionName,
+            '/src/handler.ts',
+            PROJECT_ROOT,
+            true,
+        );
+
+        const importLines = result.split('\n').filter((line) => line.startsWith('import {'));
+        const bindings = importLines.flatMap((line) => {
+            const specifiers = line.slice(line.indexOf('{') + 1, line.indexOf('}')).split(',');
+            return specifiers.map((specifier) =>
+                specifier
+                    .trim()
+                    .split(/\s+as\s+/)
+                    .pop(),
+            );
+        });
+        expect(new Set(bindings).size).toBe(bindings.length);
     });
 
     test('Should escape entry paths with special characters', () => {
@@ -162,6 +230,7 @@ describe('Backend Functions - generateVirtualEntryContent', () => {
             'handler',
             '/path/with "quotes"/handler.ts',
             PROJECT_ROOT,
+            false,
         );
         expect(result).toContain('from "/path/with \\"quotes\\"/handler.ts"');
     });
@@ -177,13 +246,19 @@ describe('Backend Functions - generateDevVirtualEntryContent', () => {
     test('Should produce identical output to generateVirtualEntryContent', () => {
         // Dev and prod share the same runtime contract ($.backendFunctionArgs),
         // so the dev codegen must produce the same source as production.
-        const dev = generateDevVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
-        const prod = generateVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
+        jest.spyOn(shared, 'isActionCatalogInstalled').mockReturnValue(true);
+        const dev = generateDevVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT, true);
+        const prod = generateVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT, true);
         expect(dev).toBe(prod);
     });
 
     test('Should read args from $.backendFunctionArgs', () => {
-        const result = generateDevVirtualEntryContent('greet', '/src/greet.ts', PROJECT_ROOT);
+        const result = generateDevVirtualEntryContent(
+            'greet',
+            '/src/greet.ts',
+            PROJECT_ROOT,
+            false,
+        );
         expect(result).toContain('const args = $.backendFunctionArgs ?? [];');
         // eslint-disable-next-line no-template-curly-in-string
         expect(result).not.toContain('${backendFunctionArgs}');
@@ -216,7 +291,7 @@ describe('Backend Functions - args round-trip via $.backendFunctionArgs', () => 
             .filter((line) => !line.trimStart().startsWith('import '))
             .join('\n')
             // Replace the call site with a $-bound handler we control.
-            .replace(/await myHandler\(\.\.\.args\)/, 'await $.__handler(...args)');
+            .replace(`await ${BACKEND_FUNCTION_ALIAS}(...args)`, 'await $.__handler(...args)');
         // The generated code declares globalThis.$, which has no effect in this
         // sandbox but is harmless. Wrap the body so we can return main().
         const wrapper = `${body}\nreturn main($);`;
@@ -246,6 +321,7 @@ describe('Backend Functions - args round-trip via $.backendFunctionArgs', () => 
                 'myHandler',
                 '/src/handler.ts',
                 PROJECT_ROOT,
+                false,
             );
             let received: unknown;
             const handler = (arg: unknown) => {
@@ -260,7 +336,12 @@ describe('Backend Functions - args round-trip via $.backendFunctionArgs', () => 
     );
 
     test('Should default to [] when backendFunctionArgs is absent', async () => {
-        const source = generateVirtualEntryContent('myHandler', '/src/handler.ts', PROJECT_ROOT);
+        const source = generateVirtualEntryContent(
+            'myHandler',
+            '/src/handler.ts',
+            PROJECT_ROOT,
+            false,
+        );
         let received: unknown[] | undefined;
         const handler = (...args: unknown[]) => {
             received = args;

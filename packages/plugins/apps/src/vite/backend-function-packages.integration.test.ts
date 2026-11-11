@@ -340,6 +340,8 @@ describe.each<Layout>(['installed', 'linked'])(
                 expect(functionNames).toEqual([expect.stringMatching(/\.fetchSeries$/)]);
                 expect(built.manifest.backend.functions[functionNames[0]]).toEqual({
                     allowedConnectionIds: ['viz-lib-metrics-connection'],
+                    connectionLabels: [],
+                    connectionLabelFallbacks: [],
                 });
             });
 

@@ -12,8 +12,9 @@ import path from 'path';
 import { createArchive } from '../archive';
 import type { Asset } from '../assets';
 import { collectAssets } from '../assets';
+import { toConnectionLabelFields } from '../backend/connection-labels';
 import { encodeQueryName } from '../backend/encodeQueryName';
-import type { BackendFunction } from '../backend/types';
+import type { BuiltBackendFunction } from '../backend/types';
 import { ARCHIVE_FILENAME, PLUGIN_NAME } from '../constants';
 import type { AppsManifest, AppsOptionsWithDefaults, AppsParameterSchema } from '../types';
 
@@ -21,7 +22,7 @@ export const MANIFEST_DIR_PREFIX = 'dd-apps-manifest-';
 
 export interface BuildAppPackageOptions {
     backendOutputs: Map<string, string>;
-    backendFunctions: BackendFunction[];
+    backendFunctions: BuiltBackendFunction[];
     context: GlobalContext;
     options: AppsOptionsWithDefaults;
     /** The app's complete tag list, written to the manifest as is. */
@@ -31,14 +32,16 @@ export interface BuildAppPackageOptions {
 }
 
 function buildManifest(
-    backendFunctions: BackendFunction[],
+    backendFunctions: BuiltBackendFunction[],
     tags: string[],
     parameters: AppsParameterSchema[] | undefined,
 ): AppsManifest {
     const functions: AppsManifest['backend']['functions'] = {};
     for (const func of backendFunctions) {
+        const labelFields = toConnectionLabelFields(func.connectionLabels);
         functions[encodeQueryName(func)] = {
             allowedConnectionIds: [...func.allowedConnectionIds],
+            ...labelFields,
         };
     }
 
