@@ -6,6 +6,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { ConnectionLabelFields } from '../backend/connection-labels';
 import type { LongPollingOptions } from '../types';
 import { resolveLongPolling } from '../validate';
 
@@ -105,8 +106,8 @@ export type ExecuteAction = (
     connectionId: string | undefined,
 ) => Promise<unknown>;
 
-/** Resolves a fresh serializable `$` snapshot from an authenticated preview execution. */
-export type GetRuntimeContext = () => Promise<unknown>;
+/** Resolves a fresh serializable `$` snapshot from an authenticated preview execution, with `labelFields`' labels resolved. */
+export type GetRuntimeContext = (labelFields: ConnectionLabelFields) => Promise<unknown>;
 
 /** Bounds a promise that could otherwise hang forever, such as a `$.Actions` call with no deadline of its own, without cancelling it. `label` is the full subject of the timeout message. */
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {

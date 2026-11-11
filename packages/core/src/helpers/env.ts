@@ -22,6 +22,8 @@ const yellow = chalk.bold.yellow;
 //   - DATADOG_APPS_IDENTIFIER
 //   - DD_APPS_NAME
 //   - DATADOG_APPS_NAME
+//   - DD_APPS_CONNECTION_ENV_ID
+//   - DATADOG_APPS_CONNECTION_ENV_ID
 //   - DD_OAUTH_ACCESS_TOKEN
 //   - DATADOG_OAUTH_ACCESS_TOKEN
 //   - DD_SITE
@@ -33,6 +35,7 @@ export const OVERRIDE_VARIABLES = [
     'APPS_PACKAGE_DIR',
     'APPS_IDENTIFIER',
     'APPS_NAME',
+    'APPS_CONNECTION_ENV_ID',
     'OAUTH_ACCESS_TOKEN',
     'SITE',
 ] as const;
