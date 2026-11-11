@@ -6,7 +6,10 @@ import { createFixtureRecord } from '@dd/tests/_jest/helpers/moduleGraph';
 import type { Program } from 'estree';
 import { parseAst } from 'rollup/parseAst';
 
-import { extractConnectionIdsFromModuleGraph } from './extract-connection-ids-from-module-graph';
+import {
+    extractConnectionIdsFromModuleGraph,
+    extractConnectionsFromModuleGraph,
+} from './extract-connection-ids-from-module-graph';
 import { createParsedModuleRecord, type ParsedModuleRecord } from './module-graph';
 
 const buildRoot = '/project';
@@ -745,5 +748,130 @@ describe('Backend Functions - extractConnectionIdsFromModuleGraph', () => {
         );
 
         expect(extract([entry, helper])).toEqual(['conn-ts']);
+    });
+});
+
+describe('Backend Functions - extractConnectionsFromModuleGraph', () => {
+    const FALLBACK_A = '1a1a1a1a-0000-4000-8000-00000000000a';
+    const FALLBACK_B = '2b2b2b2b-0000-4000-8000-00000000000b';
+    const toModules = (code: string) => {
+        const record = createRecord(entryId, code, ['@datadog/action-catalog/http/http']);
+        return new Map([[entryId, record]]);
+    };
+    const extractLabels = (code: string) => {
+        const modules = toModules(code);
+        return extractConnectionsFromModuleGraph(entryId, modules, buildRoot).connectionLabels;
+    };
+
+    test('Should return the same connection IDs as extractConnectionIdsFromModuleGraph', () => {
+        const modules = toModules(`
+            import { request } from '@datadog/action-catalog/http/http';
+            export function run() {
+                request({ connectionLabel: 'jira', connectionId: '${FALLBACK_B}', inputs: {} });
+                request({ connectionId: 'conn-a', inputs: {} });
+                request({ connectionLabel: 'pagerduty', inputs: {} });
+            }
+        `);
+        const { connectionIds } = extractConnectionsFromModuleGraph(entryId, modules, buildRoot);
+        const expected = extractConnectionIdsFromModuleGraph(entryId, modules, buildRoot);
+        expect(connectionIds).toEqual(expected);
+        expect(connectionIds).toEqual([FALLBACK_B, 'conn-a']);
+    });
+
+    // The dev server only asks for connection IDs, so it must reject the labels a build would.
+    test('Should fail extractConnectionIdsFromModuleGraph on a label the build rejects', () => {
+        const modules = toModules(`
+            import { request } from '@datadog/action-catalog/http/http';
+            export function run() {
+                request({ connectionLabel: '1bad label', connectionId: '${FALLBACK_A}', inputs: {} });
+            }
+        `);
+        expect(() => extractConnectionIdsFromModuleGraph(entryId, modules, buildRoot)).toThrow(
+            'Unsupported action-catalog connectionLabel',
+        );
+    });
+
+    test('Should sort labels by code unit, independent of the locale', () => {
+        const labels = extractLabels(`
+            import { request } from '@datadog/action-catalog/http/http';
+            export function run() {
+                request({ connectionLabel: 'b', inputs: {} });
+                request({ connectionLabel: 'B_x', inputs: {} });
+                request({ connectionLabel: 'a', inputs: {} });
+            }
+        `);
+        const sortedLabels = ['b', 'B_x', 'a'].sort();
+        expect(labels.map(({ label }) => label)).toEqual(sortedLabels);
+    });
+
+    test('Should pair each static label with its call site literal fallback', () => {
+        const labels = extractLabels(`
+            import { request } from '@datadog/action-catalog/http/http';
+            const JIRA = 'jira';
+            export function run() {
+                request({ connectionLabel: JIRA, connectionId: '${FALLBACK_A}', inputs: {} });
+                request({ connectionLabel: 'jira', connectionId: '${FALLBACK_B}', inputs: {} });
+                request({ connectionLabel: 'jira', connectionId: '${FALLBACK_A}', inputs: {} });
+                request({ connectionLabel: 'pagerduty', inputs: {} });
+                request({ connectionId: 'conn-literal', inputs: {} });
+            }
+        `);
+        expect(labels).toEqual([
+            { label: 'jira', fallbackConnectionId: FALLBACK_A },
+            { label: 'jira', fallbackConnectionId: FALLBACK_B },
+            { label: 'pagerduty' },
+        ]);
+    });
+
+    test('Should accept an uppercase UUID fallback', () => {
+        const fallback = FALLBACK_A.toUpperCase();
+        const labels = extractLabels(`
+            import { request } from '@datadog/action-catalog/http/http';
+            export function run() {
+                request({ connectionLabel: 'jira', connectionId: '${fallback}', inputs: {} });
+            }
+        `);
+        expect(labels).toEqual([{ label: 'jira', fallbackConnectionId: fallback }]);
+    });
+
+    test.each([
+        [
+            'a computed label',
+            'request({ connectionLabel: getLabel(), inputs: {} });',
+            'unsupported-expression',
+        ],
+        [
+            'a label failing the pattern',
+            "request({ connectionLabel: '1bad label', inputs: {} });",
+            'Unsupported action-catalog connectionLabel in /project/src/backend/actions.backend.js: "1bad label" must match',
+        ],
+        [
+            'a duplicate label key',
+            "request({ connectionLabel: 'a', connectionLabel: 'b', inputs: {} });",
+            'multiple connectionLabel properties could hide a connectionLabel.',
+        ],
+        [
+            'an accessor label',
+            "request({ get connectionLabel() { return 'a'; }, inputs: {} });",
+            'accessor connectionLabel properties could hide a connectionLabel.',
+        ],
+        [
+            'a fallback that is not a connection ID',
+            "request({ connectionLabel: 'jira', connectionId: 'conn-a', inputs: {} });",
+            'Unsupported action-catalog connectionLabel in /project/src/backend/actions.backend.js: the fallback connectionId "conn-a" for "jira" must be a connection ID (a UUID).',
+        ],
+        [
+            'an empty fallback',
+            "request({ connectionLabel: 'jira', connectionId: '', inputs: {} });",
+            'the fallback connectionId "" for "jira" must be a connection ID (a UUID)',
+        ],
+    ])('Should fail the build on %s', (_name, call, expectedError) => {
+        expect(() =>
+            extractLabels(`
+                import { request } from '@datadog/action-catalog/http/http';
+                function getLabel() { return 'x'; }
+                export function run() { ${call} }
+            `),
+        ).toThrow(expectedError);
     });
 });

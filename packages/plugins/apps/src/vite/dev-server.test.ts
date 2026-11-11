@@ -10,6 +10,7 @@ import {
     createViteHostCheck,
 } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
+    CONNECTION_ENV_ID_VARIABLES,
     createDevServerMiddleware,
     DEBUG_BUNDLE_ROUTE,
     DEV_SERVER_ROUTES,
@@ -202,10 +203,12 @@ describe('getRetryDelay', () => {
     });
 });
 
+const NO_LABEL_FIELDS = { connectionLabels: [], connectionLabelFallbacks: [] };
+
 /** Has `mockExecuteLocally` hydrate `$` through the request, as the real executor does, then return `fn`'s result. */
 function mockExecutorReturning(fn: (...args: unknown[]) => unknown) {
     mockExecuteLocally.mockImplementation(async (request: LocalExecutionRequest) => {
-        await request.getRuntimeContext();
+        await request.getRuntimeContext(NO_LABEL_FIELDS);
         return { data: await fn(...request.args) };
     });
 }
@@ -319,7 +322,7 @@ function createTestMiddleware(
     overrides: {
         viteBuild?: CreateDevServerMiddlewareArgs[0];
         getBackendFunctions?: CreateDevServerMiddlewareArgs[1];
-        getAllowedConnectionIds?: CreateDevServerMiddlewareArgs[2];
+        getConnections?: CreateDevServerMiddlewareArgs[2];
         auth?: CreateDevServerMiddlewareArgs[3];
         doAuthenticatedRequest?: CreateDevServerMiddlewareArgs[4];
         longPolling?: CreateDevServerMiddlewareArgs[5];
@@ -330,13 +333,14 @@ function createTestMiddleware(
         isHostAllowed?: CreateDevServerMiddlewareArgs[10];
         serverConditions?: CreateDevServerMiddlewareArgs[11];
         app?: CreateDevServerMiddlewareArgs[12];
-        executeLocally?: CreateDevServerMiddlewareArgs[13];
+        connectionEnvId?: CreateDevServerMiddlewareArgs[13];
+        executeLocally?: CreateDevServerMiddlewareArgs[14];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
         overrides.viteBuild ?? mockViteBuild,
         overrides.getBackendFunctions ?? (() => mockFunctions),
-        overrides.getAllowedConnectionIds ?? (async () => []),
+        overrides.getConnections ?? (async () => ({ connectionIds: [], connectionLabels: [] })),
         overrides.auth ?? mockAuth,
         'doAuthenticatedRequest' in overrides
             ? overrides.doAuthenticatedRequest
@@ -349,11 +353,13 @@ function createTestMiddleware(
         overrides.isHostAllowed ?? localOnlyHostCheck,
         overrides.serverConditions ?? defaultServerConditions,
         overrides.app ?? {},
+        overrides.connectionEnvId,
         overrides.executeLocally ?? mockExecuteLocally,
     );
 }
 
 const APP_UUID = '5cf28549-4f3f-432b-9039-bc841ed2b1e1';
+const CONNECTION_ENV_UUID = '0b7f3a51-9d2c-4e8a-a6f1-3c5d2e9b8a70';
 
 describe('getQueryMeta', () => {
     const cases: {
@@ -441,7 +447,41 @@ describe('getQueryMeta', () => {
     ];
 
     test.each(cases)('Should $description', ({ app, mode, expected }) => {
-        expect(getQueryMeta(app, mode)).toEqual(expected);
+        expect(getQueryMeta(app, mode, undefined)).toEqual(expected);
+    });
+
+    test('Should send the selected connection environment with the app ID', () => {
+        expect(getQueryMeta({ identifier: APP_UUID }, 'development', CONNECTION_ENV_UUID)).toEqual({
+            appId: APP_UUID,
+            connectionEnvId: CONNECTION_ENV_UUID,
+            isHighCodeApp: true,
+            isDeployed: false,
+            viewContext: { type: 'high_code_local_dev' },
+        });
+    });
+
+    const rejectedCases: {
+        description: string;
+        app: Parameters<typeof getQueryMeta>[0];
+        connectionEnvId: string;
+        error: string;
+    }[] = [
+        {
+            description: 'a connection environment ID that is not a canonical UUID',
+            app: { identifier: APP_UUID },
+            connectionEnvId: CONNECTION_ENV_UUID.toUpperCase(),
+            error: `${CONNECTION_ENV_ID_VARIABLES} must be a connection environment ID (a lowercase UUID), but it is "${CONNECTION_ENV_UUID.toUpperCase()}".`,
+        },
+        {
+            description: 'a connection environment without an app ID to look it up in',
+            app: { identifier: '5a2aefe2f0dd42ba999c46d5c49bbd42' },
+            connectionEnvId: CONNECTION_ENV_UUID,
+            error: `${CONNECTION_ENV_ID_VARIABLES} selects a connection environment of an uploaded app, but this app has no app ID. Set "id" in datadog-app.config.json to the app's ID, or unset the variable.`,
+        },
+    ];
+
+    test.each(rejectedCases)('Should reject $description', ({ app, connectionEnvId, error }) => {
+        expect(() => getQueryMeta(app, 'development', connectionEnvId)).toThrow(error);
     });
 });
 
@@ -623,6 +663,7 @@ describe('Dev Server Middleware', () => {
                     route: EXECUTE_ACTION_ROUTE,
                     queries: 2,
                     viewContextType: 'high_code_local_dev',
+                    connectionEnvId: undefined,
                 },
                 {
                     description: 'send the dev-verify meta on the cloud query',
@@ -630,6 +671,7 @@ describe('Dev Server Middleware', () => {
                     route: EXECUTE_ACTION_ROUTE,
                     queries: 1,
                     viewContextType: 'high_code_dev_verify',
+                    connectionEnvId: undefined,
                 },
                 {
                     description: 'send the local dev meta on a direct cloud query',
@@ -637,18 +679,36 @@ describe('Dev Server Middleware', () => {
                     route: '/__dd/executeActionViaCloud',
                     queries: 1,
                     viewContextType: 'high_code_local_dev',
+                    connectionEnvId: undefined,
+                },
+                {
+                    description:
+                        'send the selected connection environment on the runtime context and $.Actions queries',
+                    mode: 'development',
+                    route: EXECUTE_ACTION_ROUTE,
+                    queries: 2,
+                    viewContextType: 'high_code_local_dev',
+                    connectionEnvId: CONNECTION_ENV_UUID,
+                },
+                {
+                    description: 'send the selected connection environment on the cloud query',
+                    mode: DEV_VERIFY_MODE,
+                    route: EXECUTE_ACTION_ROUTE,
+                    queries: 1,
+                    viewContextType: 'high_code_dev_verify',
+                    connectionEnvId: CONNECTION_ENV_UUID,
                 },
             ];
 
             test.each(cases)(
                 'Should $description',
-                async ({ mode, route, queries, viewContextType }) => {
+                async ({ mode, route, queries, viewContextType, connectionEnvId }) => {
                     mockBuildWithParsedBackend();
                     const { metas, scope } = capturePreviewAsyncMeta(queries, {
                         data: previewRuntimeContext,
                     });
                     const executeLocally: LocalExecutor = async (request) => {
-                        await request.getRuntimeContext();
+                        await request.getRuntimeContext(NO_LABEL_FIELDS);
                         const data = await request.executeAction(
                             'com.datadoghq.http.request',
                             {},
@@ -656,7 +716,12 @@ describe('Dev Server Middleware', () => {
                         );
                         return { data };
                     };
-                    const metaMiddleware = createTestMiddleware({ mode, app, executeLocally });
+                    const metaMiddleware = createTestMiddleware({
+                        mode,
+                        app,
+                        connectionEnvId,
+                        executeLocally,
+                    });
                     const req = createMockRequest(route, {
                         functionName: encodeQueryName(mockFunctions[0]),
                         args: [],
@@ -671,6 +736,7 @@ describe('Dev Server Middleware', () => {
                     const expectedMeta = {
                         appId: APP_UUID,
                         appName: 'My App',
+                        ...(connectionEnvId !== undefined && { connectionEnvId }),
                         isHighCodeApp: true,
                         isDeployed: false,
                         viewContext: { type: viewContextType },
@@ -1535,6 +1601,66 @@ describe('Dev Server Middleware', () => {
             ).toEqual(['conn-build']);
         });
 
+        test('Should send the connection labels the backend build collected', async () => {
+            const fallbackConnectionId = '5c1a1b0e-0000-4000-8000-000000000002';
+            mockViteBuild.mockImplementation(async (config) => {
+                await emitModuleParsed(
+                    config,
+                    mockFunctions[0].absolutePath,
+                    `
+                        import { request } from '@datadog/action-catalog/http/http';
+
+                        export function greet() {
+                            request({ connectionLabel: 'jira', connectionId: '${fallbackConnectionId}', inputs: {} });
+                            request({ connectionLabel: 'api', inputs: {} });
+                        }
+                    `,
+                );
+                return mockBuildResult('// code');
+            });
+
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                connectionLabels: unknown;
+                                connectionLabelFallbacks: unknown;
+                            };
+                        };
+                    };
+                };
+            };
+            let capturedBody: PreviewAsyncBody | undefined;
+            const apiScope = nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body: PreviewAsyncBody) => {
+                    capturedBody = body;
+                    return true;
+                })
+                .reply(200, { data: { id: 'receipt-labels' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/receipt-labels')
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: { ok: true } } } },
+                });
+
+            const req = createMockRequest('/__dd/executeActionViaCloud', {
+                functionName: encodeQueryName(mockFunctions[0]),
+                args: [],
+            });
+            const res = createMockResponse();
+
+            middleware(req, res, jest.fn());
+            await res.done;
+
+            expect(res.statusCode).toBe(200);
+            expect(apiScope.isDone()).toBe(true);
+            const properties = capturedBody?.data.attributes.query.properties;
+            expect(properties?.connectionLabels).toEqual(['api', 'jira']);
+            expect(properties?.connectionLabelFallbacks).toEqual([
+                { label: 'jira', fallbackConnectionId },
+            ]);
+        });
+
         test('Should handle errors array from long-polling endpoint', async () => {
             mockBuildWithParsedBackend();
 
@@ -1898,7 +2024,7 @@ describe('Dev Server Middleware', () => {
                     allStarted.resolve();
                 }
                 await withTimeout(allStarted.promise, 5000, 'Waiting for every call to start');
-                const data = await request.getRuntimeContext();
+                const data = await request.getRuntimeContext(NO_LABEL_FIELDS);
                 return { data };
             });
             const childMiddleware = createTestMiddleware({ executeLocally });
@@ -1923,11 +2049,84 @@ describe('Dev Server Middleware', () => {
             expect(hydration.isDone()).toBe(true);
         });
 
+        test("Should send each concurrent call's own labels in its runtime context query", async () => {
+            nock.cleanAll();
+            const labelFieldsByCall = [
+                { connectionLabels: ['api'], connectionLabelFallbacks: [] },
+                {
+                    connectionLabels: ['jira'],
+                    connectionLabelFallbacks: [
+                        {
+                            label: 'jira',
+                            fallbackConnectionId: '5c1a1b0e-0000-4000-8000-000000000002',
+                        },
+                    ],
+                },
+            ];
+            type PreviewAsyncBody = {
+                data: {
+                    attributes: {
+                        query: {
+                            properties: {
+                                connectionLabels: unknown;
+                                connectionLabelFallbacks: unknown;
+                            };
+                        };
+                    };
+                };
+            };
+            const sentLabelFields: unknown[] = [];
+            nock(DD_API_ORIGIN)
+                .post('/api/v2/app-builder/queries/preview-async', (body: PreviewAsyncBody) => {
+                    const { connectionLabels, connectionLabelFallbacks } =
+                        body.data.attributes.query.properties;
+                    sentLabelFields.push({ connectionLabels, connectionLabelFallbacks });
+                    return true;
+                })
+                .times(2)
+                .reply(200, { data: { id: 'runtime-context-receipt' } })
+                .get('/api/v2/app-builder/queries/execution-long-polling/runtime-context-receipt')
+                .times(2)
+                .reply(200, {
+                    data: { attributes: { done: true, outputs: { data: previewRuntimeContext } } },
+                });
+            const allStarted = createDeferred();
+            let started = 0;
+            const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
+                const labelFields = labelFieldsByCall[started];
+                started += 1;
+                if (started === labelFieldsByCall.length) {
+                    allStarted.resolve();
+                }
+                await withTimeout(allStarted.promise, 5000, 'Waiting for every call to start');
+                const data = await request.getRuntimeContext(labelFields);
+                return { data };
+            });
+            const childMiddleware = createTestMiddleware({ executeLocally });
+            const responses = labelFieldsByCall.map(() => {
+                const req = createMockRequest('/__dd/executeAction', {
+                    functionName: encodeQueryName(mockFunctions[0]),
+                    args: [],
+                });
+                const res = createMockResponse();
+                childMiddleware(req, res, jest.fn());
+                return res;
+            });
+            const allDone = responses.map((res) => res.done);
+            await Promise.all(allDone);
+
+            for (const res of responses) {
+                expect(res.statusCode).toBe(200);
+            }
+            expect(sentLabelFields).toHaveLength(labelFieldsByCall.length);
+            expect(sentLabelFields).toEqual(expect.arrayContaining(labelFieldsByCall));
+        });
+
         test('Should query the runtime context again for a call that starts after the last query ended', async () => {
             nock.cleanAll();
             const hydration = mockRuntimeContextHydration(2);
             const executeLocally = jest.fn(async (request: LocalExecutionRequest) => {
-                const data = await request.getRuntimeContext();
+                const data = await request.getRuntimeContext(NO_LABEL_FIELDS);
                 return { data };
             });
             const childMiddleware = createTestMiddleware({ executeLocally });
@@ -2006,7 +2205,13 @@ describe('Dev Server Middleware', () => {
                 nock.cleanAll();
                 const executeLocally = createTestExecutor();
                 let hydrationSignal: AbortSignal | undefined;
-                const recoveringRuntimeContextRequest = makeImmediateRuntimeContextRequest();
+                // Outputs without "data", so the next call fails right after its own fresh query.
+                const recoveringRuntimeContextRequest = jest
+                    .fn()
+                    .mockResolvedValueOnce({ data: { id: 'runtime-context-receipt' } })
+                    .mockResolvedValueOnce({
+                        data: { attributes: { done: true, outputs: {} } },
+                    });
                 const nonAbortableRuntimeContextRequest = <T>(
                     options: Omit<RequestOpts, 'auth'>,
                 ) => {
@@ -2021,9 +2226,7 @@ describe('Dev Server Middleware', () => {
                 const hangingHydrationMiddleware = createDevServerMiddleware(
                     mockViteBuild,
                     () => mockFunctions,
-                    async () => {
-                        throw new Error('reached the connection lookup');
-                    },
+                    async () => ({ connectionIds: [], connectionLabels: [] }),
                     mockAuth,
                     nonAbortableRuntimeContextRequest,
                     mockLongPolling,
@@ -2034,6 +2237,7 @@ describe('Dev Server Middleware', () => {
                     localOnlyHostCheck,
                     defaultServerConditions,
                     {},
+                    undefined,
                     executeLocally,
                 );
 
@@ -2055,8 +2259,8 @@ describe('Dev Server Middleware', () => {
                 expect(hydrationSignal?.aborted).toBe(true);
                 expect(forkMock).not.toHaveBeenCalled();
 
-                // The same dev server reaching the connection lookup shows the timed-out query no
-                // longer holds the shared runtime context.
+                // A second query reaching the server shows the timed-out one no longer holds the
+                // shared runtime context.
                 const recoveringReq = createMockRequest('/__dd/executeAction', {
                     functionName: encodeQueryName(mockFunctions[0]),
                     args: [],
@@ -2070,7 +2274,10 @@ describe('Dev Server Middleware', () => {
 
                 expect(recoveringRes.statusCode).toBe(500);
                 const recoveringBody = JSON.parse(recoveringRes.getBody());
-                expect(recoveringBody.error).toContain('reached the connection lookup');
+                expect(recoveringBody.error).toContain(
+                    'Runtime context hydration completed without a "data" field',
+                );
+                expect(recoveringRuntimeContextRequest).toHaveBeenCalledTimes(2);
             } finally {
                 jest.useRealTimers();
             }
@@ -2388,11 +2595,11 @@ describe('Dev Server Middleware', () => {
             });
         });
 
-        // getAllowedConnectionIds only resolves and transforms modules, so a module the static
+        // getConnections only resolves and transforms modules, so a module the static
         // checks reject fails before any of the entry's code runs.
-        test("Should never start a call's process when getAllowedConnectionIds rejects", async () => {
+        test("Should never start a call's process when getConnections rejects", async () => {
             const rejectingMiddleware = createTestMiddleware({
-                getAllowedConnectionIds: async () => {
+                getConnections: async () => {
                     throw new Error(`"Deno" is not available in the ${NODE_BACKEND_RUNTIME}`);
                 },
                 executeLocally: createTestExecutor(),
@@ -2414,15 +2621,15 @@ describe('Dev Server Middleware', () => {
             expect(forkMock).not.toHaveBeenCalled();
         });
 
-        // getAllowedConnectionIds reads and transforms every reachable module from disk
+        // getConnections reads and transforms every reachable module from disk
         // (dev-server-module-graph.ts) with no bound of its own.
-        test('Should eventually time out and return a clear error when getAllowedConnectionIds never settles', async () => {
+        test('Should eventually time out and return a clear error when getConnections never settles', async () => {
             jest.useFakeTimers();
             try {
                 const immediateRuntimeContextRequest = makeImmediateRuntimeContextRequest();
                 const hangingMiddleware = createTestMiddleware({
                     // Never settles.
-                    getAllowedConnectionIds: () => new Promise(() => {}),
+                    getConnections: () => new Promise(() => {}),
                     doAuthenticatedRequest: immediateRuntimeContextRequest,
                     executeLocally: createTestExecutor(),
                 });

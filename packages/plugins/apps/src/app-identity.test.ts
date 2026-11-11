@@ -9,7 +9,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-import { APP_CONFIG_FILE, readAppIdentity } from './app-identity';
+import { APP_CONFIG_FILE, readAppIdentity, readConnectionEnvId } from './app-identity';
 
 describe('readAppIdentity', () => {
     let restoreEnv: () => void;
@@ -89,5 +89,46 @@ describe('readAppIdentity', () => {
         const identity = readAppIdentity(projectRoot, getMockLogger());
 
         expect(identity).toEqual(expected);
+    });
+});
+
+describe('readConnectionEnvId', () => {
+    let restoreEnv: () => void;
+
+    beforeEach(() => {
+        restoreEnv = clearDatadogEnv();
+    });
+
+    afterEach(() => {
+        restoreEnv();
+    });
+
+    const cases: { description: string; env: Record<string, string>; expected?: string }[] = [
+        {
+            description: 'return nothing when no environment is selected',
+            env: {},
+            expected: undefined,
+        },
+        {
+            description: 'read the selected environment, trimmed',
+            env: { DD_APPS_CONNECTION_ENV_ID: ' env-id ' },
+            expected: 'env-id',
+        },
+        {
+            description: 'prefer DATADOG_ over DD_',
+            env: { DATADOG_APPS_CONNECTION_ENV_ID: 'datadog', DD_APPS_CONNECTION_ENV_ID: 'dd' },
+            expected: 'datadog',
+        },
+        {
+            description: 'treat a blank value as no selection',
+            env: { DD_APPS_CONNECTION_ENV_ID: '  ' },
+            expected: undefined,
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ env, expected }) => {
+        Object.assign(process.env, env);
+
+        expect(readConnectionEnvId()).toBe(expected);
     });
 });

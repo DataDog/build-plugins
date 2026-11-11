@@ -60,6 +60,8 @@ export type AppsOptions = {
     parameters?: AppsParameters;
 };
 
+export type AppsManifestConnectionLabelFallback = { label: string; fallbackConnectionId: string };
+
 export type AppsManifest = {
     /**
      * Tags to add to the app (authored tags and derived `surface:<id>` tags), sorted.
@@ -79,6 +81,10 @@ export type AppsManifest = {
             string,
             {
                 allowedConnectionIds: string[];
+                /** Always written, even empty: its presence marks a build that understands labels. */
+                connectionLabels: string[];
+                /** Only call sites with a literal `connectionId`; label-only ones are in `connectionLabels`. */
+                connectionLabelFallbacks: AppsManifestConnectionLabelFallback[];
             }
         >;
     };

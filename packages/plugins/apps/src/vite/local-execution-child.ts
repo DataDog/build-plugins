@@ -23,7 +23,9 @@ import {
     isIndexableRecord,
     makeActionsProxy,
     returnValueSubject,
+    readResolvedConnections,
     serializeActionInputs,
+    swapConnectionLabel,
     validateActionCallShape,
 } from './local-execution-shared';
 
@@ -124,9 +126,12 @@ async function registerSdkAdapters(
         const actionExecution = await runner.import('@datadog/action-catalog/action-execution');
         const { setExecuteActionImplementation } = actionExecution;
         if (typeof setExecuteActionImplementation === 'function') {
-            setExecuteActionImplementation((actionId: string, actionRequest: unknown) => {
+            // Read once before the function runs, as the generated entry does.
+            const resolvedConnections = readResolvedConnections($);
+            setExecuteActionImplementation(async (actionId: string, actionRequest: unknown) => {
                 const call = isIndexableRecord(actionRequest) ? actionRequest : {};
-                return dispatchAction(actionId, call, `"${actionId}"`);
+                const swappedCall = swapConnectionLabel(call, resolvedConnections);
+                return dispatchAction(actionId, swappedCall, `"${actionId}"`);
             });
         }
     }

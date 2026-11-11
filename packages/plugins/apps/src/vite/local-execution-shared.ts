@@ -70,6 +70,69 @@ export async function callBackendFunction(call: () => unknown): Promise<unknown>
     }
 }
 
+/** Key of the server-owned map in `$` from each label to the connection ID the run resolved. */
+export const CONNECTIONS_CONTEXT_KEY = 'Connections';
+/** Key of the server-owned flag in `$`, true when the app has a connection environment config. */
+export const HAS_CONNECTION_ENVS_CONTEXT_KEY = 'HasConnectionEnvs';
+
+export type ResolvedConnections = {
+    hasConnectionEnvs: boolean;
+    connections: Record<string, unknown>;
+};
+
+/** A copy, so code that later changes `$` can't change which connections a run uses. */
+export function readResolvedConnections(
+    runtimeContext: Record<string, unknown>,
+): ResolvedConnections {
+    const hasConnectionEnvs = runtimeContext[HAS_CONNECTION_ENVS_CONTEXT_KEY] === true;
+    const connectionsValue = hasConnectionEnvs
+        ? runtimeContext[CONNECTIONS_CONTEXT_KEY]
+        : undefined;
+    // Null prototype, so a label like "toString" can't resolve through Object.prototype.
+    const connections: Record<string, unknown> = Object.create(null);
+    if (isIndexableRecord(connectionsValue)) {
+        Object.assign(connections, connectionsValue);
+    }
+    return { hasConnectionEnvs, connections };
+}
+
+/** Local execution's copy of the generated entry's label swap (`SET_EXECUTE_ACTION_SNIPPET`); both run the same test cases. */
+export function swapConnectionLabel(
+    request: Record<string, unknown>,
+    resolved: ResolvedConnections,
+): Record<string, unknown> {
+    if (!('connectionLabel' in request)) {
+        return request;
+    }
+    const { connectionLabel, ...rest } = request;
+    const { hasConnectionEnvs, connections } = resolved;
+    const label = String(connectionLabel);
+    if (hasConnectionEnvs) {
+        const connectionId = connections[label];
+        if (typeof connectionId !== 'string') {
+            throw new Error(
+                `Connection label "${label}" is not mapped in this connection environment`,
+            );
+        }
+        return { ...rest, connectionId };
+    }
+    if (typeof rest.connectionId !== 'string') {
+        throw new Error(
+            `Connection label "${label}" has no fallback connectionId and the app has no connection environment config`,
+        );
+    }
+    return rest;
+}
+
+/** The connection IDs the server resolved for this run, which it also adds to the run's allowed connections. */
+export function getResolvedConnectionIds(runtimeContext: Record<string, unknown>): string[] {
+    const { connections } = readResolvedConnections(runtimeContext);
+    const connectionIds = Object.values(connections).filter(
+        (value): value is string => typeof value === 'string',
+    );
+    return [...new Set(connectionIds)];
+}
+
 /** Checks only this call's own connectionId, so it's weaker than the cloud's server-side restriction: a meta-action's inputs can carry their own scope. */
 export function assertConnectionIdAllowed(
     connectionId: string | undefined,

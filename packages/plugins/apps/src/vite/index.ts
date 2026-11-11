@@ -10,7 +10,7 @@ import type { IncomingMessage } from 'http';
 import path from 'path';
 import type { build } from 'vite';
 
-import { readAppIdentity } from '../app-identity';
+import { readAppIdentity, readConnectionEnvId } from '../app-identity';
 import {
     AUTH_GUIDANCE,
     getAuthenticatedRequest,
@@ -18,7 +18,7 @@ import {
     type DoAuthenticatedRequest,
 } from '../auth';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
-import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { extractConnectionsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
 import { createBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
@@ -35,7 +35,7 @@ import {
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import { BACKEND_RUNTIME_PACKAGES } from '../backend/shared';
-import type { BackendFunction } from '../backend/types';
+import type { BackendFunction, BuiltBackendFunction } from '../backend/types';
 import {
     BACKEND_FILE_RE,
     BACKEND_FILE_WITH_QUERY_RE,
@@ -652,7 +652,8 @@ export const getVitePlugin = ({
             }
             let backendOutDir: string | undefined;
             let backendOutputs = new Map<string, string>();
-            let backendFunctions = getBackendFunctions();
+            let builtBackendFunctions: BuiltBackendFunction[] = [];
+            const backendFunctions = getBackendFunctions();
             logPackageBackendFunctions(backendFunctions, context.buildRoot, log);
             if (backendFunctions.length > 0) {
                 const result = await buildBackendFunctions(
@@ -664,12 +665,12 @@ export const getVitePlugin = ({
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
-                backendFunctions = result.functions;
+                builtBackendFunctions = result.functions;
             }
             try {
                 await buildAppPackage({
                     backendOutputs,
-                    backendFunctions,
+                    backendFunctions: builtBackendFunctions,
                     context,
                     options,
                     tags,
@@ -773,7 +774,7 @@ export const getVitePlugin = ({
             // Safe to call before a call's process loads anything: collectModuleGraphFromServer
             // primes each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
-            const getAllowedConnectionIds = async (entryId: string) => {
+            const getConnections = async (entryId: string) => {
                 const parseAst = await loadViteParseAst();
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
@@ -782,14 +783,15 @@ export const getVitePlugin = ({
                     runStaticChecks,
                     parseAst,
                 );
-                return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
+                return extractConnectionsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
             };
             const isHostAllowed = createViteHostCheck(server.config);
             const appIdentity = readAppIdentity(context.buildRoot, log);
+            const connectionEnvId = readConnectionEnvId();
             const middleware = createDevServerMiddleware(
                 bundler.build,
                 getBackendFunctions,
-                getAllowedConnectionIds,
+                getConnections,
                 auth,
                 doAuthenticatedRequest,
                 options.longPolling,
@@ -800,6 +802,7 @@ export const getVitePlugin = ({
                 isHostAllowed,
                 bundler.defaultServerConditions,
                 appIdentity,
+                connectionEnvId,
                 executeLocally,
             );
             server.middlewares.use((req, res, next) => {

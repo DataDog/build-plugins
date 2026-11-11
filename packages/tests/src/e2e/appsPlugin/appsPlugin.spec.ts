@@ -108,6 +108,8 @@ describe('Apps Plugin', () => {
                 functions: {
                     [greetName]: {
                         allowedConnectionIds: [],
+                        connectionLabels: [],
+                        connectionLabelFallbacks: [],
                     },
                 },
             },

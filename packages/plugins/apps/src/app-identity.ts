@@ -35,6 +35,12 @@ const readAppConfig = (projectRoot: string, log: Logger): Record<string, unknown
     return {};
 };
 
+/** The connection environment a dev server's runs select; none runs the app's default. */
+export const readConnectionEnvId = (): string | undefined => {
+    const envConnectionEnvId = getDDEnvValue('APPS_CONNECTION_ENV_ID');
+    return trimString(envConnectionEnvId);
+};
+
 // The env vars win because the CLI sets them, from `--identifier` too, for the builds it starts.
 export const readAppIdentity = (projectRoot: string, log: Logger): AppIdentity => {
     const config = readAppConfig(projectRoot, log);
