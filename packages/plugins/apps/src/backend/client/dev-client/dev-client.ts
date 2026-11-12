@@ -103,11 +103,17 @@ function pingParent(): Promise<void> {
     return answered;
 }
 
-// Firefox has no ancestorOrigins; App Builder's bridge answers a ping from its frame.
+// Older Firefox has no ancestorOrigins, and Firefox reports "null" for a parent that frames the
+// page with referrerpolicy="no-referrer"; App Builder's bridge answers a ping from its frame.
+function readsParentFromAncestorOrigins(): boolean {
+    const ancestorOrigins = window.location.ancestorOrigins;
+    return Boolean(ancestorOrigins) && ancestorOrigins[0] !== 'null';
+}
+
 // After MAX_UNANSWERED_PINGS misses, calls stop pinging; a later pong or response still sets the origin.
 function needsParentPing(): boolean {
     return (
-        !window.location.ancestorOrigins &&
+        !readsParentFromAncestorOrigins() &&
         window.parent !== window &&
         learnedParentOrigin === undefined &&
         unansweredPings < MAX_UNANSWERED_PINGS
@@ -115,9 +121,8 @@ function needsParentPing(): boolean {
 }
 
 async function getParentOrigin(shouldPing: boolean): Promise<string | undefined> {
-    const ancestorOrigins = window.location.ancestorOrigins;
-    if (ancestorOrigins) {
-        return ancestorOrigins[0];
+    if (readsParentFromAncestorOrigins()) {
+        return window.location.ancestorOrigins[0];
     }
     if (shouldPing) {
         await pingParent();
