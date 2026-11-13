@@ -2,6 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import {
+    CONNECTIONS_CONTEXT_KEY,
+    HAS_CONNECTION_ENVS_CONTEXT_KEY,
+} from '../vite/local-execution-shared';
+
 function isPackageExportInstalled(packageExport: string, fromDir: string): boolean {
     try {
         require.resolve(packageExport, { paths: [fromDir] });
@@ -51,10 +56,31 @@ export const SET_BACKEND_CONTEXT_SNIPPET = `\
         setBackend(buildRuntimeFromJsFunctionWithActions($));
     }`;
 
-/** Script snippet that registers the $.Actions-based executeAction implementation at runtime. */
+/** Script snippet that registers the $.Actions-based executeAction implementation at runtime. A `connectionLabel` becomes the connection the server resolved, or the call's literal `connectionId` when the app has no connection environment config. */
 export const SET_EXECUTE_ACTION_SNIPPET = `\
     if (typeof setExecuteActionImplementation === 'function') {
+        const hasConnectionEnvs = $.${HAS_CONNECTION_ENVS_CONTEXT_KEY} === true;
+        const connectionsValue = hasConnectionEnvs ? $.${CONNECTIONS_CONTEXT_KEY} : undefined;
+        const resolvedConnections = Object.create(null);
+        if (typeof connectionsValue === 'object' && connectionsValue !== null) {
+            Object.assign(resolvedConnections, connectionsValue);
+        }
         setExecuteActionImplementation(async (actionId, request) => {
+            if (request && typeof request === 'object' && 'connectionLabel' in request) {
+                const { connectionLabel, ...rest } = request;
+                if (hasConnectionEnvs) {
+                    const connectionId = resolvedConnections[connectionLabel];
+                    if (typeof connectionId !== 'string') {
+                        throw new Error('Connection label "' + connectionLabel + '" is not mapped in this connection environment');
+                    }
+                    request = { ...rest, connectionId };
+                } else {
+                    if (typeof rest.connectionId !== 'string') {
+                        throw new Error('Connection label "' + connectionLabel + '" has no fallback connectionId and the app has no connection environment config');
+                    }
+                    request = rest;
+                }
+            }
             const actionPath = actionId.replace(/^com\\.datadoghq\\./, '');
             const pathParts = actionPath.split('.');
             let actionFn = $.Actions;

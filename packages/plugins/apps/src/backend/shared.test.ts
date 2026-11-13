@@ -3,6 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import {
+    connectionLabelFailClosedCases,
+    connectionLabelSwapCases,
+} from '@dd/apps-plugin/backend/connection-labels.fixtures';
+import {
     SET_BACKEND_CONTEXT_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
 } from '@dd/apps-plugin/backend/shared';
@@ -46,9 +50,10 @@ describe('SET_BACKEND_CONTEXT_SNIPPET', () => {
  */
 function extractRegisteredCallback(
     actions: Record<string, unknown>,
+    runtimeContext: Record<string, unknown> = {},
 ): (actionId: string, request: unknown) => Promise<unknown> {
     const setExecuteActionImplementation = jest.fn();
-    const $ = { Actions: actions };
+    const $ = { ...runtimeContext, Actions: actions };
 
     // The snippet references `setExecuteActionImplementation` and `$` as free variables.
     // eslint-disable-next-line no-new-func
@@ -135,6 +140,34 @@ describe('SET_EXECUTE_ACTION_SNIPPET', () => {
             async ({ actionId, actions, expectedError }) => {
                 const callback = extractRegisteredCallback(actions);
                 await expect(callback(actionId, {})).rejects.toThrow(expectedError);
+            },
+        );
+    });
+
+    describe('connection labels', () => {
+        const actionFn = jest.fn().mockResolvedValue('result');
+
+        beforeEach(() => {
+            actionFn.mockClear();
+        });
+
+        test.each(connectionLabelSwapCases)(
+            'should $description',
+            async ({ runtimeContext, request, expected }) => {
+                const callback = extractRegisteredCallback({ http: actionFn }, runtimeContext);
+                await callback('com.datadoghq.http', request);
+                expect(actionFn).toHaveBeenCalledWith(expected);
+            },
+        );
+
+        test.each(connectionLabelFailClosedCases)(
+            'should fail closed on $description',
+            async ({ runtimeContext, request, expectedError }) => {
+                const callback = extractRegisteredCallback({ http: actionFn }, runtimeContext);
+                await expect(callback('com.datadoghq.http', request)).rejects.toThrow(
+                    expectedError,
+                );
+                expect(actionFn).not.toHaveBeenCalled();
             },
         );
     });

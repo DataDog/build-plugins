@@ -8,6 +8,7 @@ import os from 'os';
 import path from 'path';
 import { PassThrough } from 'stream';
 
+import { toConnectionLabelFields } from '../backend/connection-labels';
 import type { BackendFunction } from '../backend/types';
 
 import {
@@ -96,7 +97,7 @@ describe('Local execution process helpers', () => {
                         args: [],
                         executeAction: async () => ({}),
                         getRuntimeContext,
-                        getAllowedConnectionIds: async () => [],
+                        getConnections: async () => ({ connectionIds: [], connectionLabels: [] }),
                         timeoutMs: 1000,
                         longPolling: DEFAULT_LONG_POLLING_CONFIG,
                     });
@@ -108,6 +109,47 @@ describe('Local execution process helpers', () => {
                 expect(getRuntimeContext).not.toHaveBeenCalled();
             },
         );
+    });
+
+    describe('Connection labels', () => {
+        test("Should ask for $ with the labels the function's code uses", async () => {
+            const fallbackConnectionId = '5c1a1b0e-0000-4000-8000-000000000002';
+            const connectionLabels = [{ label: 'api' }, { label: 'jira', fallbackConnectionId }];
+            const stopBeforeFork = new Error('stop before fork');
+            const getRuntimeContext = jest.fn(async () => {
+                throw stopBeforeFork;
+            });
+            const executor = createChildProcessExecutor({
+                invokeChannel: { handleInvoke: async () => ({}) },
+                projectRoot: '/project',
+                childEntryPath: '/unused/local-execution-child.mjs',
+                moduleRunnerPath: '/vite/module-runner.js',
+                readRoots: [],
+                denyPatterns: [],
+                restrictModuleLoads: true,
+                resolveModule: async () => undefined,
+                log: getMockLogger(),
+            });
+
+            const call = executor({
+                func: {
+                    relativePath: 'src/example',
+                    name: 'example',
+                    absolutePath: '/project/src/example.backend.ts',
+                    allowedConnectionIds: [],
+                },
+                args: [],
+                executeAction: async () => ({}),
+                getRuntimeContext,
+                getConnections: async () => ({ connectionIds: [], connectionLabels }),
+                timeoutMs: 1000,
+                longPolling: DEFAULT_LONG_POLLING_CONFIG,
+            });
+
+            await expect(call).rejects.toBe(stopBeforeFork);
+            const expectedLabelFields = toConnectionLabelFields(connectionLabels);
+            expect(getRuntimeContext).toHaveBeenCalledWith(expectedLabelFields);
+        });
     });
 
     describe('Vite module runner', () => {

@@ -13,7 +13,10 @@ import type { build } from 'vite';
 import type { AppIdentity } from '../app-identity';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
+import type { ExtractedConnections } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import type { ConnectionLabelFields } from '../backend/connection-labels';
+import { toConnectionLabelFields } from '../backend/connection-labels';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type {
@@ -21,7 +24,7 @@ import type {
     ExecuteActionRequest,
     ExecuteActionResponse,
 } from '../backend/protocol';
-import type { BackendFunction, BackendOutputs } from '../backend/types';
+import type { BackendFunction, BackendOutputs, BuiltBackendFunction } from '../backend/types';
 import { generateDevVirtualEntryContent } from '../backend/virtual-entry';
 import { DEV_VERIFY_MODE } from '../constants';
 import type { LongPollingOptions } from '../types';
@@ -38,7 +41,7 @@ import { DEFAULT_TIMEOUT_MS } from './local-execution';
 import { getMaxRetryDelayMs } from './retry-delay';
 
 interface BundleResult {
-    func: BackendFunction;
+    func: BuiltBackendFunction;
     code: string;
 }
 
@@ -79,6 +82,7 @@ type LongPollingConfig = Required<LongPollingOptions>;
 export type QueryMeta = {
     appId?: string;
     appName?: string;
+    connectionEnvId?: string;
     isHighCodeApp: true;
     isDeployed: false;
     viewContext: { type: 'high_code_local_dev' | 'high_code_dev_verify' };
@@ -86,15 +90,35 @@ export type QueryMeta = {
 
 const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+export const CONNECTION_ENV_ID_VARIABLES =
+    'DD_APPS_CONNECTION_ENV_ID (or DATADOG_APPS_CONNECTION_ENV_ID)';
 
 // Upload adopts the identifier as the app ID only when it's a canonical, non-nil UUID.
-export function getQueryMeta(app: AppIdentity, mode: string): QueryMeta {
+export function getQueryMeta(
+    app: AppIdentity,
+    mode: string,
+    connectionEnvId: string | undefined,
+): QueryMeta {
     const { identifier, name } = app;
     const isAppId =
         identifier !== undefined && CANONICAL_UUID.test(identifier) && identifier !== NIL_UUID;
+    // Thrown rather than dropped, since running the default environment instead would mislead.
+    if (connectionEnvId !== undefined) {
+        if (!CANONICAL_UUID.test(connectionEnvId)) {
+            throw new Error(
+                `${CONNECTION_ENV_ID_VARIABLES} must be a connection environment ID (a lowercase UUID), but it is "${connectionEnvId}".`,
+            );
+        }
+        if (!isAppId) {
+            throw new Error(
+                `${CONNECTION_ENV_ID_VARIABLES} selects a connection environment of an uploaded app, but this app has no app ID. Set "id" in datadog-app.config.json to the app's ID, or unset the variable.`,
+            );
+        }
+    }
     return {
         ...(isAppId && { appId: identifier }),
         ...(name !== undefined && { appName: name }),
+        ...(connectionEnvId !== undefined && { connectionEnvId }),
         isHighCodeApp: true,
         isDeployed: false,
         viewContext: {
@@ -231,9 +255,11 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const { connectionIds, connectionLabels } = connectionIdCollector.getConnections();
     const enrichedFunc = {
         ...func,
-        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+        allowedConnectionIds: connectionIds,
+        connectionLabels,
     };
 
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
@@ -244,10 +270,12 @@ async function bundleBackendFunction(
 /**
  * Submits a query to Datadog's `preview-async` endpoint and long-polls until it resolves,
  * returning the raw `outputs`. `querySpec` is either the `jsFunctionWithActions` wrapper or
- * a single action's `{fqn, inputs}` — `submitQuery` doesn't care which.
+ * a single action's `{fqn, inputs}` — `submitQuery` doesn't care which. `labelFields` tells
+ * the server which connection labels to resolve into `$`, as an uploaded query's do.
  */
 async function submitQuery(
     querySpec: Record<string, unknown>,
+    labelFields: ConnectionLabelFields | undefined,
     displayName: string,
     queryMeta: QueryMeta,
     auth: AuthConfig,
@@ -271,6 +299,7 @@ async function submitQuery(
                     properties: {
                         spec: querySpec,
                         onlyTriggerManually: true,
+                        ...labelFields,
                     },
                 },
                 template_params: {},
@@ -333,7 +362,7 @@ function asOversizedBundleError(
 /** Executes a script via Datadog's app-builder queries API — the production round trip, wrapping the whole script as a `jsFunctionWithActions` query. */
 async function executeScriptViaDatadog(
     scriptBody: string,
-    func: BackendFunction,
+    func: BuiltBackendFunction,
     args: unknown[],
     queryMeta: QueryMeta,
     auth: AuthConfig,
@@ -342,6 +371,7 @@ async function executeScriptViaDatadog(
     log: Logger,
 ): Promise<BackendOutputs> {
     const displayName = formatRef(func);
+    const labelFields = toConnectionLabelFields(func.connectionLabels);
 
     const outputs = await submitQuery(
         {
@@ -352,6 +382,7 @@ async function executeScriptViaDatadog(
                 context: { backendFunctionArgs: args },
             },
         },
+        labelFields,
         displayName,
         queryMeta,
         auth,
@@ -368,13 +399,17 @@ async function executeScriptViaDatadog(
     return outputs;
 }
 
-/** Callers that arrive while a run is in flight share its result instead of starting their own. */
-function shareInFlight<T>(): (run: () => Promise<T>) => Promise<T> {
-    let pending: Promise<T> | undefined;
-    return (run) => {
-        pending ??= run().finally(() => {
-            pending = undefined;
-        });
+/** Callers that arrive while a run with the same key is in flight share its result instead of starting their own. */
+function shareInFlight<T>(): (key: string, run: () => Promise<T>) => Promise<T> {
+    const pendingByKey = new Map<string, Promise<T>>();
+    return (key, run) => {
+        let pending = pendingByKey.get(key);
+        if (!pending) {
+            pending = run().finally(() => {
+                pendingByKey.delete(key);
+            });
+            pendingByKey.set(key, pending);
+        }
         return pending;
     };
 }
@@ -391,7 +426,7 @@ function makeGetRuntimeContextRemotely(
     longPolling: LongPollingConfig,
     log: Logger,
 ): GetRuntimeContext {
-    return async () => {
+    return async (labelFields) => {
         const controller = new AbortController();
         const timeoutError = new Error(
             `Runtime context hydration timed out after ${RUNTIME_CONTEXT_TIMEOUT_MS}ms`,
@@ -417,6 +452,7 @@ function makeGetRuntimeContextRemotely(
                             context: {},
                         },
                     },
+                    labelFields,
                     RUNTIME_CONTEXT_DISPLAY_NAME,
                     queryMeta,
                     auth,
@@ -462,8 +498,11 @@ function makeExecuteActionRemotely(
     ): Promise<unknown> => {
         try {
             const startTime = Date.now();
+            const querySpec =
+                connectionId !== undefined ? { fqn, inputs, connectionId } : { fqn, inputs };
             const result = await submitQuery(
-                connectionId !== undefined ? { fqn, inputs, connectionId } : { fqn, inputs },
+                querySpec,
+                undefined,
                 fqn,
                 queryMeta,
                 auth,
@@ -684,7 +723,7 @@ async function validateAndBundle(
     req: IncomingMessage,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
-): Promise<{ func: BackendFunction; code: string; args: unknown[] }> {
+): Promise<{ func: BuiltBackendFunction; code: string; args: unknown[] }> {
     const { func, args } = await parseAndLookupFunction(req, functionsByName);
     const bundled = await bundle(func);
     return { ...bundled, args };
@@ -743,10 +782,10 @@ async function handleExecuteAction(
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    getConnections: (entryId: string) => Promise<ExtractedConnections>,
     log: Logger,
     executeLocally: LocalExecutor | undefined,
-    shareRuntimeContext: (run: GetRuntimeContext) => Promise<unknown>,
+    shareRuntimeContext: (key: string, run: () => Promise<unknown>) => Promise<unknown>,
 ): Promise<void> {
     try {
         if (!executeLocally) {
@@ -771,13 +810,17 @@ async function handleExecuteAction(
             longPolling,
             log,
         );
-        const getRuntimeContext = () => shareRuntimeContext(getRuntimeContextRemotely);
+        // Keyed by labels, since the server resolves only the labels a query lists.
+        const getRuntimeContext: GetRuntimeContext = (labelFields) => {
+            const key = JSON.stringify(labelFields);
+            return shareRuntimeContext(key, () => getRuntimeContextRemotely(labelFields));
+        };
         const result = await executeLocally({
             func,
             args,
             executeAction,
             getRuntimeContext,
-            getAllowedConnectionIds,
+            getConnections,
             timeoutMs: DEFAULT_TIMEOUT_MS,
             longPolling,
         });
@@ -876,7 +919,7 @@ function buildFunctionMap(backendFunctions: BackendFunction[]): Map<string, Back
 export function createDevServerMiddleware(
     viteBuild: typeof build,
     getBackendFunctions: () => BackendFunction[],
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>,
+    getConnections: (entryId: string) => Promise<ExtractedConnections>,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
@@ -887,12 +930,13 @@ export function createDevServerMiddleware(
     isHostAllowed: HostCheck,
     serverConditions: readonly string[],
     app: AppIdentity,
+    connectionEnvId: string | undefined,
     executeLocally?: LocalExecutor,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log, runStaticChecks);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
-    const queryMeta = getQueryMeta(app, mode);
+    const queryMeta = getQueryMeta(app, mode, connectionEnvId);
     const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
@@ -927,7 +971,7 @@ export function createDevServerMiddleware(
                 auth,
                 authedRequest,
                 longPolling,
-                getAllowedConnectionIds,
+                getConnections,
                 log,
                 executeLocally,
                 shareRuntimeContext,

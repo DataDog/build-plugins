@@ -22,7 +22,7 @@ import os from 'os';
 import path from 'path';
 import { parseAst } from 'rollup/parseAst';
 
-import type { BackendFunction } from './backend/types';
+import type { BuiltBackendFunction } from './backend/types';
 import { ARCHIVE_FILENAME, NODE_BACKEND_RUNTIME } from './constants';
 import type { AppsOptionsWithDefaults } from './types';
 import { BACKEND_OUT_DIR_PREFIX } from './vite/build-backend-functions';
@@ -97,7 +97,7 @@ describe('Apps Plugin - package output', () => {
         overrides: {
             options?: Partial<AppsOptionsWithDefaults>;
             backendOutputs?: Map<string, string>;
-            backendFunctions?: BackendFunction[];
+            backendFunctions?: BuiltBackendFunction[];
             tags?: string[];
         } = {},
     ) {
@@ -202,36 +202,79 @@ describe('Apps Plugin - package output', () => {
         expect(Object.keys(zipWithoutMaps.files)).toContain('frontend/index.html');
     });
 
-    test('includes backend function entries with connection allowlists in manifest.json', async () => {
-        const backendPath = path.join(root, 'greet.js');
-        await fs.writeFile(backendPath, 'export function greet() {}');
-        const backendFunction: BackendFunction = {
-            relativePath: 'src/backend/greet',
-            name: 'greet',
-            absolutePath: backendPath,
-            allowedConnectionIds: ['conn-a', 'conn-b'],
-        };
-        const backendOutputs = new Map<string, string>([['greet', backendPath]]);
+    const connectionLabelManifestCases: {
+        description: string;
+        connectionLabels: BuiltBackendFunction['connectionLabels'];
+        expected: Record<string, unknown>;
+    }[] = [
+        {
+            description: 'write empty label lists for a function without labels',
+            connectionLabels: [],
+            expected: {
+                allowedConnectionIds: ['conn-a', 'conn-b'],
+                connectionLabels: [],
+                connectionLabelFallbacks: [],
+            },
+        },
+        {
+            description: 'write each label once, with only the call sites that have a fallback',
+            connectionLabels: [
+                { label: 'jira' },
+                { label: 'jira', fallbackConnectionId: 'conn-a' },
+                { label: 'slack', fallbackConnectionId: 'conn-b' },
+            ],
+            expected: {
+                allowedConnectionIds: ['conn-a', 'conn-b'],
+                connectionLabels: ['jira', 'slack'],
+                connectionLabelFallbacks: [
+                    { label: 'jira', fallbackConnectionId: 'conn-a' },
+                    { label: 'slack', fallbackConnectionId: 'conn-b' },
+                ],
+            },
+        },
+        {
+            description: 'write a label-only call site to the label list but not the fallbacks',
+            connectionLabels: [{ label: 'pagerduty' }],
+            expected: {
+                allowedConnectionIds: ['conn-a', 'conn-b'],
+                connectionLabels: ['pagerduty'],
+                connectionLabelFallbacks: [],
+            },
+        },
+    ];
 
-        await buildAppPackage(
-            packageOptions({
-                backendOutputs,
-                backendFunctions: [backendFunction],
-            }),
-        );
+    test.each(connectionLabelManifestCases)(
+        'should $description in manifest.json',
+        async ({ connectionLabels, expected }) => {
+            const backendPath = path.join(root, 'greet.js');
+            await fs.writeFile(backendPath, 'export function greet() {}');
+            const backendFunction: BuiltBackendFunction = {
+                relativePath: 'src/backend/greet',
+                name: 'greet',
+                absolutePath: backendPath,
+                allowedConnectionIds: ['conn-a', 'conn-b'],
+                connectionLabels,
+            };
+            const backendOutputs = new Map<string, string>([['greet', backendPath]]);
 
-        const zip = await JSZip.loadAsync(
-            await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
-        );
-        const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
-        const functionKeys = Object.keys(manifest.backend.functions);
-        expect(functionKeys).toHaveLength(1);
-        expect(functionKeys[0]).toMatch(/^[a-f0-9]{64}\.greet$/);
-        expect(manifest.backend.functions[functionKeys[0]]).toEqual({
-            allowedConnectionIds: ['conn-a', 'conn-b'],
-        });
-        expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['backend/greet.js']));
-    });
+            await buildAppPackage(
+                packageOptions({
+                    backendOutputs,
+                    backendFunctions: [backendFunction],
+                }),
+            );
+
+            const zip = await JSZip.loadAsync(
+                await fs.readFile(path.join(packageDirectory, ARCHIVE_FILENAME)),
+            );
+            const manifest = JSON.parse(await zip.file('manifest.json')!.async('string'));
+            const functionKeys = Object.keys(manifest.backend.functions);
+            expect(functionKeys).toHaveLength(1);
+            expect(functionKeys[0]).toMatch(/^[a-f0-9]{64}\.greet$/);
+            expect(manifest.backend.functions[functionKeys[0]]).toEqual(expected);
+            expect(Object.keys(zip.files)).toEqual(expect.arrayContaining(['backend/greet.js']));
+        },
+    );
 });
 
 describe('Apps Plugin - getPlugins closeBundle', () => {
@@ -290,13 +333,18 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
                 return getEcho();
             }
         `;
+        const helperConnectionId = '3e4f5a6b-0000-4000-8000-000000000003';
         const helperCode = `
             import { request } from '@datadog/action-catalog/http/http';
 
-            const HTTP_CONNECTION_ID = 'conn-helper';
+            const HTTP_CONNECTION_ID = '${helperConnectionId}';
 
             export function getEcho() {
                 return request({ connectionId: HTTP_CONNECTION_ID, inputs: {} });
+            }
+
+            export function getLabeledEcho() {
+                return request({ connectionLabel: 'echo', connectionId: HTTP_CONNECTION_ID, inputs: {} });
             }
         `;
         const helperId = '/project/src/backend/helpers/http.js';
@@ -337,7 +385,15 @@ describe('Apps Plugin - getPlugins closeBundle', () => {
             Object.values(
                 (manifest as { backend: { functions: Record<string, unknown> } }).backend.functions,
             ),
-        ).toEqual([{ allowedConnectionIds: ['conn-helper'] }]);
+        ).toEqual([
+            {
+                allowedConnectionIds: [helperConnectionId],
+                connectionLabels: ['echo'],
+                connectionLabelFallbacks: [
+                    { label: 'echo', fallbackConnectionId: helperConnectionId },
+                ],
+            },
+        ]);
         await expectNoLeakedTempDirs(mkdtempMock, [BACKEND_OUT_DIR_PREFIX, MANIFEST_DIR_PREFIX]);
     });
 

@@ -11,7 +11,11 @@ import type { build } from 'vite';
 
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
 import { encodeQueryName } from '../backend/encodeQueryName';
-import type { BackendFunction } from '../backend/types';
+import type {
+    BackendFunction,
+    BuiltBackendFunction,
+    ConnectionLabelCallSite,
+} from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
 
 import { createBackendConnectionIdCollector } from './backend-connection-id-collector';
@@ -34,12 +38,13 @@ export async function buildBackendFunctions(
     buildRoot: string,
     log: Logger,
     runStaticChecks: RunBackendStaticChecks,
-): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
+): Promise<{ outDir: string; outputs: Map<string, string>; functions: BuiltBackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
     const outDir = await mkdtemp(outDirPrefix);
     const outputs = new Map<string, string>();
     const allowedConnectionIdsByEntryPath = new Map<string, string[]>();
+    const connectionLabelsByEntryPath = new Map<string, ConnectionLabelCallSite[]>();
 
     log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
 
@@ -101,10 +106,9 @@ export async function buildBackendFunctions(
                 }
             }
 
-            allowedConnectionIdsByEntryPath.set(
-                func.absolutePath,
-                connectionIdCollector.getAllowedConnectionIds(),
-            );
+            const { connectionIds, connectionLabels } = connectionIdCollector.getConnections();
+            allowedConnectionIdsByEntryPath.set(func.absolutePath, connectionIds);
+            connectionLabelsByEntryPath.set(func.absolutePath, connectionLabels);
         }
     } catch (error) {
         // A rejected build throws before outDir is returned, so the caller's success-path cleanup never runs — clean it up here. Cleanup failure is only logged so it can't mask the real build error.
@@ -122,6 +126,7 @@ export async function buildBackendFunctions(
         functions: functions.map((func) => ({
             ...func,
             allowedConnectionIds: allowedConnectionIdsByEntryPath.get(func.absolutePath)!,
+            connectionLabels: connectionLabelsByEntryPath.get(func.absolutePath)!,
         })),
     };
 }
