@@ -111,6 +111,14 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         errors.push(`${red('decorators')} must be one of: ${VALID_DECORATOR_SYNTAXES.join(', ')}`);
     }
 
+    // Validate exceptionReplay option
+    if (
+        pluginConfig.exceptionReplay !== undefined &&
+        typeof pluginConfig.exceptionReplay !== 'boolean'
+    ) {
+        errors.push(`${red('exceptionReplay')} must be a boolean`);
+    }
+
     // Throw if there are any errors
     if (errors.length) {
         log.error(`\n  - ${errors.join('\n  - ')}`);
@@ -144,5 +152,6 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         functionTypes: pluginConfig.functionTypes,
         namedOnly: pluginConfig.namedOnly ?? false,
         decorators: pluginConfig.decorators ?? 'legacy',
+        exceptionReplay: pluginConfig.exceptionReplay ?? false,
     };
 };
