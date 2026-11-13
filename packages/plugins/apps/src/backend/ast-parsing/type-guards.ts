@@ -2,7 +2,14 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import type { BaseNode, Program, SimpleLiteral, TemplateLiteral, VariableDeclarator } from 'estree';
+import type {
+    BaseNode,
+    Node,
+    Program,
+    SimpleLiteral,
+    TemplateLiteral,
+    VariableDeclarator,
+} from 'estree';
 
 export type StringLiteral = SimpleLiteral & { value: string };
 
@@ -41,6 +48,14 @@ export function isTypeOnly(node: TypeOnlyAwareNode): boolean {
 
 export function isVariableDeclaratorNode(node: unknown): node is VariableDeclarator {
     return hasNodeType(node, 'VariableDeclarator');
+}
+
+// Narrows nodes typed against another copy of `estree`, such as eslint-scope's, by their type.
+export function isNodeOfType<T extends Node['type']>(
+    node: unknown,
+    type: T,
+): node is Extract<Node, { type: T }> {
+    return hasNodeType(node, type);
 }
 
 function isNoSubstitutionTemplateLiteral(node: unknown): node is TemplateLiteral {
