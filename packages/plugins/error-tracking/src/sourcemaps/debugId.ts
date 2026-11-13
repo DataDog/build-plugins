@@ -8,12 +8,15 @@ import fsp from 'fs/promises';
 // (see packages/plugins/rum/src/getSourceCodeContextSnippet.ts). The key is quoted in source
 // (`JSON.stringify(context)`) but minifiers like terser strip quotes from object keys that are
 // valid identifiers, so the built output can have either `"ddDebugId":"..."` or `ddDebugId:"..."`.
-// The value can also end up wrapped in single quotes or backticks depending on the minifier, so all
-// three of `"`, `'` and `` ` `` are accepted around it. The opening quote is captured and
-// backreferenced so the closing quote must match it. Reading it back out of the file we're about to
+// Both the key and the value can also end up wrapped in single quotes or backticks depending on
+// the minifier (e.g. terser with `quote_style: 1` and `keep_quoted_props: true` emits
+// `'ddDebugId':'...'`), so all three of `"`, `'` and `` ` `` are accepted around each of them. The
+// key's quote is optional, the value's is not, and each opening quote is captured and
+// backreferenced so its closing quote must match it. Reading it back out of the file we're about to
 // upload means we never have to trust a filename as a coordination key between the RUM plugin and
 // this one, so it stays correct across any bundler renaming step.
-const DEBUG_ID_RX = /"?ddDebugId"?:(["'`])([0-9a-fA-F-]{36})\1/;
+const DEBUG_ID_RX =
+    /(?<keyQuote>["'`]?)ddDebugId\k<keyQuote>:(?<valueQuote>["'`])(?<debugId>[0-9a-fA-F-]{36})\k<valueQuote>/;
 
 // Read progressively so the common case only needs the first KiB, while still supporting
 // bundlers or transforms that place the injected snippet later in the artifact.
@@ -24,7 +27,7 @@ export const DEBUG_ID_SEARCH_CHUNK_BYTES = 1024;
 const DEBUG_ID_SEARCH_OVERLAP_CHARACTERS = 64;
 
 const matchDebugId = (fileContent: string): string | undefined => {
-    return DEBUG_ID_RX.exec(fileContent)?.[2];
+    return DEBUG_ID_RX.exec(fileContent)?.groups?.debugId;
 };
 
 // Search in fixed-size reads and stop as soon as the debug ID is found. Only a small overlap is
