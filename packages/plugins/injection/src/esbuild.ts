@@ -15,6 +15,7 @@ import path from 'path';
 import { PLUGIN_NAME } from './constants';
 import {
     getContentToInject,
+    getInitialFiles,
     hasChunkInjection,
     isNodeSystemError,
     isFileSupported,
@@ -106,13 +107,22 @@ export const getEsbuildPlugin = (
 
             try {
                 const proms: Promise<void>[] = [];
+                const outputs = result.metafile.outputs;
+                const entryOutputs = Object.keys(outputs).filter((p) => {
+                    const entryPoint = outputs[p].entryPoint;
+                    return entryPoint && entries.some((e) => e.resolved.endsWith(entryPoint));
+                });
+                const initialOutputs = getInitialFiles(entryOutputs, (p) =>
+                    (outputs[p]?.imports ?? [])
+                        .filter((imported) => imported.kind !== 'dynamic-import')
+                        .map((imported) => imported.path),
+                );
 
                 // Process all output files
-                for (const [p, o] of Object.entries(result.metafile.outputs)) {
+                for (const p of Object.keys(outputs)) {
                     // Determine if this is an entry point
-                    const isEntry = Boolean(
-                        o.entryPoint && entries.some((e) => e.resolved.endsWith(o.entryPoint!)),
-                    );
+                    const isEntry = entryOutputs.includes(p);
+                    const isInitial = initialOutputs.has(p);
 
                     if (!isEntry && !hasChunkInjection(contentsToInject)) {
                         continue;
@@ -141,12 +151,12 @@ export const getEsbuildPlugin = (
                                 const banner = getContentToInject(
                                     contentsToInject,
                                     InjectPosition.BEFORE,
-                                    { sourceOrHash, fileName, isEntry },
+                                    { sourceOrHash, fileName, isEntry, isInitial },
                                 );
                                 const footer = getContentToInject(
                                     contentsToInject,
                                     InjectPosition.AFTER,
-                                    { sourceOrHash, fileName, isEntry },
+                                    { sourceOrHash, fileName, isEntry, isInitial },
                                 );
 
                                 if (!banner && !footer) {

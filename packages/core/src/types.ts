@@ -131,6 +131,8 @@ export type ChunkInfo = {
     sourceOrHash: string;
     fileName: string;
     isEntry: boolean;
+    // Runs before any lazily loaded chunk of its build. Unset means initial.
+    isInitial?: boolean;
 };
 
 // Static string, lazy async loader (e.g. file fetch), or per-chunk code generator.
