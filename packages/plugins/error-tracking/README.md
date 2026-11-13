@@ -118,7 +118,7 @@ Number of concurrent upload to the API.
 
 Should be a prefix common to all your JS source files, depending on the URL they are served from.
 
-The prefix can be a full URL or an absolute path.
+The prefix can be a full URL or an absolute URL path. URL paths use forward slashes, including when the build runs on Windows.
 
 Example: if you're uploading `dist/file.js` to `https://example.com/static/file.js`, you can use `minifiedPathPrefix: 'https://example.com/static/'` or `minifiedPathPrefix: '/static/'`.`minifiedPathPrefix: '/'` is a valid input when you upload JS at the root directory of the server.
 

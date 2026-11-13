@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Output } from '@dd/core/types';
+import path from 'path';
 import {
     joinUrlOrPath,
     decomposePath,
@@ -66,6 +67,17 @@ describe('Error Tracking Plugin Sourcemaps Files', () => {
 
         test.each(cases)('Should handle $description', ({ base, relativePath, expected }) => {
             expect(joinUrlOrPath(base, relativePath)).toBe(expected);
+        });
+
+        test('Should use forward slashes when the platform separator is a backslash', () => {
+            const separator = jest.replaceProperty(path, 'sep', '\\');
+            try {
+                expect(joinUrlOrPath('/static/js', 'assets\\main.js')).toBe(
+                    '/static/js/assets/main.js',
+                );
+            } finally {
+                separator.restore();
+            }
         });
     });
 
