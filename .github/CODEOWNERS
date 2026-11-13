@@ -21,7 +21,7 @@ packages/plugins/git                                                  @DataDog/b
 packages/plugins/injection                                            @DataDog/build-plugins
 
 # Metrics
-packages/plugins/metrics                                              @DataDog/frontend-devx
+packages/plugins/metrics                                              @DataDog/frontend-delivery
 
 # Error Tracking
 packages/plugins/error-tracking                                       @DataDog/rum-backend @DataDog/error-tracking
