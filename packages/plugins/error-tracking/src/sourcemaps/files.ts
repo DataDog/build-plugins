@@ -18,8 +18,9 @@ type PartialSourcemap = Pick<Sourcemap, 'minifiedFilePath' | 'minifiedUrl' | 're
 export const joinUrlOrPath = (prefix: MinifiedPathPrefix, relativePath: string): string => {
     // Prefix is a path.
     if (prefix.startsWith('/')) {
-        // Simply join the prefix with the relative path.
-        return path.join(prefix, relativePath);
+        // URL paths use forward slashes even when the build runs on Windows.
+        const urlPath = relativePath.split(path.sep).join('/');
+        return path.posix.join(prefix, urlPath);
     }
 
     // Prefix is a URL.
