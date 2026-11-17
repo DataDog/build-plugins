@@ -22,6 +22,7 @@ type BuildMetadata = {
 //     with. Every sourcemap of a build is uploaded with the same git metadata,
 //     so any chunk's debug ID identifies the build's repository and commit.
 // The first chunk to execute defines the global; later chunks keep it.
+// That chunk is initial, so lazy chunks skip the version and keep their hash across builds.
 export const getRuntimeBootstrap = ({
     version,
     debugId,
@@ -30,7 +31,10 @@ export const getRuntimeBootstrap = ({
         // Without chunk info there is no debug ID to match, so don't invent one.
         const chunkDebugId = debugId && chunk ? getChunkDebugId(chunk) : undefined;
         // Undefined fields are left out by JSON.stringify.
-        const buildMetadata: BuildMetadata = { version, debugId: chunkDebugId };
+        const buildMetadata: BuildMetadata = {
+            version: chunk?.isInitial === false ? undefined : version,
+            debugId: chunkDebugId,
+        };
         const serializedBuildMetadata = JSON.stringify(buildMetadata);
 
         return `if(typeof globalThis.${buildMetadataGlobal}==='undefined'){globalThis.${buildMetadataGlobal}=${serializedBuildMetadata}}`;

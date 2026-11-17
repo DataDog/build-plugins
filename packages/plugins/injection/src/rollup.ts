@@ -10,7 +10,12 @@ import MagicString from 'magic-string';
 import path from 'path';
 import type { RenderedChunk } from 'rollup';
 
-import { getContentToInject, isFileSupported, warnUnsupportedFile } from './helpers';
+import {
+    getContentToInject,
+    getInitialFiles,
+    isFileSupported,
+    warnUnsupportedFile,
+} from './helpers';
 import type { ContentsToInject } from './types';
 
 // Use "INJECTED_FILE" so it get flagged by isInjectionFile().
@@ -26,22 +31,30 @@ export const getRollupPlugin = (
             // Keep BEFORE and AFTER injections in their requested positions even when another
             // plugin, such as Terser, transforms or reorders the chunk.
             order: 'post',
-            handler(code, chunk: RenderedChunk) {
+            handler(code, chunk: RenderedChunk, _outputOptions, { chunks }) {
                 const { base, ext } = path.parse(chunk.fileName);
                 if (!isFileSupported(ext)) {
                     warnUnsupportedFile(log, ext, base);
                     return null;
                 }
 
+                const entries = Object.values(chunks).filter((c) => c.isEntry);
+                const isInitial = getInitialFiles(
+                    entries.map((c) => c.fileName),
+                    (file) => chunks[file]?.imports ?? [],
+                ).has(chunk.fileName);
+
                 const banner = getContentToInject(contentsToInject, InjectPosition.BEFORE, {
                     sourceOrHash: code,
                     fileName: chunk.fileName,
                     isEntry: chunk.isEntry,
+                    isInitial,
                 });
                 const footer = getContentToInject(contentsToInject, InjectPosition.AFTER, {
                     sourceOrHash: code,
                     fileName: chunk.fileName,
                     isEntry: chunk.isEntry,
+                    isInitial,
                 });
 
                 if (!banner && !footer) {
