@@ -347,6 +347,13 @@ export const sendSourcemaps = async (
         return;
     }
 
+    if (options.dryRun) {
+        log.info(
+            `[DRYRUN] Would have uploaded ${green(payloads.length.toString())} sourcemaps, skipping the upload.`,
+        );
+        return;
+    }
+
     const uploadTimer = log.time('Upload sourcemaps');
     const { errors: uploadErrors, warnings: uploadWarnings } = await upload(
         payloads,
