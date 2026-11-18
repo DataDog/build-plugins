@@ -422,7 +422,7 @@ export const renderMarkdownComment = (
             body += `| ${row.browserName} | ${row.workloadLabel} | ${formatQuality(row)} | ${formatCallOverhead(row)} |\n`;
         }
 
-        body += `\n[What do the Tiny and Hot workloads represent?](${WORKLOAD_DOCS_URL})\n`;
+        body += `\n[What do the workloads represent?](${WORKLOAD_DOCS_URL})\n`;
         if (sdkVersion) {
             const sdkLabel = formatSdkLabel(sdkVersion, sdkBuild, (value) => `\`${value}\``);
             body += `\nBrowser Debugger SDK: ${sdkLabel}\n`;
