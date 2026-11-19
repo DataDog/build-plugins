@@ -98,9 +98,9 @@ export const validateSourcemapsOptions = (
             toReturn.config = {
                 bailOnError: false,
                 dryRun: false,
-                experimentalDuplicateCheck: false,
                 maxConcurrency: 20,
                 ...sourcemapsCfg,
+                experimentalDuplicateCheck: sourcemapsCfg.experimentalDuplicateCheck ?? true,
             };
         }
 

@@ -126,6 +126,10 @@ describe('Error Tracking Plugin Sourcemaps', () => {
     });
 
     describe('sendSourcemaps', () => {
+        beforeEach(() => {
+            jest.mocked(getExistingDebugIds).mockResolvedValue(new Set());
+        });
+
         test('Should upload sourcemaps.', async () => {
             // Add some fixtures.
             addFixtureFiles({
@@ -599,9 +603,6 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             return { sourcemaps, tempDir };
         };
 
-        const getDuplicateCheckOptions = () =>
-            getDebugIdSourcemapsConfiguration({ experimentalDuplicateCheck: true });
-
         beforeEach(() => {
             getExistingDebugIdsMock.mockReset();
         });
@@ -616,7 +617,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 senderContextMock,
                 mockLogger,
             );
@@ -658,7 +659,6 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             getExistingDebugIdsMock.mockResolvedValue(new Set([duplicateDebugId]));
             const dryRunOptions = getDebugIdSourcemapsConfiguration({
                 dryRun: true,
-                experimentalDuplicateCheck: true,
             });
 
             await sendSourcemaps(sourcemaps, dryRunOptions, senderContextMock, mockLogger);
@@ -673,7 +673,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             rmSync(tempDir);
         });
 
-        test('Should not query the endpoint unless the duplicate check is enabled', async () => {
+        test('Should not query the endpoint when duplicate checking is disabled', async () => {
             const { sourcemaps, tempDir } = addDebugIdSourcemaps(
                 'dd-build-plugins-duplicate-check-disabled',
                 [duplicateDebugId],
@@ -681,7 +681,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDebugIdSourcemapsConfiguration(),
+                getDebugIdSourcemapsConfiguration({ experimentalDuplicateCheck: false }),
                 senderContextMock,
                 mockLogger,
             );
@@ -700,7 +700,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 { ...senderContextMock, apiKey: undefined },
                 mockLogger,
             );
@@ -719,7 +719,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 senderContextMock,
                 mockLogger,
             );
@@ -744,7 +744,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 senderContextMock,
                 mockLogger,
             );
@@ -768,7 +768,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 { ...senderContextMock, sendMetrics: true },
                 mockLogger,
             );
@@ -792,7 +792,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDuplicateCheckOptions(),
+                getDebugIdSourcemapsConfiguration(),
                 senderContextMock,
                 mockLogger,
             );
