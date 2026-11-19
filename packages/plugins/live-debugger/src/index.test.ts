@@ -24,6 +24,7 @@ const makeOptions = (
     functionTypes: undefined,
     namedOnly: false,
     decorators: 'legacy',
+    exceptionReplay: false,
     ...overrides,
 });
 

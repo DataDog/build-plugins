@@ -42,6 +42,7 @@ describe('validateOptions', () => {
                     functionTypes: undefined,
                     namedOnly: false,
                     decorators: 'legacy',
+                    exceptionReplay: false,
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -57,6 +58,7 @@ describe('validateOptions', () => {
                     functionTypes: undefined,
                     namedOnly: false,
                     decorators: 'legacy',
+                    exceptionReplay: false,
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -72,6 +74,7 @@ describe('validateOptions', () => {
                     functionTypes: undefined,
                     namedOnly: false,
                     decorators: 'legacy',
+                    exceptionReplay: false,
                 } satisfies LiveDebuggerOptionsWithDefaults,
             },
             {
@@ -216,6 +219,16 @@ describe('validateOptions', () => {
                 description: 'accept namedOnly as false',
                 input: makeConfig({ namedOnly: false }),
                 expected: expect.objectContaining({ namedOnly: false }),
+            },
+            {
+                description: 'accept exceptionReplay as true',
+                input: makeConfig({ exceptionReplay: true }),
+                expected: expect.objectContaining({ exceptionReplay: true }),
+            },
+            {
+                description: 'accept exceptionReplay as false',
+                input: makeConfig({ exceptionReplay: false }),
+                expected: expect.objectContaining({ exceptionReplay: false }),
             },
             {
                 description: 'accept decorators as legacy',
@@ -397,6 +410,28 @@ describe('validateOptions', () => {
             );
             expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/namedOnly.*must be a boolean/),
+            );
+        });
+    });
+
+    describe('invalid exceptionReplay', () => {
+        const cases = [
+            {
+                description: 'reject exceptionReplay when not a boolean',
+                input: makeInvalidConfig({ exceptionReplay: 'yes' }),
+            },
+            {
+                description: 'reject exceptionReplay when a number',
+                input: makeInvalidConfig({ exceptionReplay: 1 }),
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockError).toHaveBeenCalledWith(
+                expect.stringMatching(/exceptionReplay.*must be a boolean/),
             );
         });
     });
