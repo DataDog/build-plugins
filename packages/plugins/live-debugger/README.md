@@ -259,6 +259,14 @@ Selects which decorator syntax the parser accepts when reading your source. The 
 
 If a file uses the decorator style that is **not** selected, it fails to parse and is skipped (left uninstrumented) — it is never miscompiled. Files with no decorators are unaffected by this option.
 
+**Example — opt into Stage 3 decorators:**
+
+```ts
+liveDebugger: {
+    decorators: 'modern',
+}
+```
+
 ### liveDebugger.exceptionReplay
 
 > default: `false`
@@ -276,14 +284,6 @@ The call only runs when an exception leaves the function and Exception Replay is
 ```ts
 liveDebugger: {
     exceptionReplay: true,
-}
-```
-
-**Example — opt into Stage 3 decorators:**
-
-```ts
-liveDebugger: {
-    decorators: 'modern',
 }
 ```
 
