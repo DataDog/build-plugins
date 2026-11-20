@@ -374,6 +374,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                           bailOnError?: boolean;
                           debugId: true;
                           dryRun?: boolean;
+                          duplicateCheck?: boolean;
                           experimentalDuplicateCheck?: boolean;
                           maxConcurrency?: number;
                           upload: true;

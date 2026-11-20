@@ -202,7 +202,7 @@ const getDuplicateDebugIds = async (
     log: Logger,
 ): Promise<Set<string>> => {
     const apiKey = context.apiKey;
-    if (options.experimentalDuplicateCheck !== true || !apiKey) {
+    if (options.duplicateCheck !== true || !apiKey) {
         return new Set();
     }
 

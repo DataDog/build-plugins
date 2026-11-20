@@ -312,14 +312,18 @@ describe('factory validateOptions', () => {
             ).toBeUndefined();
         });
 
-        it('should normalize debug ID injection and upload options', () => {
+        it.each([
+            { duplicateCheck: false },
+            { experimentalDuplicateCheck: false },
+            { duplicateCheck: false, experimentalDuplicateCheck: true },
+        ])('should forward duplicate-check options from %o', (duplicateCheckOptions) => {
             expect(
                 validateOptions({
                     sourcemaps: {
                         bailOnError: true,
                         debugId: true,
                         dryRun: true,
-                        experimentalDuplicateCheck: true,
+                        ...duplicateCheckOptions,
                         maxConcurrency: 5,
                         upload: true,
                     },
@@ -331,7 +335,7 @@ describe('factory validateOptions', () => {
                             bailOnError: true,
                             debugId: true,
                             dryRun: true,
-                            experimentalDuplicateCheck: true,
+                            ...duplicateCheckOptions,
                             maxConcurrency: 5,
                         },
                     },
@@ -376,6 +380,10 @@ describe('factory validateOptions', () => {
             },
             {
                 input: { sourcemaps: { bailOnError: true, debugId: true } },
+                error: /require sourcemaps\.upload to be true/,
+            },
+            {
+                input: { sourcemaps: { debugId: true, duplicateCheck: false } },
                 error: /require sourcemaps\.upload to be true/,
             },
             {
