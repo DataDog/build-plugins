@@ -1538,7 +1538,7 @@ describe('Dev Server Middleware', () => {
         });
         test('Should merge configured allowedConnectionIds getter into preview-async query inputs on each request', async () => {
             mockViteBuild.mockImplementation(async (config) => {
-                emitModuleParsed(
+                await emitModuleParsed(
                     config,
                     mockFunctions[0].absolutePath,
                     `

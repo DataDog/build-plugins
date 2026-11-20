@@ -12,6 +12,7 @@ export interface ChildStartConfig {
     functionName: string;
     args: unknown[];
     runtimeContext: Record<string, unknown>;
+    environment?: [name: string, value: string][];
     actionCatalogInstalled: boolean;
     appsBackendInstalled: boolean;
     flushTimeoutMs: number;
