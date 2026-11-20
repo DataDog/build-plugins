@@ -99,16 +99,20 @@ describe('Error Tracking Plugins validate', () => {
                 bailOnError: false,
                 debugId: true,
                 dryRun: false,
-                experimentalDuplicateCheck: true,
+                duplicateCheck: true,
                 maxConcurrency: 20,
             });
         });
 
-        test('Should allow disabling duplicate checks for debug ID uploads', () => {
+        test.each([
+            { options: { duplicateCheck: false } },
+            { options: { experimentalDuplicateCheck: false } },
+            { options: { duplicateCheck: false, experimentalDuplicateCheck: true } },
+        ])('Should disable duplicate checks with $options', ({ options }) => {
             const { config, errors } = validateSourcemapsOptions({
                 auth: { apiKey: '123' },
                 errorTracking: {
-                    sourcemaps: { debugId: true, experimentalDuplicateCheck: false },
+                    sourcemaps: { debugId: true, ...options },
                 },
                 rum: { sourceCodeContext: { debugId: true } },
             });
@@ -118,7 +122,7 @@ describe('Error Tracking Plugins validate', () => {
                 bailOnError: false,
                 debugId: true,
                 dryRun: false,
-                experimentalDuplicateCheck: false,
+                duplicateCheck: false,
                 maxConcurrency: 20,
             });
         });

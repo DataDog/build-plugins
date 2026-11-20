@@ -681,7 +681,7 @@ describe('Error Tracking Plugin Sourcemaps', () => {
 
             await sendSourcemaps(
                 sourcemaps,
-                getDebugIdSourcemapsConfiguration({ experimentalDuplicateCheck: false }),
+                getDebugIdSourcemapsConfiguration({ duplicateCheck: false }),
                 senderContextMock,
                 mockLogger,
             );

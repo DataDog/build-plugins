@@ -463,7 +463,7 @@ export const getDebugIdSourcemapsConfiguration = (
     bailOnError: false,
     debugId: true,
     dryRun: false,
-    experimentalDuplicateCheck: true,
+    duplicateCheck: true,
     maxConcurrency: 10,
     ...options,
 });
