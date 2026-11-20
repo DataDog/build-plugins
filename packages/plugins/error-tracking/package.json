@@ -20,6 +20,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@datadog/sourcemaps-shared": "workspace:*",
         "@dd/core": "workspace:*",
         "chalk": "2.3.1",
         "outdent": "0.8.0",

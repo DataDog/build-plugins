@@ -30,6 +30,8 @@ const dependencyExceptions = [
     // In the published packages, '@dd/tools' is listed in order to use the common rollup configuration.
     // We don't want, nor need, to list it as a dependency of the published package.
     '@dd/tools',
+    // Bundle the shared workspace into the plugins; only datadog-ci installs it from npm.
+    '@datadog/sourcemaps-shared',
 ];
 
 // Some filters.
