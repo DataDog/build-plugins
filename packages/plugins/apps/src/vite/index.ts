@@ -17,6 +17,7 @@ import {
     MissingAuthenticationError,
     type DoAuthenticatedRequest,
 } from '../auth';
+import { resolveAppConfigCredentialIds } from '../backend/app-config-resolver';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
@@ -32,6 +33,7 @@ import {
     type BackendFunctionPackage,
     type InstalledBackendFunctionPackage,
 } from '../backend/backend-sources';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { generateProxyModule } from '../backend/proxy-codegen';
 import { BACKEND_RUNTIME_PACKAGES } from '../backend/shared';
@@ -244,7 +246,13 @@ export const getVitePlugin = ({
     options,
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
-    const runStaticChecks = createBackendStaticChecks(log);
+    const getConfiguredAllowedConnectionIds = (): string[] => {
+        return resolveAppConfigCredentialIds(context.buildRoot);
+    };
+    const runStaticChecks = createBackendStaticChecks(
+        log,
+        () => getConfiguredAllowedConnectionIds().length > 0,
+    );
     const { auth } = context;
 
     context.inject({
@@ -655,12 +663,14 @@ export const getVitePlugin = ({
             let backendFunctions = getBackendFunctions();
             logPackageBackendFunctions(backendFunctions, context.buildRoot, log);
             if (backendFunctions.length > 0) {
+                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
                 const result = await buildBackendFunctions(
                     bundler.build,
                     backendFunctions,
                     context.buildRoot,
                     log,
                     runStaticChecks,
+                    configuredAllowedConnectionIds,
                 );
                 backendOutDir = result.outDir;
                 backendOutputs = result.outputs;
@@ -782,7 +792,13 @@ export const getVitePlugin = ({
                     runStaticChecks,
                     parseAst,
                 );
-                return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, context.buildRoot);
+                const discoveredIds = extractConnectionIdsFromModuleGraph(
+                    entryId,
+                    moduleGraph,
+                    context.buildRoot,
+                );
+                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
+                return mergeAllowedConnectionIds(configuredAllowedConnectionIds, discoveredIds);
             };
             const isHostAllowed = createViteHostCheck(server.config);
             const appIdentity = readAppIdentity(context.buildRoot, log);
@@ -801,6 +817,7 @@ export const getVitePlugin = ({
                 bundler.defaultServerConditions,
                 appIdentity,
                 executeLocally,
+                getConfiguredAllowedConnectionIds,
             );
             server.middlewares.use((req, res, next) => {
                 revalidateBackendFunctionFile(req);
