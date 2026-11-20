@@ -23,6 +23,7 @@ import { DEV_CLIENT_SRC, getVitePlugin, SSR_WARMUP_SETTING } from '@dd/apps-plug
 import * as fsHelpers from '@dd/core/helpers/fs';
 import { outputFileSync, readFileSync, rmSync } from '@dd/core/helpers/fs';
 import type { AuthOptionsWithDefaults } from '@dd/core/types';
+import { LABEL_FALLBACK_CONNECTION_ID } from '@dd/tests/_jest/fixtures/apps_backend_project/connectionIds.ts';
 import { getTempWorkingDir } from '@dd/tests/_jest/helpers/env';
 import {
     createMockRequest,
@@ -44,12 +45,13 @@ import {
     type ViteDevServer,
 } from 'vite';
 
-import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { extractConnectionsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type { BackendFunction } from '../backend/types';
 import { DEV_VERIFY_MODE } from '../constants';
 
+import { loadConnectionLabelsHelper } from './connection-labels-helper';
 import {
     buildLocalExecutionChild,
     removeLocalExecutionChild,
@@ -244,7 +246,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [getRuntimeUsersFunc],
-            async () => [],
+            async () => ({ connectionIds: [], connectionLabels: [] }),
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -255,6 +257,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -292,7 +295,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [nestedImportFunc],
-            async () => [],
+            async () => ({ connectionIds: [], connectionLabels: [] }),
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -303,6 +306,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -334,7 +338,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [viaHelperFunc],
-            async () => [],
+            async () => ({ connectionIds: [], connectionLabels: [] }),
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -345,6 +349,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -363,8 +368,8 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(body.result).toEqual({ data: { value: 'via-helper-value' } });
     }, 30000);
 
-    // Every other test bypasses getAllowedConnectionIds' real wiring via
-    // createDevServerMiddleware(..., () => [], ...); this one sends the request through
+    // Every other test bypasses getConnections' real wiring via
+    // createDevServerMiddleware(..., async () => ({ ... }), ...); this one sends the request through
     // server.middlewares — the real stack configureServer installs — to exercise it for real.
     test('Should execute successfully through the real configureServer-installed middleware, walking a real multi-hop import graph', async () => {
         // Registers viaHelperFunc in the real backend-function registry — a side effect of
@@ -428,7 +433,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     test('Should compute allowed connection IDs on the very first request for an entry, with no prior priming import', async () => {
         // collectModuleGraphFromServer appends LOCAL_EXECUTION_LOAD_SUFFIX internally, so this
         // closure only handles the bare id — matching vite/index.ts's real wiring.
-        const getAllowedConnectionIds = async (entryId: string) => {
+        const getConnections = async (entryId: string) => {
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
@@ -436,7 +441,13 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
-            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+            const connectionLabelsHelper = await loadConnectionLabelsHelper(FIXTURE_ROOT);
+            return extractConnectionsFromModuleGraph(
+                entryId,
+                moduleGraph,
+                FIXTURE_ROOT,
+                connectionLabelsHelper?.connectionLabelPattern,
+            );
         };
 
         const auth: AuthOptionsWithDefaults = {
@@ -448,7 +459,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [noSdkFunc],
-            getAllowedConnectionIds,
+            getConnections,
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -459,6 +470,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -481,7 +493,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
     // collectActionCatalogImports's `ImportDeclaration` search can't parse, so the collector
     // must read each module's original source from disk instead of the transformed output.
     test('Should recognize a connectionId-scoped action-catalog call and allow it, not silently reject it', async () => {
-        const getAllowedConnectionIds = async (entryId: string) => {
+        const getConnections = async (entryId: string) => {
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
@@ -489,7 +501,13 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
-            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+            const connectionLabelsHelper = await loadConnectionLabelsHelper(FIXTURE_ROOT);
+            return extractConnectionsFromModuleGraph(
+                entryId,
+                moduleGraph,
+                FIXTURE_ROOT,
+                connectionLabelsHelper?.connectionLabelPattern,
+            );
         };
 
         const auth: AuthOptionsWithDefaults = {
@@ -501,7 +519,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [actionCatalogCallFunc],
-            getAllowedConnectionIds,
+            getConnections,
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -512,6 +530,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -545,7 +564,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [actionCatalogCallFunc],
-            async () => [],
+            async () => ({ connectionIds: [], connectionLabels: [] }),
             { site: 'datadoghq.com' },
             undefined,
             mockLongPolling,
@@ -556,6 +575,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             createViteHostCheck(server.config),
             defaultServerConditions,
             {},
+            undefined,
         );
 
         const functionName = encodeQueryName(actionCatalogCallFunc);
@@ -573,14 +593,14 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         expect(res.statusCode).toBe(200);
         const rawBody = res.getBody();
         const body = JSON.parse(rawBody);
-        expect(body.allowedConnectionIds).toEqual(['conn-1']);
+        expect(body.allowedConnectionIds).toEqual([LABEL_FALLBACK_CONNECTION_ID, 'conn-1']);
         expect(body.code).toContain('conn-1');
     }, 30000);
 
     // A dynamic import sits between two static ones, so resolution must come from the AST
     // itself rather than node.importedModules's undocumented ordering for mixed imports.
     test('Should recognize a connectionId-scoped action-catalog call even when a top-level dynamic import sits between two static imports', async () => {
-        const getAllowedConnectionIds = async (entryId: string) => {
+        const getConnections = async (entryId: string) => {
             const moduleGraph = await collectModuleGraphFromServer(
                 server,
                 entryId,
@@ -588,7 +608,13 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
                 createBackendStaticChecks(getMockLogger()),
                 parseAst,
             );
-            return extractConnectionIdsFromModuleGraph(entryId, moduleGraph, FIXTURE_ROOT);
+            const connectionLabelsHelper = await loadConnectionLabelsHelper(FIXTURE_ROOT);
+            return extractConnectionsFromModuleGraph(
+                entryId,
+                moduleGraph,
+                FIXTURE_ROOT,
+                connectionLabelsHelper?.connectionLabelPattern,
+            );
         };
 
         const auth: AuthOptionsWithDefaults = {
@@ -600,7 +626,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [mixedImportsFunc],
-            getAllowedConnectionIds,
+            getConnections,
             auth,
             testApiKeyRequest,
             mockLongPolling,
@@ -611,6 +637,7 @@ describe('Dev Server Middleware — real end-to-end local execution', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
             makeChildExecutor(server),
         );
 
@@ -683,7 +710,7 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
         const middleware = createDevServerMiddleware(
             build,
             () => [func],
-            async () => [],
+            async () => ({ connectionIds: [], connectionLabels: [] }),
             { site: 'datadoghq.com' } satisfies AuthOptionsWithDefaults,
             testApiKeyRequest,
             mockLongPolling,
@@ -694,6 +721,7 @@ describe('Dev Server Middleware — dev:verify bundles', () => {
             isHostAllowed,
             defaultServerConditions,
             {},
+            undefined,
         );
         const functionName = encodeQueryName(func);
         const req = createMockRequest(EXECUTE_ACTION_ROUTE, { functionName, args: ['QA'] });

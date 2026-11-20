@@ -17,11 +17,18 @@ import { StringDecoder } from 'node:string_decoder';
 import { pathToFileURL } from 'node:url';
 import type { HotPayload } from 'vite';
 
-import { isActionCatalogInstalled, isDatadogAppsBackendInstalled } from '../backend/shared';
+import type { ExtractedConnections } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { toConnectionLabelFields } from '../backend/connection-labels';
+import {
+    isActionCatalogInstalled,
+    isConnectionLabelsHelperInstalled,
+    isDatadogAppsBackendInstalled,
+} from '../backend/shared';
 import type { BackendFunction, BackendOutputs } from '../backend/types';
 import { LOCAL_EXECUTION_LOAD_SUFFIX } from '../constants';
 import type { LongPollingOptions } from '../types';
 
+import { loadConnectionLabelsHelper } from './connection-labels-helper';
 import { UNRESTRICTED_LOCAL_EXECUTION_WARNING } from './local-execution-limits';
 import type { ChildStartConfig, ParentMessage } from './local-execution-protocol';
 import {
@@ -61,7 +68,7 @@ export interface LocalExecutionRequest {
     args: unknown[];
     executeAction: ExecuteAction;
     getRuntimeContext: GetRuntimeContext;
-    getAllowedConnectionIds: (entryId: string) => Promise<string[]>;
+    getConnections: (entryId: string) => Promise<ExtractedConnections>;
     timeoutMs: number;
     longPolling: Required<LongPollingOptions>;
 }
@@ -624,18 +631,29 @@ export function createChildProcessExecutor(
     };
 
     const execute: LocalExecutor = async (request) => {
-        const { func, args, executeAction, getRuntimeContext, getAllowedConnectionIds } = request;
+        const { func, args, executeAction, getRuntimeContext, getConnections } = request;
         refuseIfClosed(func);
         const displayName = `${func.relativePath}/${func.name}`;
-        const runtimeContext = await getRuntimeContext();
-        assertValidRuntimeContext(runtimeContext);
-        const connectionIdsResolving = getAllowedConnectionIds(func.absolutePath);
-        const allowedConnectionIds = await withTimeout(
-            connectionIdsResolving,
+        const connectionsResolving = getConnections(func.absolutePath);
+        const { connectionIds: codeConnectionIds, connectionLabels } = await withTimeout(
+            connectionsResolving,
             request.timeoutMs,
             `Resolving allowed connections for "${displayName}"`,
         );
+        // The server resolves only the labels a query lists, as it does for an uploaded one.
+        const labelFields = toConnectionLabelFields(connectionLabels);
+        const runtimeContext = await getRuntimeContext(labelFields);
+        assertValidRuntimeContext(runtimeContext);
+        // As a deployed run does, the server's resolved connections join the code's own.
+        const connectionLabelsHelper = await loadConnectionLabelsHelper(projectRoot);
+        const resolvedConnectionIds =
+            connectionLabelsHelper?.getResolvedConnectionIds(
+                runtimeContext,
+                labelFields.connectionLabels,
+            ) ?? [];
+        const allowedConnectionIds = [...new Set([...codeConnectionIds, ...resolvedConnectionIds])];
         const actionCatalogInstalled = isActionCatalogInstalled(projectRoot);
+        const connectionLabelsInstalled = isConnectionLabelsHelperInstalled(projectRoot);
         const appsBackendInstalled = isDatadogAppsBackendInstalled(projectRoot);
         callCount += 1;
         return runChild({
@@ -653,6 +671,7 @@ export function createChildProcessExecutor(
                 args,
                 runtimeContext,
                 actionCatalogInstalled,
+                connectionLabelsInstalled,
                 appsBackendInstalled,
                 flushTimeoutMs,
             },

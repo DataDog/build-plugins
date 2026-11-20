@@ -4,12 +4,17 @@
 
 import {
     ACTION_CATALOG_IMPORT,
+    CONNECTION_LABELS_IMPORT,
     DATADOG_APPS_BACKEND_IMPORT,
     SET_BACKEND_CONTEXT_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
     isActionCatalogInstalled,
+    isConnectionLabelsHelperInstalled,
     isDatadogAppsBackendInstalled,
 } from './shared';
+
+// An alias, so an export named like one of the entry's own imports can't redeclare it.
+export const BACKEND_FUNCTION_ALIAS = '__ddBackendFunction';
 
 /**
  * Generate the virtual entry source for a backend function.
@@ -23,7 +28,9 @@ export function generateVirtualEntryContent(
     const lines: string[] = [];
     const hasDatadogAppsBackendRuntime = isDatadogAppsBackendInstalled(projectRoot);
 
-    lines.push(`import { ${functionName} } from ${JSON.stringify(entryPath)};`);
+    lines.push(
+        `import { ${functionName} as ${BACKEND_FUNCTION_ALIAS} } from ${JSON.stringify(entryPath)};`,
+    );
 
     if (hasDatadogAppsBackendRuntime) {
         lines.push(DATADOG_APPS_BACKEND_IMPORT);
@@ -31,6 +38,9 @@ export function generateVirtualEntryContent(
 
     if (isActionCatalogInstalled(projectRoot)) {
         lines.push(ACTION_CATALOG_IMPORT);
+        if (isConnectionLabelsHelperInstalled(projectRoot)) {
+            lines.push(CONNECTION_LABELS_IMPORT);
+        }
     }
 
     lines.push('');
@@ -47,7 +57,7 @@ export function generateVirtualEntryContent(
     lines.push(SET_EXECUTE_ACTION_SNIPPET);
     lines.push('');
     lines.push('    const args = $.backendFunctionArgs ?? [];');
-    lines.push(`    const result = await ${functionName}(...args);`);
+    lines.push(`    const result = await ${BACKEND_FUNCTION_ALIAS}(...args);`);
     lines.push('    return result;');
     lines.push('}');
 

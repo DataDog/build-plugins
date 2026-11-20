@@ -10,6 +10,8 @@
 import nodeModule from 'node:module';
 import type { Writable } from 'node:stream';
 
+import { CONNECTION_LABELS_UPGRADE_MESSAGE } from '../backend/connection-labels';
+
 import { withPermissionHint } from './local-execution-limits';
 import type { ChildMessage, ChildStartConfig, ParentMessage } from './local-execution-protocol';
 import { isParentMessage } from './local-execution-protocol';
@@ -115,6 +117,32 @@ function onParentMessage(message: ParentMessage): void {
     }
 }
 
+/** The same action-catalog swap the generated entry imports, or a refusal of label calls without it. */
+async function loadConnectionLabelSwap(
+    runner: ModuleRunnerInstance,
+    config: ChildStartConfig,
+    $: Record<string, unknown>,
+): Promise<(call: Record<string, unknown>) => unknown> {
+    if (config.connectionLabelsInstalled) {
+        const connectionLabels = await runner.import('@datadog/action-catalog/connection-labels');
+        const { readResolvedConnections, swapConnectionLabel } = connectionLabels;
+        if (
+            typeof readResolvedConnections === 'function' &&
+            typeof swapConnectionLabel === 'function'
+        ) {
+            // Read once before the function runs, as the generated entry does.
+            const resolvedConnections: unknown = readResolvedConnections($);
+            return (call) => swapConnectionLabel(call, resolvedConnections);
+        }
+    }
+    return (call) => {
+        if ('connectionLabel' in call) {
+            throw new Error(CONNECTION_LABELS_UPGRADE_MESSAGE);
+        }
+        return call;
+    };
+}
+
 async function registerSdkAdapters(
     runner: ModuleRunnerInstance,
     config: ChildStartConfig,
@@ -124,9 +152,12 @@ async function registerSdkAdapters(
         const actionExecution = await runner.import('@datadog/action-catalog/action-execution');
         const { setExecuteActionImplementation } = actionExecution;
         if (typeof setExecuteActionImplementation === 'function') {
-            setExecuteActionImplementation((actionId: string, actionRequest: unknown) => {
+            const swapLabel = await loadConnectionLabelSwap(runner, config, $);
+            setExecuteActionImplementation(async (actionId: string, actionRequest: unknown) => {
                 const call = isIndexableRecord(actionRequest) ? actionRequest : {};
-                return dispatchAction(actionId, call, `"${actionId}"`);
+                const swappedCall = swapLabel(call);
+                const dispatchedCall = isIndexableRecord(swappedCall) ? swappedCall : {};
+                return dispatchAction(actionId, dispatchedCall, `"${actionId}"`);
             });
         }
     }

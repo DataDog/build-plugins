@@ -2,10 +2,78 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { CONNECTION_LABELS_UPGRADE_MESSAGE } from '@dd/apps-plugin/backend/connection-labels';
 import {
+    CONNECTION_LABELS_IMPORT,
     SET_BACKEND_CONTEXT_SNIPPET,
     SET_EXECUTE_ACTION_SNIPPET,
+    isConnectionLabelsHelperInstalled,
 } from '@dd/apps-plugin/backend/shared';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+describe('isConnectionLabelsHelperInstalled', () => {
+    let projectRoot: string;
+
+    beforeEach(() => {
+        projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'dd-apps-connection-labels-'));
+    });
+
+    afterEach(() => {
+        fs.rmSync(projectRoot, { recursive: true, force: true });
+    });
+
+    const installActionCatalog = (exports: Record<string, string>) => {
+        const packageDir = path.join(projectRoot, 'node_modules', '@datadog', 'action-catalog');
+        fs.mkdirSync(packageDir, { recursive: true });
+        const packageJson = { name: '@datadog/action-catalog', exports };
+        fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify(packageJson));
+        for (const file of Object.values(exports)) {
+            fs.writeFileSync(path.join(packageDir, file), 'export {};');
+        }
+    };
+
+    const cases: {
+        description: string;
+        exports: Record<string, string> | undefined;
+        expected: boolean;
+    }[] = [
+        {
+            description: 'find the helper in a version that exports it',
+            exports: {
+                './action-execution': './action-execution.js',
+                './connection-labels': './connection-labels.js',
+            },
+            expected: true,
+        },
+        {
+            description: 'not find the helper in an older version without the export',
+            exports: { './action-execution': './action-execution.js' },
+            expected: false,
+        },
+        {
+            description: 'not find the helper when action-catalog is not installed',
+            exports: undefined,
+            expected: false,
+        },
+    ];
+
+    test.each(cases)('should $description', ({ exports, expected }) => {
+        if (exports) {
+            installActionCatalog(exports);
+        }
+        expect(isConnectionLabelsHelperInstalled(projectRoot)).toBe(expected);
+    });
+});
+
+describe('CONNECTION_LABELS_IMPORT', () => {
+    test('imports the swap from the action-catalog subpath', () => {
+        expect(CONNECTION_LABELS_IMPORT).toBe(
+            "import { readResolvedConnections, swapConnectionLabel } from '@datadog/action-catalog/connection-labels';",
+        );
+    });
+});
 
 describe('SET_BACKEND_CONTEXT_SNIPPET', () => {
     test('registers the backend runtime context', () => {
@@ -46,14 +114,37 @@ describe('SET_BACKEND_CONTEXT_SNIPPET', () => {
  */
 function extractRegisteredCallback(
     actions: Record<string, unknown>,
+    runtimeContext: Record<string, unknown> = {},
+    connectionLabelsHelper?: {
+        readResolvedConnections: (runtimeContext: unknown) => unknown;
+        swapConnectionLabel: (request: unknown, resolved: unknown) => unknown;
+    },
 ): (actionId: string, request: unknown) => Promise<unknown> {
     const setExecuteActionImplementation = jest.fn();
-    const $ = { Actions: actions };
+    const $ = { ...runtimeContext, Actions: actions };
 
-    // The snippet references `setExecuteActionImplementation` and `$` as free variables.
-    // eslint-disable-next-line no-new-func
-    const run = new Function('setExecuteActionImplementation', '$', SET_EXECUTE_ACTION_SNIPPET);
-    run(setExecuteActionImplementation, $);
+    // The snippet references these as free variables. Without the helper they stay undeclared,
+    // as in an entry generated without its import.
+    if (connectionLabelsHelper) {
+        // eslint-disable-next-line no-new-func
+        const run = new Function(
+            'setExecuteActionImplementation',
+            'readResolvedConnections',
+            'swapConnectionLabel',
+            '$',
+            SET_EXECUTE_ACTION_SNIPPET,
+        );
+        run(
+            setExecuteActionImplementation,
+            connectionLabelsHelper.readResolvedConnections,
+            connectionLabelsHelper.swapConnectionLabel,
+            $,
+        );
+    } else {
+        // eslint-disable-next-line no-new-func
+        const run = new Function('setExecuteActionImplementation', '$', SET_EXECUTE_ACTION_SNIPPET);
+        run(setExecuteActionImplementation, $);
+    }
 
     expect(setExecuteActionImplementation).toHaveBeenCalledTimes(1);
     return setExecuteActionImplementation.mock.calls[0][0];
@@ -137,5 +228,96 @@ describe('SET_EXECUTE_ACTION_SNIPPET', () => {
                 await expect(callback(actionId, {})).rejects.toThrow(expectedError);
             },
         );
+    });
+
+    describe('connection labels', () => {
+        const actionFn = jest.fn().mockResolvedValue('result');
+
+        beforeEach(() => {
+            actionFn.mockClear();
+        });
+
+        describe('with the action-catalog helper', () => {
+            const resolved = { hasConnectionEnvs: true, connections: { jira: 'resolved-id' } };
+            const makeHelper = () => ({
+                readResolvedConnections: jest.fn().mockReturnValue(resolved),
+                swapConnectionLabel: jest.fn().mockReturnValue({ connectionId: 'resolved-id' }),
+            });
+
+            test('should read $ once, before any call', async () => {
+                const helper = makeHelper();
+                const runtimeContext = { Connections: { jira: 'resolved-id' } };
+                const callback = extractRegisteredCallback(
+                    { http: actionFn },
+                    runtimeContext,
+                    helper,
+                );
+                expect(helper.readResolvedConnections).toHaveBeenCalledTimes(1);
+                expect(helper.readResolvedConnections).toHaveBeenCalledWith(
+                    expect.objectContaining(runtimeContext),
+                );
+                await callback('com.datadoghq.http', { connectionLabel: 'jira' });
+                await callback('com.datadoghq.http', { connectionLabel: 'jira' });
+                expect(helper.readResolvedConnections).toHaveBeenCalledTimes(1);
+            });
+
+            const passedCases = [
+                {
+                    description: 'pass a label call to the helper and run the request it returns',
+                    request: { connectionLabel: 'jira', inputs: {} },
+                },
+                {
+                    description: 'pass a non-label call to the helper too',
+                    request: { connectionId: 'conn-1', inputs: {} },
+                },
+            ];
+
+            test.each(passedCases)('should $description', async ({ request }) => {
+                const helper = makeHelper();
+                const callback = extractRegisteredCallback({ http: actionFn }, {}, helper);
+                await callback('com.datadoghq.http', request);
+                expect(helper.swapConnectionLabel).toHaveBeenCalledWith(request, resolved);
+                expect(actionFn).toHaveBeenCalledWith({ connectionId: 'resolved-id' });
+            });
+
+            test('should not run the action when the helper fails closed', async () => {
+                const helper = makeHelper();
+                helper.swapConnectionLabel.mockImplementation(() => {
+                    throw new Error('Connection label "jira" is not mapped');
+                });
+                const callback = extractRegisteredCallback({ http: actionFn }, {}, helper);
+                await expect(
+                    callback('com.datadoghq.http', { connectionLabel: 'jira' }),
+                ).rejects.toThrow('Connection label "jira" is not mapped');
+                expect(actionFn).not.toHaveBeenCalled();
+            });
+        });
+
+        describe('without the action-catalog helper', () => {
+            test('should run a non-label call unchanged', async () => {
+                const request = { connectionId: 'conn-1', inputs: {} };
+                const callback = extractRegisteredCallback({ http: actionFn });
+                await callback('com.datadoghq.http', request);
+                expect(actionFn).toHaveBeenCalledWith(request);
+                expect(actionFn.mock.calls[0][0]).toBe(request);
+            });
+
+            test.each([
+                {
+                    description: 'a label call',
+                    request: { connectionLabel: 'jira', connectionId: 'fallback-id', inputs: {} },
+                },
+                {
+                    description: 'a label-only call',
+                    request: { connectionLabel: 'jira', inputs: {} },
+                },
+            ])('should fail $description, asking to upgrade', async ({ request }) => {
+                const callback = extractRegisteredCallback({ http: actionFn });
+                await expect(callback('com.datadoghq.http', request)).rejects.toThrow(
+                    CONNECTION_LABELS_UPGRADE_MESSAGE,
+                );
+                expect(actionFn).not.toHaveBeenCalled();
+            });
+        });
     });
 });
