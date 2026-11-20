@@ -16,10 +16,15 @@ export type RunBackendStaticChecks = (
 ) => void;
 
 /** Create one per plugin instance and share it across call sites, so the checks can't drift and each warning shows once. */
-export function createBackendStaticChecks(log: Logger): RunBackendStaticChecks {
+export function createBackendStaticChecks(
+    log: Logger,
+    hasConfiguredCredentials: () => boolean = () => false,
+): RunBackendStaticChecks {
     const warnedEnvReads: WarnedEnvReads = new Map();
     return (ast, filePath, scopeAnalysis) => {
         rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
-        warnAboutEnvReads(ast, filePath, log, scopeAnalysis, warnedEnvReads);
+        if (!hasConfiguredCredentials()) {
+            warnAboutEnvReads(ast, filePath, log, scopeAnalysis, warnedEnvReads);
+        }
     };
 }

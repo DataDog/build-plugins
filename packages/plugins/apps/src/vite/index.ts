@@ -246,7 +246,13 @@ export const getVitePlugin = ({
     options,
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
-    const runStaticChecks = createBackendStaticChecks(log);
+    const getConfiguredAllowedConnectionIds = (): string[] => {
+        return resolveAppConfigCredentialIds(context.buildRoot);
+    };
+    const runStaticChecks = createBackendStaticChecks(
+        log,
+        () => getConfiguredAllowedConnectionIds().length > 0,
+    );
     const { auth } = context;
 
     context.inject({
@@ -263,9 +269,6 @@ export const getVitePlugin = ({
         () => context.buildRoot,
         () => parametersModuleId,
     );
-    const getConfiguredAllowedConnectionIds = (): string[] => {
-        return resolveAppConfigCredentialIds(context.buildRoot);
-    };
 
     // Vite also invokes closeBundle when a dev server closes; configureServer marks the dev session
     // so its exit doesn't rebuild backend functions or replace the production package.

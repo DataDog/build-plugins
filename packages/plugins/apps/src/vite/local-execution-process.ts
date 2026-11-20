@@ -169,10 +169,11 @@ export function resolveViteModuleRunner(projectRoot: string): string | undefined
     }
 }
 
-// Node's own TLS and time zone settings, which a corporate proxy or a test may need; never app keys.
+// Let Node start with only its runtime settings. Install developer variables after startup.
 const NODE_RUNTIME_ENV = ['NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'TZ'];
+const PRIVATE_DEV_ENV =
+    /^(?:NODE_OPTIONS|NODE_TLS_REJECT_UNAUTHORIZED|NODE_CHANNEL_(?:FD|SERIALIZATION_MODE)|(?:DD|DATADOG)_(?:API_KEY|APP_KEY|OAUTH_ACCESS_TOKEN))$/i;
 
-/** Production gives each call a fresh environment without the developer's variables or keys. */
 function buildChildEnv(tmpDir: string): typeof process.env {
     const env: typeof process.env = { TMPDIR: tmpDir };
     for (const name of NODE_RUNTIME_ENV) {
@@ -619,7 +620,13 @@ export function createChildProcessExecutor(
             });
 
             startLoadTimer();
-            reply({ type: 'start', config });
+            const environment: NonNullable<ChildStartConfig['environment']> = [];
+            for (const [name, value] of Object.entries(process.env)) {
+                if (value !== undefined && !PRIVATE_DEV_ENV.test(name)) {
+                    environment.push([name, value]);
+                }
+            }
+            reply({ type: 'start', config: { ...config, environment } });
         });
     };
 

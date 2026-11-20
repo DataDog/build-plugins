@@ -295,15 +295,19 @@ describe('Local execution in a child process', () => {
         );
 
         test(
-            "Should strip the developer environment, keys included, and keep Node's own runtime settings",
+            'Should pass through local environment variables while stripping NODE_OPTIONS and dev-server OAuth tokens',
             async () => {
                 const previous = {
-                    api: process.env.DD_API_KEY,
-                    app: process.env.DD_APP_KEY,
+                    custom: process.env.LOCAL_TEST_SECRET,
+                    oauth: process.env.DD_OAUTH_ACCESS_TOKEN,
+                    datadogOauth: process.env.DATADOG_OAUTH_ACCESS_TOKEN,
+                    nodeOptions: process.env.NODE_OPTIONS,
                     tz: process.env.TZ,
                 };
-                process.env.DD_API_KEY = 'parent-api-key';
-                process.env.DD_APP_KEY = 'parent-app-key';
+                process.env.LOCAL_TEST_SECRET = 'local-secret-value';
+                process.env.DD_OAUTH_ACCESS_TOKEN = 'dev-server-oauth-token';
+                process.env.DATADOG_OAUTH_ACCESS_TOKEN = 'dev-server-datadog-oauth-token';
+                process.env.NODE_OPTIONS = '--max-old-space-size=512';
                 process.env.TZ = 'UTC';
                 try {
                     const execute = makeExecutor();
@@ -311,20 +315,12 @@ describe('Local execution in a child process', () => {
                         makeRequest(fixtureFunction('childState', 'readEnvNames'), []),
                     );
                     const allNames = Array.isArray(result.data) ? result.data : [];
-                    const allowed = [
-                        'TMPDIR',
-                        'TZ',
-                        'NODE_EXTRA_CA_CERTS',
-                        'SSL_CERT_FILE',
-                        'SSL_CERT_DIR',
-                        'SystemRoot',
-                        'TEMP',
-                        'TMP',
-                        // macOS adds this one to every process it starts.
-                        '__CF_USER_TEXT_ENCODING',
-                    ];
-                    expect(allNames.filter((name) => !allowed.includes(name))).toEqual([]);
-                    expect(allNames).toEqual(expect.arrayContaining(['TMPDIR', 'TZ']));
+                    expect(allNames).toEqual(
+                        expect.arrayContaining(['TMPDIR', 'TZ', 'LOCAL_TEST_SECRET']),
+                    );
+                    expect(allNames).not.toContain('NODE_OPTIONS');
+                    expect(allNames).not.toContain('DD_OAUTH_ACCESS_TOKEN');
+                    expect(allNames).not.toContain('DATADOG_OAUTH_ACCESS_TOKEN');
                 } finally {
                     const restore = (name: string, value: string | undefined) => {
                         if (value === undefined) {
@@ -333,8 +329,10 @@ describe('Local execution in a child process', () => {
                             process.env[name] = value;
                         }
                     };
-                    restore('DD_API_KEY', previous.api);
-                    restore('DD_APP_KEY', previous.app);
+                    restore('LOCAL_TEST_SECRET', previous.custom);
+                    restore('DD_OAUTH_ACCESS_TOKEN', previous.oauth);
+                    restore('DATADOG_OAUTH_ACCESS_TOKEN', previous.datadogOauth);
+                    restore('NODE_OPTIONS', previous.nodeOptions);
                     restore('TZ', previous.tz);
                 }
             },

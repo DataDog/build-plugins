@@ -10,7 +10,6 @@ import { getMockLogger, mockLogger } from '@dd/tests/_jest/helpers/mocks';
 import { mkdtemp } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
-import { parseAst } from 'rollup/parseAst';
 import { pathToFileURL } from 'url';
 import { build } from 'vite';
 
@@ -43,26 +42,6 @@ async function outDirCreatedByLastCall(): Promise<string> {
         throw new Error('mkdtemp was never called');
     }
     return lastCall.value;
-}
-function emitModuleParsed(
-    config: {
-        plugins?: Array<{
-            moduleParsed?: (this: { parse: typeof parseAst }, moduleInfo: unknown) => void;
-        }>;
-    },
-    id: string,
-    code: string,
-) {
-    for (const plugin of config.plugins ?? []) {
-        plugin.moduleParsed?.call(
-            { parse: parseAst },
-            {
-                id,
-                code,
-                importedIds: [],
-            },
-        );
-    }
 }
 
 describe('buildBackendFunctions', () => {
@@ -164,14 +143,17 @@ describe('buildBackendFunctions', () => {
                 allowedConnectionIds: [],
             };
 
+            const connectionId = '11111111-2222-3333-4444-555555555555';
             const result = await buildBackendFunctions(
                 build,
                 [namesFunc],
                 workingDir,
                 mockLogger,
                 createBackendStaticChecks(mockLogger),
+                [connectionId],
             );
             outDir = result.outDir;
+            expect(result.functions[0].allowedConnectionIds).toEqual([connectionId]);
             const [bundlePath] = [...result.outputs.values()];
             const bundleCode = readFileSync(bundlePath);
             const bundleUrl = pathToFileURL(bundlePath).href;
@@ -199,46 +181,4 @@ describe('buildBackendFunctions', () => {
             }
         }
     }, 30000);
-
-    test('merges configured allowedConnectionIds into each built backend function', async () => {
-        const testFunc: BackendFunction = {
-            ...func,
-            absolutePath: '/project/src/example.backend.ts',
-        };
-        const mockViteBuild = jest.fn().mockImplementation(async (config) => {
-            emitModuleParsed(
-                config,
-                testFunc.absolutePath,
-                'export function example() { return null; }',
-            );
-            return {
-                output: [
-                    {
-                        type: 'chunk',
-                        fileName: 'example.js',
-                        code: 'console.log("hello");',
-                    },
-                ],
-            };
-        });
-
-        const configuredAllowedConnectionIds = [
-            '11111111-2222-3333-4444-555555555555',
-            '22222222-3333-4444-5555-666666666666',
-        ];
-
-        const result = await buildBackendFunctions(
-            mockViteBuild as unknown as typeof build,
-            [testFunc],
-            '/project',
-            mockLogger,
-            createBackendStaticChecks(mockLogger),
-            configuredAllowedConnectionIds,
-        );
-
-        expect(result.functions[0].allowedConnectionIds).toEqual(configuredAllowedConnectionIds);
-        if (result.outDir) {
-            await rm(result.outDir);
-        }
-    });
 });
