@@ -1851,6 +1851,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@datadog/sourcemaps-shared@workspace:*, @datadog/sourcemaps-shared@workspace:packages/published/sourcemaps-shared":
+  version: 0.0.0-use.local
+  resolution: "@datadog/sourcemaps-shared@workspace:packages/published/sourcemaps-shared"
+  dependencies:
+    typescript: "npm:5.4.3"
+  languageName: unknown
+  linkType: soft
+
 "@datadog/vite-plugin@workspace:*, @datadog/vite-plugin@workspace:packages/published/vite-plugin":
   version: 0.0.0-use.local
   resolution: "@datadog/vite-plugin@workspace:packages/published/vite-plugin"
@@ -2008,6 +2016,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dd/error-tracking-plugin@workspace:packages/plugins/error-tracking"
   dependencies:
+    "@datadog/sourcemaps-shared": "workspace:*"
     "@dd/core": "workspace:*"
     chalk: "npm:2.3.1"
     outdent: "npm:0.8.0"
