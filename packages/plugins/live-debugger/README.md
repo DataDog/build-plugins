@@ -26,6 +26,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
+    -   [liveDebugger.exceptionReplay](#livedebuggerexceptionreplay)
 -   [Symbol upload](#symbol-upload)
 -   [Skipped function types](#skipped-function-types)
 -   [Bundle size impact](#bundle-size-impact)
@@ -92,6 +93,7 @@ liveDebugger?: {
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
     decorators?: 'legacy' | 'modern';
+    exceptionReplay?: boolean;
 }
 ```
 
@@ -298,6 +300,26 @@ liveDebugger: {
 }
 ```
 
+### liveDebugger.exceptionReplay
+
+> default: `false`
+
+When `true`, every instrumented function also reports the exceptions that leave it, whether or not a probe is active, so the Browser Debugger SDK can capture the arguments of each frame an error passes through (Exception Replay). The catch block of each instrumented function gets an extra call:
+
+```javascript
+catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.js;add', $dd_e, this, {a, b}); throw $dd_e; }
+```
+
+The call only runs when an exception leaves the function and Exception Replay is enabled in the SDK, so it adds no measurable cost to calls that don't throw. It repeats each function's ID, which adds 120 to 140 bytes per instrumented function to the uncompressed output, but compresses well. See [Bundle size impact](#bundle-size-impact).
+
+**Example:**
+
+```ts
+liveDebugger: {
+    exceptionReplay: true,
+}
+```
+
 ## Symbol upload
 
 To let you add logpoints to your browser application, Live Debugger needs to know which functions each build contains. After each production build, the plugin uploads nonsensitive symbols and metadata to Datadog: the names of the instrumented functions, the files they're in, and their line numbers.
@@ -329,9 +351,11 @@ Check the size limits your build enforces before enabling Live Debugger, especia
 
 If a chunk no longer fits, raise the limit, or instrument less of your code with [`include`](#livedebuggerinclude), [`exclude`](#livedebuggerexclude), [`namedOnly`](#livedebuggernamedonly), or [`functionTypes`](#livedebuggerfunctiontypes).
 
+[`exceptionReplay`](#livedebuggerexceptionreplay) adds to this growth. On a large application, it added 12% to 15% to the uncompressed size of the instrumented output, and 0.5% to 1.2% to the gzipped size.
+
 ## Runtime requirements
 
-The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd_entry`, `$dd_return`, and `$dd_throw`. These are provided by the **Datadog Browser Debugger SDK** (`@datadog/browser-debugger`).
+The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd_entry`, `$dd_return`, and `$dd_throw`, plus `$dd_catch` when [`exceptionReplay`](#livedebuggerexceptionreplay) is enabled. These are provided by the **Datadog Browser Debugger SDK** (`@datadog/browser-debugger`).
 
 ### Safe fallback when the SDK is absent
 
@@ -341,7 +365,7 @@ Every instrumented function only calls `$dd_probes` when it is defined:
 let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
 ```
 
-This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks).
+This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks). The `$dd_catch` call has its own `globalThis.$dd_catch !== void 0` guard, so it's skipped until the SDK enables Exception Replay.
 
 This also covers instrumented code that runs in another global scope than the page, such as a sandboxed iframe, a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
 
