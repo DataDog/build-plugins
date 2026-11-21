@@ -31,40 +31,40 @@ describe('getRuntimeBootstrap', () => {
 
     const cases = [
         {
-            description: 'expose the version and the chunk debug ID',
-            options: { version: '1.0.0', debugId: true },
-            chunk,
-            expected: { version: '1.0.0', debugId: chunkDebugId },
-        },
-        {
-            description: 'expose the chunk debug ID without a version',
-            options: { version: undefined, debugId: true },
+            description: 'expose the chunk debug ID',
+            options: { service: undefined, debugId: true },
             chunk,
             expected: { debugId: chunkDebugId },
         },
         {
-            description: 'expose the version only when debug IDs are disabled',
-            options: { version: '1.0.0', debugId: false },
+            description: 'expose the service and the chunk debug ID',
+            options: { service: 'checkout', debugId: true },
             chunk,
-            expected: { version: '1.0.0' },
+            expected: { service: 'checkout', debugId: chunkDebugId },
         },
         {
-            description: 'expose empty build metadata without a version or debug IDs',
-            options: { version: undefined, debugId: false },
+            description: 'expose the service only when debug IDs are disabled',
+            options: { service: 'checkout', debugId: false },
+            chunk,
+            expected: { service: 'checkout' },
+        },
+        {
+            description: 'expose empty build metadata without a service or debug IDs',
+            options: { service: undefined, debugId: false },
             chunk,
             expected: {},
         },
         {
             description: 'not expose a debug ID without chunk information',
-            options: { version: '1.0.0', debugId: true },
+            options: { service: 'checkout', debugId: true },
             chunk: undefined,
-            expected: { version: '1.0.0' },
+            expected: { service: 'checkout' },
         },
         {
-            description: 'safely serialize the version',
-            options: { version: `1.0.0"'\\</script>\u2028`, debugId: false },
+            description: 'safely serialize the service',
+            options: { service: `checkout"'\\</script>\u2028`, debugId: false },
             chunk,
-            expected: { version: `1.0.0"'\\</script>\u2028` },
+            expected: { service: `checkout"'\\</script>\u2028` },
         },
     ];
 
@@ -81,14 +81,20 @@ describe('getRuntimeBootstrap', () => {
     });
 
     test('should be a per-chunk injected value', () => {
-        const bootstrap = getRuntimeBootstrap({ version: undefined, debugId: true });
+        const bootstrap = getRuntimeBootstrap({
+            service: undefined,
+            debugId: true,
+        });
 
         // The injection plugin only passes chunk info to functions with a single parameter.
         expect(bootstrap).toHaveLength(1);
     });
 
     test('should keep the build metadata of the first chunk to execute', () => {
-        const bootstrap = getRuntimeBootstrap({ version: '1.0.0', debugId: true });
+        const bootstrap = getRuntimeBootstrap({
+            service: undefined,
+            debugId: true,
+        });
         const firstChunk = getChunk('first chunk');
         const secondChunk = getChunk('second chunk');
         const firstChunkCode = bootstrap(firstChunk);

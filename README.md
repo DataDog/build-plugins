@@ -32,6 +32,7 @@ To interact with Datadog directly from your builds.
     -   [`gitRepositoryUrl`](#gitrepositoryurl)
     -   [`logLevel`](#loglevel)
     -   [`metadata.name`](#metadataname)
+    -   [`metadata.service`](#metadataservice)
     -   [`metadata.version`](#metadataversion)
     -   [`sourcemaps`](#sourcemaps)
 -   [Features](#features)
@@ -105,6 +106,7 @@ Follow the specific documentation for each bundler:
     logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
     metadata?: {
         name?: string;
+        service?: string;
         version?: string;
     };
     sourcemaps?:
@@ -178,7 +180,7 @@ Follow the specific documentation for each bundler:
               }
             | {
                   debugId?: false;
-                  service: string;
+                  service?: string;
                   version?: string;
               };
     };
@@ -344,11 +346,17 @@ Which level of log do you want to show.
 The name of the build.<br/>
 This is used to identify the build in logs, metrics and spans.
 
+### `metadata.service`
+> default: `null`
+
+The service of the deployed application, as set in the Datadog browser SDKs.<br/>
+This is the canonical place to declare the service once. Plugins that need a service (Live Debugger's symbol table upload, RUM source code context, source map upload, etc.) read it from here unless they're given a more specific override.
+
 ### `metadata.version`
 > default: `null`
 
 An immutable identifier for the deployed build (typically a release tag, a git commit SHA, or a CI build ID).<br/>
-This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, runtime SDK initialization, etc.) read it from here unless they're given a more specific override.
+This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, Live Debugger's symbol upload, etc.) can read it from here unless they're given a more specific override. Each plugin's documentation says when it does.
 
 ### `sourcemaps`
 
@@ -502,7 +510,7 @@ datadogWebpackPlugin({
               }
             | {
                   debugId?: false,
-                  service: string,
+                  service?: string,
                   version?: string,
               },
     }

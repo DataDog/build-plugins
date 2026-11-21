@@ -13,11 +13,15 @@ import path from 'path';
 
 // Captures the build metadata object literal assigned by the runtime bootstrap.
 const BUILD_METADATA_RX = /globalThis\.__DD_LIVE_DEBUGGER_BUILD__=(\{[^}]*\})/g;
+// Captures the context object the RUM plugin's source code context snippet registers.
+const RUM_CONTEXT_RX = /\}\)\((\{[^}]*\}),"DD_SOURCE_CODE_CONTEXT"\)/g;
 
 type ChunkOutput = {
     file: string;
     // Every build metadata object defined in the file.
     buildMetadata: unknown[];
+    // Every RUM source code context registered by the file.
+    rumContexts: unknown[];
     // The debug ID the sourcemap uploader reads from the file.
     uploadedDebugId: string | undefined;
 };
@@ -31,10 +35,12 @@ const getChunkOutputs = async (outDir: string): Promise<ChunkOutput[]> => {
             const content = await readFile(file);
             const matches = content.matchAll(BUILD_METADATA_RX);
             const buildMetadata = [...matches].map(([, serialized]) => JSON.parse(serialized));
+            const rumMatches = content.matchAll(RUM_CONTEXT_RX);
+            const rumContexts = [...rumMatches].map(([, serialized]) => JSON.parse(serialized));
             const uploadedDebugId = await extractDebugId(file);
             const fileName = path.basename(file);
 
-            return { file: fileName, buildMetadata, uploadedDebugId };
+            return { file: fileName, buildMetadata, rumContexts, uploadedDebugId };
         }),
     );
 };
@@ -60,8 +66,9 @@ describe('Live Debugger debug IDs', () => {
 
     beforeAll(async () => {
         // Run the builds sequentially to ease the resources usage.
+        // Symbol uploads need both a service and a version.
         await buildProject('debugIds', {
-            metadata: { version: '1.0.0' },
+            metadata: { service: 'checkout', version: '1.0.0' },
             sourcemaps: { debugId: true },
         });
         await buildProject('noDebugIds', {});
@@ -73,21 +80,22 @@ describe('Live Debugger debug IDs', () => {
     });
 
     describe.each(BUNDLERS)('$name | $version', ({ name: bundlerName }) => {
-        test('Should expose the debug ID of each chunk with debug ID sourcemaps.', () => {
+        test('Should expose the service and debug ID of each chunk, but not the version.', () => {
             const chunkOutputs = outputs.debugIds[bundlerName] ?? [];
 
             // Both entries and the shared or dynamic chunks.
             expect(chunkOutputs.length).toBeGreaterThan(2);
-            for (const { file, buildMetadata, uploadedDebugId } of chunkOutputs) {
+            for (const { file, buildMetadata, rumContexts, uploadedDebugId } of chunkOutputs) {
                 expect(uploadedDebugId).toEqual(expect.any(String));
-                expect({ file, buildMetadata }).toEqual({
+                expect({ file, buildMetadata, rumContexts }).toEqual({
                     file,
-                    buildMetadata: [{ version: '1.0.0', debugId: uploadedDebugId }],
+                    buildMetadata: [{ service: 'checkout', debugId: uploadedDebugId }],
+                    rumContexts: [{ service: 'checkout', ddDebugId: uploadedDebugId }],
                 });
             }
         });
 
-        test('Should not expose a debug ID or a version when they are not configured.', () => {
+        test('Should not expose a debug ID when debug IDs are not configured.', () => {
             const chunkOutputs = outputs.noDebugIds[bundlerName] ?? [];
 
             expect(chunkOutputs.length).toBeGreaterThan(2);

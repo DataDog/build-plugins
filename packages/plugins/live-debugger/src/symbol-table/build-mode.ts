@@ -5,9 +5,9 @@
 import type { PluginOptions } from '@dd/core/types';
 
 export type BuildModeTracker = {
-    hooks: Pick<PluginOptions, 'webpack' | 'rspack' | 'rollup' | 'vite'>;
+    hooks: Pick<PluginOptions, 'esbuild' | 'webpack' | 'rspack' | 'rollup' | 'vite'>;
     // False in watch mode and on dev servers. esbuild doesn't tell plugins whether it's watching,
-    // so its builds always count as one-off builds.
+    // so only its first build counts as a one-off build.
     isOneOffBuild: () => boolean;
 };
 
@@ -15,9 +15,20 @@ export type BuildModeTracker = {
 export const createBuildModeTracker = (): BuildModeTracker => {
     let isContinuousBuild = false;
     let isCompilerWatching = () => false;
+    let esbuildBuildCount = 0;
 
     return {
         hooks: {
+            esbuild: {
+                setup(build) {
+                    // Any later build is a rebuild: in watch mode, on the dev server, or from the
+                    // context API.
+                    build.onStart(() => {
+                        esbuildBuildCount += 1;
+                        isContinuousBuild ||= esbuildBuildCount > 1;
+                    });
+                },
+            },
             webpack(compiler) {
                 isCompilerWatching = () => compiler.watchMode;
             },
