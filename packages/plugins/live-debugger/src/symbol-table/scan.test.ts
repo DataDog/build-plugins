@@ -96,17 +96,27 @@ describe('readChunkDebugId', () => {
     const cases = [
         {
             description: 'read the debug ID of the runtime bootstrap',
-            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"version":"1.0.0","debugId":"${DEBUG_ID}"}`,
+            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"service":"checkout","debugId":"${DEBUG_ID}"}`,
             expected: DEBUG_ID,
         },
         {
             description: 'read the debug ID of a minified runtime bootstrap',
-            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={version:"1.0.0",debugId:'${DEBUG_ID}'}`,
+            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={service:"checkout",debugId:'${DEBUG_ID}'}`,
+            expected: DEBUG_ID,
+        },
+        {
+            description: 'read the debug ID of a runtime bootstrap without a service',
+            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"debugId":"${DEBUG_ID}"}`,
+            expected: DEBUG_ID,
+        },
+        {
+            description: 'read the debug ID of a runtime bootstrap from an older plugin',
+            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"version":"1.0.0","debugId":"${DEBUG_ID}"}`,
             expected: DEBUG_ID,
         },
         {
             description: 'return undefined without a debug ID',
-            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"version":"1.0.0"}`,
+            code: `globalThis.__DD_LIVE_DEBUGGER_BUILD__={"service":"checkout"}`,
             expected: undefined,
         },
     ];

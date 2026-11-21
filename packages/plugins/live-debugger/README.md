@@ -48,7 +48,7 @@ Datadog resolves the deployed build and its source code through the [debug ID in
 
 ### Service and version
 
-Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload).
+Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload). Also pass the same version to the Browser Debugger SDK's `init()`, because the plugin doesn't add it to your build.
 
 ### Required peer dependencies
 
@@ -171,9 +171,18 @@ datadogBuildPlugins({
 });
 ```
 
-When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
+[Symbols](#symbol-upload) are uploaded under this version, and only when it's set.
 
-[Symbols](#symbol-upload) are only uploaded when `metadata.version` is set. It also enables version-specific probe targeting.
+Live Debugger doesn't add the version to your build: it changes on every build, so it would change every chunk, and browsers would download unchanged chunks again after each deploy. Pass the same version to the Browser Debugger SDK's `init()` instead:
+
+```ts
+datadogDebugger.init({
+    // ...
+    version: '1.0.0',
+});
+```
+
+Live Debugger finds symbols by the version the SDK reports, so the two must match. If they don't, you can't add logpoints to that build.
 
 ### liveDebugger.include
 
@@ -343,14 +352,12 @@ The plugin injects code into every output chunk that defines a `__DD_LIVE_DEBUGG
 ```javascript
 if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
     globalThis.__DD_LIVE_DEBUGGER_BUILD__ = {
-        version: '1.0.0',
         service: 'my-app',
         debugId: '<debug ID of the chunk>',
     };
 }
 ```
 
-- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
 - `service` is the [`metadata.service`](#metadataservice) value. It is omitted when `metadata.service` is not set.
 - `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
 

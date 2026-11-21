@@ -175,7 +175,10 @@ export const validateSourceCodeContextOptions = (
         toReturn.config = {
             ...cfg,
             ...(service ? { service } : {}),
-            version: cfg.version || (service ? options.metadata?.version : undefined),
+            // Only a service set for RUM brings in `metadata.version`: a shared
+            // `metadata.service`, set for another plugin, mustn't add the version
+            // to every chunk, which would change them all on every build.
+            version: cfg.version || (cfg.service ? options.metadata?.version : undefined),
         };
         return toReturn;
     }

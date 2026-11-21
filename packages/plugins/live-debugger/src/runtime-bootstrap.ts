@@ -10,7 +10,6 @@ import type { LiveDebuggerOptionsWithDefaults } from './types';
 const buildMetadataGlobal = '__DD_LIVE_DEBUGGER_BUILD__' as const;
 
 type BuildMetadata = {
-    version?: string;
     service?: string;
     debugId?: string;
 };
@@ -18,23 +17,24 @@ type BuildMetadata = {
 // Return the per-chunk runtime bootstrap. It doesn't define `$dd_probes`, which
 // instrumented functions only call once the SDK has defined it. It exposes build
 // metadata to the Browser Debugger SDK:
-//   - `version` (from `metadata.version`) defaults the SDK's runtime version.
 //   - `service` (from `metadata.service`) defaults the SDK's service, so it
 //     matches the service the symbol table is uploaded with.
 //   - `debugId` is the chunk's debug ID, the same one its sourcemap is uploaded
 //     with. Every sourcemap of a build is uploaded with the same git metadata,
 //     so any chunk's debug ID identifies the build's repository and commit.
+// The version is left out: it changes on every build, so it would change every
+// chunk, and browsers would download unchanged chunks again after each deploy.
+// The application passes it to the SDK's `init()` instead.
 // The first chunk to execute defines the global; later chunks keep it.
 export const getRuntimeBootstrap = ({
-    version,
     service,
     debugId,
-}: Pick<LiveDebuggerOptionsWithDefaults, 'version' | 'service' | 'debugId'>) => {
+}: Pick<LiveDebuggerOptionsWithDefaults, 'service' | 'debugId'>) => {
     return (chunk?: ChunkInfo): string => {
         // Without chunk info there is no debug ID to match, so don't invent one.
         const chunkDebugId = debugId && chunk ? getChunkDebugId(chunk) : undefined;
         // Undefined fields are left out by JSON.stringify.
-        const buildMetadata: BuildMetadata = { version, service, debugId: chunkDebugId };
+        const buildMetadata: BuildMetadata = { service, debugId: chunkDebugId };
         const serializedBuildMetadata = JSON.stringify(buildMetadata);
 
         return `if(typeof globalThis.${buildMetadataGlobal}==='undefined'){globalThis.${buildMetadataGlobal}=${serializedBuildMetadata}}`;

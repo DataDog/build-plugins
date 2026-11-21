@@ -356,7 +356,7 @@ This is the canonical place to declare the service once. Plugins that need a ser
 > default: `null`
 
 An immutable identifier for the deployed build (typically a release tag, a git commit SHA, or a CI build ID).<br/>
-This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, runtime SDK initialization, etc.) read it from here unless they're given a more specific override.
+This is the canonical place to declare the version once. Plugins that need a build version (for sourcemap upload, source-code resolution, Live Debugger's symbol upload, etc.) can read it from here unless they're given a more specific override. Each plugin's documentation says when it does.
 
 ### `sourcemaps`
 

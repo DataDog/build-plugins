@@ -34,6 +34,7 @@ export type LiveDebuggerOptions = {
 };
 
 export type LiveDebuggerOptionsWithDefaults = {
+    // From the top-level `metadata.version`. Symbols are uploaded under it; it's never injected.
     version: string | undefined;
     // From the top-level `metadata.service`.
     service: string | undefined;

@@ -131,7 +131,7 @@ describe('sourceCodeContext validation', () => {
         expect(result.config).toEqual({ service: 'checkout', version: '1.2.3' });
     });
 
-    test('should fall back to metadata.service alongside a debug ID', () => {
+    test('should fall back to metadata.service, but not metadata.version, alongside a debug ID', () => {
         const pluginOptions = {
             ...defaultPluginOptions,
             metadata: { service: 'checkout', version: '1.2.3' },
@@ -139,7 +139,7 @@ describe('sourceCodeContext validation', () => {
         };
         const result = validateSourceCodeContextOptions(pluginOptions);
         expect(result.errors).toHaveLength(0);
-        expect(result.config).toEqual({ debugId: true, service: 'checkout', version: '1.2.3' });
+        expect(result.config).toEqual({ debugId: true, service: 'checkout', version: undefined });
     });
 
     test('should prefer an explicit sourceCodeContext.service over metadata.service', () => {
