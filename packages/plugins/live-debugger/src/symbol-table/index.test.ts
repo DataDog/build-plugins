@@ -65,6 +65,7 @@ describe('Live Debugger symbol table', () => {
 describe('getUploadSetup', () => {
     const options = {
         version: '1.0.0',
+        symbolsVersion: '1.0.0',
         service: 'shop',
         enableGit: true,
     } satisfies Partial<LiveDebuggerOptionsWithDefaults>;
@@ -96,10 +97,23 @@ describe('getUploadSetup', () => {
             expected: { skipReason: expect.stringContaining('metadata.service') },
         },
         {
-            description: 'skip without a version',
-            options: { ...options, version: undefined },
+            description: 'upload under the symbols version when no version is injected',
+            options: { ...options, version: undefined, symbolsVersion: '2.0.0' },
             apiKey: 'api-key',
-            expected: { skipReason: expect.stringContaining('metadata.version') },
+            expected: {
+                settings: {
+                    apiKey: 'api-key',
+                    site: 'datadoghq.com',
+                    service: 'shop',
+                    version: '2.0.0',
+                },
+            },
+        },
+        {
+            description: 'skip without a version',
+            options: { ...options, version: undefined, symbolsVersion: undefined },
+            apiKey: 'api-key',
+            expected: { skipReason: expect.stringContaining('liveDebugger.symbols.version') },
         },
         {
             description: 'skip when git is disabled',

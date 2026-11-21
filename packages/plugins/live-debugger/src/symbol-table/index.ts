@@ -148,7 +148,7 @@ export const getUploadSetup = (
     context: GlobalContext,
 ): UploadSetup => {
     const { apiKey, site } = context.auth;
-    const { service, version, enableGit } = pluginOptions;
+    const { service, symbolsVersion, enableGit } = pluginOptions;
 
     if (!apiKey) {
         return { skipReason: 'no API key is configured' };
@@ -158,14 +158,17 @@ export const getUploadSetup = (
             skipReason: 'no service is configured. Set "metadata.service"',
         };
     }
-    if (!version) {
-        return { skipReason: 'no version is configured. Set "metadata.version"' };
+    if (!symbolsVersion) {
+        return {
+            skipReason:
+                'no version is configured. Set "metadata.version" or "liveDebugger.symbols.version"',
+        };
     }
     if (!enableGit) {
         return { skipReason: 'git is disabled with "enableGit: false"' };
     }
 
-    return { settings: { apiKey, site, service, version } };
+    return { settings: { apiKey, site, service, version: symbolsVersion } };
 };
 
 /**
@@ -235,7 +238,7 @@ export const getSymbolTableHooks = (
                 buildRoot: context.buildRoot,
                 log,
             });
-            payload = table && serializeSymbolTable(table, pluginOptions.version);
+            payload = table && serializeSymbolTable(table, pluginOptions.symbolsVersion);
         } catch (error) {
             log.warn(`Could not collect ${LOG_PREFIX}: ${error}`);
         } finally {

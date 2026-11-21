@@ -132,6 +132,15 @@ describe('plugins', () => {
                 result: false,
             },
             {
+                description: 'true with Live Debugger and only liveDebugger.symbols.version',
+                input: {
+                    ...liveDebuggerOptions,
+                    metadata: { service: 'service' },
+                    liveDebugger: { symbols: { version: '1.0.0' } },
+                },
+                result: true,
+            },
+            {
                 description: 'false with Live Debugger disabled',
                 input: { ...liveDebuggerOptions, liveDebugger: { enable: false } },
                 result: false,

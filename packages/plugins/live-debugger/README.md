@@ -26,6 +26,7 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
     -   [liveDebugger.functionTypes](#livedebuggerfunctiontypes)
     -   [liveDebugger.namedOnly](#livedebuggernamedonly)
     -   [liveDebugger.decorators](#livedebuggerdecorators)
+    -   [liveDebugger.symbols.version](#livedebuggersymbolsversion)
 -   [Symbol upload](#symbol-upload)
 -   [Skipped function types](#skipped-function-types)
 -   [Bundle size impact](#bundle-size-impact)
@@ -48,7 +49,7 @@ Datadog resolves the deployed build and its source code through the [debug ID in
 
 ### Service and version
 
-Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload).
+Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload). If your application passes its version to the Browser Debugger SDK itself, you can set [`liveDebugger.symbols.version`](#livedebuggersymbolsversion) instead of `metadata.version`.
 
 ### Required peer dependencies
 
@@ -92,6 +93,9 @@ liveDebugger?: {
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
     decorators?: 'legacy' | 'modern';
+    symbols?: {
+        version?: string;
+    };
 }
 ```
 
@@ -173,7 +177,7 @@ datadogBuildPlugins({
 
 When set, Live Debugger injects the value into runtime-visible [build metadata](#build-metadata) so the Browser Debugger SDK uses it as the default `version` during `init()`.
 
-[Symbols](#symbol-upload) are only uploaded when `metadata.version` is set. It also enables version-specific probe targeting.
+[Symbols](#symbol-upload) are uploaded under this version. Without it, they're only uploaded when [`liveDebugger.symbols.version`](#livedebuggersymbolsversion) is set. It also enables version-specific probe targeting.
 
 ### liveDebugger.include
 
@@ -289,6 +293,25 @@ liveDebugger: {
 }
 ```
 
+### liveDebugger.symbols.version
+
+> default: the value of [`metadata.version`](#metadataversion)
+
+The version to [upload symbols](#symbol-upload) under. Unlike `metadata.version`, it isn't injected into your build.
+
+Use it when your application passes its version to the Browser Debugger SDK's `init()` itself, and you leave `metadata.version` unset. For example, to keep the version out of your chunks, so that browsers don't download unchanged chunks again after each deploy.
+
+Live Debugger finds symbols by the service and version the SDK reports, so set it to the version your application passes to `init()`. When `metadata.version` is also set, the two must match.
+
+```ts
+datadogBuildPlugins({
+    metadata: { service: 'my-app' },
+    liveDebugger: {
+        symbols: { version: '1.0.0' },
+    },
+});
+```
+
 ## Symbol upload
 
 To let you add logpoints to your browser application, Live Debugger needs to know which functions each build contains. After each production build, the plugin uploads nonsensitive symbols and metadata to Datadog: the names of the instrumented functions, the files they're in, and their line numbers.
@@ -296,7 +319,7 @@ To let you add logpoints to your browser application, Live Debugger needs to kno
 The upload needs:
 
 - an API key;
-- a [service](#metadataservice) and a [version](#metadataversion);
+- a [service](#metadataservice) and a version, from [`metadata.version`](#metadataversion) or [`liveDebugger.symbols.version`](#livedebuggersymbolsversion);
 - a git repository with a remote, and the [git integration](/README.md#enablegit) enabled;
 - source maps, for the line numbers.
 
@@ -350,7 +373,7 @@ if (typeof globalThis.__DD_LIVE_DEBUGGER_BUILD__ === 'undefined') {
 }
 ```
 
-- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set.
+- `version` is the [`metadata.version`](#metadataversion) value. It is omitted when `metadata.version` is not set, even when [`liveDebugger.symbols.version`](#livedebuggersymbolsversion) is.
 - `service` is the [`metadata.service`](#metadataservice) value. It is omitted when `metadata.service` is not set.
 - `debugId` is the debug ID of the chunk that defined the global: the same value the [RUM plugin](/packages/plugins/rum#rumsourcecodecontextdebugid) injects into that chunk and that its source map is uploaded with. It is only included when debug IDs are enabled, with the top-level [`sourcemaps.debugId`](/#sourcemaps) option or with `rum.sourceCodeContext.debugId`.
 

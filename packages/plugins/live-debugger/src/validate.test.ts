@@ -34,6 +34,7 @@ describe('validateOptions', () => {
                 input: makeConfig(undefined),
                 expected: {
                     version: undefined,
+                    symbolsVersion: undefined,
                     service: undefined,
                     enableGit: false,
                     debugId: false,
@@ -51,6 +52,7 @@ describe('validateOptions', () => {
                 input: makeConfig({}),
                 expected: {
                     version: undefined,
+                    symbolsVersion: undefined,
                     service: undefined,
                     enableGit: false,
                     debugId: false,
@@ -68,6 +70,7 @@ describe('validateOptions', () => {
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: {
                     version: '1.0.0',
+                    symbolsVersion: '1.0.0',
                     service: undefined,
                     enableGit: false,
                     debugId: false,
@@ -166,6 +169,15 @@ describe('validateOptions', () => {
                 input: { ...uploadConfig, enableGit: false } satisfies Options,
                 expected: false,
             },
+            {
+                description: 'collect git data with symbols.version instead of metadata.version',
+                input: {
+                    ...uploadConfig,
+                    metadata: { service: 'cart' },
+                    liveDebugger: { symbols: { version: '2.0.0' } },
+                } satisfies Options,
+                expected: true,
+            },
         ];
 
         test.each(gitCases)('should $description', ({ input, expected }) => {
@@ -184,6 +196,21 @@ describe('validateOptions', () => {
                 description: 'forward metadata.version when present',
                 input: makeConfig({}, { version: '1.0.0' }),
                 expected: expect.objectContaining({ version: '1.0.0' }),
+            },
+            {
+                description: 'upload symbols under symbols.version without injecting it',
+                input: makeConfig({ symbols: { version: '2.0.0' } }),
+                expected: expect.objectContaining({ version: undefined, symbolsVersion: '2.0.0' }),
+            },
+            {
+                description: 'accept symbols.version when it matches metadata.version',
+                input: makeConfig({ symbols: { version: '1.0.0' } }, { version: '1.0.0' }),
+                expected: expect.objectContaining({ version: '1.0.0', symbolsVersion: '1.0.0' }),
+            },
+            {
+                description: 'upload symbols under metadata.version with an empty symbols object',
+                input: makeConfig({ symbols: {} }, { version: '1.0.0' }),
+                expected: expect.objectContaining({ version: '1.0.0', symbolsVersion: '1.0.0' }),
             },
             {
                 description: 'accept string include patterns',
@@ -478,6 +505,43 @@ describe('validateOptions', () => {
             expect(mockError).toHaveBeenCalledWith(
                 expect.stringMatching(/decorators.*must be one of/),
             );
+        });
+    });
+
+    describe('invalid symbols', () => {
+        const cases = [
+            {
+                description: 'reject symbols when a string',
+                input: makeInvalidConfig({ symbols: '1.0.0' }),
+                errorPattern: /symbols.*must be an object/,
+            },
+            {
+                description: 'reject symbols when an array',
+                input: makeInvalidConfig({ symbols: ['1.0.0'] }),
+                errorPattern: /symbols.*must be an object/,
+            },
+            {
+                description: 'reject symbols.version when a number',
+                input: makeInvalidConfig({ symbols: { version: 1 } }),
+                errorPattern: /symbols\.version.*must be a non-empty string/,
+            },
+            {
+                description: 'reject an empty symbols.version',
+                input: makeInvalidConfig({ symbols: { version: '' } }),
+                errorPattern: /symbols\.version.*must be a non-empty string/,
+            },
+            {
+                description: 'reject symbols.version when it differs from metadata.version',
+                input: makeConfig({ symbols: { version: '2.0.0' } }, { version: '1.0.0' }),
+                errorPattern: /symbols\.version.*must match.*metadata\.version/,
+            },
+        ];
+
+        test.each(cases)('should $description', ({ input, errorPattern }) => {
+            expect(() => validateOptions(input, mockLogger)).toThrow(
+                `Invalid configuration for ${PLUGIN_NAME}.`,
+            );
+            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
         });
     });
 

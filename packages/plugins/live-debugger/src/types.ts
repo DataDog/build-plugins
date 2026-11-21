@@ -31,10 +31,17 @@ export type LiveDebuggerOptions = {
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
     decorators?: DecoratorSyntax;
+    symbols?: {
+        version?: string;
+    };
 };
 
 export type LiveDebuggerOptionsWithDefaults = {
+    // From the top-level `metadata.version`. Injected into the build metadata.
     version: string | undefined;
+    // The version symbols are uploaded under: `symbols.version`, else the top-level
+    // `metadata.version`. Never injected into the build.
+    symbolsVersion: string | undefined;
     // From the top-level `metadata.service`.
     service: string | undefined;
     // Whether git data is collected (see the top-level `enableGit` option).

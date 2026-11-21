@@ -112,6 +112,26 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         errors.push(`${red('decorators')} must be one of: ${VALID_DECORATOR_SYNTAXES.join(', ')}`);
     }
 
+    // Validate symbols option
+    const symbols = pluginConfig.symbols;
+    const symbolsVersion = symbols?.version;
+    if (
+        symbols !== undefined &&
+        (typeof symbols !== 'object' || symbols === null || Array.isArray(symbols))
+    ) {
+        errors.push(`${red('symbols')} must be an object`);
+    } else if (
+        symbolsVersion !== undefined &&
+        (typeof symbolsVersion !== 'string' || symbolsVersion === '')
+    ) {
+        errors.push(`${red('symbols.version')} must be a non-empty string`);
+    } else if (symbolsVersion && metadataVersion && symbolsVersion !== metadataVersion) {
+        // The SDK reports the injected version, so symbols uploaded under another one would never match.
+        errors.push(
+            `${red('symbols.version')} must match ${red('metadata.version')} when both are configured`,
+        );
+    }
+
     // Throw if there are any errors
     if (errors.length) {
         log.error(`\n  - ${errors.join('\n  - ')}`);
@@ -127,6 +147,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
     // Build the final configuration with defaults
     return {
         version: metadataVersion,
+        symbolsVersion: symbolsVersion ?? metadataVersion,
         service: config.metadata?.service || undefined,
         enableGit: shouldGetGitInfo(config),
         debugId: areDebugIdsEnabled(config, log),

@@ -188,11 +188,13 @@ export const shouldGetGitInfo = (options: Options): boolean => {
     // Live Debugger symbol table uploads need git, and only happen with an API key, a service and a version.
     const liveDebuggerConfig = options.liveDebugger;
     const isLiveDebuggerEnabled = !!liveDebuggerConfig && !!(liveDebuggerConfig.enable ?? true);
+    const liveDebuggerSymbolsVersion =
+        liveDebuggerConfig?.symbols?.version || options.metadata?.version;
     const gitEnabledFromLiveDebugger =
         isLiveDebuggerEnabled &&
         !!options.auth?.apiKey &&
         !!options.metadata?.service &&
-        !!options.metadata?.version;
+        !!liveDebuggerSymbolsVersion;
     // If we have the 'enableGit' configuration at the root, use it and default to `true`.
     const gitEnabledFromRoot = options.enableGit ?? true;
     return (gitEnabledFromSourcemaps || gitEnabledFromLiveDebugger) && gitEnabledFromRoot;

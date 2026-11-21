@@ -16,6 +16,7 @@ const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
 ): LiveDebuggerOptionsWithDefaults => ({
     version: '1.0.0',
+    symbolsVersion: '1.0.0',
     service: undefined,
     enableGit: false,
     debugId: false,
@@ -555,6 +556,11 @@ describe('getPlugins', () => {
             description: 'inject the service when metadata.service is provided',
             options: { liveDebugger: {}, metadata: { service: 'cart' } },
             expected: { version: undefined, service: 'cart', debugId: false },
+        },
+        {
+            description: 'not inject liveDebugger.symbols.version',
+            options: { liveDebugger: { symbols: { version: '1.0.0' } } },
+            expected: { version: undefined, service: undefined, debugId: false },
         },
     ];
 
