@@ -112,6 +112,8 @@ export const validateSourcemapsOptions = (
     // configure one canonical build version at the top level keeps every
     // consumer (live-debugger, sourcemaps, …) reading from the same place.
     const releaseVersion = sourcemapsCfg.releaseVersion || config.metadata?.version;
+    // Same for `service`, with the shared top-level `metadata.service`.
+    const service = sourcemapsCfg.service || config.metadata?.service;
 
     // Validate the configuration.
     if (!releaseVersion) {
@@ -128,8 +130,10 @@ export const validateSourcemapsOptions = (
             `${red('sourcemaps.releaseVersion')} must match ${red('metadata.version')} when both are configured.`,
         );
     }
-    if (!sourcemapsCfg.service) {
-        toReturn.errors.push(`${red('sourcemaps.service')} is required.`);
+    if (!service) {
+        toReturn.errors.push(
+            `${red('sourcemaps.service')} is required (set it directly or via ${red('metadata.service')}).`,
+        );
     }
     if (!sourcemapsCfg.minifiedPathPrefix) {
         toReturn.errors.push(`${red('sourcemaps.minifiedPathPrefix')} is required.`);
@@ -145,10 +149,10 @@ export const validateSourcemapsOptions = (
         );
     }
 
-    // Build the resolved config only when `releaseVersion` actually
-    // resolves; otherwise an error has been recorded and the caller will
-    // throw before the config is read.
-    if (releaseVersion) {
+    // Build the resolved config only when `releaseVersion` and `service`
+    // actually resolve; otherwise an error has been recorded and the caller
+    // will throw before the config is read.
+    if (releaseVersion && service) {
         toReturn.config = {
             bailOnError: false,
             dryRun: false,
@@ -156,6 +160,7 @@ export const validateSourcemapsOptions = (
             ...sourcemapsCfg,
             debugId: false,
             releaseVersion,
+            service,
         };
     }
 

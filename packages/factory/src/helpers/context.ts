@@ -52,6 +52,8 @@ export const getContext = ({
         buildRoot,
         env: data.env,
         getLogger: getLoggerFactory(data, stores, options.logLevel),
+        gitPending: false,
+        gitReady: Promise.resolve(),
         // This will be updated in the injection plugin on initialization.
         asyncHook: () => {
             throw new Error('AsyncHook function called before it was initialized.');
@@ -65,6 +67,8 @@ export const getContext = ({
         },
         markArtifactsPending: () => {},
         markArtifactsReady: () => {},
+        markGitPending: () => {},
+        markGitReady: () => {},
         plugins: [],
         // This will be updated in the async-queue plugin on initialization.
         queue: () => {
@@ -103,6 +107,26 @@ export const getContext = ({
         } else {
             reject?.(error);
         }
+    };
+
+    let resolveGit: (() => void) | undefined;
+
+    context.markGitPending = () => {
+        if (resolveGit) {
+            return;
+        }
+
+        context.gitReady = new Promise<void>((resolve) => {
+            resolveGit = resolve;
+        });
+        context.gitPending = true;
+    };
+
+    context.markGitReady = () => {
+        const resolve = resolveGit;
+        resolveGit = undefined;
+        context.gitPending = false;
+        resolve?.();
     };
 
     return context;

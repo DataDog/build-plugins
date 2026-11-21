@@ -363,6 +363,7 @@ export const updateReadmes = async (plugins: Workspace[], bundlers: Workspace[])
                 logLevel?: 'debug' | 'info' | 'warn' | 'error' | 'none',
                 metadata?: {
                     name?: string;
+                    service?: string;
                     version?: string;
                 };
                 sourcemaps?:
