@@ -49,7 +49,7 @@ Datadog resolves the deployed build and its source code through the [debug ID in
 
 ### Service and version
 
-Set [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion). The plugin needs both to [upload symbols](#symbol-upload). If your application passes its version to the Browser Debugger SDK itself, you can set [`liveDebugger.symbols.version`](#livedebuggersymbolsversion) instead of `metadata.version`.
+To [upload symbols](#symbol-upload), the plugin needs [`metadata.service`](#metadataservice) and a version. Set the version with [`metadata.version`](#metadataversion), or, if your application passes its version to the Browser Debugger SDK itself, with [`liveDebugger.symbols.version`](#livedebuggersymbolsversion).
 
 ### Required peer dependencies
 

@@ -208,6 +208,17 @@ describe('validateOptions', () => {
                 expected: expect.objectContaining({ version: '1.0.0', symbolsVersion: '1.0.0' }),
             },
             {
+                description: 'treat an empty metadata.version as unset next to symbols.version',
+                input: makeConfig({ symbols: { version: '2.0.0' } }, { version: '' }),
+                expected: expect.objectContaining({ version: '', symbolsVersion: '2.0.0' }),
+            },
+            {
+                description:
+                    'keep an empty metadata.version as the symbols version, skipping the upload',
+                input: makeConfig({}, { version: '' }),
+                expected: expect.objectContaining({ version: '', symbolsVersion: '' }),
+            },
+            {
                 description: 'upload symbols under metadata.version with an empty symbols object',
                 input: makeConfig({ symbols: {} }, { version: '1.0.0' }),
                 expected: expect.objectContaining({ version: '1.0.0', symbolsVersion: '1.0.0' }),
@@ -516,6 +527,11 @@ describe('validateOptions', () => {
                 errorPattern: /symbols.*must be an object/,
             },
             {
+                description: 'reject symbols when null',
+                input: makeInvalidConfig({ symbols: null }),
+                errorPattern: /symbols.*must be an object/,
+            },
+            {
                 description: 'reject symbols when an array',
                 input: makeInvalidConfig({ symbols: ['1.0.0'] }),
                 errorPattern: /symbols.*must be an object/,
@@ -541,7 +557,8 @@ describe('validateOptions', () => {
             expect(() => validateOptions(input, mockLogger)).toThrow(
                 `Invalid configuration for ${PLUGIN_NAME}.`,
             );
-            expect(mockError).toHaveBeenCalledWith(expect.stringMatching(errorPattern));
+            const expectedError = expect.stringMatching(errorPattern);
+            expect(mockError).toHaveBeenCalledWith(expectedError);
         });
     });
 

@@ -15,6 +15,7 @@ import fsp from 'fs/promises';
 import { glob } from 'glob';
 import nock from 'nock';
 import path from 'path';
+import { gunzipSync } from 'zlib';
 
 import { SYMBOL_TABLE_PATH_ENV } from './constants';
 import type { SymbolTablePayload, SymDbScope } from './symbol-table/serialize';
@@ -35,6 +36,7 @@ const APP_DIR = 'app';
 const VIRTUAL_PEER_PATH = '.yarn/__virtual__/peer-virtual-0123456789/1/packages/peer/index.js';
 const XPACK_BUNDLERS: BundlerName[] = ['webpack', 'rspack'];
 const PROBE_CALL_RX = /\$dd_probes\((['"`])(.*?)\1\)/g;
+const BUILD_METADATA_RX = /globalThis\.__DD_LIVE_DEBUGGER_BUILD__=(\{[^}]*\})/g;
 
 const PEER_SOURCE = `export function peerHello() {
     return 'hello from peer';
@@ -196,6 +198,58 @@ const getOutputFunctionIds = async (outDir: string) => {
         return [...matches].map(([, , functionId]) => functionId);
     });
     return [...new Set(functionIds)].sort();
+};
+
+type BuildMetadata = { version?: string; service?: string; debugId?: string };
+
+// The build metadata the runtime bootstrap injects into each output chunk.
+const getInjectedBuildMetadata = async (outDir: string): Promise<BuildMetadata[]> => {
+    const files = await glob('**/*.{js,mjs}', { cwd: outDir, absolute: true });
+    const contents = files.map((file) => readFileSync(file));
+    return contents.flatMap((content) => {
+        const matches = content.matchAll(BUILD_METADATA_RX);
+        return [...matches].map(([, serializedMetadata]) => {
+            const buildMetadata: BuildMetadata = JSON.parse(serializedMetadata);
+            return buildMetadata;
+        });
+    });
+};
+
+// nock gives a request body that isn't valid UTF-8, like a multipart body with a gzipped part,
+// as a hex string.
+const getRequestBodyBuffer = (requestBody: nock.Body): Buffer => {
+    if (typeof requestBody !== 'string') {
+        const serializedBody = JSON.stringify(requestBody);
+        return Buffer.from(serializedBody);
+    }
+    const isHex = requestBody.length % 2 === 0 && /^[0-9a-f]*$/i.test(requestBody);
+    return Buffer.from(requestBody, isHex ? 'hex' : 'utf-8');
+};
+
+const readFormFile = async (form: FormData, name: string): Promise<Buffer> => {
+    const part = form.get(name);
+    if (!part || typeof part === 'string') {
+        throw new Error(`Missing the "${name}" part.`);
+    }
+    const content = await part.arrayBuffer();
+    return Buffer.from(content);
+};
+
+// The event and the gunzipped file of a symbol upload request.
+const readUploadParts = async (body: Buffer, contentType: string | string[] | undefined) => {
+    const contentTypeHeader = Array.isArray(contentType) ? contentType.join(', ') : contentType;
+    const headers = new Headers();
+    headers.set('content-type', contentTypeHeader ?? '');
+    const response = new Response(body, { headers });
+    const form = await response.formData();
+    const eventContent = await readFormFile(form, 'event');
+    const fileContent = await readFormFile(form, 'file');
+    const eventJson = eventContent.toString('utf-8');
+    const fileJson = gunzipSync(fileContent).toString('utf-8');
+    return {
+        event: JSON.parse(eventJson),
+        file: JSON.parse(fileJson),
+    };
 };
 
 describe('Live Debugger symbol table', () => {
@@ -470,15 +524,47 @@ describe('Live Debugger symbol table', () => {
             expect(triple?.endLine).toBeLessThanOrEqual(10);
         });
     });
-    describe('upload', () => {
-        type UploadRequest = { path: string; apiKey: string | string[] | undefined };
+    const uploadCases = [
+        {
+            description: 'metadata.version',
+            seed: 'metadata-version',
+            overrides: { metadata: { version: '1.0.0', service: 'fixture-service' } },
+            uploadedVersion: '1.0.0',
+            injectedVersion: '1.0.0',
+        },
+        {
+            description: 'liveDebugger.symbols.version',
+            seed: 'symbols-version',
+            overrides: {
+                metadata: { service: 'fixture-service' },
+                liveDebugger: { symbols: { version: '2.0.0' } },
+            },
+            uploadedVersion: '2.0.0',
+            injectedVersion: undefined,
+        },
+    ] satisfies {
+        description: string;
+        seed: string;
+        overrides: Partial<Options>;
+        uploadedVersion: string;
+        injectedVersion: string | undefined;
+    }[];
+
+    describe.each(uploadCases)('upload with $description', (uploadCase) => {
+        type UploadRequest = {
+            path: string;
+            apiKey: string | string[] | undefined;
+            contentType: string | string[] | undefined;
+            body: Buffer;
+        };
         const uploads: Partial<Record<BundlerName, UploadRequest[]>> = {};
+        const injectedBuildMetadata: Partial<Record<BundlerName, BuildMetadata[]>> = {};
         const buildErrors: string[] = [];
         let uploadDir: string;
         let repository: { commitSha: string; remoteUrl: string };
 
         beforeAll(async () => {
-            const seed = `${Math.abs(jest.getSeed())}.symbol-table-upload`;
+            const seed = `${Math.abs(jest.getSeed())}.symbol-table-upload.${uploadCase.seed}`;
             uploadDir = getTempWorkingDir(seed);
             await createFixture(uploadDir);
             repository = initGitRepository(uploadDir);
@@ -489,8 +575,14 @@ describe('Live Debugger symbol table', () => {
                 .persist()
                 .post('/api/v2/debugger')
                 .query(true)
-                .reply(function recordUpload() {
-                    requests.push({ path: this.req.path, apiKey: this.req.headers['dd-api-key'] });
+                .reply(function recordUpload(_uri, requestBody) {
+                    const body = getRequestBodyBuffer(requestBody);
+                    requests.push({
+                        path: this.req.path,
+                        apiKey: this.req.headers['dd-api-key'],
+                        contentType: this.req.headers['content-type'],
+                        body,
+                    });
                     return [202, '{}'];
                 });
 
@@ -505,7 +597,7 @@ describe('Live Debugger symbol table', () => {
                     {
                         ...PLUGIN_OVERRIDES,
                         enableGit: true,
-                        metadata: { version: '1.0.0', service: 'fixture-service' },
+                        ...uploadCase.overrides,
                     },
                     { entry, plugins },
                 );
@@ -514,6 +606,9 @@ describe('Live Debugger symbol table', () => {
                 buildErrors.push(...errors);
                 uploads[bundlerName] = requests;
                 requests = [];
+                const outDir = getOutDir(buildRoot, bundlerName);
+                // eslint-disable-next-line no-await-in-loop
+                injectedBuildMetadata[bundlerName] = await getInjectedBuildMetadata(outDir);
             }
         }, 200000);
 
@@ -540,5 +635,32 @@ describe('Live Debugger symbol table', () => {
                 `git.repository_url:${repository.remoteUrl},git.commit.sha:${repository.commitSha}`,
             );
         });
+
+        test.each(BUNDLERS)(
+            'Should upload the symbols under the right version with $name.',
+            async ({ name: bundlerName }) => {
+                const [request] = uploads[bundlerName] ?? [];
+                const { event, file } = await readUploadParts(request.body, request.contentType);
+                const expectedFields = {
+                    service: 'fixture-service',
+                    version: uploadCase.uploadedVersion,
+                };
+
+                expect(event).toEqual(expect.objectContaining(expectedFields));
+                expect(file).toEqual(expect.objectContaining(expectedFields));
+            },
+        );
+
+        test.each(BUNDLERS)(
+            'Should inject only metadata.version into the chunks with $name.',
+            ({ name: bundlerName }) => {
+                const buildMetadata = injectedBuildMetadata[bundlerName] ?? [];
+                const injectedVersions = buildMetadata.map((metadata) => metadata.version);
+                const uniqueInjectedVersions = [...new Set(injectedVersions)];
+
+                expect(buildMetadata.length).toBeGreaterThan(0);
+                expect(uniqueInjectedVersions).toEqual([uploadCase.injectedVersion]);
+            },
+        );
     });
 });
