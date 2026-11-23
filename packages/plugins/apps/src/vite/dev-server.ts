@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { build } from 'vite';
 
+import type { AppIdentity } from '../app-identity';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
@@ -74,6 +75,33 @@ function isDevServerRoute(url: string | undefined): url is DevServerRoute {
 
 type AuthConfig = AuthOptionsWithDefaults;
 type LongPollingConfig = Required<LongPollingOptions>;
+
+export type QueryMeta = {
+    appId?: string;
+    appName?: string;
+    isHighCodeApp: true;
+    isDeployed: false;
+    viewContext: { type: 'high_code_local_dev' | 'high_code_dev_verify' };
+};
+
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+// Upload adopts the identifier as the app ID only when it's a canonical, non-nil UUID.
+export function getQueryMeta(app: AppIdentity, mode: string): QueryMeta {
+    const { identifier, name } = app;
+    const isAppId =
+        identifier !== undefined && CANONICAL_UUID.test(identifier) && identifier !== NIL_UUID;
+    return {
+        ...(isAppId && { appId: identifier }),
+        ...(name !== undefined && { appName: name }),
+        isHighCodeApp: true,
+        isDeployed: false,
+        viewContext: {
+            type: mode === DEV_VERIFY_MODE ? 'high_code_dev_verify' : 'high_code_local_dev',
+        },
+    };
+}
 
 const RUNTIME_CONTEXT_SCRIPT = `export async function main($) {
     return $;
@@ -221,6 +249,7 @@ async function bundleBackendFunction(
 async function submitQuery(
     querySpec: Record<string, unknown>,
     displayName: string,
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -247,6 +276,7 @@ async function submitQuery(
                 template_params: {},
             },
         },
+        meta: queryMeta,
     });
 
     const initialResult = await doAuthenticatedRequest<{ data?: { id?: string } }>({
@@ -305,6 +335,7 @@ async function executeScriptViaDatadog(
     scriptBody: string,
     func: BackendFunction,
     args: unknown[],
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -322,6 +353,7 @@ async function executeScriptViaDatadog(
             },
         },
         displayName,
+        queryMeta,
         auth,
         doAuthenticatedRequest,
         longPolling,
@@ -353,6 +385,7 @@ function shareInFlight<T>(): (run: () => Promise<T>) => Promise<T> {
  * fields it needs before loading customer code and overlays invocation-owned fields locally.
  */
 function makeGetRuntimeContextRemotely(
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -385,6 +418,7 @@ function makeGetRuntimeContextRemotely(
                         },
                     },
                     RUNTIME_CONTEXT_DISPLAY_NAME,
+                    queryMeta,
                     auth,
                     doAuthenticatedRequest,
                     longPolling,
@@ -415,6 +449,7 @@ function makeGetRuntimeContextRemotely(
 
 /** Submits a single-action `preview-async` query per `$.Actions` call and logs its outcome, since production's equivalent signal never reaches the `npm run dev` console. Callers must have already confirmed auth is configured (see `createDevServerMiddleware`). */
 function makeExecuteActionRemotely(
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -430,6 +465,7 @@ function makeExecuteActionRemotely(
             const result = await submitQuery(
                 connectionId !== undefined ? { fqn, inputs, connectionId } : { fqn, inputs },
                 fqn,
+                queryMeta,
                 auth,
                 doAuthenticatedRequest,
                 longPolling,
@@ -703,6 +739,7 @@ async function handleExecuteAction(
     req: IncomingMessage,
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -721,12 +758,14 @@ async function handleExecuteAction(
         log.debug(`Executing action locally: ${displayName} with args`);
 
         const executeAction = makeExecuteActionRemotely(
+            queryMeta,
             auth,
             doAuthenticatedRequest,
             longPolling,
             log,
         );
         const getRuntimeContextRemotely = makeGetRuntimeContextRemotely(
+            queryMeta,
             auth,
             doAuthenticatedRequest,
             longPolling,
@@ -755,6 +794,7 @@ async function handleExecuteActionViaCloud(
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest,
     longPolling: LongPollingConfig,
@@ -771,6 +811,7 @@ async function handleExecuteActionViaCloud(
             code,
             func,
             args,
+            queryMeta,
             auth,
             doAuthenticatedRequest,
             longPolling,
@@ -797,6 +838,7 @@ function routeToCloudHandler(
     res: ServerResponse,
     functionsByName: Map<string, BackendFunction>,
     bundle: BundleFn,
+    queryMeta: QueryMeta,
     auth: AuthConfig,
     doAuthenticatedRequest: DoAuthenticatedRequest | undefined,
     longPolling: LongPollingConfig,
@@ -809,6 +851,7 @@ function routeToCloudHandler(
             res,
             functionsByName,
             bundle,
+            queryMeta,
             auth,
             authedRequest,
             longPolling,
@@ -843,11 +886,13 @@ export function createDevServerMiddleware(
     mode: string,
     isHostAllowed: HostCheck,
     serverConditions: readonly string[],
+    app: AppIdentity,
     executeLocally?: LocalExecutor,
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
     const bundle = (func: BackendFunction) =>
         bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log, runStaticChecks);
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
+    const queryMeta = getQueryMeta(app, mode);
     const oversizedFunctionsWarned = new Set<string>();
 
     const initialFunctions = getBackendFunctions();
@@ -863,6 +908,7 @@ export function createDevServerMiddleware(
             res,
             functionsByName,
             bundle,
+            queryMeta,
             auth,
             doAuthenticatedRequest,
             longPolling,
@@ -877,6 +923,7 @@ export function createDevServerMiddleware(
                 req,
                 res,
                 functionsByName,
+                queryMeta,
                 auth,
                 authedRequest,
                 longPolling,

@@ -15,6 +15,7 @@ import {
     DEV_SERVER_ROUTES,
     EXECUTE_ACTION_ROUTE,
     formatRef,
+    getQueryMeta,
     getRetryDelay,
     MAX_WARNED_REJECTIONS,
     oversizedBundleMessage,
@@ -328,7 +329,8 @@ function createTestMiddleware(
         mode?: CreateDevServerMiddlewareArgs[9];
         isHostAllowed?: CreateDevServerMiddlewareArgs[10];
         serverConditions?: CreateDevServerMiddlewareArgs[11];
-        executeLocally?: CreateDevServerMiddlewareArgs[12];
+        app?: CreateDevServerMiddlewareArgs[12];
+        executeLocally?: CreateDevServerMiddlewareArgs[13];
     } = {},
 ): ReturnType<typeof createDevServerMiddleware> {
     return createDevServerMiddleware(
@@ -346,9 +348,102 @@ function createTestMiddleware(
         overrides.mode ?? 'development',
         overrides.isHostAllowed ?? localOnlyHostCheck,
         overrides.serverConditions ?? defaultServerConditions,
+        overrides.app ?? {},
         overrides.executeLocally ?? mockExecuteLocally,
     );
 }
+
+const APP_UUID = '5cf28549-4f3f-432b-9039-bc841ed2b1e1';
+
+describe('getQueryMeta', () => {
+    const cases: {
+        description: string;
+        app: Parameters<typeof getQueryMeta>[0];
+        mode: string;
+        expected: ReturnType<typeof getQueryMeta>;
+    }[] = [
+        {
+            description: 'attribute a dev run to the app by its UUID and name',
+            app: { identifier: APP_UUID, name: 'My App' },
+            mode: 'development',
+            expected: {
+                appId: APP_UUID,
+                appName: 'My App',
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+        {
+            description: 'mark a dev-verify run with its own view context',
+            app: { identifier: APP_UUID, name: 'My App' },
+            mode: DEV_VERIFY_MODE,
+            expected: {
+                appId: APP_UUID,
+                appName: 'My App',
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_dev_verify' },
+            },
+        },
+        {
+            description: 'treat any other Vite mode as local dev',
+            app: { identifier: APP_UUID },
+            mode: 'staging',
+            expected: {
+                appId: APP_UUID,
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+        {
+            description: 'omit appId for a 32-character hex identifier, which is not the app UUID',
+            app: { identifier: '5a2aefe2f0dd42ba999c46d5c49bbd42', name: 'Legacy App' },
+            mode: 'development',
+            expected: {
+                appName: 'Legacy App',
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+        {
+            description: 'omit appId for a non-canonical UUID spelling',
+            app: { identifier: APP_UUID.toUpperCase() },
+            mode: 'development',
+            expected: {
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+        {
+            description: 'omit appId for the nil UUID',
+            app: { identifier: '00000000-0000-0000-0000-000000000000' },
+            mode: 'development',
+            expected: {
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+        {
+            description: 'send only the surface when the app has no identity',
+            app: {},
+            mode: 'development',
+            expected: {
+                isHighCodeApp: true,
+                isDeployed: false,
+                viewContext: { type: 'high_code_local_dev' },
+            },
+        },
+    ];
+
+    test.each(cases)('Should $description', ({ app, mode, expected }) => {
+        expect(getQueryMeta(app, mode)).toEqual(expected);
+    });
+});
 
 describe('Dev Server Middleware', () => {
     beforeEach(() => {
@@ -499,6 +594,90 @@ describe('Dev Server Middleware', () => {
             expect(body.result).toEqual({ data: { result: 'via cloud' } });
             expect(apiScope.isDone()).toBe(true);
             expect(mockExecuteLocally).not.toHaveBeenCalled();
+        });
+
+        describe('query meta', () => {
+            const app = { identifier: APP_UUID, name: 'My App' };
+
+            function capturePreviewAsyncMeta(times: number, outputs: unknown) {
+                const metas: unknown[] = [];
+                const scope = nock(DD_API_ORIGIN)
+                    .post('/api/v2/app-builder/queries/preview-async', (body: unknown) => {
+                        const hasMeta = typeof body === 'object' && body !== null && 'meta' in body;
+                        metas.push(hasMeta ? body.meta : undefined);
+                        return true;
+                    })
+                    .times(times)
+                    .reply(200, { data: { id: 'receipt-meta' } })
+                    .get('/api/v2/app-builder/queries/execution-long-polling/receipt-meta')
+                    .times(times)
+                    .reply(200, { data: { attributes: { done: true, outputs } } });
+                return { metas, scope };
+            }
+
+            const cases = [
+                {
+                    description:
+                        'send the local dev meta on the runtime context and $.Actions queries',
+                    mode: 'development',
+                    route: EXECUTE_ACTION_ROUTE,
+                    queries: 2,
+                    viewContextType: 'high_code_local_dev',
+                },
+                {
+                    description: 'send the dev-verify meta on the cloud query',
+                    mode: DEV_VERIFY_MODE,
+                    route: EXECUTE_ACTION_ROUTE,
+                    queries: 1,
+                    viewContextType: 'high_code_dev_verify',
+                },
+                {
+                    description: 'send the local dev meta on a direct cloud query',
+                    mode: 'development',
+                    route: '/__dd/executeActionViaCloud',
+                    queries: 1,
+                    viewContextType: 'high_code_local_dev',
+                },
+            ];
+
+            test.each(cases)(
+                'Should $description',
+                async ({ mode, route, queries, viewContextType }) => {
+                    mockBuildWithParsedBackend();
+                    const { metas, scope } = capturePreviewAsyncMeta(queries, {
+                        data: previewRuntimeContext,
+                    });
+                    const executeLocally: LocalExecutor = async (request) => {
+                        await request.getRuntimeContext();
+                        const data = await request.executeAction(
+                            'com.datadoghq.http.request',
+                            {},
+                            undefined,
+                        );
+                        return { data };
+                    };
+                    const metaMiddleware = createTestMiddleware({ mode, app, executeLocally });
+                    const req = createMockRequest(route, {
+                        functionName: encodeQueryName(mockFunctions[0]),
+                        args: [],
+                    });
+                    const res = createMockResponse();
+
+                    metaMiddleware(req, res, jest.fn());
+                    await res.done;
+
+                    expect(res.statusCode).toBe(200);
+                    expect(scope.isDone()).toBe(true);
+                    const expectedMeta = {
+                        appId: APP_UUID,
+                        appName: 'My App',
+                        isHighCodeApp: true,
+                        isDeployed: false,
+                        viewContext: { type: viewContextType },
+                    };
+                    expect(metas).toEqual(Array(queries).fill(expectedMeta));
+                },
+            );
         });
     });
 
@@ -1854,6 +2033,7 @@ describe('Dev Server Middleware', () => {
                     'development',
                     localOnlyHostCheck,
                     defaultServerConditions,
+                    {},
                     executeLocally,
                 );
 

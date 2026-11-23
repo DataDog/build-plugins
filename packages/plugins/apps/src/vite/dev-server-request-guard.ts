@@ -119,9 +119,15 @@ function isJsonContentType(contentType: string | undefined): boolean {
     return contentType?.split(';')[0].trim().toLowerCase() === 'application/json';
 }
 
-// Node decodes a Host as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
-function quoteHostname(hostname: string): string {
-    return JSON.stringify(hostname).replace(
+// HTTP/2 requests carry :authority and no Host.
+export function getRequestHost(headers: IncomingHttpHeaders): string | undefined {
+    const authority = headers[':authority'];
+    return headers.host ?? (typeof authority === 'string' ? authority : undefined);
+}
+
+// Node decodes Host and URL as latin1, and JSON.stringify leaves C1 controls raw for the terminal.
+export function quoteForTerminal(text: string): string {
+    return JSON.stringify(text).replace(
         /[^\x20-\x7e]/g,
         (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
     );
@@ -132,14 +138,13 @@ export function checkDevServerRequest(
     isHostAllowed: HostCheck,
 ): RequestRejection | undefined {
     const { origin } = headers;
-    // HTTP/2 requests carry :authority and no Host.
-    const authority = headers[':authority'];
-    const host = headers.host ?? (typeof authority === 'string' ? authority : undefined);
+    const host = getRequestHost(headers);
     if (!host) {
         return { statusCode: 403, message: MISSING_HOST_MESSAGE };
     }
     if (!isHostAllowed(host)) {
-        const quotedHostname = quoteHostname(getHostname(host));
+        const hostname = getHostname(host);
+        const quotedHostname = quoteForTerminal(hostname);
         return {
             statusCode: 403,
             message: `Blocked request. This host (${quotedHostname}) is not allowed. ${ALLOWED_HOSTS_HINT}`,

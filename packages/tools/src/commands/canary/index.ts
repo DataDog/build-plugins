@@ -10,7 +10,7 @@ import os from 'os';
 import path from 'path';
 
 import { formatCheckoutAlert } from './alert';
-import { checkoutTarget, getCheckoutRef } from './checkout';
+import { checkoutTarget, getCheckoutRef, resolveExistingCheckout } from './checkout';
 import { NETWORK_RETRY_DELAYS_MS, runCanary, StreamingCommandRunner } from './runner';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
 import {
@@ -244,6 +244,10 @@ class CanaryCheckout extends Command {
             Then resolves the Node.js version and package manager the checkout declares,
             prints them, and writes them to ${TOOLCHAIN_FILE} in --artifacts-dir.
 
+            With --existing, uses the checkout already in --root instead of fetching one,
+            for example one a CI job fetched itself, and only resolves its commit and
+            toolchain.
+
             Registered targets: ${SUPPORTED_TARGETS}.
         `,
         examples: [
@@ -255,14 +259,23 @@ class CanaryCheckout extends Command {
                 'Check out a specific commit',
                 '$0 canary-checkout <target> --root <checkout> --ref <sha>',
             ],
+            [
+                'Resolve the toolchain of a checkout that already exists',
+                '$0 canary-checkout <target> --root <checkout> --existing --artifacts-dir <dir>',
+            ],
         ],
     });
 
     targetName = Option.String();
 
     root = Option.String('--root', {
-        description: 'Directory to create the checkout in. It must be missing or empty.',
+        description:
+            'Directory to create the checkout in. It must be missing or empty, unless --existing is set.',
         required: true,
+    });
+
+    existing = Option.Boolean('--existing', false, {
+        description: 'Use the checkout already in --root instead of fetching one.',
     });
 
     ref = Option.String('--ref', {
@@ -275,10 +288,13 @@ class CanaryCheckout extends Command {
 
     async execute(): Promise<number> {
         const target = getTargetOrThrow(this.targetName);
+        if (this.existing && this.ref) {
+            throw new UsageError('--ref and --existing cannot be combined.');
+        }
         const root = path.resolve(this.root);
-        const ref = getCheckoutRef(target.repository, this.ref);
+        const ref = this.existing ? 'HEAD' : getCheckoutRef(target.repository, this.ref);
         const pin = target.repository.pin;
-        if (pin && !this.ref) {
+        if (pin && !this.ref && !this.existing) {
             this.context.stdout.write(
                 `[Canary] ${target.id} is pinned to ${pin.commit}: ${pin.reason}\n`,
             );
@@ -289,23 +305,26 @@ class CanaryCheckout extends Command {
         const distUrl = process.env.CANARY_NODE_DIST_URL ?? DEFAULT_NODE_DIST_URL;
 
         try {
-            const commit = await checkoutTarget({
-                networkRetryDelaysMs: NETWORK_RETRY_DELAYS_MS,
-                ref,
-                repository: target.repository,
-                root,
-                runCommand: commandRunner.run,
-                token: process.env.GH_TOKEN,
-            });
+            const commit = this.existing
+                ? await resolveExistingCheckout({ root, runCommand: commandRunner.run })
+                : await checkoutTarget({
+                      networkRetryDelaysMs: NETWORK_RETRY_DELAYS_MS,
+                      ref,
+                      repository: target.repository,
+                      root,
+                      runCommand: commandRunner.run,
+                      token: process.env.GH_TOKEN,
+                  });
             const toolchain = await resolveToolchain({
                 getNodeReleases: () => fetchNodeReleases(distUrl),
                 root,
                 target,
             });
             const environment = formatToolchainEnvironment(toolchain, commit);
-            this.context.stdout.write(
-                `\n[Canary] Checked out ${target.repository.name} ${ref} at ${commit}.\n`,
-            );
+            const checkoutMessage = this.existing
+                ? `Using the existing ${target.repository.name} checkout at ${commit}.`
+                : `Checked out ${target.repository.name} ${ref} at ${commit}.`;
+            this.context.stdout.write(`\n[Canary] ${checkoutMessage}\n`);
             this.context.stdout.write(
                 `[Canary] Node.js ${toolchain.node.version} comes from ${toolchain.node.source}.\n`,
             );

@@ -31,6 +31,7 @@ export type LiveDebuggerOptions = {
     functionTypes?: FunctionKind[];
     namedOnly?: boolean;
     decorators?: DecoratorSyntax;
+    exceptionReplay?: boolean;
 };
 
 export type LiveDebuggerOptionsWithDefaults = {
@@ -49,4 +50,5 @@ export type LiveDebuggerOptionsWithDefaults = {
     functionTypes: FunctionKind[] | undefined;
     namedOnly: boolean;
     decorators: DecoratorSyntax;
+    exceptionReplay: boolean;
 };

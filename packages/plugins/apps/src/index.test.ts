@@ -182,6 +182,26 @@ describe('Apps Plugin - package output', () => {
         expect(manifest).toEqual({ tags: [], backend: { functions: {} } });
     });
 
+    test('excludes sourcemaps from the package when excludeSourcemaps is set', async () => {
+        const mapPath = path.join(packageDirectory, 'index.js.map');
+        await fs.writeFile(mapPath, '{"version":3}');
+        jest.spyOn(assets, 'collectAssets').mockResolvedValue([
+            { absolutePath: sourcePath, relativePath: 'index.html' },
+            { absolutePath: mapPath, relativePath: 'index.js.map' },
+        ]);
+
+        const withMaps = await buildAppPackage(packageOptions());
+        const zipWithMaps = await JSZip.loadAsync(await fs.readFile(withMaps!));
+        expect(Object.keys(zipWithMaps.files)).toContain('frontend/index.js.map');
+
+        const withoutMaps = await buildAppPackage(
+            packageOptions({ options: { excludeSourcemaps: true } }),
+        );
+        const zipWithoutMaps = await JSZip.loadAsync(await fs.readFile(withoutMaps!));
+        expect(Object.keys(zipWithoutMaps.files)).not.toContain('frontend/index.js.map');
+        expect(Object.keys(zipWithoutMaps.files)).toContain('frontend/index.html');
+    });
+
     test('includes backend function entries with connection allowlists in manifest.json', async () => {
         const backendPath = path.join(root, 'greet.js');
         await fs.writeFile(backendPath, 'export function greet() {}');

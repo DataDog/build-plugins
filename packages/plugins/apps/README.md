@@ -18,6 +18,7 @@ It needs Vite 6.4 or later: on an older Vite, it stops every Vite command with a
 -   [Cloud execution](#cloud-execution)
 -   [Local execution](#local-execution)
 -   [Backend function runtime](#backend-function-runtime)
+-   [Development server Content Security Policy](#development-server-content-security-policy)
 -   [Package output](#package-output)
     -   [apps.enable](#appsenable)
     -   [apps.include](#appsinclude)
@@ -119,9 +120,37 @@ Backend functions run on the Node backend runtime, and the plugin's build-time a
 
 The checks also warn, without failing the build, about `process.env` reads: in production, the Node backend runtime doesn't pass your own environment variables or Custom Credentials to backend functions, so those reads don't see your values there. They catch direct reads: `process.env.X`, `process.env[key]`, a destructure of `process.env`, an `env`, default or namespace import from `process` or `node:process`, and a `const` bound to `process.env` or to an `env` destructured from `process`. Like the other checks, they cover only the app's own code and opted-in packages, so an SDK that reads `process.env` (for example, for a default API key) doesn't warn.
 
+## Development server Content Security Policy
+
+The dev server sends its HTML pages and worker scripts with the Datadog Apps Content Security Policy that uploaded apps get, as `Content-Security-Policy-Report-Only`: it reports what the policy would block and doesn't block it. A policy already on the response, for example from `server.headers`, is kept. The policy blocks:
+
+-   content and requests from `http:` URLs, and `ws:` connections;
+-   `data:` scripts, styles, workers and frames, and `blob:` fonts;
+-   `<object>` content and web app manifests;
+-   a `<base>` that points to another origin, and `http:` form submissions.
+
+Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
+
+An uploaded app can't frame its own pages, and its origin answers only GET requests. The dev server warns when a page is framed by its own origin or sends a non-GET request to it outside `/__dd/`, and at startup when [`server.proxy`](https://vite.dev/config/server-options#server-proxy) is set.
+
+Known gaps:
+
+-   The `server.proxy` warning also fires for an app that proxies a path such as `/api` in dev but calls a full `https:` URL once uploaded.
+-   What Vite inlines only in a build, such as a `?worker&inline` worker, isn't covered.
+-   Paths under [`server.proxy`](https://vite.dev/config/server-options#server-proxy) are left alone, even when a `bypass` hands the request back to Vite.
+-   In middleware mode, the host server's own routes get the policy on their HTML and the warnings on their non-GET requests too.
+-   HTML that another plugin's own dev-server middleware sends, and requests it answers (such as a mock API's POST routes), aren't covered, since this plugin's middleware runs after normal-order plugins' middlewares.
+-   Worker scripts, same-origin frames and the app's own requests are recognized by their `Sec-Fetch-*` request headers, which Safari sends from version 16.4.
+-   Under Vitest, the policy and the warnings are off.
+-   Tools that serve their own HTML through Vite (`appType: 'custom'`, for example Storybook) aren't covered, since they aren't uploaded as apps.
+-   The HMR WebSocket sources also admit `http:` and `https:` requests to the dev server's own host and port.
+-   Violations inside a worker, in pages Vite doesn't transform (such as files in `public/`) and in Vite 8's bundled dev mode go only to the browser's own console error.
+
 ## Package output
 
 A production `vite build` writes `datadog-app-assets.zip` beside the Vite output. The ZIP contains `frontend/`, `backend/`, and `manifest.json`. The app's identity is resolved by `@datadog/apps-cli` at deploy time.
+
+By default, sourcemaps (`*.map`) are packaged with the frontend assets. Set `apps.excludeSourcemaps: true` to leave them out of the archive — the error-tracking plugin uploads sourcemaps to Datadog directly, so serving them with the app is rarely needed, and their size counts against the upload API's decompressed limit. Sourcemaps excluded this way also stop being fetchable from the deployed app (browser devtools can no longer load them from the served assets), so keep the default if you rely on that during debugging.
 
 Set `DATADOG_APPS_PACKAGE_DIR` (or `DD_APPS_PACKAGE_DIR`) to write the archive to a different directory.
 

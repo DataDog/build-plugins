@@ -120,6 +120,7 @@ describe('getUploadSetup', () => {
             functionTypes: undefined,
             namedOnly: false,
             decorators: 'legacy',
+            exceptionReplay: false,
             ...pluginOptions,
         };
 

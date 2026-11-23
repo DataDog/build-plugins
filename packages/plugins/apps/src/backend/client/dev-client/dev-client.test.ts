@@ -124,30 +124,7 @@ describe('dev client', () => {
         },
     );
 
-    test('Should warn once and send without a bundle when ancestorOrigins reports an opaque parent origin', async () => {
-        const { postMessage, reply } = installFakeWindow({ ancestorOrigins: ['null'] });
-        mockFetchResponse({ ok: true, json: async () => BUNDLE });
-
-        for (const expected of ['first', 'second']) {
-            const result = postMessageTransport(QUERY_NAME, ARGS);
-            // eslint-disable-next-line no-await-in-loop
-            await new Promise((resolve) => {
-                setImmediate(resolve);
-            });
-            const [message] = postMessage.mock.calls.at(-1);
-            reply(message.requestId, expected);
-            // eslint-disable-next-line no-await-in-loop
-            await expect(result).resolves.toBe(expected);
-            expect(message).not.toHaveProperty('bundle');
-            expect(postMessage).toHaveBeenCalledWith(message, '*');
-        }
-
-        expect(global.fetch).not.toHaveBeenCalled();
-        expect(warn).toHaveBeenCalledTimes(1);
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining(OPAQUE_PARENT_ORIGIN_REASON));
-    });
-
-    // Firefox has no ancestorOrigins, so the parent's origin comes from its answer to a ping.
+    // Without a usable ancestorOrigins entry, the parent's answer to a ping names its origin.
     describe('without ancestorOrigins', () => {
         // Settles pending promise callbacks without advancing timers, so it also works under fake timers.
         const flushPing = async (turns = 10): Promise<void> => {
@@ -210,6 +187,57 @@ describe('dev client', () => {
             const sentPings = pings();
             expect(sentPings).toHaveLength(1);
             expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+        });
+
+        test('Should ping the parent when ancestorOrigins reports an opaque origin', async () => {
+            const { postMessage, posted, reply, pings, pong } = installFakeWindow(
+                { ancestorOrigins: ['null'] },
+                DATADOG_PARENT,
+            );
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const result = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong(DATADOG_PARENT);
+            const message = await posted;
+            reply(message.requestId, 'ok');
+
+            await expect(result).resolves.toBe('ok');
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+            expect(message).toEqual({ ...MESSAGE_WITHOUT_BUNDLE, bundle: BUNDLE });
+            expect(postMessage).toHaveBeenCalledWith(message, DATADOG_PARENT);
+            expect(warn).not.toHaveBeenCalled();
+        });
+
+        test('Should warn once and send without a bundle when the parent answers from an opaque origin', async () => {
+            const { postMessage, reply, pings, pong } = installFakeWindow({
+                ancestorOrigins: ['null'],
+            });
+            mockFetchResponse({ ok: true, json: async () => BUNDLE });
+
+            const answer = async (result: Promise<unknown>, expected: string) => {
+                await new Promise((resolve) => {
+                    setImmediate(resolve);
+                });
+                const [message] = postMessage.mock.calls.at(-1);
+                reply(message.requestId, expected);
+                await expect(result).resolves.toBe(expected);
+                expect(message).not.toHaveProperty('bundle');
+                expect(postMessage).toHaveBeenCalledWith(message, '*');
+            };
+
+            const first = postMessageTransport(QUERY_NAME, ARGS);
+            await flushPing();
+            pong();
+            await answer(first, 'first');
+            const second = postMessageTransport(QUERY_NAME, ARGS);
+            await answer(second, 'second');
+
+            const sentPings = pings();
+            expect(sentPings).toHaveLength(1);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining(OPAQUE_PARENT_ORIGIN_REASON));
         });
 
         test('Should send the call without a bundle when a non-Datadog parent answers', async () => {

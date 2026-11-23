@@ -136,5 +136,6 @@ export const validateOptions = (options: Options): AppsOptionsWithDefaults => {
         tags: resolvedOptions.tags,
         longPolling: resolveLongPolling(resolvedOptions.longPolling),
         parameters: resolveParameters(resolvedOptions.parameters),
+        excludeSourcemaps: resolvedOptions.excludeSourcemaps === true,
     };
 };

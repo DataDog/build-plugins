@@ -177,6 +177,9 @@ yarn cli canary-checkout <target> --root /tmp/canary-target --artifacts-dir /tmp
     links the tracking issue. `--ref` still overrides the pin.
 -   Set `GH_TOKEN` to read a private repository. Git receives the token through
     environment variables, so it doesn't appear in command lines or logs.
+-   `--existing` uses the checkout already in `--root` instead of fetching one,
+    and only resolves its commit and toolchain. CI uses it for private targets:
+    a job fetches them itself, so build-plugins code never holds their token.
 -   The Node.js version comes from the checkout's `.nvmrc`, `.node-version` or
     `volta.node`, then from the target's `nodeVersion`. Aliases such as
     `lts/*` and partial versions resolve against

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { SELF_SERVED_APP_TYPE } from '@dd/apps-plugin/vite/dev-server-csp';
 import type { HostCheckConfig } from '@dd/apps-plugin/vite/dev-server-request-guard';
 import {
     APPS_DEV_CLIENT_PATH,
@@ -45,6 +46,7 @@ import {
     type ViteDevServer,
 } from 'vite';
 
+import * as appIdentity from '../app-identity';
 import * as auth from '../auth';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
@@ -110,7 +112,7 @@ type FakeViteDevServer = {
     middlewares: { use: (fn: DevServerMiddleware) => void };
     ssrLoadModule: (id: string) => Promise<unknown>;
     close?: () => Promise<void>;
-    config: { mode: string } & HostCheckConfig;
+    config: { mode: string; appType?: string } & HostCheckConfig;
     environments?: {
         ssr: { hot: { handleInvoke: () => Promise<unknown> }; config: { dev: object } };
     };
@@ -1574,6 +1576,64 @@ describe('Backend Functions - getVitePlugin', () => {
         },
     );
 
+    const appTypeCases: {
+        description: string;
+        appType: string | undefined;
+        middlewareCount: number;
+    }[] = [
+        {
+            description:
+                'register only the backend function routes for a host that serves its own HTML',
+            appType: SELF_SERVED_APP_TYPE,
+            middlewareCount: 1,
+        },
+        {
+            description: 'register the app CSP and origin-gap warnings for the default app type',
+            appType: undefined,
+            middlewareCount: 3,
+        },
+    ];
+
+    test.each(appTypeCases)('Should $description', ({ appType, middlewareCount }) => {
+        const plugin = getVitePlugin(defaultOptions);
+        const use = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+
+        try {
+            configureServer({
+                middlewares: { use },
+                ssrLoadModule: jest.fn(),
+                config: { ...fakeServerConfig('development'), appType },
+            });
+        } finally {
+            restoreEnv();
+        }
+
+        expect(use).toHaveBeenCalledTimes(middlewareCount);
+    });
+
+    test('Should register only the backend function routes under Vitest', () => {
+        const plugin = getVitePlugin(defaultOptions);
+        const use = jest.fn();
+        const configureServer = getConfigureServer(plugin);
+        const restoreEnv = clearDatadogEnv();
+        process.env.VITEST = 'true';
+
+        try {
+            configureServer({
+                middlewares: { use },
+                ssrLoadModule: jest.fn(),
+                config: fakeServerConfig('development'),
+            });
+        } finally {
+            delete process.env.VITEST;
+            restoreEnv();
+        }
+
+        expect(use).toHaveBeenCalledTimes(1);
+    });
+
     test("Should hand the middleware Vite's default server conditions", () => {
         const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
         const defaultServerConditions = ['module', 'node'];
@@ -1587,8 +1647,26 @@ describe('Backend Functions - getVitePlugin', () => {
         configureServer({ middlewares: { use }, ssrLoadModule, config });
 
         const [middlewareArgs] = middlewareSpy.mock.calls;
-        const passedConditions = middlewareArgs.at(-2);
+        const passedConditions = middlewareArgs[11];
         expect(passedConditions).toBe(defaultServerConditions);
+    });
+
+    test("Should hand the middleware the app identity read from the project's app config", () => {
+        const middlewareSpy = jest.spyOn(devServer, 'createDevServerMiddleware');
+        const identity = { identifier: '5cf28549-4f3f-432b-9039-bc841ed2b1e1', name: 'My App' };
+        const readIdentitySpy = jest
+            .spyOn(appIdentity, 'readAppIdentity')
+            .mockReturnValue(identity);
+        const plugin = getVitePlugin(defaultOptions);
+        const configureServer = getConfigureServer(plugin);
+        const config = fakeServerConfig('development');
+
+        configureServer({ middlewares: { use: jest.fn() }, ssrLoadModule: jest.fn(), config });
+
+        const { buildRoot } = defaultOptions.context;
+        expect(readIdentitySpy).toHaveBeenCalledWith(buildRoot, expect.anything());
+        const [middlewareArgs] = middlewareSpy.mock.calls;
+        expect(middlewareArgs[12]).toBe(identity);
     });
 
     // Uses the real configureServer hook, not createDevServerMiddleware directly, to catch mode-forwarding regressions.
@@ -1636,8 +1714,8 @@ describe('Backend Functions - getVitePlugin', () => {
         });
         restoreEnv();
 
-        expect(use).toHaveBeenCalledTimes(1);
-        const [registeredMiddleware] = use.mock.calls[0];
+        expect(use).toHaveBeenCalledTimes(3);
+        const [registeredMiddleware] = use.mock.calls[2];
         if (!isDevServerMiddleware(registeredMiddleware)) {
             throw new Error(
                 'Expected middlewares.use to have been called with a middleware function',

@@ -109,13 +109,26 @@ export async function buildAppPackage({
     try {
         const generatedPaths = new Set([archivePath, defaultArchivePath]);
         const backendPaths = new Set(backendOutputs.values());
+        const excludedMaps: string[] = [];
         const frontendAssets = assets
             .filter((asset) => !generatedPaths.has(path.resolve(asset.absolutePath)))
             .filter((asset) => !backendPaths.has(asset.absolutePath))
+            .filter((asset) => {
+                if (!options.excludeSourcemaps || !asset.relativePath.endsWith('.map')) {
+                    return true;
+                }
+                excludedMaps.push(asset.relativePath);
+                return false;
+            })
             .map((asset) => ({
                 ...asset,
                 relativePath: `frontend/${asset.relativePath}`,
             }));
+        if (excludedMaps.length > 0) {
+            log.debug(
+                `Left ${excludedMaps.length} sourcemap(s) out of the package (excludeSourcemaps): ${excludedMaps.join(', ')}.`,
+            );
+        }
         const packageAssets: Asset[] = [...frontendAssets];
         for (const [bundleName, absolutePath] of backendOutputs) {
             packageAssets.push({

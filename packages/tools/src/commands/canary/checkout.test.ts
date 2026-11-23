@@ -2,11 +2,16 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { existsSync, outputFile, rm } from '@dd/core/helpers/fs';
+import { existsSync, mkdir, outputFile, rm } from '@dd/core/helpers/fs';
 import os from 'os';
 import path from 'path';
 
-import { checkoutTarget, getCheckoutRef, getGitAuthEnvironment } from './checkout';
+import {
+    checkoutTarget,
+    getCheckoutRef,
+    getGitAuthEnvironment,
+    resolveExistingCheckout,
+} from './checkout';
 import type { CommandSpec, RunCommand, TargetRepository } from './types';
 
 const TEST_ROOT = path.resolve(os.tmpdir(), `build-plugins-canary-checkout-${process.pid}`);
@@ -117,6 +122,29 @@ describe('canary checkout', () => {
         });
 
         await expect(promise).rejects.toThrow('is not empty');
+        expect(runCommand).not.toHaveBeenCalled();
+    });
+    test('should resolve the commit of an existing checkout without fetching', async () => {
+        await mkdir(path.resolve(CHECKOUT_ROOT, '.git'));
+        const specs: CommandSpec[] = [];
+        const runCommand: RunCommand = async (spec) => {
+            specs.push(spec);
+            return { durationMs: 1, exitCode: 0, output: '0123abcd\n', signal: null };
+        };
+
+        const commit = await resolveExistingCheckout({ root: CHECKOUT_ROOT, runCommand });
+
+        expect(commit).toBe('0123abcd');
+        expect(specs.map((spec) => spec.args.join(' '))).toEqual(['rev-parse HEAD']);
+    });
+
+    test('should refuse an existing directory that is not a git checkout', async () => {
+        await outputFile(path.resolve(CHECKOUT_ROOT, 'package.json'), '{}');
+        const runCommand = jest.fn<ReturnType<RunCommand>, Parameters<RunCommand>>();
+
+        const promise = resolveExistingCheckout({ root: CHECKOUT_ROOT, runCommand });
+
+        await expect(promise).rejects.toThrow('is not a git checkout');
         expect(runCommand).not.toHaveBeenCalled();
     });
 });

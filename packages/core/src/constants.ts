@@ -33,3 +33,8 @@ export const HOST_NAME = 'datadog-build-plugins';
 // Global function that Live Debugger instrumentation calls at the start of
 // every instrumented function, with the function's ID as its only argument.
 export const LIVE_DEBUGGER_PROBES_FUNCTION = '$dd_probes';
+
+// Global function that Live Debugger instrumentation calls, when Exception
+// Replay is enabled, for every exception that leaves an instrumented function,
+// with the function's ID as its first argument.
+export const LIVE_DEBUGGER_CATCH_FUNCTION = '$dd_catch';
