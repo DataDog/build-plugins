@@ -4,7 +4,7 @@
 
 import { doRequest } from '@dd/core/helpers/request';
 
-import { getCheckExistsUrl, getExistingDebugIds, MAX_DEBUG_IDS_PER_REQUEST } from './check-exists';
+import { getCheckExistsUrl, getExistingDebugIds } from './check-exists';
 
 jest.mock('@dd/core/helpers/request', () => {
     const original = jest.requireActual('@dd/core/helpers/request');
@@ -118,20 +118,13 @@ describe('Error Tracking Plugin check-exists', () => {
 
         test('Should chunk the debug IDs across several requests', async () => {
             doRequestMock.mockResolvedValue({ data: { attributes: { results: {} } } });
-            const debugIds = Array.from(
-                { length: MAX_DEBUG_IDS_PER_REQUEST + 1 },
-                (_, index) => `debug-id-${index}`,
-            );
+            const debugIds = Array.from({ length: 1001 }, (_, index) => `debug-id-${index}`);
 
             await getExistingDebugIds(debugIds, contextMock);
 
             expect(doRequestMock).toHaveBeenCalledTimes(2);
-            expect(await getRequestBody(0)).toBe(
-                getExpectedBody(debugIds.slice(0, MAX_DEBUG_IDS_PER_REQUEST)),
-            );
-            expect(await getRequestBody(1)).toBe(
-                getExpectedBody(debugIds.slice(MAX_DEBUG_IDS_PER_REQUEST)),
-            );
+            expect(await getRequestBody(0)).toBe(getExpectedBody(debugIds.slice(0, 1000)));
+            expect(await getRequestBody(1)).toBe(getExpectedBody(debugIds.slice(1000)));
         });
 
         test('Should throw when the request fails', async () => {

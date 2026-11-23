@@ -1,0 +1,28 @@
+{
+    "name": "@datadog/sourcemaps-shared",
+    "version": "3.5.1",
+    "description": "Shared sourcemap utilities for Datadog build plugins and datadog-ci",
+    "license": "MIT",
+    "author": "Datadog",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DataDog/build-plugins",
+        "directory": "packages/published/sourcemaps-shared"
+    },
+    "main": "./src/index.ts",
+    "files": [
+        "dist"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "main": "./dist/index.js",
+        "types": "./dist/index.d.ts"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "prepack": "yarn build"
+    },
+    "devDependencies": {
+        "typescript": "5.4.3"
+    }
+}

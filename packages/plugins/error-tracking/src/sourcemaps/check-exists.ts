@@ -2,10 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { getCheckExistsBatches } from '@datadog/sourcemaps-shared';
 import { doRequest, getOriginHeaders } from '@dd/core/helpers/request';
-
-// The endpoint rejects requests carrying more debug IDs than this.
-export const MAX_DEBUG_IDS_PER_REQUEST = 1000;
 
 const CHECK_EXISTS_TIMEOUT_MS = 1000;
 
@@ -36,9 +34,8 @@ export const getExistingDebugIds = async (
     debugIds: string[],
     context: CheckExistsContext,
 ): Promise<Set<string>> => {
-    const uniqueDebugIds = [...new Set(debugIds)];
     const existingDebugIds = new Set<string>();
-    if (uniqueDebugIds.length === 0) {
+    if (debugIds.length === 0) {
         return existingDebugIds;
     }
 
@@ -48,8 +45,7 @@ export const getExistingDebugIds = async (
         version: context.version,
     });
 
-    for (let index = 0; index < uniqueDebugIds.length; index += MAX_DEBUG_IDS_PER_REQUEST) {
-        const chunk = uniqueDebugIds.slice(index, index + MAX_DEBUG_IDS_PER_REQUEST);
+    for (const chunk of getCheckExistsBatches(debugIds)) {
         const body = JSON.stringify({
             data: { type: 'check_exists', attributes: { debug_ids: chunk } },
         });
