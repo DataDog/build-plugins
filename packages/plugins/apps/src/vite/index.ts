@@ -235,7 +235,7 @@ function allowPackageRoots(allow: string[], packages: BackendFunctionPackage[]):
  * Production (closeBundle): builds backend functions (if any) then writes the
  * deployable package without resolving authentication or performing requests.
 
- * Dev (configureServer): reports the app CSP on HTML and worker responses, and registers
+ * Dev (configureServer): enforces the app CSP on HTML and worker responses, and registers
  * middleware for local backend function testing when auth credentials are available.
  */
 export const getVitePlugin = ({

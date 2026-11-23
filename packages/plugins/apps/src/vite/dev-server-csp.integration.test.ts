@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { CSP_VIOLATION_LOGGER_ID } from '@dd/apps-plugin/vite/dev-server-csp-violations';
+import {
+    APP_CSP_PREFIX,
+    CSP_VIOLATION_LOGGER_ID,
+} from '@dd/apps-plugin/vite/dev-server-csp-violations';
 import {
     getAppCspDirective,
     getDirective,
@@ -116,6 +119,23 @@ describe('Dev server app CSP — real Vite dev server', () => {
         await server?.close();
         rmSync(root);
         restoreEnv();
+    });
+
+    test('Should enforce the app CSP on the page rather than only report it', async () => {
+        const { headers } = await get(BASE);
+        const policy = String(headers['content-security-policy']);
+        const objectSrc = getDirective(policy, 'object-src');
+        const expectedObjectSrc = getAppCspDirective('object-src');
+
+        expect(objectSrc).toEqual(expectedObjectSrc);
+        expect(headers['content-security-policy-report-only']).toBeUndefined();
+    });
+
+    test('Should start the policy the way the violation logger recognizes it', async () => {
+        const { headers } = await get(BASE);
+        const policy = String(headers[APP_CSP_HEADER.toLowerCase()]);
+
+        expect(policy.startsWith(APP_CSP_PREFIX)).toBe(true);
     });
 
     test('Should send the app script-src without a hash, so inline scripts stay allowed', async () => {

@@ -122,14 +122,14 @@ The checks also warn, without failing the build, about `process.env` reads: in p
 
 ## Development server Content Security Policy
 
-The dev server sends its HTML pages and worker scripts with the Datadog Apps Content Security Policy that uploaded apps get, as `Content-Security-Policy-Report-Only`: it reports what the policy would block and doesn't block it. A policy already on the response, for example from `server.headers`, is kept. The policy blocks:
+The dev server sends its HTML pages and worker scripts with the Datadog Apps Content Security Policy that uploaded apps get, and the browser enforces it, so what fails once uploaded fails in dev too. A policy already on the response, for example from `server.headers`, is kept beside it. The policy blocks:
 
 -   content and requests from `http:` URLs, and `ws:` connections;
 -   `data:` scripts, styles, workers and frames, and `blob:` fonts;
 -   `<object>` content and web app manifests;
 -   a `<base>` that points to another origin, and `http:` form submissions.
 
-Pages Vite transforms log what the policy would block to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
+Pages Vite transforms log what the policy blocks to the browser console, once per rule and URL, with the rule involved. The policy also allows the HMR WebSocket in `connect-src`, since `https:` doesn't match `ws:`, and the dev server's own origin in `frame-src` and `form-action`, which `https:` covers for an uploaded app.
 
 An uploaded app can't frame its own pages, and its origin answers only GET requests. The dev server warns when a page is framed by its own origin or sends a non-GET request to it outside `/__dd/`, and at startup when [`server.proxy`](https://vite.dev/config/server-options#server-proxy) is set.
 
@@ -144,6 +144,7 @@ Known gaps:
 -   Under Vitest, the policy and the warnings are off.
 -   Tools that serve their own HTML through Vite (`appType: 'custom'`, for example Storybook) aren't covered, since they aren't uploaded as apps.
 -   The HMR WebSocket sources also admit `http:` and `https:` requests to the dev server's own host and port.
+-   Assets that [`server.origin`](https://vite.dev/config/server-options#server-origin) puts on another `http:` origin are blocked.
 -   Violations inside a worker, in pages Vite doesn't transform (such as files in `public/`) and in Vite 8's bundled dev mode go only to the browser's own console error.
 
 ## Package output
