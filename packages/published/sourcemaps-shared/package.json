@@ -1,6 +1,6 @@
 {
     "name": "@datadog/sourcemaps-shared",
-    "version": "3.5.1",
+    "version": "3.5.2",
     "description": "Shared sourcemap utilities for Datadog build plugins and datadog-ci",
     "license": "MIT",
     "author": "Datadog",
