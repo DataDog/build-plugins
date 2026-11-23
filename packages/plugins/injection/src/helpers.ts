@@ -61,6 +61,18 @@ export function hasBeforeAfterInjection(contentsToInject: ContentToInject[]) {
     );
 }
 
+export const getInitialFiles = (
+    entryFiles: string[],
+    getStaticImports: (file: string) => string[],
+): Set<string> => {
+    const initialFiles = new Set(entryFiles);
+    // Set iteration also visits entries added during the loop.
+    for (const file of initialFiles) {
+        getStaticImports(file).forEach((imported) => initialFiles.add(imported));
+    }
+    return initialFiles;
+};
+
 export function hasChunkInjection(contentsToInject: ContentToInject[]) {
     return contentsToInject.some((content) => content.injectIntoAllChunks);
 }

@@ -55,6 +55,12 @@ describe('getRuntimeBootstrap', () => {
             expected: {},
         },
         {
+            description: 'expose only the debug ID in a lazily loaded chunk',
+            options: { version: '1.0.0', debugId: true },
+            chunk: { ...chunk, isInitial: false },
+            expected: { debugId: chunkDebugId },
+        },
+        {
             description: 'not expose a debug ID without chunk information',
             options: { version: '1.0.0', debugId: true },
             chunk: undefined,
