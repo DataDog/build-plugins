@@ -8,7 +8,7 @@ import type { Socket } from 'net';
 import { formatAppCsp } from './app-csp';
 import { getRequestHost } from './dev-server-request-guard';
 
-export const APP_CSP_HEADER = 'Content-Security-Policy-Report-Only';
+export const APP_CSP_HEADER = 'Content-Security-Policy';
 export const MIDDLEWARE_MODE_HMR_PORT = 24678;
 // A host that serves its own HTML through Vite, such as Storybook, is never uploaded as an app.
 export const SELF_SERVED_APP_TYPE = 'custom';
@@ -156,8 +156,8 @@ const isTlsSocket = (socket: Socket | undefined): boolean =>
     !!socket && 'encrypted' in socket && socket.encrypted === true;
 
 /**
- * Reports the app CSP on HTML and worker script responses, without enforcing it, so code
- * production would block shows up in dev before upload. A policy already on the response stays.
+ * Enforces the app CSP on HTML and worker script responses, so code production would block
+ * fails in dev before upload. A policy already on the response stays.
  */
 export const createAppCspMiddleware = (config: CspServerConfig) => {
     const isProxiedUrl = createProxyMatcher(config.server.proxy);

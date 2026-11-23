@@ -29,7 +29,7 @@ const INLINE_MODULE_SCRIPT = [
     'window.$RefreshSig$ = () => (type) => type;',
 ].join('\n');
 const SERVER_PORT = 5173;
-const ENFORCED_CSP_HEADER = 'Content-Security-Policy';
+const REPORT_ONLY_CSP_HEADER = 'Content-Security-Policy-Report-Only';
 
 const wsAndWss = (hostAndPort: string) => [`ws://${hostAndPort}`, `wss://${hostAndPort}`];
 
@@ -434,18 +434,39 @@ describe('dev-server-csp — createAppCspMiddleware over real HTTP', () => {
         expect(getDirective(policies[1], 'script-src')).toEqual(getAppCspDirective('script-src'));
     });
 
-    test('Should report the app CSP without enforcing it, leaving an enforced policy alone', async () => {
+    test('Should enforce the app CSP beside an enforced policy already on the response', async () => {
         respond = (req, res) => {
             res.setHeader('Content-Type', 'text/html');
-            res.setHeader(ENFORCED_CSP_HEADER, "img-src 'self'");
+            res.setHeader(APP_CSP_HEADER, "img-src 'self'");
+            res.end(html);
+        };
+        const served = await get();
+        const [existing, policy, ...others] = getPolicies(served);
+        const scriptSrc = getDirective(policy, 'script-src');
+        const expectedScriptSrc = getAppCspDirective('script-src');
+        const reportOnlyHeader = REPORT_ONLY_CSP_HEADER.toLowerCase();
+
+        expect(existing).toBe("img-src 'self'");
+        expect(scriptSrc).toEqual(expectedScriptSrc);
+        expect(others).toEqual([]);
+        expect(served.headers[reportOnlyHeader]).toBeUndefined();
+    });
+
+    test('Should leave a report-only policy on the response alone', async () => {
+        respond = (req, res) => {
+            res.setHeader('Content-Type', 'text/html');
+            res.setHeader(REPORT_ONLY_CSP_HEADER, "img-src 'self'");
             res.end(html);
         };
         const served = await get();
         const [policy, ...others] = getPolicies(served);
+        const scriptSrc = getDirective(policy, 'script-src');
+        const expectedScriptSrc = getAppCspDirective('script-src');
+        const reportOnlyHeader = REPORT_ONLY_CSP_HEADER.toLowerCase();
 
-        expect(served.headers[ENFORCED_CSP_HEADER.toLowerCase()]).toBe("img-src 'self'");
+        expect(served.headers[reportOnlyHeader]).toBe("img-src 'self'");
+        expect(scriptSrc).toEqual(expectedScriptSrc);
         expect(others).toEqual([]);
-        expect(getDirective(policy, 'script-src')).toEqual(getAppCspDirective('script-src'));
     });
 
     test('Should add the policy beside one passed to writeHead, before any body is sent', async () => {

@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { formatAppCsp } from '@dd/apps-plugin/vite/app-csp';
 import {
     CSP_VIOLATION_LOGGER_SOURCE,
     CSP_VIOLATION_MESSAGE,
@@ -9,18 +10,32 @@ import {
 } from '@dd/apps-plugin/vite/dev-server-csp-violations';
 import { runInNewContext } from 'vm';
 
-type Violation = { effectiveDirective: string; blockedURI: string };
+type Violation = {
+    effectiveDirective: string;
+    blockedURI: string;
+    disposition?: 'enforce' | 'report';
+    originalPolicy?: string;
+};
+
+const APP_POLICY = formatAppCsp({ 'connect-src': ['ws://localhost:5173'] });
 
 // Runs the logger as the browser would, against a document that only dispatches violations.
 const runLogger = () => {
     const document = new EventTarget();
     const warn = jest.fn();
     runInNewContext(CSP_VIOLATION_LOGGER_SOURCE, { document, console: { warn } });
-    const dispatch = ({ effectiveDirective, blockedURI }: Violation) => {
+    const dispatch = ({
+        effectiveDirective,
+        blockedURI,
+        disposition = 'enforce',
+        originalPolicy = APP_POLICY,
+    }: Violation) => {
         const violation = new Event('securitypolicyviolation');
         const event = Object.assign(violation, {
             effectiveDirective,
             blockedURI,
+            disposition,
+            originalPolicy,
         });
         document.dispatchEvent(event);
     };
@@ -53,11 +68,11 @@ describe('dev-server-csp-violations — the violation logger', () => {
     });
 
     test('Should name the Datadog Apps policy, not how production serves it', () => {
-        expect(CSP_VIOLATION_MESSAGE).toContain('Datadog Apps Content Security Policy will block');
+        expect(CSP_VIOLATION_MESSAGE).toContain('Datadog Apps Content Security Policy blocked');
         expect(CSP_VIOLATION_MESSAGE).not.toMatch(/shim/i);
     });
 
-    test('Should say the policy would block the URL, with the directive', () => {
+    test('Should say the policy blocked the URL, with the directive', () => {
         const { dispatch, warn } = runLogger();
         const violation = {
             effectiveDirective: 'connect-src',
@@ -80,6 +95,26 @@ describe('dev-server-csp-violations — the violation logger', () => {
         dispatch({ effectiveDirective: 'img-src', blockedURI: 'https://b.example/y.png' });
 
         expect(warn).toHaveBeenCalledTimes(2);
+    });
+
+    test('Should ignore a report-only violation, which blocked nothing', () => {
+        const { dispatch, warn } = runLogger();
+        const violation = { effectiveDirective: 'img-src', blockedURI: 'https://a.example/x.png' };
+        dispatch({ ...violation, disposition: 'report' });
+
+        expect(warn).not.toHaveBeenCalled();
+        dispatch(violation);
+        expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    test('Should ignore a violation of another enforced policy on the response', () => {
+        const { dispatch, warn } = runLogger();
+        const violation = { effectiveDirective: 'img-src', blockedURI: 'https://a.example/x.png' };
+        dispatch({ ...violation, originalPolicy: "img-src 'self'" });
+
+        expect(warn).not.toHaveBeenCalled();
+        dispatch(violation);
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 });
 
