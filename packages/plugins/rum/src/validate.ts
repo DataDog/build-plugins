@@ -167,17 +167,26 @@ export const validateSourceCodeContextOptions = (
     }
 
     const cfg: SourceCodeContextOptions = validatedOptions.sourceCodeContext;
+    // Resolve `service`: prefer the plugin-specific option, then fall back to
+    // the shared top-level `metadata.service`.
+    const service = cfg.service || options.metadata?.service;
 
     if (cfg.debugId === true) {
         toReturn.config = {
             ...cfg,
+            ...(service ? { service } : {}),
+            // Only a service set for RUM brings in `metadata.version`: a shared
+            // `metadata.service`, set for another plugin, mustn't add the version
+            // to every chunk, which would change them all on every build.
             version: cfg.version || (cfg.service ? options.metadata?.version : undefined),
         };
         return toReturn;
     }
 
-    if (!cfg.service || typeof cfg.service !== 'string') {
-        toReturn.errors.push(`Missing ${red('"rum.sourceCodeContext.service"')}.`);
+    if (!service || typeof service !== 'string') {
+        toReturn.errors.push(
+            `Missing ${red('"rum.sourceCodeContext.service"')} (set it directly or via ${red('"metadata.service"')}).`,
+        );
     }
 
     if (toReturn.errors.length === 0) {
@@ -185,6 +194,7 @@ export const validateSourceCodeContextOptions = (
         // the shared top-level `metadata.version`.
         toReturn.config = {
             ...cfg,
+            service,
             version: cfg.version || options.metadata?.version,
         };
     }
