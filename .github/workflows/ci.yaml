@@ -247,7 +247,10 @@ jobs:
     timeout-minutes: 30
 
     name: Live Debugger runtime benchmark
-    runs-on: ubuntu-latest
+    # Playwright 1.49 installs its browsers' system packages under their Ubuntu 24.04 names,
+    # which ubuntu-latest (26.04) doesn't have. Go back to ubuntu-latest once @playwright/test
+    # in packages/tests/package.json supports it.
+    runs-on: ubuntu-24.04
     needs: runtime-bench-preflight
     if: ${{ needs.runtime-bench-preflight.outputs.should-run == 'true' }}
     continue-on-error: true
