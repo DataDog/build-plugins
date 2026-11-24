@@ -13,6 +13,7 @@ export interface ChildStartConfig {
     args: unknown[];
     runtimeContext: Record<string, unknown>;
     actionCatalogInstalled: boolean;
+    connectionLabelsInstalled: boolean;
     appsBackendInstalled: boolean;
     flushTimeoutMs: number;
 }

@@ -2,13 +2,20 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-function isPackageExportInstalled(packageExport: string, fromDir: string): boolean {
+import { CONNECTION_LABELS_UPGRADE_MESSAGE } from './connection-labels';
+
+export const CONNECTION_LABELS_EXPORT = '@datadog/action-catalog/connection-labels';
+
+export function resolvePackageExport(packageExport: string, fromDir: string): string | undefined {
     try {
-        require.resolve(packageExport, { paths: [fromDir] });
-        return true;
+        return require.resolve(packageExport, { paths: [fromDir] });
     } catch {
-        return false;
+        return undefined;
     }
+}
+
+function isPackageExportInstalled(packageExport: string, fromDir: string): boolean {
+    return resolvePackageExport(packageExport, fromDir) !== undefined;
 }
 
 /**
@@ -40,6 +47,9 @@ export const BACKEND_RUNTIME_PACKAGES: readonly string[] = [
 export const ACTION_CATALOG_IMPORT =
     "import { setExecuteActionImplementation } from '@datadog/action-catalog/action-execution';";
 
+/** The import line to pull action-catalog's connection label swap into bundles. */
+export const CONNECTION_LABELS_IMPORT = `import { readResolvedConnections, swapConnectionLabel } from '${CONNECTION_LABELS_EXPORT}';`;
+
 /** The import line that exposes @datadog/apps-backend backend context initialization. */
 export const DATADOG_APPS_BACKEND_IMPORT = `\
 import { buildRuntimeFromJsFunctionWithActions } from '@datadog/apps-backend/runtime/jsFunctionWithActions';
@@ -51,10 +61,17 @@ export const SET_BACKEND_CONTEXT_SNIPPET = `\
         setBackend(buildRuntimeFromJsFunctionWithActions($));
     }`;
 
-/** Script snippet that registers the $.Actions-based executeAction implementation at runtime. */
+/** Script snippet that registers the $.Actions-based executeAction implementation at runtime. action-catalog's helper swaps a `connectionLabel`; without it, a label call fails. */
 export const SET_EXECUTE_ACTION_SNIPPET = `\
     if (typeof setExecuteActionImplementation === 'function') {
+        const hasConnectionLabelsHelper = typeof readResolvedConnections === 'function' && typeof swapConnectionLabel === 'function';
+        const resolvedConnections = hasConnectionLabelsHelper ? readResolvedConnections($) : undefined;
         setExecuteActionImplementation(async (actionId, request) => {
+            if (hasConnectionLabelsHelper) {
+                request = swapConnectionLabel(request, resolvedConnections);
+            } else if (request && typeof request === 'object' && 'connectionLabel' in request) {
+                throw new Error(${JSON.stringify(CONNECTION_LABELS_UPGRADE_MESSAGE)});
+            }
             const actionPath = actionId.replace(/^com\\.datadoghq\\./, '');
             const pathParts = actionPath.split('.');
             let actionFn = $.Actions;

@@ -4,14 +4,16 @@
 
 import type { Plugin } from 'vite';
 
-import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import type { ExtractedConnections } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
+import { extractConnectionsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import type { ParsedModuleRecord } from '../backend/ast-parsing/module-graph';
+import type { ConnectionLabelRule } from '../backend/connection-labels';
 
 import { createBackendModuleGraphCollector } from './backend-module-graph-collector';
 
 export interface BackendConnectionIdCollector {
     plugin: Plugin;
-    getAllowedConnectionIds: () => string[];
+    getConnections: () => ExtractedConnections;
     /** Exposed so a plugin sharing this build (e.g. the static-checks plugin) can reuse these records instead of re-parsing every module. */
     getModuleRecords: () => ReadonlyMap<string, ParsedModuleRecord>;
 }
@@ -19,17 +21,15 @@ export interface BackendConnectionIdCollector {
 export function createBackendConnectionIdCollector(
     entryId: string,
     buildRoot: string,
+    labelRule: ConnectionLabelRule,
 ): BackendConnectionIdCollector {
     const moduleGraphCollector = createBackendModuleGraphCollector(buildRoot);
 
     return {
         plugin: moduleGraphCollector.plugin,
-        getAllowedConnectionIds() {
-            return extractConnectionIdsFromModuleGraph(
-                entryId,
-                moduleGraphCollector.getModuleRecords(),
-                buildRoot,
-            );
+        getConnections() {
+            const moduleRecords = moduleGraphCollector.getModuleRecords();
+            return extractConnectionsFromModuleGraph(entryId, moduleRecords, buildRoot, labelRule);
         },
         getModuleRecords: moduleGraphCollector.getModuleRecords,
     };
