@@ -143,6 +143,26 @@ describe('Error Tracking Plugin Sourcemaps', () => {
             expect(doRequestMock).toHaveBeenCalledTimes(1);
         });
 
+        test('Should not upload sourcemaps during a dry run', async () => {
+            addFixtureFiles({
+                '/path/to/minified.min.js': 'Some JS File with some content.',
+                '/path/to/sourcemap.js.map': '{"version":3,"sources":["/path/to/minified.min.js"]}',
+            });
+
+            await sendSourcemaps(
+                [getSourcemapMock()],
+                getSourcemapsConfiguration({ dryRun: true }),
+                senderContextMock,
+                mockLogger,
+            );
+
+            expect(doRequestMock).not.toHaveBeenCalled();
+            expect(mockLogFn).toHaveBeenCalledWith(
+                expect.stringMatching(/\[DRYRUN\].*1.* sourcemaps/),
+                'info',
+            );
+        });
+
         test('Should include the configured repository identity in upload metadata', async () => {
             addFixtureFiles({
                 '/path/to/minified.min.js': 'Some JS File with some content.',
