@@ -30,6 +30,7 @@ export type RumOptions = {
     sdk?: SDKOptions;
     privacy?: PrivacyOptions;
     sourceCodeContext?: SourceCodeContextOptions;
+    earlyCollection?: boolean;
 };
 
 export type SDKOptions = Assign<
@@ -70,6 +71,7 @@ export type RumOptionsWithDefaults = {
     sdk?: SDKOptionsWithDefaults;
     privacy?: PrivacyOptionsWithDefaults;
     sourceCodeContext?: SourceCodeContextOptions;
+    earlyCollection?: boolean;
 };
 
 export type RumOptionsWithSdk = Assign<RumOptionsWithDefaults, { sdk: SDKOptionsWithDefaults }>;

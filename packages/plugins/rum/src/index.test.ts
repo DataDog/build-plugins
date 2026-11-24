@@ -34,6 +34,25 @@ describe('RUM Plugin', () => {
         expect(run({})).toHaveLength(0);
     });
 
+    test('Should not add the early collection plugin by default', () => {
+        const plugins = getPlugins(
+            getGetPluginsArg({ ...defaultPluginOptions, rum: {} }, getContextMock()),
+        );
+        expect(plugins).toHaveLength(0);
+    });
+
+    test('Should add the early collection plugin when enabled', () => {
+        const plugins = getPlugins(
+            getGetPluginsArg(
+                { ...defaultPluginOptions, rum: { earlyCollection: true } },
+                getContextMock(),
+            ),
+        );
+        expect(plugins.map((plugin) => plugin.name)).toEqual([
+            'datadog-rum-early-collection-plugin',
+        ]);
+    });
+
     test('Should inject SDK files with sdk config', () => {
         const values = run({ sdk: { applicationId: 'app-id' } });
         expect(values).toHaveLength(2);

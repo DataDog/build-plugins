@@ -17,6 +17,8 @@ Interact with Real User Monitoring (RUM) directly from your build system.
     -   [Using global `DD_RUM`](#using-global-ddrum)
     -   [rum.sdk.applicationId](#rumsdkapplicationid)
     -   [rum.sdk.clientToken](#rumsdkclienttoken)
+-   [Early Collection](#early-collection)
+    -   [rum.earlyCollection](#rumearlycollection)
 -   [Source Code Context](#source-code-context)
     -   [rum.sourceCodeContext.debugId](#rumsourcecodecontextdebugid)
 <!-- #toc -->
@@ -34,6 +36,7 @@ rum?: {
         clientToken?: string;
         // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
     };
+    earlyCollection?: boolean;
     sourceCodeContext?:
         | {
               debugId: true;
@@ -111,6 +114,41 @@ A [Datadog client token](https://docs.datadoghq.com/account_management/api-app-k
 > [!NOTE]
 > If not provided, the plugin will attempt to fetch the client token using the API.
 > You need to provide both `auth.apiKey` and `auth.appKey` with the `rum_apps_read` permission.
+
+## Early Collection
+
+### rum.earlyCollection
+
+> optional, defaults to `false`
+
+Start the [JS Self-Profiling](https://wicg.github.io/js-self-profiling/) session before the application and the RUM SDK are loaded, so profiles cover the page load (HTML parsing, application boot, the SDK download itself) instead of starting when the SDK is evaluated.
+
+When enabled, the plugin adds this tag as the **first child of the `<head>`** of every HTML page of the build:
+
+```html
+<script src="https://www.datadoghq-browser-agent.com/datadog-early-collection.js"></script>
+```
+
+The script (about 300 bytes) starts a `Profiler` and publishes it on `window._DD_EARLY_COLLECTION`. The RUM Browser SDK adopts it when it is evaluated. The script is idempotent and fails silently when profiling is unavailable.
+
+The plugin does not generate HTML; it rewrites the HTML produced by your build:
+
+| Bundler          | How                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Vite             | `transformIndexHtml` (build and dev server).                                                                                    |
+| webpack / Rspack | Every `.html` asset, after `html-webpack-plugin` / `HtmlRspackPlugin` emitted it (build and dev server).                        |
+| Rollup           | Every `.html` asset emitted by other plugins.                                                                                   |
+| esbuild          | Every `.html` file of the output directory once the build ends. **List the Datadog plugin after the plugin writing your HTML.** |
+
+If no HTML file is found (server-side rendered pages, libraries, ...), the plugin logs a warning and nothing is injected: add the tag above to your page template yourself.
+
+> [!IMPORTANT]
+> Requirements for it to have any effect:
+>
+> -   The page must be served with the response header `Document-Policy: js-profiling`, as for regular RUM profiling. Without it, or in a browser without the JS Self-Profiling API (only Chrome and Edge), the script does nothing.
+> -   Profiling must be enabled on your RUM application (profiling sample rate above 0).
+> -   Your RUM Browser SDK must be **v7.20.0 or later**. The script is served from the CDN as of the Browser SDK v7.20.0 release; before that the URL returns a 404 and the page is unaffected.
+> -   If you use a Content Security Policy, allow `https://www.datadoghq-browser-agent.com` in `script-src`.
 
 ## Source Code Context
 

@@ -8,6 +8,7 @@ import path from 'path';
 
 import type { RumInitConfiguration, RumPublicApi } from './browserSdkTypes';
 import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { getEarlyCollectionPlugin } from './earlyCollection';
 import { getSourceCodeContextSnippet } from './getSourceCodeContextSnippet';
 import { getPrivacyPlugin } from './privacy';
 import { getInjectionValue } from './sdk';
@@ -26,7 +27,7 @@ export type types = {
     RumInitConfiguration: RumInitConfiguration;
 };
 
-export const getPlugins: GetPlugins = ({ options, context }) => {
+export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     const log = context.getLogger(PLUGIN_NAME);
     const validatedOptions = validateOptions(options, log);
     const plugins: PluginOptions[] = [];
@@ -75,6 +76,11 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
         });
         const privacyPlugin = getPrivacyPlugin(validatedOptions.privacy, context);
         plugins.push(privacyPlugin);
+    }
+
+    if (validatedOptions.earlyCollection) {
+        // Add the early collection script to the HTML pages.
+        plugins.push(getEarlyCollectionPlugin(bundler, context));
     }
 
     return plugins;
