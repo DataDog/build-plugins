@@ -286,6 +286,8 @@ type SourcemapsUploadEnabledOptions = {
     upload: true;
     bailOnError?: boolean;
     dryRun?: boolean;
+    duplicateCheck?: boolean;
+    /** @deprecated Use duplicateCheck instead. */
     experimentalDuplicateCheck?: boolean;
     maxConcurrency?: number;
 };
@@ -294,6 +296,7 @@ type SourcemapsInjectionOnlyOptions = {
     upload?: false;
     bailOnError?: never;
     dryRun?: never;
+    duplicateCheck?: never;
     experimentalDuplicateCheck?: never;
     maxConcurrency?: never;
 };

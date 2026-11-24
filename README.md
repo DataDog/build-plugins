@@ -118,6 +118,7 @@ Follow the specific documentation for each bundler:
               bailOnError?: boolean;
               debugId: true;
               dryRun?: boolean;
+              duplicateCheck?: boolean;
               experimentalDuplicateCheck?: boolean;
               maxConcurrency?: number;
               upload: true;
@@ -129,6 +130,7 @@ Follow the specific documentation for each bundler:
                   bailOnError?: boolean;
                   debugId: true;
                   dryRun?: boolean;
+                  duplicateCheck?: boolean;
                   experimentalDuplicateCheck?: boolean;
                   maxConcurrency?: number;
               }
@@ -379,7 +381,7 @@ Inject a debug ID into each JavaScript bundle and, optionally, upload the corres
 
 Setting `debugId: true` enables injection. Set `upload: true` to upload the source maps directly from the build plugin. Uploading requires `auth.apiKey` or the `DATADOG_API_KEY` environment variable.
 
-The `bailOnError`, `dryRun`, `experimentalDuplicateCheck`, and `maxConcurrency` upload options are available when `upload` is `true`.
+The `bailOnError`, `dryRun`, `duplicateCheck`, and `maxConcurrency` upload options are available when `upload` is `true`. Debug-ID uploads check for existing sourcemaps by default; set `duplicateCheck: false` to opt out. `experimentalDuplicateCheck` remains supported and is used only if `duplicateCheck` is not set.
 
 Existing `rum.sourceCodeContext` and `errorTracking.sourcemaps` configurations remain supported. The top-level `sourcemaps` option can be combined with `rum.sourceCodeContext.service` and `rum.sourceCodeContext.version`; this metadata is independent of debug ID matching. Do not combine the top-level option with `errorTracking.sourcemaps` or with `rum.sourceCodeContext.debugId: false`.
 
@@ -405,6 +407,7 @@ datadogWebpackPlugin({
                   bailOnError?: boolean,
                   debugId: true,
                   dryRun?: boolean,
+                  duplicateCheck?: boolean,
                   experimentalDuplicateCheck?: boolean,
                   maxConcurrency?: number,
               }

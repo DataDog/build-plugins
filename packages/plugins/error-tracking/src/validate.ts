@@ -95,12 +95,13 @@ export const validateSourcemapsOptions = (
         }
 
         if (toReturn.errors.length === 0) {
+            const { duplicateCheck, experimentalDuplicateCheck, ...uploadOptions } = sourcemapsCfg;
             toReturn.config = {
                 bailOnError: false,
                 dryRun: false,
-                experimentalDuplicateCheck: false,
                 maxConcurrency: 20,
-                ...sourcemapsCfg,
+                ...uploadOptions,
+                duplicateCheck: duplicateCheck ?? experimentalDuplicateCheck ?? true,
             };
         }
 
