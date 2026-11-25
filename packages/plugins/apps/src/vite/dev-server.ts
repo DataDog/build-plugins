@@ -198,9 +198,13 @@ async function bundleBackendFunction(
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
+    const hasConfiguredCredentials = configuredAllowedConnectionIds.length > 0;
+    const runChecksForRequest: RunBackendStaticChecks = (ast, filePath, scopeAnalysis) => {
+        runStaticChecks(ast, filePath, scopeAnalysis, hasConfiguredCredentials);
+    };
     const staticChecksPlugin = createBackendStaticChecksPlugin(
         projectRoot,
-        runStaticChecks,
+        runChecksForRequest,
         connectionIdCollector.getModuleRecords,
     );
     const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [

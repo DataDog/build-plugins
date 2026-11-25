@@ -12,12 +12,13 @@ import { parseAst } from 'rollup/parseAst';
 
 const FILE_PATH = '/project/src/handler.backend.ts';
 
-function check(code: string, hasConfiguredCredentials?: () => boolean): void {
+function check(code: string, hasConfiguredCredentials?: boolean): void {
     const ast = parseAst(code);
     const program = ensureProgram(ast, FILE_PATH);
     const scopeAnalysis = analyzeModuleScope(program);
-    const runStaticChecks = createBackendStaticChecks(getMockLogger(), hasConfiguredCredentials);
-    runStaticChecks(ast, FILE_PATH, scopeAnalysis);
+    const logger = getMockLogger();
+    const runStaticChecks = createBackendStaticChecks(logger);
+    runStaticChecks(ast, FILE_PATH, scopeAnalysis, hasConfiguredCredentials);
 }
 
 describe('Backend Functions - createBackendStaticChecks', () => {
@@ -92,7 +93,7 @@ describe('Backend Functions - createBackendStaticChecks', () => {
     });
 
     test('should not warn about a process.env read when custom credentials are configured', () => {
-        check('export function run() { return process.env.STRIPE_KEY; }', () => true);
+        check('export function run() { return process.env.STRIPE_KEY; }', true);
 
         expect(mockLogFn).not.toHaveBeenCalled();
     });

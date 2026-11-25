@@ -3,18 +3,19 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { existsSync, readFileSync } from '@dd/core/helpers/fs';
+import type { Logger } from '@dd/core/types';
 import path from 'path';
 
-export const APP_CONFIG_FILENAME = 'datadog-app.config.json';
+import { APP_CONFIG_FILE } from '../app-identity';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { UUID_PATTERN } from './connection-ids';
 
 /**
  * Resolves custom credential connection IDs directly from datadog-app.config.json in projectRoot.
- * Returns an empty array if the file is absent, malformed, or contains no valid UUIDs.
+ * Warns and returns an empty array if the file is unreadable or malformed, and warns on skipped entries.
  */
-export function resolveAppConfigCredentialIds(projectRoot: string): string[] {
-    const filePath = path.join(projectRoot, APP_CONFIG_FILENAME);
+export function resolveAppConfigCredentialIds(projectRoot: string, log: Logger): string[] {
+    const filePath = path.join(projectRoot, APP_CONFIG_FILE);
     if (!existsSync(filePath)) {
         return [];
     }
@@ -22,32 +23,58 @@ export function resolveAppConfigCredentialIds(projectRoot: string): string[] {
     let raw: string;
     try {
         raw = readFileSync(filePath);
-    } catch {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`Could not read ${APP_CONFIG_FILE}: ${message}`);
         return [];
     }
 
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
-    } catch {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.warn(`Could not parse ${APP_CONFIG_FILE}: ${message}`);
         return [];
     }
-    if (
-        typeof parsed !== 'object' ||
-        parsed === null ||
-        Array.isArray(parsed) ||
-        !('customCredentialIds' in parsed)
-    ) {
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        log.warn(`Ignoring ${APP_CONFIG_FILE}: root value must be a JSON object.`);
+        return [];
+    }
+
+    if (!('customCredentialIds' in parsed) || parsed.customCredentialIds === undefined) {
         return [];
     }
 
     const { customCredentialIds } = parsed;
     if (!Array.isArray(customCredentialIds)) {
+        log.warn(
+            `Ignoring customCredentialIds in ${APP_CONFIG_FILE}: value must be an array of UUIDs.`,
+        );
         return [];
     }
 
-    return customCredentialIds
-        .filter((id): id is string => typeof id === 'string')
-        .map((id) => id.trim())
-        .filter((id) => UUID_PATTERN.test(id));
+    const validIds: string[] = [];
+    let invalidCount = 0;
+    for (const entry of customCredentialIds) {
+        if (typeof entry === 'string') {
+            const trimmed = entry.trim();
+            if (UUID_PATTERN.test(trimmed)) {
+                const normalized = trimmed.toLowerCase();
+                validIds.push(normalized);
+                continue;
+            }
+        }
+        invalidCount += 1;
+    }
+
+    if (invalidCount > 0) {
+        const label = invalidCount === 1 ? 'entry' : 'entries';
+        log.warn(
+            `Ignoring ${invalidCount} invalid customCredentialIds ${label} in ${APP_CONFIG_FILE}: each entry must be a valid UUID.`,
+        );
+    }
+
+    return validIds;
 }

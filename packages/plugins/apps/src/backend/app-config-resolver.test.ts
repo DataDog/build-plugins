@@ -3,9 +3,12 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { existsSync, readFileSync } from '@dd/core/helpers/fs';
+import { getMockLogger, mockLogFn } from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
-import { APP_CONFIG_FILENAME, resolveAppConfigCredentialIds } from './app-config-resolver';
+import { APP_CONFIG_FILE } from '../app-identity';
+
+import { resolveAppConfigCredentialIds } from './app-config-resolver';
 
 jest.mock('@dd/core/helpers/fs');
 
@@ -14,78 +17,115 @@ const mockReadFileSync = jest.mocked(readFileSync);
 
 describe('resolveAppConfigCredentialIds', () => {
     const projectRoot = '/test/project/root';
-    const uuid1 = '11111111-2222-3333-4444-555555555555';
-    const uuid2 = '66666666-7777-8888-9999-000000000000';
+    const uuid1 = '11111111-2222-3333-4444-55555555abcd';
+    const uuid2 = '66666666-7777-8888-9999-00000000ef01';
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    test('returns empty array when datadog-app.config.json does not exist', () => {
+    test('returns empty array without warning when datadog-app.config.json does not exist', () => {
         mockExistsSync.mockReturnValue(false);
+        const logger = getMockLogger();
 
-        const result = resolveAppConfigCredentialIds(projectRoot);
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
 
         expect(result).toEqual([]);
-        const expectedConfigPath = path.join(projectRoot, APP_CONFIG_FILENAME);
+        const expectedConfigPath = path.join(projectRoot, APP_CONFIG_FILE);
         expect(mockExistsSync).toHaveBeenCalledWith(expectedConfigPath);
         expect(mockReadFileSync).not.toHaveBeenCalled();
+        expect(mockLogFn).not.toHaveBeenCalled();
     });
 
-    test('returns empty array when file read throws', () => {
+    test('warns and returns empty array when file read throws', () => {
         mockExistsSync.mockReturnValue(true);
         mockReadFileSync.mockImplementation(() => {
             throw new Error('EACCES');
         });
+        const logger = getMockLogger();
 
-        const result = resolveAppConfigCredentialIds(projectRoot);
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
 
         expect(result).toEqual([]);
+        const expectedWarning = expect.stringContaining(
+            `Could not read ${APP_CONFIG_FILE}: EACCES`,
+        );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedWarning, 'warn');
     });
 
-    test('returns empty array when file is not valid JSON', () => {
+    test('warns and returns empty array when file is not valid JSON', () => {
         mockExistsSync.mockReturnValue(true);
         mockReadFileSync.mockReturnValue('{ malformed json');
+        const logger = getMockLogger();
 
-        const result = resolveAppConfigCredentialIds(projectRoot);
-
-        expect(result).toEqual([]);
-    });
-
-    test('returns empty array when customCredentialIds is absent', () => {
-        mockExistsSync.mockReturnValue(true);
-        mockReadFileSync.mockReturnValue(JSON.stringify({ id: 'app-id', name: 'app' }));
-
-        const result = resolveAppConfigCredentialIds(projectRoot);
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
 
         expect(result).toEqual([]);
+        const expectedWarning = expect.stringContaining(`Could not parse ${APP_CONFIG_FILE}`);
+        expect(mockLogFn).toHaveBeenCalledWith(expectedWarning, 'warn');
     });
 
-    test('returns empty array when customCredentialIds is not an array', () => {
+    test('warns and returns empty array when root value is not a JSON object', () => {
         mockExistsSync.mockReturnValue(true);
-        mockReadFileSync.mockReturnValue(JSON.stringify({ customCredentialIds: 'not-an-array' }));
+        mockReadFileSync.mockReturnValue('[]');
+        const logger = getMockLogger();
 
-        const result = resolveAppConfigCredentialIds(projectRoot);
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
 
         expect(result).toEqual([]);
-    });
-
-    test('returns trimmed valid UUIDs, filtering out invalid values', () => {
-        mockExistsSync.mockReturnValue(true);
-        mockReadFileSync.mockReturnValue(
-            JSON.stringify({
-                customCredentialIds: [
-                    `  ${uuid1.toUpperCase()}  `,
-                    'not-a-uuid',
-                    123,
-                    null,
-                    `\t${uuid2} `,
-                ],
-            }),
+        const expectedWarning = expect.stringContaining(
+            `Ignoring ${APP_CONFIG_FILE}: root value must be a JSON object.`,
         );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedWarning, 'warn');
+    });
 
-        const result = resolveAppConfigCredentialIds(projectRoot);
+    test('returns empty array without warning when customCredentialIds is absent', () => {
+        mockExistsSync.mockReturnValue(true);
+        const configJson = JSON.stringify({ id: 'app-id', name: 'app' });
+        mockReadFileSync.mockReturnValue(configJson);
+        const logger = getMockLogger();
 
-        expect(result).toEqual([uuid1.toUpperCase(), uuid2]);
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
+
+        expect(result).toEqual([]);
+        expect(mockLogFn).not.toHaveBeenCalled();
+    });
+
+    test('warns and returns empty array when customCredentialIds is not an array', () => {
+        mockExistsSync.mockReturnValue(true);
+        const configJson = JSON.stringify({ customCredentialIds: 'not-an-array' });
+        mockReadFileSync.mockReturnValue(configJson);
+        const logger = getMockLogger();
+
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
+
+        expect(result).toEqual([]);
+        const expectedWarning = expect.stringContaining(
+            `Ignoring customCredentialIds in ${APP_CONFIG_FILE}`,
+        );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedWarning, 'warn');
+    });
+
+    test('returns trimmed lowercase valid UUIDs and warns about invalid values', () => {
+        mockExistsSync.mockReturnValue(true);
+        const configJson = JSON.stringify({
+            customCredentialIds: [
+                `  ${uuid1.toUpperCase()}  `,
+                'not-a-uuid',
+                123,
+                null,
+                `\t${uuid2} `,
+            ],
+        });
+        mockReadFileSync.mockReturnValue(configJson);
+        const logger = getMockLogger();
+
+        const result = resolveAppConfigCredentialIds(projectRoot, logger);
+
+        expect(result).toEqual([uuid1, uuid2]);
+        const expectedWarning = expect.stringContaining(
+            `Ignoring 3 invalid customCredentialIds entries in ${APP_CONFIG_FILE}`,
+        );
+        expect(mockLogFn).toHaveBeenCalledWith(expectedWarning, 'warn');
     });
 });

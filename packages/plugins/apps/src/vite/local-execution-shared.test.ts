@@ -3,7 +3,10 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { ActionCallArgs } from '@dd/apps-plugin/vite/local-execution-shared';
-import { validateActionCallShape } from '@dd/apps-plugin/vite/local-execution-shared';
+import {
+    assertConnectionIdAllowed,
+    validateActionCallShape,
+} from '@dd/apps-plugin/vite/local-execution-shared';
 
 const actionDescription = '$.Actions.http.request';
 const missingInputs = `First argument to action ${actionDescription} must have an inputs field that is an object`;
@@ -65,5 +68,27 @@ describe('local-execution-shared — validateActionCallShape', () => {
 
         expect(validated.inputs).toBe(call.inputs);
         expect(validated.connectionId).toBe(call.connectionId);
+    });
+});
+
+describe('local-execution-shared — assertConnectionIdAllowed', () => {
+    test('Should allow a mixed-case UUID when the allowlist holds its lowercase form', () => {
+        const allowed = ['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'];
+
+        expect(() =>
+            assertConnectionIdAllowed(
+                'AAAAAAAA-bbbb-CCCC-dddd-EEEEEEEEEEEE',
+                allowed,
+                actionDescription,
+            ),
+        ).not.toThrow();
+    });
+
+    test('Should keep non-UUID connection IDs case-sensitive', () => {
+        const allowed = ['conn-a'];
+
+        expect(() => assertConnectionIdAllowed('CONN-A', allowed, actionDescription)).toThrow(
+            "not in this function's allowed connections",
+        );
     });
 });

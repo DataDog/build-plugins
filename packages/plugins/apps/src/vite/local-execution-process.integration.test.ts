@@ -295,16 +295,24 @@ describe('Local execution in a child process', () => {
         );
 
         test(
-            'Should pass through local environment variables while stripping NODE_OPTIONS and dev-server OAuth tokens',
+            'Should pass through local environment variables while stripping NODE_OPTIONS and Datadog auth variables',
             async () => {
                 const previous = {
                     custom: process.env.LOCAL_TEST_SECRET,
+                    apiKey: process.env.DD_API_KEY,
+                    appKey: process.env.DD_APP_KEY,
+                    datadogApiKey: process.env.DATADOG_API_KEY,
+                    datadogAppKey: process.env.DATADOG_APP_KEY,
                     oauth: process.env.DD_OAUTH_ACCESS_TOKEN,
                     datadogOauth: process.env.DATADOG_OAUTH_ACCESS_TOKEN,
                     nodeOptions: process.env.NODE_OPTIONS,
                     tz: process.env.TZ,
                 };
                 process.env.LOCAL_TEST_SECRET = 'local-secret-value';
+                process.env.DD_API_KEY = 'dev-server-api-key';
+                process.env.DD_APP_KEY = 'dev-server-app-key';
+                process.env.DATADOG_API_KEY = 'dev-server-datadog-api-key';
+                process.env.DATADOG_APP_KEY = 'dev-server-datadog-app-key';
                 process.env.DD_OAUTH_ACCESS_TOKEN = 'dev-server-oauth-token';
                 process.env.DATADOG_OAUTH_ACCESS_TOKEN = 'dev-server-datadog-oauth-token';
                 process.env.NODE_OPTIONS = '--max-old-space-size=512';
@@ -315,10 +323,17 @@ describe('Local execution in a child process', () => {
                         makeRequest(fixtureFunction('childState', 'readEnvNames'), []),
                     );
                     const allNames = Array.isArray(result.data) ? result.data : [];
-                    expect(allNames).toEqual(
-                        expect.arrayContaining(['TMPDIR', 'TZ', 'LOCAL_TEST_SECRET']),
-                    );
+                    const expectedAllowed = expect.arrayContaining([
+                        'TMPDIR',
+                        'TZ',
+                        'LOCAL_TEST_SECRET',
+                    ]);
+                    expect(allNames).toEqual(expectedAllowed);
                     expect(allNames).not.toContain('NODE_OPTIONS');
+                    expect(allNames).not.toContain('DD_API_KEY');
+                    expect(allNames).not.toContain('DD_APP_KEY');
+                    expect(allNames).not.toContain('DATADOG_API_KEY');
+                    expect(allNames).not.toContain('DATADOG_APP_KEY');
                     expect(allNames).not.toContain('DD_OAUTH_ACCESS_TOKEN');
                     expect(allNames).not.toContain('DATADOG_OAUTH_ACCESS_TOKEN');
                 } finally {
@@ -330,6 +345,10 @@ describe('Local execution in a child process', () => {
                         }
                     };
                     restore('LOCAL_TEST_SECRET', previous.custom);
+                    restore('DD_API_KEY', previous.apiKey);
+                    restore('DD_APP_KEY', previous.appKey);
+                    restore('DATADOG_API_KEY', previous.datadogApiKey);
+                    restore('DATADOG_APP_KEY', previous.datadogAppKey);
                     restore('DD_OAUTH_ACCESS_TOKEN', previous.oauth);
                     restore('DATADOG_OAUTH_ACCESS_TOKEN', previous.datadogOauth);
                     restore('NODE_OPTIONS', previous.nodeOptions);

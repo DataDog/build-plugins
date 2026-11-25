@@ -22,6 +22,14 @@ describe('mergeAllowedConnectionIds', () => {
         ]);
     });
 
+    test('deduplicates UUIDs regardless of letter case', () => {
+        const configured = ['AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE'];
+        const discovered = ['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'];
+
+        const result = mergeAllowedConnectionIds(configured, discovered);
+        expect(result).toEqual(['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee']);
+    });
+
     test('handles empty arrays', () => {
         expect(mergeAllowedConnectionIds([], [])).toEqual([]);
         expect(mergeAllowedConnectionIds(['a'], [])).toEqual(['a']);

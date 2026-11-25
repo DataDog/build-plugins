@@ -21,7 +21,10 @@ import { resolveAppConfigCredentialIds } from '../backend/app-config-resolver';
 import { extractExportedFunctions } from '../backend/ast-parsing/extract-backend-functions';
 import { extractConnectionIdsFromModuleGraph } from '../backend/ast-parsing/extract-connection-ids-from-module-graph';
 import { analyzeModuleScope } from '../backend/ast-parsing/module-scope';
-import { createBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import {
+    createBackendStaticChecks,
+    type RunBackendStaticChecks,
+} from '../backend/ast-parsing/run-backend-static-checks';
 import { ensureProgram } from '../backend/ast-parsing/type-guards';
 import {
     findInstalledBackendFunctionPackages,
@@ -247,12 +250,16 @@ export const getVitePlugin = ({
 }: VitePluginOptions): PluginOptions['vite'] => {
     const log = context.getLogger(PLUGIN_NAME);
     const getConfiguredAllowedConnectionIds = (): string[] => {
-        return resolveAppConfigCredentialIds(context.buildRoot);
+        return resolveAppConfigCredentialIds(context.buildRoot, log);
     };
-    const runStaticChecks = createBackendStaticChecks(
-        log,
-        () => getConfiguredAllowedConnectionIds().length > 0,
-    );
+    let buildConfiguredCredentialIds: string[] | undefined;
+    const getBuildConfiguredCredentialIds = (): string[] => {
+        if (buildConfiguredCredentialIds === undefined) {
+            buildConfiguredCredentialIds = getConfiguredAllowedConnectionIds();
+        }
+        return buildConfiguredCredentialIds;
+    };
+    const runStaticChecks = createBackendStaticChecks(log);
     const { auth } = context;
 
     context.inject({
@@ -549,7 +556,11 @@ export const getVitePlugin = ({
                 const program = ensureProgram(ast, normalizedId);
                 const scopeAnalysis = analyzeModuleScope(program);
                 // Runs even for a file with zero exports, to catch a restricted global as soon as it's written.
-                runStaticChecks(ast, normalizedId, scopeAnalysis);
+                const configuredCredentialIds = devServerActive
+                    ? getConfiguredAllowedConnectionIds()
+                    : getBuildConfiguredCredentialIds();
+                const hasConfiguredCredentials = configuredCredentialIds.length > 0;
+                runStaticChecks(ast, normalizedId, scopeAnalysis, hasConfiguredCredentials);
                 const exportNames = extractExportedFunctions(ast, normalizedId);
                 if (exportNames.length === 0) {
                     // Only a genuinely no-query id can be trusted as a real re-transform of this
@@ -589,6 +600,7 @@ export const getVitePlugin = ({
         async buildStart() {
             // A watch-mode rebuild must not inherit tags derived from the previous build's code.
             buildTagSources = createBuildTagSources();
+            buildConfiguredCredentialIds = getConfiguredAllowedConnectionIds();
             parametersModuleId = undefined;
             if (options.parameters === undefined) {
                 // Resolved from the root, as app source would. An app without
@@ -651,6 +663,7 @@ export const getVitePlugin = ({
         async closeBundle() {
             // Taken before any await, so the next watch-mode build can't change what this one packages.
             const tags = resolveTags(buildTagSources);
+            const configuredAllowedConnectionIds = getBuildConfiguredCredentialIds();
             // An explicit option overrides discovery. Otherwise the code is the
             // only definition, so finding nothing clears an earlier declaration.
             const parameters = options.parameters ?? parameterCollector.resolve();
@@ -663,7 +676,6 @@ export const getVitePlugin = ({
             let backendFunctions = getBackendFunctions();
             logPackageBackendFunctions(backendFunctions, context.buildRoot, log);
             if (backendFunctions.length > 0) {
-                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
                 const result = await buildBackendFunctions(
                     bundler.build,
                     backendFunctions,
@@ -784,12 +796,21 @@ export const getVitePlugin = ({
             // primes each node itself via `transformRequest`, since `moduleParsed` (production's
             // mechanism) is Rollup-build-only and never fires on a real dev server.
             const getAllowedConnectionIds = async (entryId: string) => {
+                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
+                const hasConfiguredCredentials = configuredAllowedConnectionIds.length > 0;
+                const runChecksForRequest: RunBackendStaticChecks = (
+                    ast,
+                    filePath,
+                    scopeAnalysis,
+                ) => {
+                    runStaticChecks(ast, filePath, scopeAnalysis, hasConfiguredCredentials);
+                };
                 const parseAst = await loadViteParseAst();
                 const moduleGraph = await collectModuleGraphFromServer(
                     server,
                     entryId,
                     context.buildRoot,
-                    runStaticChecks,
+                    runChecksForRequest,
                     parseAst,
                 );
                 const discoveredIds = extractConnectionIdsFromModuleGraph(
@@ -797,7 +818,6 @@ export const getVitePlugin = ({
                     moduleGraph,
                     context.buildRoot,
                 );
-                const configuredAllowedConnectionIds = getConfiguredAllowedConnectionIds();
                 return mergeAllowedConnectionIds(configuredAllowedConnectionIds, discoveredIds);
             };
             const isHostAllowed = createViteHostCheck(server.config);

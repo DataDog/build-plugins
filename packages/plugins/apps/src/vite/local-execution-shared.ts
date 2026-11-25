@@ -5,6 +5,7 @@
 /* global Proxy */
 
 // Side-effect free, so the local execution child process can bundle it.
+import { normalizeConnectionId } from '../backend/connection-ids';
 
 export interface ActionCallArgs {
     inputs: Record<string, unknown>;
@@ -76,7 +77,14 @@ export function assertConnectionIdAllowed(
     allowedConnectionIds: string[],
     actionDescription: string,
 ): void {
-    if (connectionId !== undefined && !allowedConnectionIds.includes(connectionId)) {
+    if (connectionId === undefined) {
+        return;
+    }
+    const normalizedId = normalizeConnectionId(connectionId);
+    const isAllowed = allowedConnectionIds.some(
+        (allowedId) => normalizeConnectionId(allowedId) === normalizedId,
+    );
+    if (!isAllowed) {
         throwActionFailure(
             `Action ${actionDescription} used connection "${connectionId}", which is not in this function's allowed connections: [${allowedConnectionIds.join(', ')}]`,
         );

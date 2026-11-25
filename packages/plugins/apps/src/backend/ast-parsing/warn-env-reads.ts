@@ -34,7 +34,7 @@ const PROCESS_MODULES = new Set(['process', 'node:process']);
 export const MAX_TRACKED_FILES = 500;
 export type WarnedEnvReads = Map<string, Set<string>>;
 
-export const ENV_NOT_PASSED_EXPLANATION = `In production, the ${NODE_BACKEND_RUNTIME} only passes secrets from Custom Credentials attached to this app. No customCredentialIds are set in datadog-app.config.json, so these reads will not see your local environment variables there. Run \`datadog-apps secrets add\` or \`datadog-apps secrets attach\` to attach secrets.`;
+export const ENV_NOT_PASSED_EXPLANATION = `In production, the ${NODE_BACKEND_RUNTIME} only passes secrets from Custom Credentials attached to this app. No valid customCredentialIds were loaded from datadog-app.config.json, so these reads will not see your local environment variables there. Check datadog-app.config.json or run \`datadog-apps secrets add\` or \`datadog-apps secrets attach\` to attach secrets.`;
 
 type Role = 'process' | 'env';
 // Recorded beside a file's reported uses, so a failed check warns once per file too.

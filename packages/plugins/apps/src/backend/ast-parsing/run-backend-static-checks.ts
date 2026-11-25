@@ -13,17 +13,15 @@ export type RunBackendStaticChecks = (
     ast: BaseNode,
     filePath: string,
     scopeAnalysis: ModuleScopeAnalysis,
+    hasConfiguredCredentials?: boolean,
 ) => void;
 
 /** Create one per plugin instance and share it across call sites, so the checks can't drift and each warning shows once. */
-export function createBackendStaticChecks(
-    log: Logger,
-    hasConfiguredCredentials: () => boolean = () => false,
-): RunBackendStaticChecks {
+export function createBackendStaticChecks(log: Logger): RunBackendStaticChecks {
     const warnedEnvReads: WarnedEnvReads = new Map();
-    return (ast, filePath, scopeAnalysis) => {
+    return (ast, filePath, scopeAnalysis, hasConfiguredCredentials = false) => {
         rejectGlobalsMissingFromNode(ast, filePath, scopeAnalysis);
-        if (!hasConfiguredCredentials()) {
+        if (!hasConfiguredCredentials) {
             warnAboutEnvReads(ast, filePath, log, scopeAnalysis, warnedEnvReads);
         }
     };

@@ -43,8 +43,12 @@ export async function buildBackendFunctions(
     const outputs = new Map<string, string>();
     const allowedConnectionIdsByEntryPath = new Map<string, string[]>();
 
-    log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
+    const hasConfiguredCredentials = configuredAllowedConnectionIds.length > 0;
+    const runChecksForBuild: RunBackendStaticChecks = (ast, filePath, scopeAnalysis) => {
+        runStaticChecks(ast, filePath, scopeAnalysis, hasConfiguredCredentials);
+    };
 
+    log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
     try {
         // Build each function individually so that each output is a single self-contained JS file.
         for (const func of functions) {
@@ -62,7 +66,7 @@ export async function buildBackendFunctions(
 
             const staticChecksPlugin = createBackendStaticChecksPlugin(
                 buildRoot,
-                runStaticChecks,
+                runChecksForBuild,
                 connectionIdCollector.getModuleRecords,
             );
             const baseConfig = getBaseBackendBuildConfig(
