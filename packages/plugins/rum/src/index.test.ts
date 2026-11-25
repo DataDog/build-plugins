@@ -9,6 +9,7 @@ import {
     defaultPluginOptions,
     getContextMock,
     getGetPluginsArg,
+    getMockLogger,
 } from '@dd/tests/_jest/helpers/mocks';
 import path from 'path';
 
@@ -32,6 +33,50 @@ describe('RUM Plugin', () => {
 
     test('Should inject nothing with no config', () => {
         expect(run({})).toHaveLength(0);
+    });
+
+    test('Should not add the early collection plugin by default', () => {
+        const plugins = getPlugins(
+            getGetPluginsArg({ ...defaultPluginOptions, rum: {} }, getContextMock()),
+        );
+        expect(plugins).toHaveLength(0);
+    });
+
+    test('Should add the early collection plugin when enabled', () => {
+        const plugins = getPlugins(
+            getGetPluginsArg(
+                { ...defaultPluginOptions, rum: { earlyCollection: true } },
+                getContextMock(),
+            ),
+        );
+        expect(plugins.map((plugin) => plugin.name)).toEqual([
+            'datadog-rum-early-collection-plugin',
+        ]);
+    });
+
+    test('Should warn that the bundled SDK does not adopt the early collection', () => {
+        const warn = jest.fn();
+        const log = { ...getMockLogger(), warn };
+        const config = { earlyCollection: true, sdk: { applicationId: 'app-id' } };
+        getPlugins(
+            getGetPluginsArg(
+                { ...defaultPluginOptions, rum: config },
+                getContextMock({ getLogger: () => log }),
+            ),
+        );
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain('v7.20.0');
+    });
+
+    test('Should reject a non boolean earlyCollection', () => {
+        expect(() =>
+            getPlugins(
+                getGetPluginsArg(
+                    { ...defaultPluginOptions, rum: { earlyCollection: 'yes' as any } },
+                    getContextMock(),
+                ),
+            ),
+        ).toThrow('Invalid configuration');
     });
 
     test('Should inject SDK files with sdk config', () => {

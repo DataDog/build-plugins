@@ -174,6 +174,7 @@ Follow the specific documentation for each bundler:
             clientToken?: string;
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         };
+        earlyCollection?: boolean;
         sourceCodeContext?:
             | {
                   debugId: true;
@@ -505,6 +506,7 @@ datadogWebpackPlugin({
             clientToken?: string,
             // [...] See https://docs.datadoghq.com/real_user_monitoring/browser/setup/client?tab=rum#configuration for all options.
         },
+        earlyCollection?: boolean,
         sourceCodeContext?:
             | {
                   debugId: true,

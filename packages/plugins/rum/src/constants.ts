@@ -6,3 +6,5 @@ import type { PluginName } from '@dd/core/types';
 
 export const CONFIG_KEY = 'rum' as const;
 export const PLUGIN_NAME: PluginName = 'datadog-rum-plugin' as const;
+export const EARLY_COLLECTION_PLUGIN_NAME: PluginName =
+    'datadog-rum-early-collection-plugin' as const;
