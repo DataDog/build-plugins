@@ -143,14 +143,17 @@ describe('buildBackendFunctions', () => {
                 allowedConnectionIds: [],
             };
 
+            const connectionId = '11111111-2222-3333-4444-555555555555';
             const result = await buildBackendFunctions(
                 build,
                 [namesFunc],
                 workingDir,
                 mockLogger,
                 createBackendStaticChecks(mockLogger),
+                [connectionId],
             );
             outDir = result.outDir;
+            expect(result.functions[0].allowedConnectionIds).toEqual([connectionId]);
             const [bundlePath] = [...result.outputs.values()];
             const bundleCode = readFileSync(bundlePath);
             const bundleUrl = pathToFileURL(bundlePath).href;

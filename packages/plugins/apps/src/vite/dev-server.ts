@@ -14,6 +14,7 @@ import type { AppIdentity } from '../app-identity';
 import { AUTH_GUIDANCE } from '../auth';
 import type { DoAuthenticatedRequest } from '../auth';
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import { DEBUG_BUNDLE_PATH } from '../backend/protocol';
 import type {
@@ -179,6 +180,7 @@ async function bundleBackendFunction(
     serverConditions: readonly string[],
     func: BackendFunction,
     projectRoot: string,
+    configuredAllowedConnectionIds: string[] = [],
     log: Logger,
     runStaticChecks: RunBackendStaticChecks,
 ): Promise<BundleResult> {
@@ -196,9 +198,13 @@ async function bundleBackendFunction(
 
     log.debug(`Bundling backend function "${displayName}" from ${func.absolutePath}`);
 
+    const hasConfiguredCredentials = configuredAllowedConnectionIds.length > 0;
+    const runChecksForRequest: RunBackendStaticChecks = (ast, filePath, scopeAnalysis) => {
+        runStaticChecks(ast, filePath, scopeAnalysis, hasConfiguredCredentials);
+    };
     const staticChecksPlugin = createBackendStaticChecksPlugin(
         projectRoot,
-        runStaticChecks,
+        runChecksForRequest,
         connectionIdCollector.getModuleRecords,
     );
     const devBaseConfig = getBaseBackendBuildConfig(projectRoot, { [virtualId]: virtualContent }, [
@@ -231,11 +237,15 @@ async function bundleBackendFunction(
     }
 
     const code = output.output[0].type === 'chunk' ? output.output[0].code : '';
+    const discoveredIds = connectionIdCollector.getAllowedConnectionIds();
+    const allowedConnectionIds = mergeAllowedConnectionIds(
+        configuredAllowedConnectionIds,
+        discoveredIds,
+    );
     const enrichedFunc = {
         ...func,
-        allowedConnectionIds: connectionIdCollector.getAllowedConnectionIds(),
+        allowedConnectionIds,
     };
-
     log.debug(`Bundled "${displayName}" (${code.length} bytes)`);
 
     return { func: enrichedFunc, code };
@@ -888,9 +898,26 @@ export function createDevServerMiddleware(
     serverConditions: readonly string[],
     app: AppIdentity,
     executeLocally?: LocalExecutor,
+    configuredAllowedConnectionIds: string[] | (() => string[]) = [],
 ): (req: IncomingMessage, res: ServerResponse, next: () => void) => void {
-    const bundle = (func: BackendFunction) =>
-        bundleBackendFunction(viteBuild, serverConditions, func, projectRoot, log, runStaticChecks);
+    const resolveConfiguredAllowedConnectionIds = (): string[] => {
+        if (typeof configuredAllowedConnectionIds === 'function') {
+            return configuredAllowedConnectionIds();
+        }
+        return configuredAllowedConnectionIds;
+    };
+    const bundle = (func: BackendFunction) => {
+        const connectionIds = resolveConfiguredAllowedConnectionIds();
+        return bundleBackendFunction(
+            viteBuild,
+            serverConditions,
+            func,
+            projectRoot,
+            connectionIds,
+            log,
+            runStaticChecks,
+        );
+    };
     const isDevVerifyMode = mode === DEV_VERIFY_MODE;
     const queryMeta = getQueryMeta(app, mode);
     const oversizedFunctionsWarned = new Set<string>();

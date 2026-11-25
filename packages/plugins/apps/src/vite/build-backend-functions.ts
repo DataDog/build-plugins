@@ -10,6 +10,7 @@ import path from 'path';
 import type { build } from 'vite';
 
 import type { RunBackendStaticChecks } from '../backend/ast-parsing/run-backend-static-checks';
+import { mergeAllowedConnectionIds } from '../backend/connection-ids';
 import { encodeQueryName } from '../backend/encodeQueryName';
 import type { BackendFunction } from '../backend/types';
 import { generateVirtualEntryContent } from '../backend/virtual-entry';
@@ -34,6 +35,7 @@ export async function buildBackendFunctions(
     buildRoot: string,
     log: Logger,
     runStaticChecks: RunBackendStaticChecks,
+    configuredAllowedConnectionIds: string[] = [],
 ): Promise<{ outDir: string; outputs: Map<string, string>; functions: BackendFunction[] }> {
     const tmpRoot = tmpdir();
     const outDirPrefix = path.join(tmpRoot, BACKEND_OUT_DIR_PREFIX);
@@ -41,8 +43,12 @@ export async function buildBackendFunctions(
     const outputs = new Map<string, string>();
     const allowedConnectionIdsByEntryPath = new Map<string, string[]>();
 
-    log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
+    const hasConfiguredCredentials = configuredAllowedConnectionIds.length > 0;
+    const runChecksForBuild: RunBackendStaticChecks = (ast, filePath, scopeAnalysis) => {
+        runStaticChecks(ast, filePath, scopeAnalysis, hasConfiguredCredentials);
+    };
 
+    log.debug(`Building ${functions.length} backend function(s) via vite.build()`);
     try {
         // Build each function individually so that each output is a single self-contained JS file.
         for (const func of functions) {
@@ -60,7 +66,7 @@ export async function buildBackendFunctions(
 
             const staticChecksPlugin = createBackendStaticChecksPlugin(
                 buildRoot,
-                runStaticChecks,
+                runChecksForBuild,
                 connectionIdCollector.getModuleRecords,
             );
             const baseConfig = getBaseBackendBuildConfig(
@@ -119,9 +125,16 @@ export async function buildBackendFunctions(
     return {
         outDir,
         outputs,
-        functions: functions.map((func) => ({
-            ...func,
-            allowedConnectionIds: allowedConnectionIdsByEntryPath.get(func.absolutePath)!,
-        })),
+        functions: functions.map((func) => {
+            const discoveredIds = allowedConnectionIdsByEntryPath.get(func.absolutePath) ?? [];
+            const allowedConnectionIds = mergeAllowedConnectionIds(
+                configuredAllowedConnectionIds,
+                discoveredIds,
+            );
+            return {
+                ...func,
+                allowedConnectionIds,
+            };
+        }),
     };
 }

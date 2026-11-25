@@ -166,6 +166,11 @@ function flush(stream: Writable, write: Writable['write'], timeoutMs: number): P
 }
 
 async function load(config: ChildStartConfig): Promise<unknown> {
+    for (const [name, value] of config.environment ?? []) {
+        if (!Object.hasOwn(process.env, name)) {
+            process.env[name] = value;
+        }
+    }
     const { ModuleRunner, ESModulesEvaluator, createNodeImportMeta }: ModuleRunnerModule =
         await import(config.moduleRunnerUrl);
     // Declared, so top-level code reading `$` sees undefined as in production rather than a ReferenceError.

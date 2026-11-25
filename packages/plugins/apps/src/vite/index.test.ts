@@ -1553,7 +1553,7 @@ describe('Backend Functions - getVitePlugin', () => {
                     environments: { ssr: { hot, config: { dev: {} } } },
                 });
 
-                const executeLocally = createMiddleware.mock.calls[0]?.at(-1);
+                const executeLocally = createMiddleware.mock.calls[0]?.[13];
                 expect(typeof executeLocally).toBe(runsLocally ? 'function' : 'undefined');
                 const executorOptions = createExecutor.mock.calls.map(([options]) => ({
                     invokeChannel: options.invokeChannel,
