@@ -29,6 +29,11 @@ export const validateOptions = (
     errors.push(...privacyResults.errors);
     errors.push(...sourceCodeContextResults.errors);
 
+    const earlyCollection = options[CONFIG_KEY]?.earlyCollection;
+    if (earlyCollection !== undefined && typeof earlyCollection !== 'boolean') {
+        errors.push(`${chalk.bold.red('"rum.earlyCollection"')} must be a boolean.`);
+    }
+
     // Throw if there are any errors.
     if (errors.length) {
         log.error(`\n  - ${errors.join('\n  - ')}`);

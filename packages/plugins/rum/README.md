@@ -142,13 +142,21 @@ The plugin does not generate HTML; it rewrites the HTML produced by your build:
 
 If no HTML file is found (server-side rendered pages, libraries, ...), the plugin logs a warning and nothing is injected: add the tag above to your page template yourself.
 
+With esbuild, the plugin only rewrites the HTML files found in the output directory (`outdir`, or the directory of `outfile`). It never touches the files when that directory is your project root or one of its parents, and it skips hidden directories, `node_modules` and symlinks. In watch mode, a plugin that rewrites your HTML on every rebuild can overwrite the injected tag.
+
 > [!IMPORTANT]
 > Requirements for it to have any effect:
 >
 > -   The page must be served with the response header `Document-Policy: js-profiling`, as for regular RUM profiling. Without it, or in a browser without the JS Self-Profiling API (only Chrome and Edge), the script does nothing.
 > -   Profiling must be enabled on your RUM application (profiling sample rate above 0).
 > -   Your RUM Browser SDK must be **v7.20.0 or later**. The script is served from the CDN as of the Browser SDK v7.20.0 release; before that the URL returns a 404 and the page is unaffected.
-> -   If you use a Content Security Policy, allow `https://www.datadoghq-browser-agent.com` in `script-src`.
+> -   The SDK injected by [`rum.sdk`](#browser-sdk-injection) is **not** v7.20.0+ yet, so it does not adopt the early session (the plugin logs a warning). Load a compatible SDK yourself to benefit from this option.
+> -   If you use a Content Security Policy, allow `https://www.datadoghq-browser-agent.com` in `script-src`. The plugin does not add a `nonce`, so a policy that requires nonces (or `strict-dynamic`) blocks the tag: add it to your template yourself.
+>
+> Good to know:
+>
+> -   The tag is a blocking request to the CDN, on purpose, so that the profiler starts before anything else. The URL is not versioned, so Subresource Integrity cannot be used.
+> -   The tag is placed first in `<head>`, before any `<meta charset>` or `<meta http-equiv="Content-Security-Policy">`. Make sure your charset declaration is within the first 1024 bytes of the document, and prefer the `Content-Security-Policy` header over the meta tag.
 
 ## Source Code Context
 

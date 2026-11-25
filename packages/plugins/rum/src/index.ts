@@ -79,6 +79,11 @@ export const getPlugins: GetPlugins = ({ options, context, bundler }) => {
     }
 
     if (validatedOptions.earlyCollection) {
+        if (validatedOptions.sdk) {
+            log.warn(
+                'The RUM SDK injected by "rum.sdk" does not adopt the early collection session (it requires the Browser SDK v7.20.0+). Load a compatible SDK yourself to benefit from "rum.earlyCollection".',
+            );
+        }
         // Add the early collection script to the HTML pages.
         plugins.push(getEarlyCollectionPlugin(bundler, context));
     }

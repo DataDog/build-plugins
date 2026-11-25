@@ -4,6 +4,8 @@
 
 import {
     EARLY_COLLECTION_TAG,
+    getNoHtmlWarning,
+    hasEarlyCollectionTag,
     injectEarlyCollectionTag,
     isHtmlFile,
 } from '@dd/rum-plugin/earlyCollection/html';
@@ -53,8 +55,59 @@ describe('Early collection HTML', () => {
             expect(second).toEqual({ html: first!.html, injected: false });
         });
 
+        test('Should ignore <head> and <html> in comments, scripts and conditional comments', () => {
+            const result = injectEarlyCollectionTag(
+                '<!--[if IE]><html class="ie"><![endif]--><!-- <head> --><html><head><script>const a = "<head>";</script></head></html>',
+            );
+            expect(result?.html).toBe(
+                `<!--[if IE]><html class="ie"><![endif]--><!-- <head> --><html><head>${EARLY_COLLECTION_TAG}<script>const a = "<head>";</script></head></html>`,
+            );
+        });
+
+        test('Should handle ">" in quoted <head> attributes', () => {
+            const result = injectEarlyCollectionTag('<html><head data-a=">"><title>a</title>');
+            expect(result?.html).toBe(
+                `<html><head data-a=">">${EARLY_COLLECTION_TAG}<title>a</title>`,
+            );
+        });
+
+        test('Should not be fooled by a comment mentioning the file', () => {
+            const html = '<html><head><!-- datadog-early-collection.js --></head></html>';
+            expect(injectEarlyCollectionTag(html)?.injected).toBe(true);
+        });
+
+        test('Should not inject when the page already loads the script from elsewhere', () => {
+            const html =
+                '<html><head><script src="/vendor/datadog-early-collection.js"></script></head>';
+            expect(injectEarlyCollectionTag(html)).toEqual({ html, injected: false });
+        });
+
         test('Should skip the documents without <head> nor <html>', () => {
             expect(injectEarlyCollectionTag('<div>partial</div>')).toBeUndefined();
+        });
+    });
+
+    describe('hasEarlyCollectionTag', () => {
+        test.each([
+            [EARLY_COLLECTION_TAG, true],
+            [
+                '<script defer src="https://cdn.example.com/datadog-early-collection.js"></script>',
+                true,
+            ],
+            ["<script src='/datadog-early-collection.js'></script>", true],
+            ['<!-- <script src="/datadog-early-collection.js"></script> -->', false],
+            ['<link rel="preload" href="/datadog-early-collection.js" as="script">', false],
+            ['<script src="/app.js"></script>', false],
+        ])('%s -> %s', (html, expected) => {
+            expect(hasEarlyCollectionTag(html)).toBe(expected);
+        });
+    });
+
+    describe('getNoHtmlWarning', () => {
+        test('Should only mention the plugin order for esbuild', () => {
+            expect(getNoHtmlWarning('reason', 'esbuild')).toContain('after the plugin');
+            expect(getNoHtmlWarning('reason', 'webpack')).not.toContain('after the plugin');
+            expect(getNoHtmlWarning('reason', 'webpack')).toContain(EARLY_COLLECTION_TAG);
         });
     });
 });

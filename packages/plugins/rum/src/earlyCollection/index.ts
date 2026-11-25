@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { outputFile, readFile } from '@dd/core/helpers/fs';
 import { getAbsolutePath } from '@dd/core/helpers/paths';
 import type { GlobalContext, PluginOptions } from '@dd/core/types';
 import fs from 'fs';
@@ -9,25 +10,24 @@ import path from 'path';
 
 import { EARLY_COLLECTION_PLUGIN_NAME, PLUGIN_NAME } from '../constants';
 
-import { getNoHtmlWarning, injectEarlyCollectionTag, isHtmlFile } from './html';
-import type { InjectionResult } from './html';
+import {
+    EARLY_COLLECTION_URL,
+    getNoHtmlWarning,
+    hasEarlyCollectionTag,
+    injectEarlyCollectionTag,
+    isHtmlFile,
+} from './html';
 
 const fsp = fs.promises;
 
-// Mutable tally of what we saw in a build, to warn when there was no HTML to inject into.
-type Tally = { seen: number; injected: number };
-
-const record = (tally: Tally, result: InjectionResult | undefined) => {
-    if (result) {
-        tally.seen++;
-        if (result.injected) {
-            tally.injected++;
-        }
-    }
-};
-
-const toText = (source: string | Uint8Array | Buffer): string =>
+const toText = (source: string | Uint8Array): string =>
     typeof source === 'string' ? source : Buffer.from(source).toString('utf-8');
+
+// Whether "child" is "parent" or lives inside it.
+const isInside = (parent: string, child: string): boolean => {
+    const relative = path.relative(parent, child);
+    return !relative.startsWith('..') && !path.isAbsolute(relative);
+};
 
 const findHtmlFiles = async (dir: string): Promise<string[]> => {
     const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -35,9 +35,13 @@ const findHtmlFiles = async (dir: string): Promise<string[]> => {
         entries.map((entry) => {
             const entryPath = path.join(dir, entry.name);
             if (entry.isDirectory()) {
-                return entry.name === 'node_modules' ? [] : findHtmlFiles(entryPath);
+                // Skip the dependencies and the hidden folders (.git, .cache, ...).
+                return entry.name === 'node_modules' || entry.name.startsWith('.')
+                    ? []
+                    : findHtmlFiles(entryPath);
             }
-            return isHtmlFile(entry.name) ? [entryPath] : [];
+            // Regular files only, we don't follow symlinks out of the output directory.
+            return entry.isFile() && isHtmlFile(entry.name) ? [entryPath] : [];
         }),
     );
     return files.flat();
@@ -58,66 +62,88 @@ const findHtmlFiles = async (dir: string): Promise<string[]> => {
  */
 export const getEarlyCollectionPlugin = (bundler: any, context: GlobalContext): PluginOptions => {
     const log = context.getLogger(PLUGIN_NAME);
-    const warnNoHtml = () => log.warn(getNoHtmlWarning());
+    // Only warn once per build tool instance, not on every rebuild or output.
+    let warned = false;
+    const warnNoHtml = (reason: string) => {
+        if (warned) {
+            return;
+        }
+        warned = true;
+        log.warn(getNoHtmlWarning(reason, context.bundler.name));
+    };
+    const NO_HTML = 'no HTML file with a <head> was found in the build output';
 
     const plugin: PluginOptions = {
         name: EARLY_COLLECTION_PLUGIN_NAME,
     };
 
     let isViteBuild = false;
+    let isViteAppBuild = true;
     let viteHtmlSeen = 0;
     plugin.vite = {
         enforce: 'pre',
         configResolved(config) {
             isViteBuild = config.command === 'build';
+            // Library and SSR builds don't produce a page.
+            isViteAppBuild = !config.build?.lib && !config.build?.ssr;
         },
         transformIndexHtml: {
             // Run before Vite adds its own tags, so ours is the first of the <head>.
             order: 'pre',
             handler(html) {
-                const result = injectEarlyCollectionTag(html);
-                if (!result) {
-                    return html;
-                }
                 viteHtmlSeen++;
-                return result.html;
+                if (hasEarlyCollectionTag(html)) {
+                    return [];
+                }
+                // Let Vite place the tag, it also handles pages without <head>.
+                return [
+                    {
+                        tag: 'script',
+                        attrs: { src: EARLY_COLLECTION_URL },
+                        injectTo: 'head-prepend',
+                    },
+                ];
             },
         },
         closeBundle() {
-            if (isViteBuild && viteHtmlSeen === 0) {
-                warnNoHtml();
+            if (isViteBuild && isViteAppBuild && viteHtmlSeen === 0) {
+                warnNoHtml(NO_HTML);
             }
         },
     };
 
+    let rollupHtmlSeen = 0;
     plugin.rollup = {
         generateBundle: {
             order: 'post',
             handler(_options, bundle) {
-                const tally: Tally = { seen: 0, injected: 0 };
                 for (const file of Object.values(bundle)) {
                     if (file.type !== 'asset' || !isHtmlFile(file.fileName)) {
                         continue;
                     }
                     const result = injectEarlyCollectionTag(toText(file.source));
-                    record(tally, result);
-                    if (result?.injected) {
+                    if (!result) {
+                        continue;
+                    }
+                    rollupHtmlSeen++;
+                    if (result.injected) {
                         file.source = result.html;
                     }
                 }
-                if (!tally.seen) {
-                    warnNoHtml();
+                // Another output may still have HTML, so only warn when none had any so far.
+                if (!rollupHtmlSeen) {
+                    warnNoHtml(NO_HTML);
                 }
             },
         },
     };
 
     // webpack and rspack share the same plugin API for what we need.
-    const xpackPlugin: PluginOptions['webpack'] & PluginOptions['rspack'] = (compiler: any) => {
+    const xpackPlugin: PluginOptions['webpack'] & PluginOptions['rspack'] = (compiler) => {
         const { Compilation, sources } = bundler;
         // "thisCompilation" is not called for child compilations,
         // so we don't process the HTML of sub-builds twice.
-        compiler.hooks.thisCompilation.tap(EARLY_COLLECTION_PLUGIN_NAME, (compilation: any) => {
+        compiler.hooks.thisCompilation.tap(EARLY_COLLECTION_PLUGIN_NAME, (compilation) => {
             compilation.hooks.processAssets.tap(
                 {
                     name: EARLY_COLLECTION_PLUGIN_NAME,
@@ -125,19 +151,24 @@ export const getEarlyCollectionPlugin = (bundler: any, context: GlobalContext): 
                     stage: Compilation.PROCESS_ASSETS_STAGE_SUMMARIZE,
                 },
                 () => {
-                    const tally: Tally = { seen: 0, injected: 0 };
-                    for (const asset of compilation.getAssets() as Array<{ name: string }>) {
-                        if (!isHtmlFile(asset.name)) {
+                    let htmlSeen = 0;
+                    for (const { name } of compilation.getAssets()) {
+                        const asset = isHtmlFile(name) ? compilation.getAsset(name) : undefined;
+                        if (!asset) {
                             continue;
                         }
-                        compilation.updateAsset(asset.name, (old: any) => {
-                            const result = injectEarlyCollectionTag(toText(old.source()));
-                            record(tally, result);
-                            return result?.injected ? new sources.RawSource(result.html) : old;
-                        });
+                        const result = injectEarlyCollectionTag(toText(asset.source.source()));
+                        if (!result) {
+                            continue;
+                        }
+                        htmlSeen++;
+                        // Don't touch the assets we don't change, so their hash stays the same.
+                        if (result.injected) {
+                            compilation.updateAsset(name, new sources.RawSource(result.html));
+                        }
                     }
-                    if (!tally.seen) {
-                        warnNoHtml();
+                    if (!htmlSeen) {
+                        warnNoHtml(NO_HTML);
                     }
                 },
             );
@@ -149,34 +180,48 @@ export const getEarlyCollectionPlugin = (bundler: any, context: GlobalContext): 
     plugin.esbuild = {
         setup(build) {
             const { initialOptions } = build;
-            build.onEnd(async () => {
+            build.onEnd(async (result) => {
+                if (result.errors.length) {
+                    return;
+                }
                 if (initialOptions.write === false) {
-                    log.debug(
-                        'Nothing is written to disk, skipping the early collection injection.',
-                    );
+                    warnNoHtml('esbuild does not write the build output to disk (write: false)');
                     return;
                 }
                 const outputDir =
                     initialOptions.outdir ??
                     (initialOptions.outfile ? path.dirname(initialOptions.outfile) : undefined);
                 if (!outputDir) {
-                    warnNoHtml();
+                    warnNoHtml('the esbuild output directory could not be determined');
                     return;
                 }
 
-                const tally: Tally = { seen: 0, injected: 0 };
-                const files = await findHtmlFiles(getAbsolutePath(context.buildRoot, outputDir));
+                const absoluteOutputDir = getAbsolutePath(context.buildRoot, outputDir);
+                // We only want to rewrite the build output, never the sources of the project.
+                if (isInside(absoluteOutputDir, context.buildRoot)) {
+                    warnNoHtml(
+                        'the esbuild output directory is the project root (or one of its parents), so the HTML files cannot be told apart from your sources',
+                    );
+                    return;
+                }
+
+                let htmlSeen = 0;
+                const files = await findHtmlFiles(absoluteOutputDir);
                 await Promise.all(
                     files.map(async (file) => {
-                        const result = injectEarlyCollectionTag(await fsp.readFile(file, 'utf-8'));
-                        record(tally, result);
-                        if (result?.injected) {
-                            await fsp.writeFile(file, result.html);
+                        const content = await readFile(file);
+                        const injection = injectEarlyCollectionTag(content);
+                        if (!injection) {
+                            return;
+                        }
+                        htmlSeen++;
+                        if (injection.injected) {
+                            await outputFile(file, injection.html);
                         }
                     }),
                 );
-                if (!tally.seen) {
-                    warnNoHtml();
+                if (!htmlSeen) {
+                    warnNoHtml(NO_HTML);
                 }
             });
         },
