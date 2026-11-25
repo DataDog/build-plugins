@@ -14,7 +14,7 @@ import type {
     PluginOptions,
 } from '@dd/core/types';
 
-import { cleanName, cleanPath, getType } from './helpers';
+import { cleanIdentifier, cleanName, cleanPath, getType } from './helpers';
 
 export const getXpackPlugin =
     (
@@ -264,10 +264,12 @@ export const getXpackPlugin =
                             depDeps.dependents.add(moduleIdentifier);
                             moduleDeps.dependencies.add(depIdentifier);
                             tempDeps.set(depIdentifier, depDeps);
+                            tempDeps.set(cleanIdentifier(depIdentifier), depDeps);
                         }
 
                         // Store the dependencies.
                         tempDeps.set(moduleIdentifier, moduleDeps);
+                        tempDeps.set(cleanIdentifier(moduleIdentifier), moduleDeps);
 
                         // Store the inputs.
                         const file: Input = isExternal(module)
@@ -276,7 +278,7 @@ export const getXpackPlugin =
                                   name: cleanExternalName(moduleName),
                                   dependencies: new Set(),
                                   dependents: new Set(),
-                                  filepath: moduleIdentifier,
+                                  filepath: cleanIdentifier(moduleIdentifier),
                                   type: 'external',
                               }
                             : {
@@ -284,7 +286,7 @@ export const getXpackPlugin =
                                   name: moduleName,
                                   dependencies: new Set(),
                                   dependents: new Set(),
-                                  filepath: moduleIdentifier,
+                                  filepath: cleanIdentifier(moduleIdentifier),
                                   type: getType(moduleIdentifier),
                               };
 
