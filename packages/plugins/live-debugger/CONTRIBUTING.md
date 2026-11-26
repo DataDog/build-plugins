@@ -161,6 +161,13 @@ A failed run records where it failed and who most likely needs to act on it:
     Debugger wasn't evaluated, and `interrupted` when the run was stopped. When
     an instrumented build fails before control has run, the canary still builds
     control to tell the two apart.
+-   `failureKind` is `registry` instead of `target` when Datadog's npm mirror
+    refused package versions that npm published less than 3 days ago. The
+    mirror holds new versions back for 2 days, so a later run gets them. The
+    canary reads the refused versions from the failed command's output and
+    their publish dates from `https://registry.npmjs.org`. It then exits with
+    code 75 instead of 1, and CI doesn't alert. If it can't confirm that every
+    refused version is that new, the failure stays `target`.
 
 ### Fresh checkouts and CI
 

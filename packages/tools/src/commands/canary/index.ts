@@ -11,7 +11,13 @@ import path from 'path';
 
 import { formatCheckoutAlert } from './alert';
 import { checkoutTarget, getCheckoutRef, resolveExistingCheckout } from './checkout';
-import { NETWORK_RETRY_DELAYS_MS, runCanary, StreamingCommandRunner } from './runner';
+import { fetchNpmPublishedAt } from './registry-hold';
+import {
+    CanaryRegistryHoldError,
+    NETWORK_RETRY_DELAYS_MS,
+    runCanary,
+    StreamingCommandRunner,
+} from './runner';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
 import {
     DEFAULT_NODE_DIST_URL,
@@ -33,6 +39,9 @@ const REPORT_FILE = 'report.json';
 const LOGS_DIRECTORY = 'logs';
 const TOOLCHAIN_FILE = 'toolchain.env';
 const ALERT_FILE = 'slack-message.txt';
+// EX_TEMPFAIL: the run failed only because Datadog's npm mirror still holds back
+// new package versions. CI allows this exit code, so it doesn't alert.
+const REGISTRY_HOLD_EXIT_CODE = 75;
 
 const getTargetOrThrow = (name: string): CanaryTarget => {
     const target = getCanaryTarget(name);
@@ -201,6 +210,7 @@ class Canary extends Command {
                 alert,
                 buildPluginsRoot: ROOT,
                 cleanup: this.cleanup,
+                getPublishedAt: fetchNpmPublishedAt,
                 install: this.install,
                 networkRetryDelaysMs: NETWORK_RETRY_DELAYS_MS,
                 phaseSelection: this.phase,
@@ -221,6 +231,9 @@ class Canary extends Command {
             }
             if (interruption === 'SIGTERM') {
                 return 143;
+            }
+            if (error instanceof CanaryRegistryHoldError) {
+                return REGISTRY_HOLD_EXIT_CODE;
             }
             return 1;
         } finally {

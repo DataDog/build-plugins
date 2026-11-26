@@ -128,8 +128,11 @@ export type CanaryFailure = {
 //   Live Debugger is the suspect;
 // - target: the target, its setup, or its control build failed, so Live
 //   Debugger wasn't evaluated;
+// - registry: Datadog's npm mirror still holds back package versions published
+//   in the last few days, so Live Debugger wasn't evaluated. It clears by itself;
+//   CI doesn't alert on it;
 // - interrupted: the run was stopped before it finished.
-export type FailureKind = 'plugin' | 'target' | 'interrupted';
+export type FailureKind = 'plugin' | 'target' | 'registry' | 'interrupted';
 
 // Where an alert about a failed run is written, and the CI links it includes.
 export type AlertOptions = {
@@ -141,7 +144,7 @@ export type AlertOptions = {
 };
 
 export type CanaryReport = {
-    schemaVersion: 3;
+    schemaVersion: 4;
     status: 'passed' | 'failed';
     failureKind: FailureKind | null;
     target: string;

@@ -7,8 +7,10 @@ import os from 'os';
 import path from 'path';
 import { gzipSync } from 'zlib';
 
+import type { GetPublishedAt } from './registry-hold';
 import {
     CanaryInterruptedError,
+    CanaryRegistryHoldError,
     createMetricComparison,
     getVariantOrder,
     measureArtifacts,
@@ -19,6 +21,8 @@ import {
 import type { CanaryPhase, CanaryTarget, CommandResult, CommandSpec, RunCommand } from './types';
 
 const TEST_ROOT = path.resolve(os.tmpdir(), `build-plugins-canary-runner-${process.pid}`);
+
+const unknownPublishTimes: GetPublishedAt = async () => undefined;
 
 const successfulResult = (durationMs: number, output = ''): CommandResult => {
     return {
@@ -202,6 +206,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -232,7 +237,7 @@ describe('canary runner', () => {
         expect(commands).toHaveLength(6);
         expect(cleanupOrder).toEqual(['second', 'first']);
         const serialized = await readFile(reportPath);
-        expect(serialized).toContain('"schemaVersion": 3');
+        expect(serialized).toContain('"schemaVersion": 4');
         expect(serialized).toContain('"buildTool": "webpack"');
         expect(serialized).toContain('"dirty": true');
     });
@@ -266,6 +271,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -304,6 +310,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -347,6 +354,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: true,
             networkRetryDelaysMs: [0, 0],
             phaseSelection: 'all',
@@ -375,6 +383,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: true,
             networkRetryDelaysMs: [0, 0],
             phaseSelection: 'all',
@@ -404,6 +413,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: false,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -516,6 +526,7 @@ describe('canary runner', () => {
                 alert: undefined,
                 buildPluginsRoot: process.cwd(),
                 cleanup: true,
+                getPublishedAt: unknownPublishTimes,
                 install: false,
                 networkRetryDelaysMs: [],
                 phaseSelection: 'all',
@@ -558,6 +569,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -585,6 +597,7 @@ describe('canary runner', () => {
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
+            getPublishedAt: unknownPublishTimes,
             install: false,
             networkRetryDelaysMs: [],
             phaseSelection: 'all',
@@ -598,6 +611,53 @@ describe('canary runner', () => {
         await expect(promise).rejects.toThrow(CanaryInterruptedError);
         const serialized = await readFile(reportPath);
         expect(serialized).toContain('"failureKind": "interrupted"');
+    });
+
+    const registryHoldCases = [
+        {
+            description: 'report a failure the npm mirror hold explains as a registry hold',
+            publishedAgoMs: 60 * 60 * 1_000,
+            expected: { error: CanaryRegistryHoldError, failureKind: 'registry' },
+        },
+        {
+            description: 'keep a failure on an older refused version as a target failure',
+            publishedAgoMs: 30 * 24 * 60 * 60 * 1_000,
+            expected: { error: 'build:control failed with exit code 1.', failureKind: 'target' },
+        },
+    ];
+
+    test.each(registryHoldCases)('should $description', async ({ publishedAgoMs, expected }) => {
+        await writeVariantOutputs(TEST_ROOT);
+        const publishedAt = new Date(Date.now() - publishedAgoMs).toISOString();
+        const requested: string[] = [];
+        const getPublishedAt: GetPublishedAt = async ({ name, version }) => {
+            requested.push(`${name}@${version}`);
+            return publishedAt;
+        };
+        const output = '➤ YN0082: │ glob@npm:14.0.6: No candidates found\n';
+        const reportPath = path.resolve(TEST_ROOT, 'registry-hold-report.json');
+        const runId = findRunIdStartingWith(['control']);
+        const target = createSyntheticTarget(TEST_ROOT, []);
+        const promise = runCanary({
+            alert: undefined,
+            buildPluginsRoot: process.cwd(),
+            cleanup: true,
+            getPublishedAt,
+            install: false,
+            networkRetryDelaysMs: [],
+            phaseSelection: 'all',
+            reportPath,
+            root: TEST_ROOT,
+            runCommand: async () => ({ durationMs: 1, exitCode: 1, output, signal: null }),
+            runId,
+            target,
+        });
+
+        await expect(promise).rejects.toThrow(expected.error);
+        expect(requested).toEqual(['glob@14.0.6']);
+        const serialized = await readFile(reportPath);
+        expect(serialized).toContain(`"failureKind": "${expected.failureKind}"`);
+        expect(serialized).toContain('"stage": "phase:webpack-production:control:build"');
     });
 
     test('should write an alert only when the run fails', async () => {
@@ -618,6 +678,7 @@ describe('canary runner', () => {
                 alert,
                 buildPluginsRoot: process.cwd(),
                 cleanup: true,
+                getPublishedAt: unknownPublishTimes,
                 install: false,
                 networkRetryDelaysMs: [],
                 phaseSelection: 'all',

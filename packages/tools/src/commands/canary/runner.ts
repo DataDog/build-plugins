@@ -13,6 +13,8 @@ import type { Readable, Writable } from 'stream';
 import { gzipSync } from 'zlib';
 
 import { formatRunAlert } from './alert';
+import type { GetPublishedAt, HeldPackage } from './registry-hold';
+import { findRegistryHold, formatHeldPackages } from './registry-hold';
 import { CANARY_VARIANTS } from './types';
 import type {
     AlertOptions,
@@ -42,16 +44,30 @@ const normalizeError = (error: unknown): Error => {
 
 export class CanaryCommandError extends Error {}
 
+// A command that exited unsuccessfully, with its output.
+export class CanaryFailedCommandError extends CanaryCommandError {
+    readonly output: string;
+
+    constructor(message: string, output: string) {
+        super(message);
+        this.output = output;
+    }
+}
+
 // Thrown for commands that are cut short or refused after an interrupt, so retries stop.
 export class CanaryInterruptedError extends Error {}
+
+// Thrown when a run failed only because Datadog's npm mirror still holds back
+// package versions published in the last few days. CI doesn't alert on it.
+export class CanaryRegistryHoldError extends Error {}
 
 // A failed phase, with the stage that failed and who most likely needs to act on it.
 export class CanaryPhaseError extends Error {
     readonly kind: FailureKind;
     readonly stage: string;
 
-    constructor(message: string, stage: string, kind: FailureKind) {
-        super(message);
+    constructor(message: string, stage: string, kind: FailureKind, cause: unknown) {
+        super(message, { cause });
         this.kind = kind;
         this.stage = stage;
     }
@@ -63,11 +79,23 @@ type VariantStep = 'build' | 'output' | 'artifacts' | 'validate';
 class VariantStepError extends Error {
     readonly step: VariantStep;
 
-    constructor(message: string, step: VariantStep) {
-        super(message);
+    constructor(message: string, step: VariantStep, cause: unknown) {
+        super(message, { cause });
         this.step = step;
     }
 }
+
+// The output of the command behind a failure, when a command failed.
+const getFailedCommandOutput = (error: unknown): string | undefined => {
+    let current = error;
+    while (current instanceof Error) {
+        if (current instanceof CanaryFailedCommandError) {
+            return current.output;
+        }
+        current = current.cause;
+    }
+    return undefined;
+};
 
 // Network-bound steps (fetching the target, installing its dependencies) are retried
 // after these delays. Builds and validations are never retried.
@@ -221,7 +249,10 @@ export const runCheckedCommand = async (
     const exitDescription = result.signal
         ? `signal ${result.signal}`
         : `exit code ${result.exitCode ?? 'unknown'}`;
-    throw new CanaryCommandError(`${spec.label} failed with ${exitDescription}.`);
+    throw new CanaryFailedCommandError(
+        `${spec.label} failed with ${exitDescription}.`,
+        result.output,
+    );
 };
 
 const getArtifactFiles = async (spec: ArtifactSpec): Promise<string[]> => {
@@ -366,7 +397,7 @@ const measureVariant = async ({
             throw error;
         }
         const normalized = normalizeError(error);
-        throw new VariantStepError(normalized.message, step);
+        throw new VariantStepError(normalized.message, step, error);
     }
 };
 
@@ -426,7 +457,7 @@ const runPhase = async ({
                 (results.control !== undefined ||
                     (await controlPasses({ phase, root, runCommand })));
             const kind = controlPassed ? 'plugin' : 'target';
-            throw new CanaryPhaseError(error.message, stage, kind);
+            throw new CanaryPhaseError(error.message, stage, kind, error);
         }
     }
 
@@ -503,6 +534,29 @@ const getFailureKind = (error: Error): FailureKind => {
     return error instanceof CanaryPhaseError ? error.kind : 'target';
 };
 
+// Checks whether a failed command only failed because Datadog's npm mirror still
+// holds back new package versions. A failed lookup counts as no hold, so the run
+// alerts as usual.
+const findFailureRegistryHold = async (
+    error: unknown,
+    getPublishedAt: GetPublishedAt,
+): Promise<HeldPackage[] | undefined> => {
+    const output = getFailedCommandOutput(error);
+    if (output === undefined) {
+        return undefined;
+    }
+    try {
+        const now = Date.now();
+        return await findRegistryHold({ getPublishedAt, now, output });
+    } catch (lookupError) {
+        const normalized = normalizeError(lookupError);
+        console.log(
+            `\n[Canary] Couldn't check when npm published the refused packages: ${normalized.message}`,
+        );
+        return undefined;
+    }
+};
+
 const writeReport = async (report: CanaryReport): Promise<void> => {
     const serialized = JSON.stringify(report, null, 2);
     await outputFile(report.reportPath, `${serialized}\n`);
@@ -512,6 +566,7 @@ export const runCanary = async ({
     alert,
     buildPluginsRoot,
     cleanup,
+    getPublishedAt,
     install,
     networkRetryDelaysMs,
     phaseSelection,
@@ -526,6 +581,8 @@ export const runCanary = async ({
     buildPluginsRoot: string;
     // Disposable CI checkouts skip reverting the target's changes.
     cleanup: boolean;
+    // Tells a registry hold from other install failures.
+    getPublishedAt: GetPublishedAt;
     install: boolean;
     networkRetryDelaysMs: number[];
     phaseSelection: string;
@@ -539,7 +596,7 @@ export const runCanary = async ({
     const buildPluginsGit = await getGitState(buildPluginsRoot);
     const targetGit = await getGitState(root);
     const report: CanaryReport = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         status: 'passed',
         failureKind: null,
         target: target.id,
@@ -617,6 +674,19 @@ export const runCanary = async ({
             stage: primaryError instanceof CanaryPhaseError ? primaryError.stage : stage,
         });
         report.failureKind = getFailureKind(primaryError);
+        // Only failures that happened before Live Debugger was evaluated can come
+        // from the mirror holding back dependencies.
+        const hold =
+            report.failureKind === 'target'
+                ? await findFailureRegistryHold(error, getPublishedAt)
+                : undefined;
+        if (hold) {
+            report.failureKind = 'registry';
+            const heldPackages = formatHeldPackages(hold);
+            primaryError = new CanaryRegistryHoldError(
+                `Datadog's npm mirror is still holding back ${heldPackages}. It holds new versions back for 2 days after they're published, so a later run should get them.`,
+            );
+        }
     } finally {
         if (cleanup) {
             const cleanupError = await runCleanups(cleanups, report.failures);
