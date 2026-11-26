@@ -11,6 +11,8 @@ const SHORT_COMMIT_LENGTH = 8;
 const KIND_DESCRIPTIONS: Record<FailureKind, string> = {
     plugin: 'the control build passed but an instrumented build failed, so Live Debugger is the suspect.',
     target: "the target, its setup or its control build failed, so Live Debugger wasn't evaluated.",
+    registry:
+        "Datadog's npm mirror still holds back package versions published in the last few days, so Live Debugger wasn't evaluated. It clears by itself.",
     interrupted: 'the run was stopped before it finished.',
 };
 

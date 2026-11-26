@@ -7,7 +7,7 @@ import type { CanaryReport, FailureKind } from './types';
 
 const createReport = (overrides: Partial<CanaryReport>): CanaryReport => {
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         status: 'failed',
         failureKind: 'plugin',
         target: 'excalidraw',
@@ -61,6 +61,12 @@ describe('canary alerts', () => {
             failureKind: 'target',
             expected:
                 "*Kind:* target: the target, its setup or its control build failed, so Live Debugger wasn't evaluated.",
+        },
+        {
+            description: 'explain a registry hold',
+            failureKind: 'registry',
+            expected:
+                "*Kind:* registry: Datadog's npm mirror still holds back package versions published in the last few days, so Live Debugger wasn't evaluated. It clears by itself.",
         },
         {
             description: 'explain an interrupted run',
