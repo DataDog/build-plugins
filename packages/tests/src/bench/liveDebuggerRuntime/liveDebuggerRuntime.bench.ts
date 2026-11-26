@@ -367,7 +367,7 @@ describe('Live Debugger Runtime Benchmark', () => {
             contentType: 'application/json',
         });
 
-        expect(results).toHaveLength(2);
+        expect(results).toHaveLength(3);
         expect(errors).toEqual([]);
     });
 });

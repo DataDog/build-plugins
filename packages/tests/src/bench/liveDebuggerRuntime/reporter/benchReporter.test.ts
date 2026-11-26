@@ -96,7 +96,7 @@ describe('Live Debugger runtime benchmark reporter', () => {
             '| --- | --- | --- | ---: |',
             '| chrome | Tiny | caution (outliers) | <= 0.05 ns |',
             '',
-            '[What do the Tiny and Hot workloads represent?](https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures)',
+            '[What do the workloads represent?](https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures)',
             '',
             'Browser Debugger SDK: `7.4.0` · built 2026-06-23 · S3 ETag `0766e1c8`',
             '',
@@ -114,6 +114,51 @@ describe('Live Debugger runtime benchmark reporter', () => {
         ].join('\n');
 
         expect(comment).toBe(expectedComment);
+    });
+
+    test('should render the Throw rows in their own tables below the others', () => {
+        const tinyRow = createBenchResultRow();
+        const throwRow: BenchResultRow = {
+            ...createBenchResultRow(),
+            workloadId: 'throw',
+            workloadLabel: 'Throw',
+            perCallNs: {
+                ...tinyRow.perCallNs,
+                upperBound: 1_234.5,
+            },
+            quality: { level: 'clean', reasons: [] },
+        };
+        const comment = renderMarkdownComment([tinyRow, throwRow], []);
+        const tinyDiagnosticsTable = buildAlignedTable([tinyRow]);
+        const throwDiagnosticsTable = buildAlignedTable([throwRow]);
+        const expectedStart = [
+            '<!-- ld-runtime-bench -->',
+            '## Live Debugger Runtime Benchmark',
+            '',
+            'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.',
+            '',
+            '| Browser | Workload | Quality | Per-call overhead upper |',
+            '| --- | --- | --- | ---: |',
+            '| chrome | Tiny | caution (outliers) | <= 0.05 ns |',
+            '',
+            '**Exception path:** the extra cost each time an exception passes through a dormant instrumented function.',
+            '',
+            '| Browser | Workload | Quality | Per-call overhead upper |',
+            '| --- | --- | --- | ---: |',
+            '| chrome | Throw | clean | <= 1,234.50 ns |',
+            '',
+            '[What do the workloads represent?]',
+        ].join('\n');
+        const expectedDiagnostics = [
+            '```',
+            tinyDiagnosticsTable,
+            '',
+            throwDiagnosticsTable,
+            '```',
+        ].join('\n');
+
+        expect(comment.startsWith(expectedStart)).toBe(true);
+        expect(comment).toContain(expectedDiagnostics);
     });
 
     test('should surface the raw samples artifact after benchmark failures', () => {
