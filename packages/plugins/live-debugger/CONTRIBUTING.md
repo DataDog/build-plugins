@@ -206,7 +206,7 @@ For a faster loop, pass a browser project:
 yarn workspace @dd/tests bench:live-debugger:runtime --project chrome
 ```
 
-The terminal output prints one row per browser and workload (`Tiny`, `Hot`, `Throw`). Browser projects run serially to reduce CPU contention. The benchmark uses one fixed bundler so the report focuses on runtime overhead, not on bundler-to-bundler differences.
+The terminal output prints one row per browser and workload. The `Throw` rows get their own table, below the `Tiny` and `Hot` rows, because their numbers are orders of magnitude larger. The PR comment splits its tables the same way. Browser projects run serially to reduce CPU contention. The benchmark uses one fixed bundler so the report focuses on runtime overhead, not on bundler-to-bundler differences.
 
 ### What it measures
 

@@ -39,6 +39,9 @@ const COMMENT_FILE = path.resolve(os.tmpdir(), 'live-debugger-runtime-bench-comm
 const WORKLOAD_DOCS_URL =
     'https://github.com/DataDog/build-plugins/blob/master/packages/plugins/live-debugger/CONTRIBUTING.md#what-it-measures';
 const RAW_SAMPLES_NOTE = 'Raw samples are in the `live-debugger-runtime-bench-results` artifact.';
+const THROW_WORKLOAD_ID = 'throw';
+const EXCEPTION_PATH_INTRO =
+    '**Exception path:** the extra cost each time an exception passes through a dormant instrumented function.';
 
 const buildResultsFilePath = (generatedAt: string) => {
     const safeTimestamp = generatedAt.replace(/[:.]/g, '-');
@@ -352,6 +355,52 @@ export const buildAlignedTable = (rows: BenchResultRow[]) => {
     return lines.join('\n');
 };
 
+// Throwing costs hundreds to thousands of nanoseconds per call, orders of
+// magnitude more than the workloads that return, so the reports show the Throw
+// rows in their own table instead of mixing them with the others.
+const splitRowsByPath = (rows: BenchResultRow[]) => {
+    const returnPathRows = rows.filter((row) => row.workloadId !== THROW_WORKLOAD_ID);
+    const exceptionPathRows = rows.filter((row) => row.workloadId === THROW_WORKLOAD_ID);
+
+    return { returnPathRows, exceptionPathRows };
+};
+
+export const buildDiagnosticTables = (rows: BenchResultRow[]) => {
+    const { returnPathRows, exceptionPathRows } = splitRowsByPath(rows);
+    const nonEmptyGroups = [returnPathRows, exceptionPathRows].filter((group) => group.length > 0);
+    const tables = nonEmptyGroups.map((group) => buildAlignedTable(group));
+
+    return tables.join('\n\n');
+};
+
+const renderSummaryTable = (rows: BenchResultRow[]) => {
+    let table = '| Browser | Workload | Quality | Per-call overhead upper |\n';
+    table += '| --- | --- | --- | ---: |\n';
+
+    for (const row of rows) {
+        table += `| ${row.browserName} | ${row.workloadLabel} | ${formatQuality(row)} | ${formatCallOverhead(row)} |\n`;
+    }
+
+    return table;
+};
+
+const renderSummaryTables = (rows: BenchResultRow[]) => {
+    const { returnPathRows, exceptionPathRows } = splitRowsByPath(rows);
+    const sections: string[] = [];
+
+    if (returnPathRows.length > 0) {
+        const returnPathTable = renderSummaryTable(returnPathRows);
+        sections.push(returnPathTable);
+    }
+
+    if (exceptionPathRows.length > 0) {
+        const exceptionPathTable = renderSummaryTable(exceptionPathRows);
+        sections.push(`${EXCEPTION_PATH_INTRO}\n\n${exceptionPathTable}`);
+    }
+
+    return sections.join('\n');
+};
+
 // Normalize an HTTP ETag header value to its bare content hash: strip the optional weak
 // validator prefix (W/) and the surrounding quotes. CloudFront returns a weak ETag (W/"...")
 // when it compresses the response, so the raw header varies in shape for identical content.
@@ -384,7 +433,8 @@ const printRows = (rows: BenchResultRow[], sdkVersion?: string, sdkBuild?: SdkBu
     if (sdkVersion) {
         console.log(`Browser Debugger SDK: ${formatSdkLabel(sdkVersion, sdkBuild)}`);
     }
-    console.log(buildAlignedTable(rows));
+    const diagnosticTables = buildDiagnosticTables(rows);
+    console.log(diagnosticTables);
 };
 
 const printFailures = (failures: BenchFailure[]) => {
@@ -415,13 +465,7 @@ export const renderMarkdownComment = (
     } else {
         body +=
             'SDK-loaded dormant-probe runtime overhead, measured against an uninstrumented bundle in the same browser session.\n\n';
-        body += '| Browser | Workload | Quality | Per-call overhead upper |\n';
-        body += '| --- | --- | --- | ---: |\n';
-
-        for (const row of rows) {
-            body += `| ${row.browserName} | ${row.workloadLabel} | ${formatQuality(row)} | ${formatCallOverhead(row)} |\n`;
-        }
-
+        body += renderSummaryTables(rows);
         body += `\n[What do the workloads represent?](${WORKLOAD_DOCS_URL})\n`;
         if (sdkVersion) {
             const sdkLabel = formatSdkLabel(sdkVersion, sdkBuild, (value) => `\`${value}\``);
@@ -429,7 +473,7 @@ export const renderMarkdownComment = (
         }
         body += '\n<details>\n<summary>Full diagnostics</summary>\n\n';
         body += '```\n';
-        body += `${buildAlignedTable(rows)}\n`;
+        body += `${buildDiagnosticTables(rows)}\n`;
         body += '```\n';
         if (failures.length === 0) {
             body += `\n${RAW_SAMPLES_NOTE}\n`;
