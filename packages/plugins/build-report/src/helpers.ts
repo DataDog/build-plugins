@@ -67,18 +67,17 @@ export const cleanReport = <T = string>(
 // Clean a path from its query parameters and leading invisible characters.
 // Careful with this and webpack/rspack as loaders may add "|" before and after the filepath.
 export const cleanPath = (filepath: string) => {
-    return (
-        filepath
-            // [webpack] Only keep the loaded part of a loader query.
-            .split('!')
-            .pop()!
-            // Remove query parameters.
-            .split(QUERY_RX)
-            .shift()!
-            // Remove leading, invisible characters,
-            // sometimes added in rollup by the commonjs plugin.
-            .replace(/^[^\w\s.,!@#$%^&*()=+~`\-/\\]+/, '')
-    );
+    // [webpack] Only keep the loaded part of a loader query.
+    const loaderEnd = filepath.lastIndexOf('!') + 1;
+    let cleaned = filepath.slice(loaderEnd);
+    // Remove query parameters.
+    const queryIndex = cleaned.search(QUERY_RX);
+    if (queryIndex >= 0) {
+        cleaned = cleaned.slice(0, queryIndex);
+    }
+    // Remove leading, invisible characters,
+    // sometimes added in rollup by the commonjs plugin.
+    return cleaned.replace(/^[^\w\s.,!@#$%^&*()=+~`\-/\\]+/, '');
 };
 
 // From two file paths, remove the common path prefix.
@@ -105,21 +104,20 @@ export const cleanName = (absoluteOutDir: string, filepath: string) => {
         return filepath.replace('webpack/runtime/', '').replace(/ +/g, '-');
     }
 
-    return (
-        removeCommonPrefix(
-            filepath
-                // [webpack] Only keep the loaded part of a loader query.
-                .split('!')
-                .pop()!,
-            absoluteOutDir,
-        )
-            // Remove node_modules path.
-            .split('node_modules')
-            .pop()!
-            // Remove query parameters.
-            .split(QUERY_RX)
-            .shift()!
-            // Remove leading dots and slashes.
-            .replace(/^((\.\.?)?[/\\])+/g, '')
-    );
+    // [webpack] Only keep the loaded part of a loader query.
+    const loaderEnd = filepath.lastIndexOf('!') + 1;
+    const loadedPath = filepath.slice(loaderEnd);
+    let name = removeCommonPrefix(loadedPath, absoluteOutDir);
+    // Remove node_modules path.
+    const nodeModulesIndex = name.lastIndexOf('node_modules');
+    if (nodeModulesIndex >= 0) {
+        name = name.slice(nodeModulesIndex + 'node_modules'.length);
+    }
+    // Remove query parameters.
+    const queryIndex = name.search(QUERY_RX);
+    if (queryIndex >= 0) {
+        name = name.slice(0, queryIndex);
+    }
+    // Remove leading dots and slashes.
+    return name.replace(/^((\.\.?)?[/\\])+/g, '');
 };

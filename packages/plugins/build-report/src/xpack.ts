@@ -34,8 +34,6 @@ export const getXpackPlugin =
         type Chunk = IterableElement<Compilation['chunks']>;
         type IndexedModule = {
             identifier: Module['identifier'];
-            dependencies: Dependency[];
-            blocks: any[];
             externalType: unknown;
             external: unknown;
         };
@@ -45,6 +43,8 @@ export const getXpackPlugin =
         const reportOutputsIndexed: Map<string, Output> = new Map();
         const modulesPerFile: Map<string, Set<string>> = new Map();
         const moduleIndex: Map<string, IndexedModule> = new Map();
+        const moduleIdentifiers = new Map<Pick<Module, 'identifier'>, string>();
+        const resolvedModules = new Map<string, Map<string, IndexedModule | undefined>>();
 
         // Some temporary holders to later fill in more data.
         const tempSourcemaps: Output[] = [];
@@ -77,7 +77,11 @@ export const getXpackPlugin =
             entries = [];
             reportInputsIndexed.clear();
             reportOutputsIndexed.clear();
+            modulesPerFile.clear();
             moduleIndex.clear();
+            moduleIdentifiers.clear();
+            resolvedModules.clear();
+            tempSourcemaps.length = 0;
             tempDeps.clear();
         };
 
@@ -109,7 +113,7 @@ export const getXpackPlugin =
             };
 
             // Start by indexing the identifier.
-            indexValue(mod.identifier());
+            indexValue(getModuleIdentifier(mod));
 
             // Then index all the other keys.
             for (const key of keysOfModuleToIndexOn) {
@@ -122,12 +126,19 @@ export const getXpackPlugin =
             return indexes;
         };
 
+        const getModuleIdentifier = (module: Pick<Module, 'identifier'>): string => {
+            let identifier = moduleIdentifiers.get(module);
+            if (identifier === undefined) {
+                identifier = module.identifier();
+                moduleIdentifiers.set(module, identifier);
+            }
+            return identifier;
+        };
+
         const createIndexedModule = (mod: Module): IndexedModule => {
-            const id = mod.identifier();
+            const id = getModuleIdentifier(mod);
             return {
                 identifier: () => id,
-                dependencies: 'dependencies' in mod ? [...mod.dependencies] : [],
-                blocks: 'blocks' in mod ? [...mod.blocks] : [],
                 externalType: 'externalType' in mod ? mod.externalType : undefined,
                 external: 'external' in mod ? mod.external : undefined,
             };
@@ -137,12 +148,9 @@ export const getXpackPlugin =
             const moduleToIndex = createIndexedModule(mod);
             const keysToIndex = getKeysToIndex(mod);
             for (const key of keysToIndex) {
-                if (moduleIndex.has(key)) {
-                    // Update the existing module.
-                    const previousModule = moduleIndex.get(key)!;
-                    previousModule.dependencies.push(...(moduleToIndex.dependencies || []));
-                    previousModule.blocks.push(...(moduleToIndex.blocks || []));
-                } else {
+                // Dependency lookup only needs identity and external-module metadata.
+                // Keep the first match when multiple modules share a lookup key.
+                if (!moduleIndex.has(key)) {
                     moduleIndex.set(key, moduleToIndex);
                 }
             }
@@ -152,17 +160,23 @@ export const getXpackPlugin =
         const getAllDependencies = (
             module: Module | Dependency | Module['blocks'][number],
             dependencies: Dependency[] = [],
+            visited = new Set<Module | Dependency | Module['blocks'][number]>(),
         ) => {
+            if (visited.has(module)) {
+                return dependencies;
+            }
+            visited.add(module);
+
             if ('dependencies' in module) {
                 for (const dependency of module.dependencies) {
                     dependencies.push(dependency);
-                    getAllDependencies(dependency, dependencies);
+                    getAllDependencies(dependency, dependencies, visited);
                 }
             }
 
             if ('blocks' in module) {
                 for (const block of module.blocks) {
-                    getAllDependencies(block, dependencies);
+                    getAllDependencies(block, dependencies, visited);
                 }
             }
 
@@ -170,18 +184,29 @@ export const getXpackPlugin =
         };
 
         const getModuleFromDep = (mod: Module, dep: Dependency): IndexedModule | undefined => {
-            if ('request' in dep && dep.request) {
-                const cleanRequest = cleanPath(dep.request);
-                if (moduleIndex.has(cleanRequest)) {
-                    return moduleIndex.get(cleanRequest);
-                }
-                if (mod.context) {
-                    const cleanedPath = getAbsolutePath(cleanPath(mod.context), cleanRequest);
-                    if (moduleIndex.has(cleanedPath)) {
-                        return moduleIndex.get(cleanedPath);
-                    }
-                }
+            if (!('request' in dep) || !dep.request) {
+                return;
             }
+            const request = dep.request;
+            const directory = mod.context || '';
+            let requests = resolvedModules.get(directory);
+            if (!requests) {
+                requests = new Map();
+                resolvedModules.set(directory, requests);
+            }
+            if (requests.has(request)) {
+                return requests.get(request);
+            }
+
+            const cleanRequest = cleanPath(request);
+            let target = moduleIndex.get(cleanRequest);
+            if (!target && directory) {
+                const cleanedDirectory = cleanPath(directory);
+                const absoluteRequest = getAbsolutePath(cleanedDirectory, cleanRequest);
+                target = moduleIndex.get(absoluteRequest);
+            }
+            requests.set(request, target);
+            return target;
         };
 
         const isExternal = (mod: Module | IndexedModule) => {
@@ -191,7 +216,7 @@ export const getXpackPlugin =
             if ('external' in mod && mod.external) {
                 return true;
             }
-            if (mod.identifier?.().startsWith('external ')) {
+            if (getModuleIdentifier(mod).startsWith('external ')) {
                 return true;
             }
             return false;
@@ -216,7 +241,7 @@ export const getXpackPlugin =
                     // Second loop to create the dependency graph.
                     const timeInputs = log.time('building inputs');
                     for (const module of finishedModules) {
-                        const moduleIdentifier = module.identifier();
+                        const moduleIdentifier = getModuleIdentifier(module);
                         const moduleName = cleanName(context.bundler.outDir, moduleIdentifier);
                         const dependencies: Set<string> = new Set(
                             getAllDependencies(module)
@@ -335,6 +360,8 @@ export const getXpackPlugin =
 
         compiler.hooks.afterEmit.tapPromise(PLUGIN_NAME, async (result: Compilation) => {
             timeBuildReport.resume();
+            // Optimization may have changed module identifiers since finishModules.
+            moduleIdentifiers.clear();
             const chunks = result.chunks;
             const assets = result.getAssets();
 
@@ -355,8 +382,8 @@ export const getXpackPlugin =
                         .flatMap((m) => {
                             // modules exists but isn't in the types.
                             return 'modules' in m && Array.isArray(m.modules)
-                                ? m.modules.map((m2) => m2.identifier())
-                                : m.identifier();
+                                ? m.modules.map(getModuleIdentifier)
+                                : getModuleIdentifier(m);
                         })
                         .filter(isModuleSupported);
 
@@ -436,22 +463,20 @@ export const getXpackPlugin =
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 chunkGroup: any,
                 visited: Set<unknown> = new Set(),
+                allChunks = new Set<Chunk>(),
             ): Set<Chunk> => {
                 if (visited.has(chunkGroup)) {
-                    return new Set();
+                    return allChunks;
                 }
                 visited.add(chunkGroup);
 
-                const allChunks: Set<Chunk> = new Set(chunkGroup.chunks);
-
+                for (const chunk of chunkGroup.chunks) {
+                    allChunks.add(chunk);
+                }
                 // Recursively get chunks from child chunk groups (async chunks).
                 for (const childGroup of chunkGroup.childrenIterable || []) {
-                    const childChunks = getAllChunksFromGroup(childGroup, visited);
-                    for (const chunk of childChunks) {
-                        allChunks.add(chunk);
-                    }
+                    getAllChunksFromGroup(childGroup, visited, allChunks);
                 }
-
                 return allChunks;
             };
 
