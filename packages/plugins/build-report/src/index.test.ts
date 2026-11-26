@@ -491,6 +491,44 @@ describe('Build Report Plugin', () => {
                         dependents: [],
                     },
                     {
+                        filename: 'hard_project/src/srcFile0.js',
+                        dependencies: ['hard_project/workspaces/app/workspaceFile0.js'],
+                        // Imported statically by both entries and dynamically by srcFile1.
+                        dependents: [
+                            'hard_project/main1.js',
+                            'hard_project/main2.js',
+                            'hard_project/src/srcFile1.js',
+                        ],
+                    },
+                    {
+                        filename: 'hard_project/src/srcFile1.js',
+                        // srcFile0 is only imported dynamically.
+                        dependencies: [
+                            'hard_project/src/srcFile0.js',
+                            'hard_project/workspaces/app/workspaceFile1.js',
+                        ],
+                        dependents: ['hard_project/main2.js'],
+                    },
+                    {
+                        filename: 'hard_project/src/dynamicChunk.js',
+                        dependencies: [],
+                        dependents: ['hard_project/main1.js'],
+                    },
+                    {
+                        filename: 'hard_project/workspaces/app/workspaceFile0.js',
+                        dependencies: [],
+                        // Imported through different relative requests from different directories.
+                        dependents: [
+                            'hard_project/src/srcFile0.js',
+                            'hard_project/workspaces/app/workspaceFile1.js',
+                        ],
+                    },
+                    {
+                        filename: 'hard_project/workspaces/app/workspaceFile1.js',
+                        dependencies: ['hard_project/workspaces/app/workspaceFile0.js'],
+                        dependents: ['hard_project/main1.js', 'hard_project/src/srcFile1.js'],
+                    },
+                    {
                         filename: 'ansi-styles/index.js',
                         dependencies: ['color-convert/index.js'],
                         dependents: ['chalk/index.js'],
