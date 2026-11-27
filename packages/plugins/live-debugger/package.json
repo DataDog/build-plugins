@@ -12,7 +12,15 @@
         "directory": "packages/plugins/live-debugger"
     },
     "buildPlugin": {
-        "hideFromRootReadme": true
+        "hideFromRootReadme": true,
+        "toBuild": {
+            "live-debugger-worker": {
+                "format": [
+                    "cjs"
+                ],
+                "entry": "./src/transform/worker.ts"
+            }
+        }
     },
     "exports": {
         ".": "./src/index.ts",

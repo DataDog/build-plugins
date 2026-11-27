@@ -90,7 +90,17 @@ function requireOptionalPeerDep<T>(name: RequiredPeerDep): T {
     }
 }
 
+let customRequire: ((id: string) => unknown) | undefined;
+
+export function setTransformRequire(req: (id: string) => unknown): void {
+    customRequire = req;
+    hasLoadedTransformRuntime = false;
+}
+
 function loadKnownPeerDep(name: RequiredPeerDep): unknown {
+    if (customRequire) {
+        return customRequire(name);
+    }
     switch (name) {
         case '@babel/parser':
             // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
@@ -159,7 +169,7 @@ function escapeSingleQuotedJavaScriptString(value: string): string {
     });
 }
 
-const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
+export const HAS_FUNCTION_SYNTAX = /\bfunction\b|=>|\bclass\b|\)\s*\{/;
 
 interface ReturnInfo {
     start: number;
@@ -1166,6 +1176,6 @@ function getFunctionKind(node: BabelTypes.Function, typesModule: BabelTypesModul
     return 'functionExpression';
 }
 
-function containsUnsupportedImports(code: string): boolean {
+export function containsUnsupportedImports(code: string): boolean {
     return /['"][^'"]*(?:@css-module:|\?worker\b|\?sprite\b|dynamic!)[^'"]*['"]/.test(code);
 }
