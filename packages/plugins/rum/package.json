@@ -26,6 +26,12 @@
                     "esm"
                 ],
                 "entry": "./src/built/privacy-helpers.ts"
+            },
+            "rum-privacy-worker": {
+                "format": [
+                    "cjs"
+                ],
+                "entry": "./src/privacy/worker.ts"
             }
         }
     },
