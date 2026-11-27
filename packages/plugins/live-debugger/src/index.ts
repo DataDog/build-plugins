@@ -2,6 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import {
+    TransformWorkerPool,
+    getTransformWorkerCount,
+    resolveWorkerScript,
+} from '@dd/core/helpers/workerPool';
 import type { GetPlugins, GlobalContext, PluginOptions } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
 import remapping from '@jridgewell/remapping';
@@ -14,9 +19,16 @@ import { createFileExtensionPattern, createFileFilter } from './filter';
 import { getRepositoryRoot } from './paths';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
 import { getSymbolTableHooks } from './symbol-table';
-import { transformCode } from './transform';
+import type {
+    LiveDebuggerWorkerInitData,
+    LiveDebuggerWorkerResult,
+    LiveDebuggerWorkerTask,
+} from './transform/worker';
+import { HAS_FUNCTION_SYNTAX, containsUnsupportedImports, transformCode } from './transform';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
+
+const WORKER_FILENAME = 'live-debugger-worker.js';
 
 export { CONFIG_KEY, PLUGIN_NAME };
 
@@ -54,6 +66,29 @@ export const getLiveDebuggerPlugin = (
         return repositoryRoot;
     };
 
+    const workerCount = Number.isFinite(DD_LD_LIMIT) ? 0 : getTransformWorkerCount();
+    const resolvedWorker =
+        workerCount > 0 ? resolveWorkerScript(__dirname, WORKER_FILENAME, __filename) : undefined;
+    const workerPool = resolvedWorker
+        ? new TransformWorkerPool<
+              LiveDebuggerWorkerInitData,
+              LiveDebuggerWorkerTask,
+              LiveDebuggerWorkerResult
+          >({
+              workerScriptPath: resolvedWorker.workerScriptPath,
+              pnpPath: resolvedWorker.pnpPath,
+              issuerPath: __filename,
+              initData: {
+                  honorSkipComments: pluginOptions.honorSkipComments,
+                  functionTypes: pluginOptions.functionTypes,
+                  namedOnly: pluginOptions.namedOnly,
+                  decorators: pluginOptions.decorators,
+                  exceptionReplay: pluginOptions.exceptionReplay,
+              },
+              size: workerCount,
+          })
+        : undefined;
+
     return {
         name: PLUGIN_NAME,
         // Enforce when the plugin will be executed.
@@ -83,8 +118,64 @@ export const getLiveDebuggerPlugin = (
                     return null;
                 }
 
+                const functionIdRoot = getFunctionIdRoot();
+                const inputMap = getInputSourceMap(this);
+
+                if (workerPool) {
+                    // Fast-path before worker serialization for files that cannot
+                    // be instrumented (e.g., barrels, JSON-like exports, unsupported imports).
+                    if (containsUnsupportedImports(code)) {
+                        skippedFileCount++;
+                        return null;
+                    }
+                    if (!HAS_FUNCTION_SYNTAX.test(code)) {
+                        return null;
+                    }
+
+                    return workerPool
+                        .run({
+                            code,
+                            filePath: id,
+                            repositoryRoot: functionIdRoot,
+                            inputMap,
+                        })
+                        .then((result) => {
+                            instrumentedCount += result.instrumentedCount;
+                            totalFunctions += result.totalFunctions;
+                            failedCount += result.failedCount;
+                            skippedByCommentCount += result.skippedByCommentCount;
+                            skippedFileCount += result.skippedFileCount;
+                            skippedUnsupportedCount += result.skippedUnsupportedCount;
+
+                            if (result.totalFunctions > 0) {
+                                totalFilesWithFunctions++;
+                            }
+
+                            if (result.unchanged || result.instrumentedCount === 0) {
+                                return null;
+                            }
+
+                            transformedFileCount++;
+
+                            if (result.mapComposeError) {
+                                log.error(
+                                    `Failed to compose source map for ${id}: ${result.mapComposeError}`,
+                                    { forward: true },
+                                );
+                            }
+
+                            return {
+                                code: result.code!,
+                                map: result.map,
+                            };
+                        })
+                        .catch((e) => {
+                            log.error(`Instrumentation Error in ${id}: ${e}`, { forward: true });
+                            return null;
+                        });
+                }
+
                 try {
-                    const functionIdRoot = getFunctionIdRoot();
                     const result = transformCode({
                         code,
                         filePath: id,
@@ -113,7 +204,6 @@ export const getLiveDebuggerPlugin = (
 
                     transformedFileCount++;
 
-                    const inputMap = getInputSourceMap(this);
                     const composedMap =
                         result.map && inputMap
                             ? composeWithInputMap(result.map, inputMap, id, log)
@@ -130,7 +220,10 @@ export const getLiveDebuggerPlugin = (
             },
         },
         ...getSymbolTableHooks(pluginOptions, context, log),
-        buildEnd: () => {
+        buildEnd: async () => {
+            if (workerPool) {
+                await workerPool.terminateAll();
+            }
             if (totalFunctions > 0) {
                 log.info(
                     `Live Debugger: ${instrumentedCount}/${totalFunctions} functions instrumented across ${transformedFileCount}/${totalFilesWithFunctions} files`,
