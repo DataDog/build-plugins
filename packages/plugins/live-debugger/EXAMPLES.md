@@ -28,6 +28,7 @@ A few conventions used throughout:
 -   [Arrow inside a super call argument](#arrow-inside-a-super-call-argument)
 -   [Arrow whose body is a super call](#arrow-whose-body-is-a-super-call)
 -   [Function expressions keep their own this](#function-expressions-keep-their-own-this)
+-   [Arrows at the top level of an ES module](#arrows-at-the-top-level-of-an-es-module)
 -   [Function IDs](#function-ids)
 -   [What is not instrumented](#what-is-not-instrumented)
 <!-- #toc -->
@@ -429,6 +430,29 @@ class Widget extends Base {
         super(items.map(double));
     }
 }
+```
+
+## Arrows at the top level of an ES module
+
+Rollup and Vite warn about `this` at the top level of a module, where it's `undefined`. In their
+builds, arrow functions there pass `void 0` to the hooks instead of the `this` they inherit.
+Files without module syntax, such as `import` or `export`, keep `this`, as do modules where
+Rollup's `context` or `moduleContext` option gives it another value.
+
+```js
+// Before
+export const double = (x) => x * 2;
+
+// After
+export const double = (x) => {
+    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;double');
+    try {
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, void 0, {x});
+        const $dd_rv0 = x * 2;
+        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, {x});
+        return $dd_rv0;
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, {x}); throw $dd_e; }
+};
 ```
 
 ## Function IDs

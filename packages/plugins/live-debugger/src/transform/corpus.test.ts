@@ -30,6 +30,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code' | 'filePath' | 'repositoryRoot
     namedOnly: false,
     decorators: 'legacy',
     exceptionReplay: false,
+    hasUndefinedTopLevelThis: false,
 };
 
 const getCorpusFiles = (): { description: string; filePath: string; packageRoot: string }[] => {

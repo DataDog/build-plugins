@@ -280,6 +280,16 @@ describe('getLiveDebuggerPlugin', () => {
         });
     });
 
+    describe('top-level this', () => {
+        // Rollup and Vite builds are covered in sourcemap.integration.test.ts.
+        it("should pass this when neither Rollup's nor Vite's buildStart has run", () => {
+            const handler = getHandler(makeOptions({ include: [], exclude: [] }));
+            const result = handler('export const double = (x) => x * 2;', '/src/utils.js');
+
+            expect(result?.code).toContain('$dd_entry($dd_p0, this');
+        });
+    });
+
     describe('source-map composition', () => {
         const LINES_SHIFTED = 4;
 
