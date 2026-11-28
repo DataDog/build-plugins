@@ -34,12 +34,19 @@ describe('Chatwoot canary target', () => {
         expect(control.env).toEqual({
             ...allFunctions.env,
             BUILD_PLUGIN_LIVE_DEBUGGER: 'false',
-            VITE_RUBY_PUBLIC_OUTPUT_DIR: 'live-debugger-canary/app/control',
+            VITE_RUBY_PUBLIC_DIR: 'public/vite-live-debugger-canary/app/control',
         });
         expect(namedOnly.env).toEqual({
             ...allFunctions.env,
             BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'true',
-            VITE_RUBY_PUBLIC_OUTPUT_DIR: 'live-debugger-canary/app/named-only',
+            VITE_RUBY_PUBLIC_DIR: 'public/vite-live-debugger-canary/app/named-only',
+        });
+        expect(allFunctions.env).toMatchObject({
+            BUILD_PLUGIN_LIVE_DEBUGGER: 'true',
+            BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'false',
+            RAILS_ENV: 'production',
+            // vite-plugin-ruby puts it in the URLs it emits, so it stays the same.
+            VITE_RUBY_PUBLIC_OUTPUT_DIR: 'vite',
         });
         expect(control.args).toEqual(allFunctions.args);
         expect(namedOnly.args).toEqual(allFunctions.args);
@@ -49,12 +56,13 @@ describe('Chatwoot canary target', () => {
         const phase = createChatwootPhase();
         const build = phase.getBuildCommand('/chatwoot', 'named-only');
         const artifacts = phase.getArtifactSpec('/chatwoot', 'named-only');
+        const publicDir = build.env?.VITE_RUBY_PUBLIC_DIR ?? '';
         const publicOutputDir = build.env?.VITE_RUBY_PUBLIC_OUTPUT_DIR ?? '';
 
-        // vite-plugin-ruby ignores --outDir, and writes to public/<publicOutputDir>.
+        // vite-plugin-ruby ignores --outDir, and writes to <publicDir>/<publicOutputDir>.
         expect(build.args).not.toContain('--outDir');
-        expect(publicOutputDir).toContain('named-only');
-        expect(artifacts.roots).toEqual([path.resolve('/chatwoot/public', publicOutputDir)]);
+        expect(publicDir).toContain('named-only');
+        expect(artifacts.roots).toEqual([path.resolve('/chatwoot', publicDir, publicOutputDir)]);
     });
 
     test('should require instrumented functions from .vue files', async () => {

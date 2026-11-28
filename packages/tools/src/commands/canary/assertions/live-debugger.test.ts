@@ -90,9 +90,10 @@ describe('Live Debugger canary assertions', () => {
             scriptPath,
             'let $dd_p = globalThis.$dd_probes !== void 0 && $dd_probes("src/Cart.vue.js;total");',
         );
+        // Live Debugger matches extensions case-insensitively.
         await outputFile(
             componentPath,
-            'let $dd_p = globalThis.$dd_probes !== void 0 && $dd_probes("src/Cart.vue;total");',
+            'let $dd_p = globalThis.$dd_probes !== void 0 && $dd_probes("src/Cart.VUE;total");',
         );
 
         await expect(

@@ -274,9 +274,12 @@ generated config adds `.vue` to `liveDebugger.fileExtensions`, and the canary
 fails when an instrumented build has no function from a `.vue` file. Cleanup
 restores `package.json` and `pnpm-lock.yaml`, then reinstalls the checkout's
 dependencies. Every variant is a production build, written to
-`public/live-debugger-canary/`: Chatwoot's Vite config uses `vite-plugin-ruby`,
-which ignores `--outDir`, so the build sets `VITE_RUBY_PUBLIC_OUTPUT_DIR`
-instead.
+`public/vite-live-debugger-canary/`, which Chatwoot's `.gitignore` covers.
+Chatwoot's Vite config uses `vite-plugin-ruby`, which ignores `--outDir`, so
+each build sets `VITE_RUBY_PUBLIC_DIR` instead. It leaves
+`VITE_RUBY_PUBLIC_OUTPUT_DIR` at `vite` in every variant, as in Chatwoot's
+production build: the plugin puts it in the asset URLs, which would otherwise
+change the size of the output.
 
 ## Runtime benchmark
 

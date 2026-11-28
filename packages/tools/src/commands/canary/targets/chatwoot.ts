@@ -38,31 +38,35 @@ const CHATWOOT_DEPENDENCIES = 'node_modules';
 const APP_CONFIG = 'vite.config.ts';
 const BASE_CONFIG_SPECIFIER = `./${APP_CONFIG}`;
 const CANARY_CONFIG = 'vite.config.live-debugger-canary.mjs';
-const CANARY_OUTPUT_DIRECTORY = 'live-debugger-canary';
 const JAVASCRIPT_PATTERNS = ['**/*.js'];
 const PHASE_ID = 'app';
 
 // Live Debugger doesn't instrument Vue single-file components by default.
 const VUE_FILE_EXTENSION = '.vue';
 
-// Chatwoot's Vite config uses vite-plugin-ruby, which sets the output directory
-// itself and ignores --outDir. It writes to `public/<publicOutputDir>`, and
-// reads publicOutputDir from this variable before `config/vite.json`.
-const PUBLIC_DIRECTORY = 'public';
+// Chatwoot's Vite config uses vite-plugin-ruby, which ignores --outDir. It
+// writes to `<publicDir>/<publicOutputDir>` and also puts publicOutputDir in the
+// URLs it emits. So each variant gets its own publicDir, and every variant keeps
+// publicOutputDir at `vite`, the value Chatwoot's production build uses. These
+// variables take precedence over `config/vite.json`.
+const PUBLIC_DIR_ENV = 'VITE_RUBY_PUBLIC_DIR';
 const PUBLIC_OUTPUT_DIR_ENV = 'VITE_RUBY_PUBLIC_OUTPUT_DIR';
+const PUBLIC_OUTPUT_DIR = 'vite';
+// Chatwoot's .gitignore covers `/public/vite*`.
+const CANARY_PUBLIC_DIRECTORY = 'public/vite-live-debugger-canary';
 
 // vite-plugin-ruby takes its mode from RAILS_ENV before Vite's own. Chatwoot
 // builds its production assets with RAILS_ENV=production.
 const RAILS_ENV = 'production';
 
-const getPublicOutputDirectory = (variant: CanaryVariant): string => {
-    return `${CANARY_OUTPUT_DIRECTORY}/${PHASE_ID}/${variant}`;
+const getPublicDirectory = (variant: CanaryVariant): string => {
+    return `${CANARY_PUBLIC_DIRECTORY}/${PHASE_ID}/${variant}`;
 };
 
 const getArtifactSpec = (root: string, variant: CanaryVariant): ArtifactSpec => {
-    const outputDirectory = getPublicOutputDirectory(variant);
+    const publicDirectory = getPublicDirectory(variant);
     return {
-        roots: [path.resolve(root, PUBLIC_DIRECTORY, outputDirectory)],
+        roots: [path.resolve(root, publicDirectory, PUBLIC_OUTPUT_DIR)],
         patterns: JAVASCRIPT_PATTERNS,
     };
 };
@@ -75,7 +79,8 @@ const getBuildCommand = (root: string, variant: CanaryVariant): CommandSpec => {
         env: {
             ...getViteBuildEnvironment(variant),
             RAILS_ENV,
-            [PUBLIC_OUTPUT_DIR_ENV]: getPublicOutputDirectory(variant),
+            [PUBLIC_DIR_ENV]: getPublicDirectory(variant),
+            [PUBLIC_OUTPUT_DIR_ENV]: PUBLIC_OUTPUT_DIR,
         },
         label: `${PHASE_ID} ${variant} build`,
     };

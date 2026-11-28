@@ -74,7 +74,8 @@ export const assertLiveDebuggerArtifacts = async (
 
 // Live Debugger skips files whose extension it isn't configured for, without an
 // error. A target that adds an extension, such as `.vue`, checks that the build
-// instrumented functions from such files.
+// instrumented at least one function from such a file. Like Live Debugger, it
+// matches extensions case-insensitively.
 export const assertFileExtensionInstrumented = async (
     filePaths: string[],
     variant: CanaryVariant,
@@ -84,11 +85,13 @@ export const assertFileExtensionInstrumented = async (
         return;
     }
 
+    const normalizedExtension = extension.toLowerCase();
     for (const filePath of filePaths) {
         const content = await readFile(filePath);
         const { functions } = scanChunk(content);
         const hasFunction = functions.some(({ functionId }) => {
-            return parseFunctionId(functionId)?.modulePath.endsWith(extension);
+            const modulePath = parseFunctionId(functionId)?.modulePath.toLowerCase();
+            return modulePath?.endsWith(normalizedExtension);
         });
         if (hasFunction) {
             return;
