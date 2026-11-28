@@ -8,7 +8,11 @@ import path from 'path';
 
 import type { CommandResult } from '../types';
 
-import { assertLiveDebuggerArtifacts, assertLiveDebuggerBuildOutput } from './live-debugger';
+import {
+    assertFileExtensionInstrumented,
+    assertLiveDebuggerArtifacts,
+    assertLiveDebuggerBuildOutput,
+} from './live-debugger';
 
 const TEST_ROOT = path.resolve(os.tmpdir(), `build-plugins-canary-live-debugger-${process.pid}`);
 
@@ -74,6 +78,32 @@ describe('Live Debugger canary assertions', () => {
         );
         await expect(
             assertLiveDebuggerArtifacts([plainPath, instrumentedPath], 'named-only'),
+        ).resolves.toBeUndefined();
+    });
+
+    test('should require an instrumented function from a file with the extension', async () => {
+        await rm(TEST_ROOT);
+        const scriptPath = path.resolve(TEST_ROOT, 'script.js');
+        const componentPath = path.resolve(TEST_ROOT, 'component.js');
+        // Minifiers can change the quotes around the function ID.
+        await outputFile(
+            scriptPath,
+            'let $dd_p = globalThis.$dd_probes !== void 0 && $dd_probes("src/Cart.vue.js;total");',
+        );
+        // Live Debugger matches extensions case-insensitively.
+        await outputFile(
+            componentPath,
+            'let $dd_p = globalThis.$dd_probes !== void 0 && $dd_probes("src/Cart.VUE;total");',
+        );
+
+        await expect(
+            assertFileExtensionInstrumented([scriptPath], 'all-functions', '.vue'),
+        ).rejects.toThrow('contains no function from a .vue file');
+        await expect(
+            assertFileExtensionInstrumented([scriptPath, componentPath], 'all-functions', '.vue'),
+        ).resolves.toBeUndefined();
+        await expect(
+            assertFileExtensionInstrumented([scriptPath], 'control', '.vue'),
         ).resolves.toBeUndefined();
     });
 });

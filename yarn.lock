@@ -2271,6 +2271,7 @@ __metadata:
     "@dd/core": "workspace:*"
     "@dd/error-tracking-plugin": "workspace:*"
     "@dd/factory": "workspace:*"
+    "@dd/live-debugger-plugin": "workspace:*"
     "@dd/metrics-plugin": "workspace:*"
     "@dd/rum-plugin": "workspace:*"
     "@dd/tests": "workspace:*"

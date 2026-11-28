@@ -84,4 +84,19 @@ describe('Vite plugin canary helpers', () => {
         );
         expect(config).toContain("import baseConfig from './vite.config.mts';");
     });
+
+    test('should keep the default file extensions unless a target adds some', () => {
+        const defaultConfig = getCanaryViteConfig('./vite.config.mts');
+        const vueConfig = getCanaryViteConfig('./vite.config.ts', {
+            additionalFileExtensions: ['.vue'],
+        });
+
+        expect(defaultConfig).not.toContain('fileExtensions');
+        expect(vueConfig).toContain(
+            "\n                    fileExtensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts', '.vue'],\n",
+        );
+        expect(vueConfig.replace(/\n\s*fileExtensions: .*/, '')).toBe(
+            defaultConfig.replace('./vite.config.mts', './vite.config.ts'),
+        );
+    });
 });
