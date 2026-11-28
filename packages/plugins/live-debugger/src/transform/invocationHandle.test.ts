@@ -475,6 +475,12 @@ describe('invocation handle forwarding', () => {
                 expected: { kind: 'return', args: { a: 4 }, locals: { set: expect.any(Function) } },
             },
             {
+                description: 'leave out the arguments when only strings mention arguments or eval',
+                code: "function f(a) { return a + '\\u00a0 arguments eval'; }",
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: undefined, locals: undefined },
+            },
+            {
                 description: 'pass the arguments again when a nested function mentions arguments',
                 code: 'function f(a) { const g = function () { return arguments; }; return a; }',
                 script: 'out.result = f(1);',

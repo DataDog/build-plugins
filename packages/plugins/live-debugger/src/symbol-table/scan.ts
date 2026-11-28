@@ -230,8 +230,8 @@ export const scanChunk = (code: string): ChunkScan => {
         }
 
         if (match[1] === LIVE_DEBUGGER_CATCH_FUNCTION) {
-            // Only the catch hook of the innermost open function closes it, which also skips the
-            // marker text in strings.
+            // Only the catch hook of the innermost open function closes it, which also skips
+            // `$dd_catch(` in strings. `$dd_throw(` passes no function ID to check.
             const argumentOffset = offset + match[0].length;
             const functionId = readFunctionIdArgument(code, argumentOffset, ',');
             const innermostFunction = openFunctions.at(-1);

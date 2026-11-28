@@ -112,7 +112,7 @@ Each instrumented function gets:
 - Return value tracking with local variable capture via `$dd_return()`
 - Exception tracking via `$dd_throw()`, or via `$dd_catch()` when [`exceptionReplay`](#livedebuggerexceptionreplay) is enabled
 
-The SDK keeps the parameters that `$dd_entry()` captured, so the exit hooks only get them again when the function may reassign one. See [Reassigned parameters](./EXAMPLES.md#reassigned-parameters).
+The SDK keeps the parameters that `$dd_entry()` captured, so `$dd_return()` and `$dd_throw()` only get them again when the function may reassign one. See [Reassigned parameters](./EXAMPLES.md#reassigned-parameters).
 
 The instrumentation checks whether probes are active by calling `$dd_probes2(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the guarded `$dd_probes2` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
