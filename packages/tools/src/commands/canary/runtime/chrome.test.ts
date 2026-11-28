@@ -179,7 +179,7 @@ describe('DevTools connection', () => {
     test('should cancel waits when asked, for example when their page closes', async () => {
         const session = await openSession();
         const waiting = session.waitFor('Page.loadEventFired', 60_000);
-        session.cancelWaits(new Error('The page closed.'));
+        session.cancel(new Error('The page closed.'));
 
         await expect(waiting).rejects.toThrow('The page closed.');
     });
@@ -189,5 +189,60 @@ describe('DevTools connection', () => {
         FakeSocket.failSends = true;
 
         await expect(session.send('Page.reload')).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+});
+
+describe('DevTools connection timeouts and cancellation', () => {
+    const originalWebSocket: unknown = Reflect.get(global, 'WebSocket');
+
+    beforeEach(() => {
+        FakeSocket.latest = undefined;
+        FakeSocket.failSends = false;
+        Reflect.set(global, 'WebSocket', FakeSocket);
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        Reflect.set(global, 'WebSocket', originalWebSocket);
+    });
+
+    const openConnection = async () => {
+        const connecting = connect('ws://127.0.0.1:9222/devtools/browser/test');
+        getSocket().emit('open');
+        return connecting;
+    };
+
+    test("should treat the browser's own commands timing out as Chrome failing", async () => {
+        jest.useFakeTimers();
+        const connection = await openConnection();
+        const browser = createSession(connection, undefined).send('Target.createTarget');
+        const page = createSession(connection, 'session-1').send('Runtime.evaluate');
+        jest.advanceTimersByTime(120_000);
+
+        await expect(browser).rejects.toBeInstanceOf(ChromeConnectionError);
+        await expect(page).rejects.toThrow('Runtime.evaluate got no answer within 120s.');
+        await expect(page).rejects.not.toBeInstanceOf(ChromeConnectionError);
+    });
+
+    test("should reject a cancelled session's commands, and only its own", async () => {
+        const connection = await openConnection();
+        const first = createSession(connection, 'session-1');
+        const second = createSession(connection, 'session-2');
+        const cancelled = first.send('Runtime.evaluate');
+        const other = second.send('Runtime.evaluate');
+        first.cancel(new Error('The page closed.'));
+
+        await expect(cancelled).rejects.toThrow('The page closed.');
+        const sent: unknown = JSON.parse(getSocket().sent[1] ?? '{}');
+        const id = getNumber(sent, 'id');
+        getSocket().emit('message', { data: JSON.stringify({ id, result: { value: 2 } }) });
+        await expect(other).resolves.toEqual({ value: 2 });
+    });
+
+    test('should fail to connect when the socket closes before it opens', async () => {
+        const connecting = connect('ws://127.0.0.1:9222/devtools/browser/test');
+        getSocket().emit('close');
+
+        await expect(connecting).rejects.toBeInstanceOf(ChromeConnectionError);
     });
 });

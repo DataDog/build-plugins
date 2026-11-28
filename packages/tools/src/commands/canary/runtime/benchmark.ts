@@ -323,6 +323,7 @@ export const runRuntimeBenchmark = async <V extends string>(
     const servers: StaticServer[] = [];
     const browsers: Chrome[] = [];
     const variantIds = options.variants.map((variant) => variant.id);
+    let benchmarkResult: RuntimeBenchmarkResult<V>;
 
     try {
         const origins = new Map<V, string>();
@@ -417,9 +418,6 @@ export const runRuntimeBenchmark = async <V extends string>(
             const description = formatLoad(load);
             log(`Load ${index + 1}/${plan.length}: ${description}`);
         }
-        // A stop during the last load mustn't produce a result.
-        throwIfAborted(signal);
-
         const statisticsRandom = createRandom(`${options.seed}:bootstrap`);
         const conditions = summarizeLoads({
             controlVariant,
@@ -429,7 +427,7 @@ export const runRuntimeBenchmark = async <V extends string>(
             settings,
             variants: variantIds,
         });
-        return {
+        benchmarkResult = {
             browser: {
                 version: coldBrowser.version,
             },
@@ -450,4 +448,8 @@ export const runRuntimeBenchmark = async <V extends string>(
             }
         }
     }
+    // A stop during the last load, or while Chrome shuts down, mustn't produce a
+    // result.
+    throwIfAborted(signal);
+    return benchmarkResult;
 };

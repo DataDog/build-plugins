@@ -23,6 +23,8 @@ const NETWORK_IDLE_MS = 500;
 // How long a command may still take once a load's time is up. A page that doesn't
 // answer by then, for example because a script loops, fails the load.
 const COMMAND_GRACE_MS = 5_000;
+// How long a page's setup may take before its load starts.
+const SETUP_TIMEOUT_MS = 10_000;
 const BITS_PER_MEGABIT = 1_000_000;
 const BITS_PER_BYTE = 8;
 
@@ -137,16 +139,24 @@ type Limits = {
     signal: AbortSignal | undefined;
 };
 
-// Waits for promise, but no longer than COMMAND_GRACE_MS past the deadline, and not
-// past an abort.
-const withinLimits = <T>(promise: Promise<T>, { deadline, signal }: Limits, what: string) => {
-    signal?.throwIfAborted();
+// Starts a command and waits for it, but no longer than COMMAND_GRACE_MS past the
+// deadline, and not past an abort. An abort is checked before the command starts,
+// so no command is left without a handler.
+const withinLimits = <T>(
+    start: () => Promise<T>,
+    { deadline, signal }: Limits,
+    what: string,
+): Promise<T> => {
+    if (signal?.aborted) {
+        return Promise.reject(signal.reason);
+    }
+    const promise = start();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
     const limit = new Promise<never>((_resolve, reject) => {
         const timeoutMs = getRemainingMs(deadline) + COMMAND_GRACE_MS;
         timeout = setTimeout(() => {
-            reject(new Error(`${what} got no answer within the load's time limit.`));
+            reject(new Error(`${what} got no answer within its time limit.`));
         }, timeoutMs);
         if (signal) {
             onAbort = () => reject(signal.reason);
@@ -161,9 +171,18 @@ const withinLimits = <T>(promise: Promise<T>, { deadline, signal }: Limits, what
     });
 };
 
+const sendWithinLimits = (
+    page: ChromePage,
+    method: string,
+    params: Record<string, unknown>,
+    limits: Limits,
+): Promise<unknown> => {
+    return withinLimits(() => page.send(method, params), limits, method);
+};
+
 const evaluate = async (page: ChromePage, expression: string, limits: Limits) => {
-    const request = page.send('Runtime.evaluate', { expression, returnByValue: true });
-    const response = await withinLimits(request, limits, 'Runtime.evaluate');
+    const params = { expression, returnByValue: true };
+    const response = await sendWithinLimits(page, 'Runtime.evaluate', params, limits);
     const exception = isRecord(response) ? response.exceptionDetails : undefined;
     if (exception !== undefined) {
         const text = getString(exception, 'text') ?? 'Uncaught exception';
@@ -178,24 +197,24 @@ const navigate = async (page: ChromePage, url: string, limits: Limits): Promise<
     // Navigation errors are reported below; don't let this one go unhandled first.
     // Closing the page cancels the wait.
     loaded.catch(() => undefined);
-    const request = page.send('Page.navigate', { url });
-    const navigation = await withinLimits(request, limits, 'Page.navigate');
+    const navigation = await sendWithinLimits(page, 'Page.navigate', { url }, limits);
     const errorText = getString(navigation, 'errorText');
     if (errorText) {
         throw new Error(`Loading ${url} failed: ${errorText}`);
     }
-    await withinLimits(loaded, limits, 'The load event');
+    await withinLimits(() => loaded, limits, 'The load event');
 };
 
 const waitForVisible = async (page: ChromePage, selector: string, limits: Limits) => {
     const expression = getVisibleExpression(selector);
     for (;;) {
         const visible = await evaluate(page, expression, limits);
-        if (visible === true) {
-            return;
-        }
+        // An answer that arrives after the deadline is too late, visible or not.
         if (now() >= limits.deadline) {
             throw new Error(`${selector} wasn't visible in time.`);
+        }
+        if (visible === true) {
+            return;
         }
         await wait(POLL_INTERVAL_MS, undefined, { signal: limits.signal });
     }
@@ -355,6 +374,8 @@ type PreparedPage = {
     page: ChromePage;
     network: NetworkTracker;
     getPageErrors: () => string[];
+    // Sends within the setup's time limit.
+    send: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 };
 
 const preparePage = async ({
@@ -362,11 +383,13 @@ const preparePage = async ({
     clearCache,
     cookies,
     pageOrigin,
+    signal,
 }: {
     chrome: Chrome;
     clearCache: boolean;
     cookies: RuntimeCookie[];
     pageOrigin: string;
+    signal: AbortSignal | undefined;
 }): Promise<PreparedPage> => {
     const page = await chrome.newPage();
     try {
@@ -378,27 +401,25 @@ const preparePage = async ({
             pageErrors.push(description ?? 'Uncaught exception');
         });
         const network = trackNetwork(page, pageOrigin);
-        await page.send('Page.enable');
-        await page.send('Page.addScriptToEvaluateOnNewDocument', {
-            source: BLOCK_SERVICE_WORKERS,
-        });
-        await page.send('Runtime.enable');
-        await page.send('Network.enable');
-        await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
+        const limits = { deadline: now() + SETUP_TIMEOUT_MS, signal };
+        const send = (method: string, params: Record<string, unknown> = {}) =>
+            sendWithinLimits(page, method, params, limits);
+        await send('Page.enable');
+        await send('Page.addScriptToEvaluateOnNewDocument', { source: BLOCK_SERVICE_WORKERS });
+        await send('Runtime.enable');
+        await send('Network.enable');
+        await send('Emulation.setDeviceMetricsOverride', VIEWPORT);
         if (clearCache) {
             // Clears the HTTP cache and V8's code cache of the whole profile, which
             // only cold loads use.
-            await page.send('Network.clearBrowserCache');
-            await page.send('Storage.clearDataForOrigin', {
-                origin: pageOrigin,
-                storageTypes: 'all',
-            });
+            await send('Network.clearBrowserCache');
+            await send('Storage.clearDataForOrigin', { origin: pageOrigin, storageTypes: 'all' });
         }
         if (cookies.length > 0) {
-            await page.send('Network.setCookies', { cookies });
+            await send('Network.setCookies', { cookies });
         }
-        await page.send('Page.bringToFront');
-        return { page, network, getPageErrors: () => pageErrors };
+        await send('Page.bringToFront');
+        return { page, network, getPageErrors: () => pageErrors, send };
     } catch (error) {
         try {
             await page.close();
@@ -406,6 +427,18 @@ const preparePage = async ({
             // The error that stopped the preparation matters more.
         }
         throw error;
+    }
+};
+
+// A page that doesn't close cleanly mustn't change its load's result, unless
+// Chrome itself failed.
+const closePage = async (page: ChromePage): Promise<void> => {
+    try {
+        await page.close();
+    } catch (error) {
+        if (error instanceof ChromeConnectionError) {
+            throw error;
+        }
     }
 };
 
@@ -438,6 +471,7 @@ export const visitPage = async ({
         clearCache: false,
         cookies,
         pageOrigin,
+        signal,
     });
     try {
         const limits = { deadline: now() + maxWaitMs, signal };
@@ -454,7 +488,7 @@ export const visitPage = async ({
         const details = pageErrors.length > 0 ? ` Page errors: ${pageErrors.join('; ')}` : '';
         throw new Error(`${message}${details}`);
     } finally {
-        await page.close();
+        await closePage(page);
     }
 };
 
@@ -485,11 +519,12 @@ export const measureLoad = async ({
 }): Promise<LoadResult> => {
     const url = getPageUrl(origin, runtimePage);
     const pageOrigin = new URL(url).origin;
-    const { page, network, getPageErrors } = await preparePage({
+    const { page, network, getPageErrors, send } = await preparePage({
         chrome,
         clearCache: cache === 'cold',
         cookies,
         pageOrigin,
+        signal,
     });
     const metrics: RuntimeLoadMetrics = {
         fcpMs: null,
@@ -501,12 +536,12 @@ export const measureLoad = async ({
     };
 
     try {
-        await page.send('Emulation.setCPUThrottlingRate', { rate: cpuThrottling });
+        await send('Emulation.setCPUThrottlingRate', { rate: cpuThrottling });
         if (networkThrottling) {
             const conditions = getNetworkConditions(networkThrottling);
-            await page.send('Network.emulateNetworkConditions', conditions);
+            await send('Network.emulateNetworkConditions', conditions);
         }
-        await page.send('Performance.enable', { timeDomain: 'timeTicks' });
+        await send('Performance.enable', { timeDomain: 'timeTicks' });
 
         const limits = { deadline: now() + maxWaitMs, signal };
         let error: string | null = null;
@@ -533,11 +568,11 @@ export const measureLoad = async ({
 
         // A failed load's metrics aren't used, and its page may not answer.
         if (error === null) {
-            const request = page.send('Performance.getMetrics');
-            const performanceMetrics = await withinLimits(
-                request,
-                limits,
+            const performanceMetrics = await sendWithinLimits(
+                page,
                 'Performance.getMetrics',
+                {},
+                limits,
             );
             const metricList = isRecord(performanceMetrics)
                 ? performanceMetrics.metrics
@@ -562,6 +597,6 @@ export const measureLoad = async ({
             failedRequests: networkSummary.failedRequests,
         };
     } finally {
-        await page.close();
+        await closePage(page);
     }
 };

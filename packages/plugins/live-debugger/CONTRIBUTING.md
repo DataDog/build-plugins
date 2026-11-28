@@ -261,7 +261,8 @@ How a run works:
     fails the same way when a variant ends up with fewer than 3 successful
     loads in a condition, or when more than 10% of its loads in a condition
     fail: the slow loads are the likeliest to fail, so dropping many of them
-    would make a variant look faster than it is.
+    would make a variant look faster than it is. Below 10 repetitions, a
+    single failed load is more than 10%.
 -   Chrome crashing, or its DevTools connection breaking, fails the run at
     once as a `target` failure, instead of failing every load that follows.
 -   Each repetition then loads every variant once per page, cache state and CPU
@@ -289,10 +290,11 @@ For each load, the report records:
     to the page's own origin count, so scripts from another host aren't
     measured. Warm loads transfer almost nothing.
 
-Loads that fail, have no FCP or LCP, or don't finish within
-`--runtime-max-wait-ms` count as failed and stay out of the statistics. A page
-that doesn't answer a command within 5 seconds of that limit, for example
-because a script loops, fails its load too.
+A load fails when it errors, has no FCP or LCP, or its navigation or ready
+selector doesn't finish within `--runtime-max-wait-ms`. Failed loads stay out
+of the statistics. Waiting for LCP to settle stops at that limit and keeps the
+last candidate. A page that doesn't answer a command within 5 seconds of that
+limit, for example because a script loops, fails its load too.
 
 The report's `runtime` section, `null` without `--runtime`, holds the settings
 and one entry per phase with the Chrome version, the step's duration, the

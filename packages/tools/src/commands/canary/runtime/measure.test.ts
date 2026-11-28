@@ -2,7 +2,10 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { trackNetwork } from './measure';
+import { setTimeout as wait } from 'timers/promises';
+
+import type { Chrome, ChromePage } from './chrome';
+import { measureLoad, trackNetwork } from './measure';
 
 type Listener = (params: unknown) => void;
 
@@ -53,5 +56,72 @@ describe('runtime network tracking', () => {
             jsTransferBytes: 500,
         });
         expect(network.getInFlight()).toBe(0);
+    });
+});
+
+describe('runtime page loads', () => {
+    const page = { id: 'home', path: '/', readySelector: 'main' };
+
+    // A page that answers every command at once, except that it says the ready
+    // selector is visible only after visibleAfterMs.
+    const createChrome = (visibleAfterMs: number): Chrome => ({
+        version: 'HeadlessChrome/1',
+        close: async () => undefined,
+        newPage: async (): Promise<ChromePage> => ({
+            send: async (method, params) => {
+                const expression = typeof params?.expression === 'string' ? params.expression : '';
+                if (method === 'Runtime.evaluate' && expression.includes('getBoundingClientRect')) {
+                    await wait(visibleAfterMs);
+                    return { result: { value: true } };
+                }
+                return {};
+            },
+            on: () => () => undefined,
+            waitFor: async () => ({}),
+            close: async () => undefined,
+        }),
+    });
+
+    const load = (chrome: Chrome, signal?: AbortSignal) =>
+        measureLoad({
+            cache: 'cold',
+            chrome,
+            cookies: [],
+            cpuThrottling: 1,
+            lcpSettleMs: 10,
+            maxWaitMs: 50,
+            network: null,
+            origin: 'http://127.0.0.1:9',
+            page,
+            signal,
+        });
+
+    test('should fail a load whose page becomes ready only after its time limit', async () => {
+        const result = await load(createChrome(150));
+        expect(result.error).toBe("main wasn't visible in time.");
+    });
+
+    test('should send nothing once the run was stopped', async () => {
+        const controller = new AbortController();
+        controller.abort();
+        const chrome = createChrome(0);
+        const newPage = chrome.newPage;
+        const sent: string[] = [];
+        const tracked: Chrome = {
+            ...chrome,
+            newPage: async () => {
+                const fakePage = await newPage();
+                return {
+                    ...fakePage,
+                    send: (method, params) => {
+                        sent.push(method);
+                        return fakePage.send(method, params);
+                    },
+                };
+            },
+        };
+
+        await expect(load(tracked, controller.signal)).rejects.toThrow();
+        expect(sent).toEqual([]);
     });
 });

@@ -24,6 +24,7 @@ const WINDOW_SIZE = { width: 1280, height: 800 };
 const STARTUP_TIMEOUT_MS = 30_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const COMMAND_TIMEOUT_MS = 120_000;
+const CLOSE_PAGE_TIMEOUT_MS = 10_000;
 const STDERR_TAIL_LENGTH = 4_000;
 const DEVTOOLS_URL = /DevTools listening on (ws:\/\/\S+)/;
 
@@ -78,6 +79,7 @@ type WebSocketConstructor = new (url: string) => WebSocketLike;
 
 type PendingCommand = {
     method: string;
+    sessionId: string | undefined;
     resolve: (result: unknown) => void;
     reject: (error: Error) => void;
     timeout: ReturnType<typeof setTimeout>;
@@ -232,8 +234,11 @@ export type Connection = {
         method: string,
         params: Record<string, unknown>,
         sessionId: string | undefined,
+        timeoutMs?: number,
     ) => Promise<unknown>;
     on: (method: string, sessionId: string | undefined, listener: Listener) => () => void;
+    // Rejects the session's commands that are still waiting for an answer.
+    rejectSession: (sessionId: string, error: Error) => void;
     // Calls fail when the connection closes. Returns a function that removes it.
     onClosed: (fail: (error: Error) => void) => () => void;
     getClosedError: () => Error | undefined;
@@ -305,7 +310,7 @@ export const connect = (url: string): Promise<Connection> => {
     };
 
     const connection: Connection = {
-        send: (method, params, sessionId) => {
+        send: (method, params, sessionId, timeoutMs = COMMAND_TIMEOUT_MS) => {
             if (closedError) {
                 return Promise.reject(closedError);
             }
@@ -314,12 +319,18 @@ export const connect = (url: string): Promise<Connection> => {
             return new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
                     pending.delete(id);
-                    const error = new Error(
-                        `${method} got no answer within ${COMMAND_TIMEOUT_MS / 1_000}s.`,
-                    );
+                    const seconds = timeoutMs / 1_000;
+                    // A page's command can hang on the page's own scripts, but the
+                    // browser's own commands only hang when Chrome does.
+                    const error =
+                        sessionId === undefined
+                            ? new ChromeConnectionError(
+                                  `Chrome didn't answer ${method} within ${seconds}s.`,
+                              )
+                            : new Error(`${method} got no answer within ${seconds}s.`);
                     reject(error);
-                }, COMMAND_TIMEOUT_MS);
-                pending.set(id, { method, resolve, reject, timeout });
+                }, timeoutMs);
+                pending.set(id, { method, sessionId, resolve, reject, timeout });
                 const message = JSON.stringify({ id, method, params, sessionId });
                 try {
                     socket.send(message);
@@ -343,6 +354,15 @@ export const connect = (url: string): Promise<Connection> => {
                 }
             };
         },
+        rejectSession: (sessionId, error) => {
+            for (const [id, command] of Array.from(pending.entries())) {
+                if (command.sessionId === sessionId) {
+                    pending.delete(id);
+                    clearTimeout(command.timeout);
+                    command.reject(error);
+                }
+            }
+        },
         onClosed: (fail) => {
             closeWatchers.add(fail);
             return () => {
@@ -365,14 +385,17 @@ export const connect = (url: string): Promise<Connection> => {
         socket.addEventListener('close', () => {
             const error = new ChromeConnectionError('The DevTools connection closed.');
             rejectAll(error);
+            // Only matters when it closes before it opened.
+            reject(error);
         });
         socket.addEventListener('message', (event) => handleMessage(event.data));
     });
 };
 
 export type Session = CdpSession & {
-    // Rejects every pending waitFor, for example when its page closes.
-    cancelWaits: (error: Error) => void;
+    // Rejects the session's pending commands and waits, for example when its page
+    // closes: Chrome doesn't answer a closed page's commands.
+    cancel: (error: Error) => void;
 };
 
 // Exported for tests.
@@ -408,9 +431,12 @@ export const createSession = (connection: Connection, sessionId: string | undefi
                 const removeCloseWatcher = connection.onClosed(fail);
                 waits.add(fail);
             }),
-        cancelWaits: (error) => {
+        cancel: (error) => {
             for (const fail of Array.from(waits)) {
                 fail(error);
+            }
+            if (sessionId !== undefined) {
+                connection.rejectSession(sessionId, error);
             }
         },
     };
@@ -495,7 +521,7 @@ export const launchChrome = async ({
                     targetId,
                 });
                 const sessionId = getRequiredString(attached, 'sessionId', 'Target.attachToTarget');
-                const { cancelWaits, ...session } = createSession(openConnection, sessionId);
+                const { cancel, ...session } = createSession(openConnection, sessionId);
                 const removers: Array<() => void> = [];
                 return {
                     ...session,
@@ -505,11 +531,17 @@ export const launchChrome = async ({
                         return remove;
                     },
                     close: async () => {
-                        cancelWaits(new Error('The page closed.'));
+                        cancel(new Error('The page closed.'));
                         for (const remove of removers) {
                             remove();
                         }
-                        await browser.send('Target.closeTarget', { targetId });
+                        // A browser-level command, so a timeout means Chrome hangs.
+                        await openConnection.send(
+                            'Target.closeTarget',
+                            { targetId },
+                            undefined,
+                            CLOSE_PAGE_TIMEOUT_MS,
+                        );
                     },
                 };
             },

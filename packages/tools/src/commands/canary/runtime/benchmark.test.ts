@@ -366,27 +366,33 @@ const createFakePage = (): ChromePage => ({
 });
 
 describe('runtime benchmark failures', () => {
-    // Priming opens 3 pages per variant: 2 warm visits and 1 cold one.
+    // Priming opens 3 pages per variant: 2 warm visits and 1 cold one, control
+    // first. 12 measured loads follow.
     const PRIMING_PAGES = 3 * VARIANTS.length;
+    const MEASURED_LOADS = 12;
     const variants: RuntimeVariantTarget<Variant>[] = VARIANTS.map((id) => ({
         id,
         origin: 'http://127.0.0.1:9',
     }));
 
-    // Every page after priming fails to open with failure().
-    const runWithFailingPages = (failure: () => Error) => {
+    const runWithFakeChrome = ({
+        closeChrome = async () => undefined,
+        openPage,
+        signal,
+    }: {
+        closeChrome?: () => Promise<void>;
+        // Gets the page's number, from 1.
+        openPage: (pageNumber: number) => Promise<ChromePage>;
+        signal?: AbortSignal;
+    }) => {
         let openedPages = 0;
-        const newPage = async (): Promise<ChromePage> => {
-            openedPages += 1;
-            if (openedPages > PRIMING_PAGES) {
-                throw failure();
-            }
-            return createFakePage();
-        };
         const chrome: Chrome = {
             version: 'HeadlessChrome/1',
-            newPage,
-            close: async () => undefined,
+            newPage: () => {
+                openedPages += 1;
+                return openPage(openedPages);
+            },
+            close: closeChrome,
         };
         mockLaunchChrome.mockResolvedValue(chrome);
         return runRuntimeBenchmark({
@@ -397,52 +403,73 @@ describe('runtime benchmark failures', () => {
             pages: [PAGES[0]],
             seed: 'seed',
             settings: { ...SETTINGS, repetitions: 3, cpuThrottlingRates: [1], maxWaitMs: 1_000 },
-            signal: undefined,
+            signal,
             variants,
         });
     };
 
+    // Every page after the first `after` fails to open with failure().
+    const failPagesAfter = (after: number, failure: () => Error) => async (pageNumber: number) => {
+        if (pageNumber > after) {
+            throw failure();
+        }
+        return createFakePage();
+    };
+
+    const connectionClosed = () => new ChromeConnectionError('The DevTools connection closed.');
+
     test('should stop on a Chrome failure instead of counting failed loads', async () => {
-        const run = runWithFailingPages(
-            () => new ChromeConnectionError('The DevTools connection closed.'),
-        );
+        const run = runWithFakeChrome({
+            openPage: failPagesAfter(PRIMING_PAGES, connectionClosed),
+        });
+        await expect(run).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+
+    test("should not blame the variant that's priming when Chrome fails", async () => {
+        // The instrumented variant's first priming visit, after control's three.
+        const run = runWithFakeChrome({ openPage: failPagesAfter(3, connectionClosed) });
         await expect(run).rejects.toBeInstanceOf(ChromeConnectionError);
     });
 
     test("should count a page's own failures as failed loads and keep going", async () => {
-        const result = await runWithFailingPages(() => new Error('Target.createTarget failed.'));
-        expect(result.loads).toHaveLength(12);
+        const failure = () => new Error('Target.createTarget failed.');
+        const result = await runWithFakeChrome({
+            openPage: failPagesAfter(PRIMING_PAGES, failure),
+        });
+        expect(result.loads).toHaveLength(MEASURED_LOADS);
         expect(result.loads.every((load) => !load.ok)).toBe(true);
         expect(result.conditions[0].variants[0]).toMatchObject({ loads: 0, failedLoads: 3 });
     });
 
-    test('should stop with an abort instead of a result after the last load', async () => {
+    test('should stop instead of returning a result when stopped after the last load', async () => {
         const controller = new AbortController();
-        let openedPages = 0;
-        const newPage = async (): Promise<ChromePage> => {
-            openedPages += 1;
-            // The last of the 12 measured loads.
-            if (openedPages === PRIMING_PAGES + 12) {
-                controller.abort();
-            }
-            return createFakePage();
-        };
-        const chrome: Chrome = {
-            version: 'HeadlessChrome/1',
-            newPage,
-            close: async () => undefined,
-        };
-        mockLaunchChrome.mockResolvedValue(chrome);
-        const run = runRuntimeBenchmark({
-            chromeFlags: [],
-            chromePath: '/fake/chrome',
-            controlVariant: 'control',
-            log: () => undefined,
-            pages: [PAGES[0]],
-            seed: 'seed',
-            settings: { ...SETTINGS, repetitions: 3, cpuThrottlingRates: [1], maxWaitMs: 1_000 },
+        const run = runWithFakeChrome({
+            // The last load's page aborts as it closes, after the load succeeded.
+            openPage: async (pageNumber) => {
+                const page = createFakePage();
+                if (pageNumber < PRIMING_PAGES + MEASURED_LOADS) {
+                    return page;
+                }
+                return {
+                    ...page,
+                    close: async () => {
+                        controller.abort();
+                    },
+                };
+            },
             signal: controller.signal,
-            variants,
+        });
+        await expect(run).rejects.toThrow('The runtime benchmark was stopped.');
+    });
+
+    test('should stop instead of returning a result when stopped while Chrome closes', async () => {
+        const controller = new AbortController();
+        const run = runWithFakeChrome({
+            closeChrome: async () => {
+                controller.abort();
+            },
+            openPage: async () => createFakePage(),
+            signal: controller.signal,
         });
         await expect(run).rejects.toThrow('The runtime benchmark was stopped.');
     });
