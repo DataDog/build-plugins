@@ -45,6 +45,7 @@ describe('Chatwoot canary target', () => {
             BUILD_PLUGIN_LIVE_DEBUGGER: 'true',
             BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY: 'false',
             RAILS_ENV: 'production',
+            VITE_RUBY_PUBLIC_DIR: 'public/vite-live-debugger-canary/app/all-functions',
             // vite-plugin-ruby puts it in the URLs it emits, so it stays the same.
             VITE_RUBY_PUBLIC_OUTPUT_DIR: 'vite',
         });
