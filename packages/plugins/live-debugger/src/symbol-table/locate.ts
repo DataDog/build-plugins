@@ -143,7 +143,7 @@ const getFirstMappedPosition = (
  * The original position of the last mapped segment of `sourceIndex` between two generated
  * positions, both included. Some tokens have no mapping: the code the transform appends after
  * an arrow function's expression body, and tokens that minifiers rewrite. The closest mapped token
- * before the `$dd_throw` call is then the best estimate of where the function ends.
+ * before the `$dd_throw` or `$dd_catch` call is then the best estimate of where the function ends.
  */
 const getLastMappedPosition = (
     traceMap: TraceMap,
@@ -171,9 +171,9 @@ const getLastMappedPosition = (
 };
 
 /**
- * Map the scanned functions to their original positions. The transform anchors the `$dd_probes`
- * call to the body's opening brace, and the `$dd_throw` call to its closing brace when the body
- * is a block. When a marker isn't mapped, the closest mapped token inside the function is used.
+ * Map the scanned functions to their original positions. The transform anchors the `$dd_probes2`
+ * call to the body's opening brace, and the `$dd_throw` or `$dd_catch` call to its closing brace
+ * when the body is a block. When a marker isn't mapped, the closest mapped token inside the function is used.
  */
 export const locateFunctions = (
     code: string,
@@ -183,15 +183,15 @@ export const locateFunctions = (
     const toPosition = createOffsetConverter(code);
 
     return scan.functions.map((scannedFunction) => {
-        const { functionId, probeOffset, throwOffset } = scannedFunction;
+        const { functionId, probeOffset, endOffset } = scannedFunction;
         const parentIndex = scan.paired ? scannedFunction.parentIndex : undefined;
 
-        if (!traceMap || !scan.paired || throwOffset === undefined) {
+        if (!traceMap || !scan.paired || endOffset === undefined) {
             return { functionId, parentIndex, start: undefined, end: undefined };
         }
 
         const generatedStart = toPosition(probeOffset);
-        const generatedEnd = toPosition(throwOffset);
+        const generatedEnd = toPosition(endOffset);
         const mappedStart =
             getMappedPosition(traceMap, generatedStart) ??
             getFirstMappedPosition(traceMap, generatedStart, generatedEnd);

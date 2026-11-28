@@ -31,6 +31,7 @@ interface InvocationHandle {
 
 interface EntryRecord {
     handle: InvocationHandle;
+    self: unknown;
     args: Record<string, unknown> | undefined;
 }
 
@@ -38,7 +39,9 @@ interface ExitRecord {
     kind: 'return' | 'throw';
     handle: InvocationHandle | undefined;
     value: unknown;
+    // Only passed when they may differ from the entry's.
     args: Record<string, unknown> | undefined;
+    self: unknown;
     locals: Record<string, unknown> | undefined;
 }
 
@@ -54,26 +57,26 @@ type EntryHook = (
 ) => InvocationHandle | undefined;
 
 interface RuntimeHooks {
-    $dd_probes: (functionId: string) => unknown;
+    $dd_probes2: (functionId: string) => unknown;
     $dd_entry: EntryHook;
     $dd_return: (
         handle: unknown,
-        value: unknown,
-        self: unknown,
-        args?: Record<string, unknown>,
+        value?: unknown,
         locals?: Record<string, unknown>,
+        args?: Record<string, unknown>,
+        self?: unknown,
     ) => unknown;
     $dd_throw: (
         handle: unknown,
         error: unknown,
-        self: unknown,
         args?: Record<string, unknown>,
+        self?: unknown,
     ) => void;
 }
 
 /**
  * Stand-in for the Browser Debugger SDK implementing the Option A contract:
- * `$dd_probes` looks probes up, `$dd_entry` exchanges them for a handle that
+ * `$dd_probes2` looks probes up, `$dd_entry` exchanges them for a handle that
  * identifies one invocation, and the exit hooks are given that handle back.
  *
  * `producesHandle: false` models an invocation where every probe was skipped
@@ -87,33 +90,35 @@ const createProbeRuntime = (
     let nextHandleId = 0;
 
     const hooks: RuntimeHooks = {
-        $dd_probes: () => ['probe'],
+        $dd_probes2: () => ['probe'],
         $dd_entry: (probes, self, args) => {
             if (!producesHandle) {
                 return undefined;
             }
             const handle: InvocationHandle = { id: nextHandleId, enteredWith: args };
             nextHandleId += 1;
-            runtime.entries.push({ handle, args });
+            runtime.entries.push({ handle, self, args });
             return handle;
         },
-        $dd_return: (handle, value, self, args, locals) => {
+        $dd_return: (handle, value, locals, args, self) => {
             const record: ExitRecord = {
                 kind: 'return',
                 handle: handle as InvocationHandle | undefined,
                 value,
                 args,
+                self,
                 locals,
             };
             runtime.exits.push(record);
             return value;
         },
-        $dd_throw: (handle, error, self, args) => {
+        $dd_throw: (handle, error, args, self) => {
             const record: ExitRecord = {
                 kind: 'throw',
                 handle: handle as InvocationHandle | undefined,
                 value: error,
                 args,
+                self,
                 locals: undefined,
             };
             runtime.exits.push(record);
@@ -247,8 +252,8 @@ describe('invocation handle forwarding', () => {
 
         it('should pass the error and a parameter named e to $dd_throw separately', () => {
             // A generated catch binding named `e` would shadow the parameter in the
-            // arguments object passed to `$dd_throw`.
-            const code = "function f(e) { throw new Error('boom'); }";
+            // arguments object passed to `$dd_throw`, which gets them because `e` is reassigned.
+            const code = "function f(e) { e += 1; throw new Error('boom'); }";
             const script = 'try { f(1); } catch (caught) { out.result = caught; }';
             const { runtime, output } = runInstrumented(code, script, true);
 
@@ -257,7 +262,7 @@ describe('invocation handle forwarding', () => {
             const exit = runtime.exits[0];
 
             expect(exit.kind).toBe('throw');
-            expect(exit.args).toEqual({ e: 1 });
+            expect(exit.args).toEqual({ e: 2 });
             const thrownText = String(exit.value);
             expect(thrownText).toBe('Error: boom');
             // The caller receives the same error object `$dd_throw` was given.
@@ -389,6 +394,62 @@ describe('invocation handle forwarding', () => {
             expect(exitA.handle).toBe(entryA.handle);
             expect(exitB.kind).toBe('throw');
             expect(exitB.handle).toBe(entryB.handle);
+        });
+    });
+
+    describe('arguments and receiver at exit', () => {
+        const cases = [
+            {
+                description: 'leave out the arguments when no parameter is reassigned',
+                code: 'function f(a, b) { const sum = a + b; return sum; }',
+                script: 'out.result = f(1, 2);',
+                expected: { kind: 'return', args: undefined, locals: { sum: 3 } },
+            },
+            {
+                description: 'pass the arguments again when a parameter is reassigned',
+                code: 'function f(a, b) { a = a * 10; return a + b; }',
+                script: 'out.result = f(1, 2);',
+                expected: { kind: 'return', args: { a: 10, b: 2 }, locals: undefined },
+            },
+            {
+                description:
+                    'pass the arguments again when a nested function reassigns a parameter',
+                code: 'function f(a) { const set = () => { a = 5; }; set(); return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 5 }, locals: { set: expect.any(Function) } },
+            },
+            {
+                description: 'pass the arguments again when sloppy-mode arguments alias them',
+                code: 'function f(a) { arguments[0] = 7; return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 7 }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again to $dd_throw when a parameter is reassigned',
+                code: "function f(a) { a = 'changed'; throw new Error(a); }",
+                script: 'try { f(1); } catch (error) { out.result = error.message; }',
+                expected: { kind: 'throw', args: { a: 'changed' }, locals: undefined },
+            },
+        ];
+
+        test.each(cases)('should $description', ({ code, script, expected }) => {
+            const { runtime } = runInstrumented(code, script, true);
+            const exit = runtime.exits.at(-1);
+
+            expect(exit).toEqual(expect.objectContaining(expected));
+            expect(exit?.self).toBeUndefined();
+        });
+
+        it('should pass the receiver again when an arrow in a derived constructor sets it', () => {
+            const code =
+                'class A {} class B extends A { constructor() { const init = () => super(); init(); } }';
+            const script = 'out.instance = new B();';
+            const { runtime, output } = runInstrumented(code, script, true);
+
+            expect(runtime.entries).toHaveLength(1);
+            expect(runtime.entries[0].self).toBeUndefined();
+            expect(runtime.exits).toHaveLength(1);
+            expect(runtime.exits[0].self).toBe(output.instance);
         });
     });
 

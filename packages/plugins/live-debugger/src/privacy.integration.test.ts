@@ -66,7 +66,7 @@ type ProbeHandle = { functionId: string };
 type BundleGlobals = {
     circularProject?: CircularProject;
     $DD_A_Q?: string[][];
-    $dd_probes?: (functionId: string) => ProbeHandle;
+    $dd_probes2?: (functionId: string) => ProbeHandle;
     $dd_entry?: (handle: ProbeHandle) => ProbeHandle;
     $dd_return?: (handle: ProbeHandle, value: unknown) => unknown;
     $dd_throw?: (handle: ProbeHandle) => void;
@@ -130,7 +130,7 @@ const summarize = (project: CircularProject) => {
 
 // Stand-in for the Browser Debugger SDK with an active probe on every function.
 const recordProbes = (globals: BundleGlobals, events: ProbeEvent[]) => {
-    globals.$dd_probes = (functionId) => ({ functionId });
+    globals.$dd_probes2 = (functionId) => ({ functionId });
     globals.$dd_entry = (handle) => {
         events.push({ hook: 'entry', functionId: handle.functionId });
         return handle;

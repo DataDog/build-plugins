@@ -14,7 +14,7 @@ type BuildMetadata = {
     debugId?: string;
 };
 
-// Return the per-chunk runtime bootstrap. It doesn't define `$dd_probes`, which
+// Return the per-chunk runtime bootstrap. It doesn't define `$dd_probes2`, which
 // instrumented functions only call once the SDK has defined it. It exposes build
 // metadata to the Browser Debugger SDK:
 //   - `service` (from `metadata.service`) defaults the SDK's service, so it

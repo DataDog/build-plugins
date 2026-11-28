@@ -32,9 +32,13 @@ export const HOST_NAME = 'datadog-build-plugins';
 
 // Global function that Live Debugger instrumentation calls at the start of
 // every instrumented function, with the function's ID as its only argument.
-export const LIVE_DEBUGGER_PROBES_FUNCTION = '$dd_probes';
+// It replaced `$dd_probes` when the exit hooks stopped receiving `this` and the
+// arguments, so a Browser Debugger SDK that only defines `$dd_probes` leaves
+// newer builds dormant instead of calling their hooks the old way.
+export const LIVE_DEBUGGER_PROBES_FUNCTION = '$dd_probes2';
 
 // Global function that Live Debugger instrumentation calls, when Exception
 // Replay is enabled, for every exception that leaves an instrumented function,
-// with the function's ID as its first argument.
+// with the function's ID as its first argument and the invocation handle as
+// its last.
 export const LIVE_DEBUGGER_CATCH_FUNCTION = '$dd_catch';

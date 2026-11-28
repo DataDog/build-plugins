@@ -57,7 +57,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(result.totalFunctions).toBe(1);
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
         });
 
         it('should pass pre-filter for class with no instrumentable methods', () => {
@@ -83,7 +83,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(result.totalFunctions).toBe(1);
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
             expect(result.code).toContain('$dd_entry');
             expect(result.code).toContain('$dd_return');
             expect(result.code).toContain('$dd_throw');
@@ -129,10 +129,8 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            // return; should have a preceding $dd_return call with undefined
-            expect(result.code).toContain('$dd_return');
-            expect(result.code).toContain('undefined');
-            expect(result.code).toContain('return;');
+            // return; should have a preceding $dd_return call without a return value
+            expect(result.code).toContain('if ($dd_p0) $dd_return($dd_p0); return;');
         });
 
         it('should preserve sequence expression semantics in return statements', () => {
@@ -170,7 +168,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
             expect(result.code).toContain('const $dd_rv0 = ');
             expect(result.code).toContain('return $dd_rv0;');
         });
@@ -182,7 +180,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
             expect(result.code).toContain('($dd_rv0 = x + 1');
         });
 
@@ -238,11 +236,11 @@ describe('transformCode', () => {
             expect(result.code).toContain('constructor(items) {let $dd_t;');
             expect(result.code).toContain('super(items.map((x) => {');
             expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, {x})');
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, $dd_t, {x})');
-            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, $dd_t, {x})');
-            expect(result.code).not.toContain('$dd_entry($dd_p0, this');
-            expect(result.code).not.toContain('$dd_return($dd_p0, $dd_rv0, this');
-            expect(result.code).not.toContain('$dd_throw($dd_p0, $dd_e, this');
+            expect(result.code).toContain(
+                '$dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t)',
+            );
+            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, undefined, $dd_t)');
+            expect(result.code).not.toContain('this');
         });
 
         it('should handle arrow expression bodies that are super calls', () => {
@@ -445,7 +443,7 @@ describe('transformCode', () => {
                 });
 
                 const syntaxError = validateSyntax(result.code, '/src/utils.ts');
-                const probeMatches = result.code.match(/\$dd_probes\(/g);
+                const probeMatches = result.code.match(/\$dd_probes2\(/g);
                 expect(syntaxError).toBeNull();
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
@@ -599,7 +597,7 @@ describe('transformCode', () => {
                 expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
                 expect(result.instrumentedCount).toBe(expectedInstrumentedCount);
                 expect(result.totalFunctions).toBe(expectedTotalFunctions);
-                expect(result.code).toContain('$dd_probes');
+                expect(result.code).toContain('$dd_probes2');
                 expect(result.code).toContain('catch($dd_e)');
             },
         );
@@ -698,7 +696,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
             expect(parseError(result.code, LEGACY_PLUGINS)).toBeNull();
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
             expect(result.code).toContain('catch($dd_e)');
         });
 
@@ -711,7 +709,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBeGreaterThanOrEqual(1);
             expect(parseError(result.code, MODERN_PLUGINS)).toBeNull();
-            expect(result.code).toContain('$dd_probes');
+            expect(result.code).toContain('$dd_probes2');
             expect(result.code).toContain('catch($dd_e)');
         });
 
@@ -746,7 +744,7 @@ describe('transformCode', () => {
             expect(result.skippedUnsupportedCount).toBe(1);
         });
 
-        // The probe guard reads `globalThis.$dd_probes`, which these bindings would shadow.
+        // The probe guard reads `globalThis.$dd_probes2`, which these bindings would shadow.
         const globalThisBindingCases = [
             {
                 description: 'a globalThis parameter',
@@ -789,7 +787,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(result.skippedUnsupportedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;g')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;g')");
         });
 
         it('should return original code when nothing instrumented', () => {
@@ -820,7 +818,7 @@ describe('transformCode', () => {
     describe('missing runtime', () => {
         const code = 'function add(a, b) { return a + b; }\nresult = add(1, 2);';
 
-        it('should run where $dd_probes is not defined', () => {
+        it('should run where $dd_probes2 is not defined', () => {
             const result = transformCode({ ...BASE_OPTIONS, code });
             // A fresh global scope without the chunk bootstrap, like an iframe or a worker.
             const context: { result?: number } = {};
@@ -830,12 +828,12 @@ describe('transformCode', () => {
             expect(context.result).toBe(3);
         });
 
-        it('should call $dd_probes when it is defined', () => {
+        it('should call $dd_probes2 when it is defined', () => {
             const result = transformCode({ ...BASE_OPTIONS, code });
             const functionIds: string[] = [];
             const context = {
                 result: undefined,
-                $dd_probes: (functionId: string) => {
+                $dd_probes2: (functionId: string) => {
                     functionIds.push(functionId);
                 },
             };
@@ -895,7 +893,7 @@ describe('transformCode', () => {
             });
 
             expect(result.code).toContain('$dd_entry($dd_p0, this, {a, b})');
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, {a, b}, {c})');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, {c})');
         });
 
         it('should omit local captures when there are no locals', () => {
@@ -905,7 +903,17 @@ describe('transformCode', () => {
             });
 
             expect(result.code).toContain('$dd_entry($dd_p0, this, {a, b})');
-            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, this, {a, b})');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0)');
+        });
+
+        it('should pass the args again, after the locals, when a parameter is reassigned', () => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code: 'function f(a, b) { const c = 1; a += c; return a + b; }',
+            });
+
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, {c}, {a, b})');
+            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, {a, b})');
         });
 
         it('should omit both helpers when there are no params and no locals', () => {
@@ -1089,7 +1097,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;decl')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;decl')");
         });
 
         it('should instrument only arrow functions', () => {
@@ -1100,7 +1108,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;arrow')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;arrow')");
         });
 
         it('should instrument only function expressions', () => {
@@ -1111,7 +1119,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;expr')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;expr')");
         });
 
         it('should instrument only object methods', () => {
@@ -1122,7 +1130,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;method')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;method')");
         });
 
         it('should instrument only class methods', () => {
@@ -1133,7 +1141,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.classMethod')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;Foo.classMethod')");
         });
 
         it('should instrument only class private methods', () => {
@@ -1144,7 +1152,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.#secret')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;Foo.#secret')");
         });
 
         it('should instrument multiple selected types', () => {
@@ -1155,9 +1163,9 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(3);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;decl')");
-            expect(result.code).toContain("$dd_probes('src/utils.ts;arrow')");
-            expect(result.code).toContain("$dd_probes('src/utils.ts;Foo.classMethod')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;decl')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;arrow')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;Foo.classMethod')");
         });
 
         it('should return original code when no functions match the filter', () => {
@@ -1220,7 +1228,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;named')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;named')");
         });
     });
 
@@ -1235,7 +1243,7 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(0);
             expect(result.skippedByCommentCount).toBe(1);
-            expect(result.code).not.toContain('$dd_probes');
+            expect(result.code).not.toContain('$dd_probes2');
         });
 
         it('should skip an exported const arrow function with a comment above', () => {
@@ -1270,8 +1278,8 @@ describe('transformCode', () => {
 
             expect(result.instrumentedCount).toBe(1);
             expect(result.skippedByCommentCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;fn2')");
-            expect(result.code).not.toContain("$dd_probes('src/utils.ts;fn1')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;fn2')");
+            expect(result.code).not.toContain("$dd_probes2('src/utils.ts;fn1')");
         });
 
         it('should not skip an inner function when the outer function is annotated', () => {
@@ -1289,7 +1297,7 @@ describe('transformCode', () => {
             // outer is skipped, but inner should still be instrumented
             expect(result.skippedByCommentCount).toBe(1);
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;outer/inner')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;outer/inner')");
         });
 
         it('should skip all declarators in a multi-declarator const with a comment above', () => {
@@ -1323,7 +1331,7 @@ describe('transformCode', () => {
 
             // The comment attaches to the `const x = 42` declaration, not to fn
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;fn')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;fn')");
         });
     });
 
@@ -1335,7 +1343,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;my-method')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;my-method')");
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
 
@@ -1346,7 +1354,7 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;42')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;42')");
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
 
@@ -1357,13 +1365,13 @@ describe('transformCode', () => {
             });
 
             expect(result.instrumentedCount).toBe(1);
-            expect(result.code).toContain("$dd_probes('src/utils.ts;it\\'s')");
+            expect(result.code).toContain("$dd_probes2('src/utils.ts;it\\'s')");
             expect(validateSyntax(result.code, '/src/utils.ts')).toBeNull();
         });
     });
 
     describe('function IDs', () => {
-        const PROBE_ID_RX = /\$dd_probes\('([^']*)'\)/g;
+        const PROBE_ID_RX = /\$dd_probes2\('([^']*)'\)/g;
         const getProbeIds = (code: string) => {
             const matches = code.matchAll(PROBE_ID_RX);
             return [...matches].map(([, functionId]) => functionId);
@@ -1472,11 +1480,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1490,11 +1498,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function getTime() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getTime');",
+                    "function getTime() {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;getTime');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); const now = Date.now(); return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {now}) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1508,11 +1516,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1527,11 +1535,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0); ',
-                    "  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;add', $dd_e, this, {a, b}); throw $dd_e; }",
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); ',
+                    "  } catch($dd_e) { if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;add', $dd_e, this, {a, b}, $dd_p0); throw $dd_e; }",
                     '}',
                 ),
             );
@@ -1545,7 +1553,7 @@ describe('transformCode', () => {
             });
 
             expect(result.code).toContain(
-                "catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;getTime', $dd_e, this); throw $dd_e; }",
+                "catch($dd_e) { if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;getTime', $dd_e, this, undefined, $dd_p0); throw $dd_e; }",
             );
         });
 
@@ -1557,11 +1565,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;add');",
+                    "function add(a, b) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;add');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b}); const sum = a + b; return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {sum}) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1575,11 +1583,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f(flag) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;f');",
+                    "function f(flag) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {flag}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag}); if (flag) { return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); } const later = 2; return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {later}) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1593,12 +1601,12 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function f() {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;f');",
+                    "function f() {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;f');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0, undefined, this); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {a}) : $dd_rv0); } ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, undefined, {a});',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {a}) : $dd_rv0); } ',
+                    '    if ($dd_p0) $dd_return($dd_p0, undefined, {a});',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1613,13 +1621,13 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const double = (x) => {',
-                    "  let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;double');",
+                    "  let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;double');",
                     '  try {',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = x * 2;',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0);',
                     '    return $dd_rv0;',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '};',
                 ),
             );
@@ -1634,13 +1642,13 @@ describe('transformCode', () => {
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
                     'const getObj = (x) => {',
-                    "  let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;getObj');",
+                    "  let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;getObj');",
                     '  try {',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    const $dd_rv0 = {key: x};',
-                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});',
+                    '    if ($dd_p0) $dd_return($dd_p0, $dd_rv0);',
                     '    return $dd_rv0;',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '};',
                 ),
             );
@@ -1665,13 +1673,13 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(items) {let $dd_t;',
                     '    ($dd_t = super(items.map((x) => {',
-                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;B.constructor/<anonymous>');",
+                    "      let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;B.constructor/<anonymous>');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
-                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);',
                     '        return $dd_rv0;',
-                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t, {x}); throw $dd_e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }',
                     '    })));',
                     '  }',
                     '}',
@@ -1699,13 +1707,13 @@ describe('transformCode', () => {
                     'class B extends A {',
                     '  constructor(args) {let $dd_t;',
                     '    const init = () => {',
-                    "      let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;B.constructor/init');",
+                    "      let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;B.constructor/init');",
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);',
                     '        const $dd_rv0 = ($dd_t = super(args));',
-                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);',
                     '        return $dd_rv0;',
-                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t); throw $dd_e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }',
                     '    };',
                     '    init();',
                     '  }',
@@ -1722,12 +1730,12 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function log(msg) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;log');",
+                    "function log(msg) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;log');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg}); console.log(msg); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {msg}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_return($dd_p0);',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1741,11 +1749,11 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function abs(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;abs');",
+                    "function abs(x) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;abs');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0); ',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (x < 0) { return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); } return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0); ',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1759,12 +1767,12 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;earlyExit');",
+                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0);',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1778,12 +1786,12 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;earlyExit');",
+                    "function earlyExit(x) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;earlyExit');",
                     '  try {',
                     '    let $dd_rv0;',
-                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; } console.log(x); ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x}); if (!x) { if ($dd_p0) $dd_return($dd_p0); return; } console.log(x); ',
+                    '    if ($dd_p0) $dd_return($dd_p0);',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1805,17 +1813,17 @@ describe('transformCode', () => {
 
             expect(normalizeCode(result.code)).toBe(
                 normalizeCode(
-                    "function sign(x) {let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.ts;sign');",
+                    "function sign(x) {let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.ts;sign');",
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});',
                     '    if (x > 0) {',
-                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
+                    '      return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);',
                     '    } else {',
-                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);',
+                    '      return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);',
                     '    }',
                     '',
-                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }',
+                    '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
             );
@@ -1828,7 +1836,7 @@ interface RuntimeGlobal {
 }
 
 interface RuntimeSandbox {
-    $dd_probes: () => undefined;
+    $dd_probes2: () => undefined;
     globalThis: RuntimeGlobal;
 }
 
@@ -1836,7 +1844,7 @@ interface RuntimeSandbox {
 function runTransformedFunction(code: string): unknown {
     const runtimeGlobal: RuntimeGlobal = { result: undefined };
     const sandbox: RuntimeSandbox = {
-        $dd_probes: () => undefined,
+        $dd_probes2: () => undefined,
         globalThis: runtimeGlobal,
     };
     const executableCode = `${code}\nglobalThis.result = f();`;

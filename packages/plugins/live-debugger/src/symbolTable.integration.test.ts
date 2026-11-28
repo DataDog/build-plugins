@@ -34,7 +34,7 @@ type TableFunction = {
 const APP_DIR = 'app';
 const VIRTUAL_PEER_PATH = '.yarn/__virtual__/peer-virtual-0123456789/1/packages/peer/index.js';
 const XPACK_BUNDLERS: BundlerName[] = ['webpack', 'rspack'];
-const PROBE_CALL_RX = /\$dd_probes\((['"`])(.*?)\1\)/g;
+const PROBE_CALL_RX = /\$dd_probes2\((['"`])(.*?)\1\)/g;
 
 const PEER_SOURCE = `export function peerHello() {
     return 'hello from peer';

@@ -9,8 +9,8 @@ import { locateFunctions } from './locate';
 import { scanChunk } from './scan';
 
 // A minified function: `body` stands for the original code of its body.
-const CODE = `let p=$dd_probes('a.js;fn');try{body}catch(e){throw p&&$dd_throw(p,e),e}`;
-const PROBE = CODE.indexOf('$dd_probes');
+const CODE = `let p=$dd_probes2('a.js;fn');try{body}catch(e){throw p&&$dd_throw(p,e),e}`;
+const PROBE = CODE.indexOf('$dd_probes2');
 const BODY = CODE.indexOf('body');
 const THROW = CODE.indexOf('$dd_throw');
 const CATCH = CODE.indexOf('catch');

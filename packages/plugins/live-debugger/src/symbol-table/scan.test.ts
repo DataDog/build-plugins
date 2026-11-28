@@ -10,7 +10,7 @@ describe('scanChunk', () => {
     const cases = [
         {
             description: 'read single, double and backtick quoted function IDs',
-            code: `$dd_probes('a.js;one');$dd_throw(p);$dd_probes("a.js;two");$dd_throw(p);$dd_probes(\`a.js;three\`);$dd_throw(p);`,
+            code: `$dd_probes2('a.js;one');$dd_throw(p);$dd_probes2("a.js;two");$dd_throw(p);$dd_probes2(\`a.js;three\`);$dd_throw(p);`,
             expected: {
                 functionIds: ['a.js;one', 'a.js;two', 'a.js;three'],
                 parentIndexes: [undefined, undefined, undefined],
@@ -19,7 +19,7 @@ describe('scanChunk', () => {
         },
         {
             description: 'decode escape sequences',
-            code: String.raw`$dd_probes('a.js;it\'s');$dd_throw(p);$dd_probes("a.js;\x41\u0042\u{43}\\");$dd_throw(p);`,
+            code: String.raw`$dd_probes2('a.js;it\'s');$dd_throw(p);$dd_probes2("a.js;\x41\u0042\u{43}\\");$dd_throw(p);`,
             expected: {
                 functionIds: ["a.js;it's", 'a.js;ABC\\'],
                 parentIndexes: [undefined, undefined],
@@ -28,7 +28,7 @@ describe('scanChunk', () => {
         },
         {
             description: 'nest functions like brackets',
-            code: `function a(){let p=$dd_probes('a.js;outer');try{const b=()=>{let q=$dd_probes('a.js;inner');try{}catch(e){$dd_throw(q,e)}};}catch(e){$dd_throw(p,e)}}function c(){let r=$dd_probes('a.js;sibling');try{}catch(e){$dd_throw(r,e)}}`,
+            code: `function a(){let p=$dd_probes2('a.js;outer');try{const b=()=>{let q=$dd_probes2('a.js;inner');try{}catch(e){$dd_throw(q,e)}};}catch(e){$dd_throw(p,e)}}function c(){let r=$dd_probes2('a.js;sibling');try{}catch(e){$dd_throw(r,e)}}`,
             expected: {
                 functionIds: ['a.js;outer', 'a.js;inner', 'a.js;sibling'],
                 parentIndexes: [undefined, 0, undefined],
@@ -36,8 +36,17 @@ describe('scanChunk', () => {
             },
         },
         {
+            description: 'close functions built with Exception Replay on their catch hook',
+            code: `let p=$dd_probes2('a.js;outer');try{const b=()=>{let q=$dd_probes2('a.js;inner');try{}catch(e){throw void 0!==globalThis.$dd_catch&&$dd_catch('a.js;inner',e,this,{a},q),e}};}catch(e){throw void 0!==globalThis.$dd_catch&&$dd_catch('a.js;outer',e,this,void 0,p),e}`,
+            expected: {
+                functionIds: ['a.js;outer', 'a.js;inner'],
+                parentIndexes: [undefined, 0],
+                paired: true,
+            },
+        },
+        {
             description: 'accept whitespace around the argument',
-            code: `$dd_probes ( 'a.js;spaced' ) ;$dd_throw (p);`,
+            code: `$dd_probes2 ( 'a.js;spaced' ) ;$dd_throw (p);`,
             expected: {
                 functionIds: ['a.js;spaced'],
                 parentIndexes: [undefined],
@@ -46,7 +55,7 @@ describe('scanChunk', () => {
         },
         {
             description: 'ignore member calls, declarations and non-constant arguments',
-            code: `obj.$dd_probes('a.js;member');function $dd_throw(a){}x$dd_probes('a.js;prefixed');$dd_probes(id);$dd_probes(\`a.js;\${name}\`);$dd_probes('a.js;' + name);`,
+            code: `obj.$dd_probes2('a.js;member');function $dd_throw(a){}x$dd_probes2('a.js;prefixed');$dd_probes2(id);$dd_probes2(\`a.js;\${name}\`);$dd_probes2('a.js;' + name);`,
             expected: {
                 functionIds: [],
                 parentIndexes: [],
@@ -55,7 +64,7 @@ describe('scanChunk', () => {
         },
         {
             description: 'report a closing marker without an opening one',
-            code: `$dd_throw(p);$dd_probes('a.js;one');$dd_throw(p);`,
+            code: `$dd_throw(p);$dd_probes2('a.js;one');$dd_throw(p);`,
             expected: {
                 functionIds: ['a.js;one'],
                 parentIndexes: [undefined],
@@ -64,7 +73,7 @@ describe('scanChunk', () => {
         },
         {
             description: 'report an opening marker without a closing one',
-            code: `$dd_probes('a.js;one');`,
+            code: `$dd_probes2('a.js;one');`,
             expected: {
                 functionIds: ['a.js;one'],
                 parentIndexes: [undefined],
@@ -84,11 +93,11 @@ describe('scanChunk', () => {
     });
 
     test('Should record the offsets of both markers.', () => {
-        const code = `let p=$dd_probes('a.js;one');try{}catch(e){$dd_throw(p,e)}`;
+        const code = `let p=$dd_probes2('a.js;one');try{}catch(e){$dd_throw(p,e)}`;
         const [scanned] = scanChunk(code).functions;
 
-        expect(scanned.probeOffset).toBe(code.indexOf('$dd_probes'));
-        expect(scanned.throwOffset).toBe(code.indexOf('$dd_throw'));
+        expect(scanned.probeOffset).toBe(code.indexOf('$dd_probes2'));
+        expect(scanned.endOffset).toBe(code.indexOf('$dd_throw'));
     });
 });
 

@@ -4,9 +4,51 @@
 
 import type * as t from '@babel/types';
 
-import type { BabelTypesModule } from './babel-path.types';
+import type { BabelPath, BabelTypesModule } from './babel-path.types';
 
 export const MAX_CAPTURE_VARIABLES = 25;
+
+// `arguments` and direct `eval` can give parameters new values without assigning their bindings.
+const PARAMETER_ALIAS_RX = /\b(?:arguments|eval)\b/;
+
+// Whether code mentions `arguments` or `eval`, which `mayReassignParameters` then looks for.
+export function mentionsParameterAliases(code: string): boolean {
+    return PARAMETER_ALIAS_RX.test(code);
+}
+
+/**
+ * Whether a function may give one of the parameters it captures a new value after its entry, so
+ * its exit hooks need the parameters again instead of the ones the entry hook got.
+ *
+ * Assignments count wherever they are, including in nested functions. So does any mention of
+ * `arguments` or `eval` in the function: in sloppy mode, `arguments[0] = value` reassigns the
+ * first parameter, and a direct `eval` can assign any of them. Pass `mayAliasParameters: false`
+ * when the file mentions neither, to skip that search.
+ */
+export function mayReassignParameters(
+    functionPath: BabelPath<t.Function>,
+    parameterNames: string[],
+    code: string,
+    mayAliasParameters: boolean,
+): boolean {
+    if (parameterNames.length === 0) {
+        return false;
+    }
+
+    for (const name of parameterNames) {
+        const binding = functionPath.scope.getOwnBinding(name);
+        if (!binding || binding.constantViolations.length > 0) {
+            return true;
+        }
+    }
+
+    if (!mayAliasParameters) {
+        return false;
+    }
+
+    const functionCode = code.slice(functionPath.node.start!, functionPath.node.end!);
+    return PARAMETER_ALIAS_RX.test(functionCode);
+}
 
 export interface LocalVariableTemporalDeadZone {
     start: number;

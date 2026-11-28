@@ -2,31 +2,31 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
+import { LIVE_DEBUGGER_CATCH_FUNCTION, LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 
 import { LIVE_DEBUGGER_THROW_FUNCTION } from '../constants';
 
 // An instrumented function found in a chunk's code.
 export type ScannedFunction = {
     functionId: string;
-    // Offset of the `$dd_probes('<id>')` call at the start of the function's body.
+    // Offset of the `$dd_probes2('<id>')` call at the start of the function's body.
     probeOffset: number;
-    // Offset of the `$dd_throw(` call at the end of the function's body.
-    throwOffset: number | undefined;
+    // Offset of the `$dd_throw(` or `$dd_catch(` call at the end of the function's body.
+    endOffset: number | undefined;
     // Index of the enclosing instrumented function in the same list.
     parentIndex: number | undefined;
 };
 
 export type ChunkScan = {
     functions: ScannedFunction[];
-    // False when the markers don't nest, so `throwOffset` and `parentIndex` can't be trusted.
+    // False when the markers don't nest, so `endOffset` and `parentIndex` can't be trusted.
     paired: boolean;
 };
 
 const escapeRegExp = (value: string) => value.replace(/[$()*+.?[\\\]^{|}]/g, '\\$&');
 
 const MARKER_RX = new RegExp(
-    `(${escapeRegExp(LIVE_DEBUGGER_PROBES_FUNCTION)}|${escapeRegExp(LIVE_DEBUGGER_THROW_FUNCTION)})\\s*\\(`,
+    `(${escapeRegExp(LIVE_DEBUGGER_PROBES_FUNCTION)}|${escapeRegExp(LIVE_DEBUGGER_THROW_FUNCTION)}|${escapeRegExp(LIVE_DEBUGGER_CATCH_FUNCTION)})\\s*\\(`,
     'g',
 );
 // A marker preceded by one of these is another identifier or a member access, not a call.
@@ -175,7 +175,7 @@ const decodeStringLiteral = (code: string, offset: number): Decoded | undefined 
     return undefined;
 };
 
-// Read the function ID of a `$dd_probes('<id>')` call, from right after its opening parenthesis.
+// Read the function ID of a `$dd_probes2('<id>')` call, from right after its opening parenthesis.
 const readFunctionIdArgument = (code: string, offset: number): string | undefined => {
     const literalStart = skipWhitespace(code, offset);
     const literal = decodeStringLiteral(code, literalStart);
@@ -190,9 +190,9 @@ const readFunctionIdArgument = (code: string, offset: number): string | undefine
 /**
  * Find the instrumented functions in a chunk's code, without parsing it.
  *
- * Every instrumented function contains exactly one `$dd_probes('<id>')` call at the start of its
- * body and one `$dd_throw(` call at its end, in the injected `catch`. Minifiers keep both, because
- * they are calls to globals. Pairing them like brackets gives each function's extent, and the
+ * Every instrumented function contains exactly one `$dd_probes2('<id>')` call at the start of its
+ * body and one call at its end, in the injected `catch`: `$dd_throw(`, or `$dd_catch(` when it was
+ * built with Exception Replay. Minifiers keep both, because they are calls to globals. Pairing them like brackets gives each function's extent, and the
  * nesting gives its enclosing function.
  */
 export const scanChunk = (code: string): ChunkScan => {
@@ -216,7 +216,7 @@ export const scanChunk = (code: string): ChunkScan => {
             functions.push({
                 functionId,
                 probeOffset: offset,
-                throwOffset: undefined,
+                endOffset: undefined,
                 parentIndex: openFunctions.at(-1),
             });
             openFunctions.push(functions.length - 1);
@@ -228,7 +228,7 @@ export const scanChunk = (code: string): ChunkScan => {
             paired = false;
             continue;
         }
-        functions[closedFunction].throwOffset = offset;
+        functions[closedFunction].endOffset = offset;
     }
 
     if (openFunctions.length > 0) {

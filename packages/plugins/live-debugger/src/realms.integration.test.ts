@@ -11,13 +11,13 @@ import path from 'path';
 import { runInNewContext } from 'vm';
 
 // Instrumented code that runs in another global scope than the page's chunks,
-// where the Browser Debugger SDK never defines `$dd_probes`.
+// where the Browser Debugger SDK never defines `$dd_probes2`.
 const MAIN_ENTRY = './realms_project/main.js';
 const WORKER_ENTRY = './realms_project/worker_main.js';
 const CHILD_ENTRY = './realms_project/src/child.js';
 const EXPECTED_RESULT = 42;
 
-const PROBES_CALL = /\$dd_probes\(/;
+const PROBES_CALL = /\$dd_probes2\(/;
 
 type CompilerRun = (callback: (error?: Error | null, stats?: CompilerStats) => void) => void;
 type CompilerStats = { hasErrors(): boolean; toString(): string };
@@ -132,7 +132,7 @@ const getStringifiedSource = (bundler: BundlerName) => {
     return globals.realmsProject.stringifiedSource;
 };
 
-// Run code in a fresh global scope without `$dd_probes`, like an iframe or a worker.
+// Run code in a fresh global scope without `$dd_probes2`, like an iframe or a worker.
 const runElsewhere = (code: string): unknown => {
     const globals: Record<string, unknown> = { importScripts: () => {} };
     globals.self = globals;
@@ -211,7 +211,7 @@ describe('Live Debugger in other global scopes', () => {
     });
 
     describe.each(SCENARIOS)('$bundler: $name', ({ getCode, instrumented }) => {
-        test('Should run where $dd_probes is not defined.', () => {
+        test('Should run where $dd_probes2 is not defined.', () => {
             expect(runElsewhere(getCode())).toBe(EXPECTED_RESULT);
         });
 

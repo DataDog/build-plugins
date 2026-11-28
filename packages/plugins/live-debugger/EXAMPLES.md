@@ -6,9 +6,9 @@ plugin's [How it works](./README.md#how-it-works) section.
 
 A few conventions used throughout:
 
--   The injected globals (`$dd_probes`, `$dd_entry`, `$dd_return`, `$dd_throw`) are provided by the Browser Debugger SDK at runtime — see [Runtime requirements](./README.md#runtime-requirements).
+-   The injected globals (`$dd_probes2`, `$dd_entry`, `$dd_return`, `$dd_throw`) are provided by the Browser Debugger SDK at runtime — see [Runtime requirements](./README.md#runtime-requirements).
 -   The per-function locals carry a numeric suffix (`$dd_p0`, `$dd_rv0`); the index increments for each instrumented function in a file.
--   The captured-arguments object literal (e.g. `{a, b}`) is inlined directly at each probe-guarded call site and is only emitted when the function has parameters. It is built lazily — inside the `if (probe)` / `probe ? ` guards — so dormant calls allocate nothing.
+-   The captured-arguments object literal (e.g. `{a, b}`) is passed to `$dd_entry`, and is only emitted when the function has parameters. The SDK keeps the arguments and `this` it got at entry, so the exit hooks only get the arguments again when the function may reassign a parameter (see [Reassigned parameters](#reassigned-parameters)). The object is built lazily — inside the `if (probe)` / `probe ? ` guards — so dormant calls allocate nothing.
 -   Indentation below is reformatted for readability; the real output preserves the original source layout.
 
 ## Table of content <!-- #omit in toc -->
@@ -24,6 +24,7 @@ A few conventions used throughout:
 -   [Multiple returns](#multiple-returns)
 -   [Exhaustive if and else returns](#exhaustive-if-and-else-returns)
 -   [Returns before a local declaration](#returns-before-a-local-declaration)
+-   [Reassigned parameters](#reassigned-parameters)
 -   [Functions inside a derived class constructor](#functions-inside-a-derived-class-constructor)
 -   [Arrow inside a super call argument](#arrow-inside-a-super-call-argument)
 -   [Arrow whose body is a super call](#arrow-whose-body-is-a-super-call)
@@ -36,7 +37,7 @@ A few conventions used throughout:
 
 The most common shape: parameters, a local variable, and an explicit `return`. The return is
 rewritten so the original value is captured (`$dd_rv0`) and reported only when a probe is active.
-In-scope locals (here, `sum`) are captured in the final argument to `$dd_return`.
+In-scope locals (here, `sum`) are passed to `$dd_return` after the return value.
 
 ```js
 // Before
@@ -47,13 +48,13 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
-        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
+        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {sum}) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -68,13 +69,13 @@ const double = (x) => x * 2;
 
 // After
 const double = (x) => {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;double');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;double');
     try {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = x * 2;
-        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
+        if ($dd_p0) $dd_return($dd_p0, $dd_rv0);
         return $dd_rv0;
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 };
 ```
 
@@ -89,13 +90,13 @@ const getObj = (x) => ({key: x});
 
 // After
 const getObj = (x) => {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getObj');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;getObj');
     try {
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         const $dd_rv0 = {key: x};
-        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, this, {x});
+        if ($dd_p0) $dd_return($dd_p0, $dd_rv0);
         return $dd_rv0;
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 };
 ```
 
@@ -112,12 +113,12 @@ function getTime() {
 
 // After
 function getTime() {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;getTime');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
-        return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }
+        return ($dd_rv0 = Date.now(), $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -135,20 +136,20 @@ function getTime() {
 
 // After
 function getTime() {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;getTime');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;getTime');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this);
         const now = Date.now();
-        return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, undefined, {now}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this); throw $dd_e; }
+        return ($dd_rv0 = now, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {now}) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
 ## Function with no return value
 
-A function that never returns a value still reports its exit: a trailing
-`$dd_return(..., undefined, ...)` is injected before the closing brace.
+A function that never returns a value still reports its exit: a trailing `$dd_return` call
+without a return value is injected before the closing brace.
 
 ```js
 // Before
@@ -158,19 +159,19 @@ function log(msg) {
 
 // After
 function log(msg) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;log');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;log');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {msg});
         console.log(msg);
-        if ($dd_p0) $dd_return($dd_p0, undefined, this, {msg});
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {msg}); throw $dd_e; }
+        if ($dd_p0) $dd_return($dd_p0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
 ## Bare return and early exit
 
-A bare `return;` (no argument) is preceded by an explicit `$dd_return(..., undefined, ...)`. A
+A bare `return;` (no argument) is preceded by a `$dd_return` call without a return value. A
 trailing report is also added for the implicit fall-through exit.
 
 ```js
@@ -184,17 +185,17 @@ function earlyExit(x) {
 
 // After
 function earlyExit(x) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;earlyExit');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;earlyExit');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (!x) {
-            if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
+            if ($dd_p0) $dd_return($dd_p0);
             return;
         }
         console.log(x);
-        if ($dd_p0) $dd_return($dd_p0, undefined, this, {x});
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+        if ($dd_p0) $dd_return($dd_p0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -206,7 +207,7 @@ When the bare `return;` is the brace-less body of an `if`, `else`, or loop, the 
 if (!x) return;
 
 // After
-if (!x) { if ($dd_p0) $dd_return($dd_p0, undefined, this, {x}); return; }
+if (!x) { if ($dd_p0) $dd_return($dd_p0); return; }
 ```
 
 ## Multiple returns
@@ -224,15 +225,15 @@ function abs(x) {
 
 // After
 function abs(x) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;abs');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;abs');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (x < 0) {
-            return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
+            return ($dd_rv0 = -x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
         }
-        return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+        return ($dd_rv0 = x, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -252,16 +253,16 @@ function sign(x) {
 
 // After
 function sign(x) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;sign');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;sign');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
         if (x > 0) {
-            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
+            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
         } else {
-            return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
+            return ($dd_rv0 = -1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
         }
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -283,16 +284,46 @@ function f(flag) {
 
 // After
 function f(flag) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;f');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;f');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {flag});
         if (flag) {
-            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}) : $dd_rv0);
+            return ($dd_rv0 = 1, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
         }
         const later = 2;
-        return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {flag}, {later}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {flag}); throw $dd_e; }
+        return ($dd_rv0 = later, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {later}) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
+}
+```
+
+## Reassigned parameters
+
+When a function may give a parameter a new value, the exit hooks get the arguments again, after
+the locals (`undefined` here, as there are none), so the snapshot shows their values at the exit.
+Any assignment to a parameter counts, including in a nested function, and so does any mention of
+`arguments` or `eval`, which can reassign parameters too.
+
+```js
+// Before
+function clamp(value, max) {
+    if (value > max) {
+        value = max;
+    }
+    return value;
+}
+
+// After
+function clamp(value, max) {
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;clamp');
+    try {
+        let $dd_rv0;
+        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {value, max});
+        if (value > max) {
+            value = max;
+        }
+        return ($dd_rv0 = value, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, undefined, {value, max}) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, {value, max}); throw $dd_e; }
 }
 ```
 
@@ -302,7 +333,8 @@ In a derived constructor (a class that `extends` another), `this` is not availab
 `super()` has run. For functions defined in that scope, the plugin cannot reference `this`
 directly for the receiver. Instead it declares a `$dd_t` alias at the top of the constructor,
 captures the receiver by wrapping the `super(...)` call as `($dd_t = super(...))`, and uses
-`$dd_t` instead of `this` in the instrumentation.
+`$dd_t` instead of `this` in the instrumentation. Because `$dd_t` is only set once `super()`
+returns, the exit hooks get it again, as their last argument.
 
 The constructor itself is never instrumented (see [What is not instrumented](#what-is-not-instrumented)),
 and the user's own `this.props` inside the function body is left untouched — only the receiver
@@ -323,13 +355,13 @@ class Button extends Component {
     constructor(props) {
         let $dd_t;
         const handleClick = () => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/Button.js;Button.constructor/handleClick');
+            let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/Button.js;Button.constructor/handleClick');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = this.props.onClick();
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
         };
         ($dd_t = super(props));
         this.handleClick = handleClick;
@@ -356,13 +388,13 @@ class Widget extends Base {
     constructor(items) {
         let $dd_t;
         ($dd_t = super(items.map((x) => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/<anonymous>');
+            let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/widget.js;Widget.constructor/<anonymous>');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t, {x});
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t, {x}); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
         })));
     }
 }
@@ -387,13 +419,13 @@ class Widget extends Base {
     constructor(args) {
         let $dd_t;
         const init = () => {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/init');
+            let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/widget.js;Widget.constructor/init');
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = ($dd_t = super(args));
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, $dd_t);
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, $dd_t); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
         };
         init();
     }
@@ -419,12 +451,12 @@ class Widget extends Base {
 class Widget extends Base {
     constructor(items) {
         const double = function(x) {
-            let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/widget.js;Widget.constructor/double');
+            let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/widget.js;Widget.constructor/double');
             try {
                 let $dd_rv0;
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {x});
-                return ($dd_rv0 = x * 2, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {x}) : $dd_rv0);
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {x}); throw $dd_e; }
+                return ($dd_rv0 = x * 2, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
         };
         super(items.map(double));
     }

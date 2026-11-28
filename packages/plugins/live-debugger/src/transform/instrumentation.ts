@@ -83,7 +83,7 @@ export function canInstrumentFunction(
 
     // Skip functions where `globalThis` resolves to a local binding, such as a
     // parameter or a module-level `var globalThis`: the probe guard reads
-    // `globalThis.$dd_probes` and would read that binding instead.
+    // `globalThis.$dd_probes2` and would read that binding instead.
     if (functionPath.scope.getBinding('globalThis')) {
         return false;
     }

@@ -17,7 +17,12 @@ import type { BabelPath, BabelTypesModule } from './babel-path.types';
 import { resolveCjsDefaultExport } from './cjs-interop';
 import { createFunctionIdGenerator, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
-import { getLocalVariableDeclarations, getParameterNames } from './scopeTracker';
+import {
+    getLocalVariableDeclarations,
+    getParameterNames,
+    mayReassignParameters,
+    mentionsParameterAliases,
+} from './scopeTracker';
 import type { LocalVariableDeclaration } from './scopeTracker';
 
 type TraverseFn = typeof _traverse;
@@ -190,6 +195,8 @@ interface FunctionTarget {
     probeVarName: string;
     probeIdx: string;
     entryVars: string[];
+    // Whether the function may reassign a parameter, so the exit hooks need the parameters again.
+    passesArgumentsAtExit: boolean;
     localVars: LocalVariableDeclaration[];
     returns: ReturnInfo[];
 }
@@ -301,6 +308,7 @@ export function transformCode(options: TransformOptions): TransformResult {
     const superCallsByConstructorNode = new Map<BabelTypes.Node, SuperCallTarget[]>();
     const functionIdPath = getFunctionIdPath(filePath, repositoryRoot);
     const functionIds = createFunctionIdGenerator(functionIdPath, babelTypes);
+    const mayAliasParameters = mentionsParameterAliases(code);
     let probeVarCounter = 0;
 
     // @babel/parser and @babel/traverse bundle separate copies of @babel/types,
@@ -364,6 +372,12 @@ export function transformCode(options: TransformOptions): TransformResult {
                     const idx = probeVarCounter++;
                     const probeVarName = `$dd_p${idx}`;
                     const entryVars = getParameterNames(node, babelTypes);
+                    const passesArgumentsAtExit = mayReassignParameters(
+                        path,
+                        entryVars,
+                        code,
+                        mayAliasParameters,
+                    );
                     const localVars = getLocalVariableDeclarations(node, babelTypes);
 
                     const isExpressionBody =
@@ -422,6 +436,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                         probeVarName,
                         probeIdx: String(idx),
                         entryVars,
+                        passesArgumentsAtExit,
                         localVars,
                         returns,
                     });
@@ -494,6 +509,7 @@ function injectInstrumentation(
         probeIdx,
         functionId,
         entryVars,
+        passesArgumentsAtExit,
         localVars,
         returns,
         bodyStart,
@@ -517,13 +533,25 @@ function injectInstrumentation(
 
     const entryArgs = `{${entryVarsList}}`;
     const argsArg = hasParams ? `, ${entryArgs}` : '';
+    // The SDK keeps the receiver and the arguments the entry hook got, so the exit hooks only get
+    // the arguments again when the function may reassign one. The receiver of a call can't change,
+    // except `$dd_t`, which stands for `this` in arrows inside derived constructors and is only set
+    // once `super()` returns.
+    const exitArgs = hasParams && passesArgumentsAtExit ? entryArgs : undefined;
+    const exitReceiver = useThisAlias ? receiverArg : undefined;
+    // What a `$dd_return` call passes after the handle: the return value, the locals in scope at
+    // the exit, then the arguments and the receiver when they need passing again.
+    const getReturnHookArguments = (returnValue: string | undefined, exitPosition: number) => {
+        const locals = getLocalCaptureArg(localVars, exitPosition);
+        return formatOptionalArguments([returnValue, locals, exitArgs, exitReceiver]);
+    };
 
     const escapedFunctionId = escapeSingleQuotedJavaScriptString(functionId);
     // `$dd_entry` swaps the probe list for a handle identifying this invocation
     // (undefined when no probe produced an entry), reusing the same binding so
     // every exit hook pairs with its own entry state, not a concurrent call's.
     //
-    // The guard keeps the function from throwing where `$dd_probes` isn't defined:
+    // The guard keeps the function from throwing where `$dd_probes2` isn't defined:
     // before the Browser Debugger SDK initializes, and in global scopes without the
     // SDK, such as a sandboxed iframe or a worker. It reads `globalThis` instead of
     // using `typeof`, which minifiers turn into a relational string comparison that
@@ -533,13 +561,14 @@ function injectInstrumentation(
     const entryCall = `if (${probeVarName}) ${probeVarName} = $dd_entry(${probeVarName}, ${receiverArg}${argsArg});`;
     // Exception Replay calls `$dd_catch` for every exception leaving the function, whether or not
     // a probe is active, so the SDK can capture the arguments of each frame the exception passes
-    // through. It's a separate `if` rather than an `else`, so a frame still gets its Exception
-    // Replay snapshot when a probe is active. The guard and the bare call with a literal function
-    // ID follow `$dd_probes`, for the same reasons.
-    const catchHook = exceptionReplay
-        ? ` if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}${argsArg});`
-        : '';
-    const catchBlock = `catch($dd_e) { if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e, ${receiverArg}${argsArg});${catchHook} throw $dd_e; }`;
+    // through. It also gets the invocation handle, so it reports the exception to the function's
+    // probes too, in place of `$dd_throw`. The handle goes last, where an SDK that predates it
+    // ignores it. The guard and the bare call with a literal function ID follow `$dd_probes2`, for
+    // the same reasons.
+    const throwHook = exceptionReplay
+        ? `if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}, ${hasParams ? entryArgs : 'undefined'}, ${probeVarName});`
+        : `if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e${formatOptionalArguments([exitArgs, exitReceiver])});`;
+    const catchBlock = `catch($dd_e) { ${throwHook} throw $dd_e; }`;
 
     if (isExpressionBody) {
         // Arrow expression body: (a) => expr
@@ -582,14 +611,14 @@ function injectInstrumentation(
             .filter(Boolean)
             .join('\n');
 
-        const returnCaptureArgs = getReturnCaptureArgs(entryArgs, hasParams, localVars, bodyEnd);
+        const returnHookArguments = getReturnHookArguments(rvVarName, bodyEnd);
         let expressionSuffix = hasSequenceExpressionBody ? ');' : ';';
         if (aliasesExpressionBodySuperCall) {
             expressionSuffix = hasSequenceExpressionBody ? '));' : ');';
         }
         const suffix = [
             expressionSuffix,
-            `if (${probeVarName}) $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs});`,
+            `if (${probeVarName}) $dd_return(${probeVarName}${returnHookArguments});`,
             `return ${rvVarName};`,
             `} ${catchBlock}`,
             '}',
@@ -624,28 +653,23 @@ function injectInstrumentation(
         // bodyEnd - 1, the return suffix is appended to the preceding chunk
         // (its outro) and ends up before the postamble in the generated code.
         for (const ret of returns) {
-            const returnCaptureArgs = getReturnCaptureArgs(
-                entryArgs,
-                hasParams,
-                localVars,
-                ret.start,
-            );
-
             if (ret.argStart != null && ret.argEnd != null) {
                 // return EXPR; → return ($dd_rvN = EXPR, probe ? $dd_return(...) : $dd_rvN);
                 const assignmentPrefix = ret.hasSequenceExpressionArgument
                     ? `(${rvVarName} = (`
                     : `(${rvVarName} = `;
                 const assignmentSuffix = ret.hasSequenceExpressionArgument ? ')' : '';
+                const returnHookArguments = getReturnHookArguments(rvVarName, ret.start);
 
                 s.appendLeft(ret.argStart, assignmentPrefix);
                 s.appendRight(
                     ret.argEnd,
-                    `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}, ${rvVarName}, ${receiverArg}${returnCaptureArgs}) : ${rvVarName})`,
+                    `${assignmentSuffix}, ${probeVarName} ? $dd_return(${probeVarName}${returnHookArguments}) : ${rvVarName})`,
                 );
             } else {
                 // return; → if (probe) $dd_return(...); return;
-                const returnReport = `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${returnCaptureArgs}); `;
+                const returnHookArguments = getReturnHookArguments(undefined, ret.start);
+                const returnReport = `if (${probeVarName}) $dd_return(${probeVarName}${returnHookArguments}); `;
                 if (ret.isStatementBody) {
                     // if (x) return; → if (x) { if (probe) $dd_return(...); return; }
                     // Without the braces, only the report would stay conditional.
@@ -678,14 +702,9 @@ function injectInstrumentation(
         // included here (rather than as a separate appendLeft) so that the
         // single boundary update for `}` covers it; this keeps the trailing
         // helper's source-map segment anchored to the closing brace too.
-        const trailingReturnCaptureArgs = getReturnCaptureArgs(
-            entryArgs,
-            hasParams,
-            localVars,
-            bodyEnd,
-        );
+        const trailingReturnHookArguments = getReturnHookArguments(undefined, bodyEnd);
         const trailingReturn = target.needsTrailingReturn
-            ? `if (${probeVarName}) $dd_return(${probeVarName}, undefined, ${receiverArg}${trailingReturnCaptureArgs});\n`
+            ? `if (${probeVarName}) $dd_return(${probeVarName}${trailingReturnHookArguments});\n`
             : '';
         const postamble = `\n${trailingReturn}} ${catchBlock}\n`;
         s.update(bodyEnd - 1, bodyEnd, `${postamble}${code[bodyEnd - 1]}`);
@@ -872,23 +891,20 @@ function isDerivedClassMethod(path: BabelPath, typesModule: BabelTypesModule): b
     );
 }
 
-function getReturnCaptureArgs(
-    entryArgs: string,
-    hasParams: boolean,
-    localVars: LocalVariableDeclaration[],
-    exitPosition: number,
-): string {
-    const localsArg = getLocalCaptureArg(localVars, exitPosition);
-    if (hasParams && localsArg) {
-        return `, ${entryArgs}, ${localsArg}`;
+/**
+ * Format the optional arguments that follow a hook's required ones, each with a leading comma.
+ * Trailing undefined arguments are left out, and the others are written as `undefined`.
+ */
+function formatOptionalArguments(args: (string | undefined)[]): string {
+    let count = args.length;
+    while (count > 0 && args[count - 1] === undefined) {
+        count--;
     }
-    if (hasParams) {
-        return `, ${entryArgs}`;
-    }
-    if (localsArg) {
-        return `, undefined, ${localsArg}`;
-    }
-    return '';
+
+    return args
+        .slice(0, count)
+        .map((arg) => `, ${arg ?? 'undefined'}`)
+        .join('');
 }
 
 function getLeadingWrapperParens(code: string, start: number, end: number): number[] {
