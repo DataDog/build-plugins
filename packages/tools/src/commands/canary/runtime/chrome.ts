@@ -248,6 +248,10 @@ export type Connection = {
     close: () => void;
 };
 
+const getCommandTimeoutMs = (sessionId: string | undefined): number => {
+    return sessionId === undefined ? BROWSER_COMMAND_TIMEOUT_MS : COMMAND_TIMEOUT_MS;
+};
+
 const getListenerKey = (method: string, sessionId: string | undefined): string => {
     return `${sessionId ?? ''}:${method}`;
 };
@@ -313,7 +317,8 @@ export const connect = (url: string): Promise<Connection> => {
     };
 
     const connection: Connection = {
-        send: (method, params, sessionId, timeoutMs = COMMAND_TIMEOUT_MS) => {
+        // The browser's own commands get less time than a page's.
+        send: (method, params, sessionId, timeoutMs = getCommandTimeoutMs(sessionId)) => {
             if (closedError) {
                 return Promise.reject(closedError);
             }
@@ -379,13 +384,27 @@ export const connect = (url: string): Promise<Connection> => {
     };
 
     return new Promise((resolve, reject) => {
-        socket.addEventListener('open', () => resolve(connection));
+        const openTimeout = setTimeout(() => {
+            const seconds = BROWSER_COMMAND_TIMEOUT_MS / 1_000;
+            const error = new ChromeConnectionError(
+                `The DevTools connection to ${url} didn't open within ${seconds}s.`,
+            );
+            rejectAll(error);
+            reject(error);
+            socket.close();
+        }, BROWSER_COMMAND_TIMEOUT_MS);
+        socket.addEventListener('open', () => {
+            clearTimeout(openTimeout);
+            resolve(connection);
+        });
         socket.addEventListener('error', () => {
+            clearTimeout(openTimeout);
             const error = new ChromeConnectionError(`The DevTools connection to ${url} failed.`);
             rejectAll(error);
             reject(error);
         });
         socket.addEventListener('close', () => {
+            clearTimeout(openTimeout);
             const error = new ChromeConnectionError('The DevTools connection closed.');
             rejectAll(error);
             // Only matters when it closes before it opened.

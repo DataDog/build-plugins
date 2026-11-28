@@ -212,18 +212,25 @@ describe('DevTools connection timeouts and cancellation', () => {
         return connecting;
     };
 
-    test("should treat the browser's own commands timing out as Chrome failing", async () => {
+    test("should give the browser's own commands 10s and treat a timeout as Chrome failing", async () => {
         jest.useFakeTimers();
         const connection = await openConnection();
         const browser = createSession(connection, undefined).send('Target.createTarget');
         const page = createSession(connection, 'session-1').send('Runtime.evaluate');
-        jest.advanceTimersByTime(120_000);
-        // Settles both first, so neither rejection goes unhandled if one check fails.
-        const [browserOutcome, pageOutcome] = await Promise.allSettled([browser, page]);
+        jest.advanceTimersByTime(10_000);
+        const [browserOutcome] = await Promise.allSettled([browser]);
+        // A page's command gets 120s.
+        jest.advanceTimersByTime(110_000);
+        const [pageOutcome] = await Promise.allSettled([page]);
 
         expect(browserOutcome).toMatchObject({
             status: 'rejected',
             reason: expect.any(ChromeConnectionError),
+        });
+        expect(browserOutcome).toMatchObject({
+            reason: expect.objectContaining({
+                message: "Chrome didn't answer Target.createTarget within 10s.",
+            }),
         });
         expect(pageOutcome).toMatchObject({
             status: 'rejected',

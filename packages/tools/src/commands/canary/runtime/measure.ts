@@ -581,6 +581,25 @@ export const measureLoad = async ({
             } else if (metrics.fcpMs === null || metrics.lcpMs === null) {
                 error = 'Chrome reported no FCP or LCP.';
             }
+            // A failed load's metrics aren't used, and its page may not answer.
+            if (error === null) {
+                const performanceMetrics = await sendWithinLimits(
+                    page,
+                    'Performance.getMetrics',
+                    {},
+                    limits,
+                );
+                const metricList = isRecord(performanceMetrics)
+                    ? performanceMetrics.metrics
+                    : undefined;
+                const entries: unknown[] = Array.isArray(metricList) ? metricList : [];
+                const scriptDuration = entries.find(
+                    (entry) => getString(entry, 'name') === 'ScriptDuration',
+                );
+                // Reported in seconds, for the whole load.
+                const scriptSeconds = getNumber(scriptDuration, 'value');
+                metrics.scriptMs = scriptSeconds === undefined ? null : scriptSeconds * 1_000;
+            }
         } catch (loadError) {
             if (isFatal(loadError, signal)) {
                 throw loadError;
@@ -588,25 +607,6 @@ export const measureLoad = async ({
             error = getErrorMessage(loadError);
         }
 
-        // A failed load's metrics aren't used, and its page may not answer.
-        if (error === null) {
-            const performanceMetrics = await sendWithinLimits(
-                page,
-                'Performance.getMetrics',
-                {},
-                limits,
-            );
-            const metricList = isRecord(performanceMetrics)
-                ? performanceMetrics.metrics
-                : undefined;
-            const entries: unknown[] = Array.isArray(metricList) ? metricList : [];
-            const scriptDuration = entries.find(
-                (entry) => getString(entry, 'name') === 'ScriptDuration',
-            );
-            // Reported in seconds, for the whole load.
-            const scriptSeconds = getNumber(scriptDuration, 'value');
-            metrics.scriptMs = scriptSeconds === undefined ? null : scriptSeconds * 1_000;
-        }
         const networkSummary = network.summarize();
         metrics.jsTransferBytes = networkSummary.jsTransferBytes;
         metrics.jsDecodedBytes = networkSummary.jsDecodedBytes;
