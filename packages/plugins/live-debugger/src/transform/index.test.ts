@@ -236,10 +236,8 @@ describe('transformCode', () => {
             expect(result.code).toContain('constructor(items) {let $dd_t;');
             expect(result.code).toContain('super(items.map((x) => {');
             expect(result.code).toContain('$dd_entry($dd_p0, $dd_t, {x})');
-            expect(result.code).toContain(
-                '$dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t)',
-            );
-            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, undefined, $dd_t)');
+            expect(result.code).toContain('$dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t)');
+            expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, void 0, $dd_t)');
             expect(result.code).not.toContain('this');
         });
 
@@ -916,6 +914,45 @@ describe('transformCode', () => {
             expect(result.code).toContain('$dd_throw($dd_p0, $dd_e, {a, b})');
         });
 
+        const typeScriptTargetCases = [
+            { description: 'a non-null assertion', code: 'a! = 2;', expected: true },
+            { description: 'a type assertion', code: '(a as number) = 2;', expected: true },
+            {
+                description: 'a satisfies expression',
+                code: '(a satisfies number) = 2;',
+                expected: true,
+            },
+            { description: 'an update', code: 'a!++;', expected: true },
+            { description: 'an array pattern', code: '[a!] = [2];', expected: true },
+            { description: 'an object pattern', code: '({ x: a! } = { x: 2 });', expected: true },
+            {
+                description: 'a default value in a pattern',
+                code: '[(a as number) = 2] = [];',
+                expected: true,
+            },
+            { description: 'a rest element', code: '[...(a as any)] = [2];', expected: true },
+            { description: 'a for-of loop', code: 'for ((a as any) of [2]) {}', expected: true },
+            {
+                description: 'only a read',
+                code: 'use(a!, a as number, { x: a! });',
+                expected: false,
+            },
+        ];
+
+        test.each(typeScriptTargetCases)(
+            'should detect reassignments through $description',
+            ({ code, expected }) => {
+                const result = transformCode({
+                    ...BASE_OPTIONS,
+                    code: `function f(a?: any) { ${code} return a; }`,
+                });
+
+                expect(result.code.includes('$dd_return($dd_p0, $dd_rv0, void 0, {a})')).toBe(
+                    expected,
+                );
+            },
+        );
+
         it('should omit both helpers when there are no params and no locals', () => {
             const result = transformCode({
                 ...BASE_OPTIONS,
@@ -1553,7 +1590,7 @@ describe('transformCode', () => {
             });
 
             expect(result.code).toContain(
-                "catch($dd_e) { if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;getTime', $dd_e, this, undefined, $dd_p0); throw $dd_e; }",
+                "catch($dd_e) { if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.ts;getTime', $dd_e, this, void 0, $dd_p0); throw $dd_e; }",
             );
         });
 
@@ -1605,7 +1642,7 @@ describe('transformCode', () => {
                     '  try {',
                     '    let $dd_rv0;',
                     '    if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this); let a = 1; if (a) { if ($dd_p0) $dd_return($dd_p0); return; let a = 2; return ($dd_rv0 = a, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {a}) : $dd_rv0); } ',
-                    '    if ($dd_p0) $dd_return($dd_p0, undefined, {a});',
+                    '    if ($dd_p0) $dd_return($dd_p0, void 0, {a});',
                     '  } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }',
                     '}',
                 ),
@@ -1677,9 +1714,9 @@ describe('transformCode', () => {
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});',
                     '        const $dd_rv0 = x * 2;',
-                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t);',
                     '        return $dd_rv0;',
-                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, $dd_t); throw $dd_e; }',
                     '    })));',
                     '  }',
                     '}',
@@ -1711,9 +1748,9 @@ describe('transformCode', () => {
                     '      try {',
                     '        if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);',
                     '        const $dd_rv0 = ($dd_t = super(args));',
-                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);',
+                    '        if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t);',
                     '        return $dd_rv0;',
-                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }',
+                    '      } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, $dd_t); throw $dd_e; }',
                     '    };',
                     '    init();',
                     '  }',

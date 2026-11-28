@@ -23,7 +23,7 @@ import type { BenchVariant, BrowserBenchApi, SdkBuild } from './types';
 declare global {
     var ddBench: Record<BenchVariant, BrowserBenchApi> | undefined;
     var crossOriginIsolated: boolean;
-    var $dd_probes2: (functionId: string) => unknown[] | undefined;
+    var $dd_probes2: ((functionId: string) => unknown[] | undefined) | undefined;
     var DD_DEBUGGER:
         | {
               version: string;
@@ -295,16 +295,25 @@ describe('Live Debugger Runtime Benchmark', () => {
 
         // Confirm the real SDK loaded and is dormant (no active probes) before measuring.
         const sdkState = await page.evaluate(() => {
-            const probesForAbsentFunction = globalThis.$dd_probes2(
-                'live-debugger-runtime-bench;__absent__',
-            );
+            const getProbes = globalThis.$dd_probes2;
+            const hasProbesHook = typeof getProbes === 'function';
             return {
                 hasSdk: typeof globalThis.DD_DEBUGGER !== 'undefined',
                 version: globalThis.DD_DEBUGGER?.version,
-                dormant: probesForAbsentFunction === undefined,
+                hasProbesHook,
+                dormant:
+                    hasProbesHook &&
+                    getProbes('live-debugger-runtime-bench;__absent__') === undefined,
             };
         });
         expect(sdkState.hasSdk).toBe(true);
+        // Without the hook, the instrumented code would stay dormant and the benchmark would
+        // measure the code path of a page without the SDK.
+        if (!sdkState.hasProbesHook) {
+            throw new Error(
+                `Browser Debugger SDK ${sdkState.version ?? '(unknown version)'} doesn't define $dd_probes2, which the instrumented code calls`,
+            );
+        }
         expect(sdkState.dormant).toBe(true);
 
         // The SDK always exposes its build version (set by makePublicApi). A missing version

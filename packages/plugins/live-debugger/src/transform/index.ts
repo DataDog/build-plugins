@@ -377,6 +377,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                         entryVars,
                         code,
                         mayAliasParameters,
+                        babelTypes,
                     );
                     const localVars = getLocalVariableDeclarations(node, babelTypes);
 
@@ -566,7 +567,7 @@ function injectInstrumentation(
     // ignores it. The guard and the bare call with a literal function ID follow `$dd_probes2`, for
     // the same reasons.
     const throwHook = exceptionReplay
-        ? `if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}, ${hasParams ? entryArgs : 'undefined'}, ${probeVarName});`
+        ? `if (globalThis.${LIVE_DEBUGGER_CATCH_FUNCTION} !== void 0) ${LIVE_DEBUGGER_CATCH_FUNCTION}('${escapedFunctionId}', $dd_e, ${receiverArg}, ${hasParams ? entryArgs : 'void 0'}, ${probeVarName});`
         : `if (${probeVarName}) ${LIVE_DEBUGGER_THROW_FUNCTION}(${probeVarName}, $dd_e${formatOptionalArguments([exitArgs, exitReceiver])});`;
     const catchBlock = `catch($dd_e) { ${throwHook} throw $dd_e; }`;
 
@@ -893,7 +894,8 @@ function isDerivedClassMethod(path: BabelPath, typesModule: BabelTypesModule): b
 
 /**
  * Format the optional arguments that follow a hook's required ones, each with a leading comma.
- * Trailing undefined arguments are left out, and the others are written as `undefined`.
+ * Trailing undefined arguments are left out, and the others are written as `void 0`, which,
+ * unlike `undefined`, an application binding can't shadow.
  */
 function formatOptionalArguments(args: (string | undefined)[]): string {
     let count = args.length;
@@ -903,7 +905,7 @@ function formatOptionalArguments(args: (string | undefined)[]): string {
 
     return args
         .slice(0, count)
-        .map((arg) => `, ${arg ?? 'undefined'}`)
+        .map((arg) => `, ${arg ?? 'void 0'}`)
         .join('');
 }
 

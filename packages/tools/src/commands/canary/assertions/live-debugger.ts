@@ -2,6 +2,7 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { LIVE_DEBUGGER_PROBES_FUNCTION } from '@dd/core/constants';
 import { readFile } from '@dd/core/helpers/fs';
 
 import { CanaryCommandError } from '../runner';
@@ -60,7 +61,7 @@ export const assertLiveDebuggerArtifacts = async (
 
     for (const filePath of filePaths) {
         const content = await readFile(filePath);
-        if (content.includes('$dd_probes')) {
+        if (content.includes(LIVE_DEBUGGER_PROBES_FUNCTION)) {
             return;
         }
     }

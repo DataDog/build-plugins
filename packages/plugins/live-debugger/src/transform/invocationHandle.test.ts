@@ -425,6 +425,63 @@ describe('invocation handle forwarding', () => {
                 expected: { kind: 'return', args: { a: 7 }, locals: undefined },
             },
             {
+                description: 'pass the arguments again when a parameter is incremented',
+                code: 'function f(a) { a++; return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 2 }, locals: undefined },
+            },
+            {
+                description:
+                    'pass the arguments again when a destructuring assignment sets a parameter',
+                code: 'function f(a, source) { ({ a } = source); return a; }',
+                script: 'out.result = f(1, { a: 3 });',
+                expected: { kind: 'return', args: { a: 3, source: { a: 3 } }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again when a loop assigns a parameter',
+                code: 'function f(a) { for (a of [4, 5]) {} return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 5 }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again when var redeclares a parameter',
+                code: 'function f(a) { var a = 6; return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 6 }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again when a destructured parameter is reassigned',
+                code: 'function f({ a }) { a = 8; return a; }',
+                script: 'out.result = f({ a: 1 });',
+                expected: { kind: 'return', args: { a: 8 }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again when a direct eval may reassign a parameter',
+                code: 'function f(a) { eval("a = 9"); return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 9 }, locals: undefined },
+            },
+            {
+                description:
+                    'pass the arguments again when an escaped eval may reassign a parameter',
+                code: 'function f(a) { \\u0065val("a = 9"); return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 9 }, locals: undefined },
+            },
+            {
+                description: 'pass the arguments again when a nested arrow writes to arguments',
+                code: 'function f(a) { const set = () => { arguments[0] = 4; }; set(); return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 4 }, locals: { set: expect.any(Function) } },
+            },
+            {
+                description:
+                    'leave out the arguments when only a catch binding with the same name is assigned',
+                code: 'function f(a) { try { throw 1; } catch (a) { a = 2; } return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: undefined, locals: undefined },
+            },
+            {
                 description: 'pass the arguments again to $dd_throw when a parameter is reassigned',
                 code: "function f(a) { a = 'changed'; throw new Error(a); }",
                 script: 'try { f(1); } catch (error) { out.result = error.message; }',

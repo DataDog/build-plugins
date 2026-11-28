@@ -124,8 +124,8 @@ function getTime() {
 
 ## Function with no parameters but local variables
 
-When there are no parameters but there are locals to capture, the arguments slot is filled with
-`undefined` so the captured locals (`{now}`) line up as the trailing argument.
+When there are no parameters but there are locals to capture, the entry hook gets no arguments
+object, and the captured locals (`{now}`) still follow the return value.
 
 ```js
 // Before
@@ -300,7 +300,7 @@ function f(flag) {
 ## Reassigned parameters
 
 When a function may give a parameter a new value, the exit hooks get the arguments again, after
-the locals (`undefined` here, as there are none), so the snapshot shows their values at the exit.
+the locals (`void 0` here, as there are none), so the snapshot shows their values at the exit.
 Any assignment to a parameter counts, including in a nested function, and so does any mention of
 `arguments` or `eval`, which can reassign parameters too.
 
@@ -322,7 +322,7 @@ function clamp(value, max) {
         if (value > max) {
             value = max;
         }
-        return ($dd_rv0 = value, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, undefined, {value, max}) : $dd_rv0);
+        return ($dd_rv0 = value, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, void 0, {value, max}) : $dd_rv0);
     } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, {value, max}); throw $dd_e; }
 }
 ```
@@ -359,9 +359,9 @@ class Button extends Component {
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = this.props.onClick();
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, $dd_t); throw $dd_e; }
         };
         ($dd_t = super(props));
         this.handleClick = handleClick;
@@ -392,9 +392,9 @@ class Widget extends Base {
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t, {x});
                 const $dd_rv0 = x * 2;
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, $dd_t); throw $dd_e; }
         })));
     }
 }
@@ -423,9 +423,9 @@ class Widget extends Base {
             try {
                 if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, $dd_t);
                 const $dd_rv0 = ($dd_t = super(args));
-                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, undefined, undefined, $dd_t);
+                if ($dd_p0) $dd_return($dd_p0, $dd_rv0, void 0, void 0, $dd_t);
                 return $dd_rv0;
-            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, undefined, $dd_t); throw $dd_e; }
+            } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, void 0, $dd_t); throw $dd_e; }
         };
         init();
     }

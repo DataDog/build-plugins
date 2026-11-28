@@ -66,7 +66,7 @@ describe('Live Debugger canary assertions', () => {
         await outputFile(plainPath, 'function plain() {}');
         await outputFile(
             instrumentedPath,
-            'globalThis.$dd_probes = globalThis.$dd_probes || (() => []);',
+            'globalThis.$dd_probes2 = globalThis.$dd_probes2 || (() => []);',
         );
 
         await expect(assertLiveDebuggerArtifacts([plainPath], 'named-only')).rejects.toThrow(

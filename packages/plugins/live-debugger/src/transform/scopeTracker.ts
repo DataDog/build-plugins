@@ -9,27 +9,77 @@ import type { BabelPath, BabelTypesModule } from './babel-path.types';
 export const MAX_CAPTURE_VARIABLES = 25;
 
 // `arguments` and direct `eval` can give parameters new values without assigning their bindings.
-const PARAMETER_ALIAS_RX = /\b(?:arguments|eval)\b/;
+// A Unicode escape can spell either name, as in `\u0065val`.
+const PARAMETER_ALIAS_RX = /\b(?:arguments|eval)\b|\\u/;
 
 // Whether code mentions `arguments` or `eval`, which `mayReassignParameters` then looks for.
 export function mentionsParameterAliases(code: string): boolean {
     return PARAMETER_ALIAS_RX.test(code);
 }
 
+// TypeScript expressions that can wrap an assignment target, as in `value! = 1`. Angle-bracket
+// assertions can't, because the parser always reads JSX.
+function isTypeScriptWrapper(node: t.Node, typesModule: BabelTypesModule): boolean {
+    return (
+        typesModule.isTSNonNullExpression(node) ||
+        typesModule.isTSAsExpression(node) ||
+        typesModule.isTSSatisfiesExpression(node)
+    );
+}
+
+/**
+ * Whether a reference is assigned through TypeScript expressions around it, as in `value! = 1`
+ * or `[value as number] = list`. Babel doesn't count those assignments as constant violations of
+ * the binding.
+ */
+function isAssignedThroughTypeScriptWrapper(
+    referencePath: BabelPath,
+    typesModule: BabelTypesModule,
+): boolean {
+    let target = referencePath;
+    while (target.parentPath && isTypeScriptWrapper(target.parent, typesModule)) {
+        target = target.parentPath;
+    }
+
+    if (target === referencePath || !target.parentPath) {
+        return false;
+    }
+
+    const { node, parent } = target;
+    if (
+        typesModule.isAssignmentExpression(parent) ||
+        typesModule.isAssignmentPattern(parent) ||
+        typesModule.isForXStatement(parent)
+    ) {
+        return parent.left === node;
+    }
+    if (typesModule.isObjectProperty(parent)) {
+        return parent.value === node && typesModule.isObjectPattern(target.parentPath.parent);
+    }
+
+    return (
+        typesModule.isUpdateExpression(parent) ||
+        typesModule.isArrayPattern(parent) ||
+        typesModule.isRestElement(parent)
+    );
+}
+
 /**
  * Whether a function may give one of the parameters it captures a new value after its entry, so
  * its exit hooks need the parameters again instead of the ones the entry hook got.
  *
- * Assignments count wherever they are, including in nested functions. So does any mention of
- * `arguments` or `eval` in the function: in sloppy mode, `arguments[0] = value` reassigns the
- * first parameter, and a direct `eval` can assign any of them. Pass `mayAliasParameters: false`
- * when the file mentions neither, to skip that search.
+ * Assignments count wherever they are, including in nested functions and through TypeScript
+ * expressions such as `value! = 1`. So does any mention of `arguments` or `eval` in the function:
+ * in sloppy mode, `arguments[0] = value` reassigns the first parameter, and a direct `eval` can
+ * assign any of them. Pass `mayAliasParameters: false` when the file mentions neither, to skip
+ * that search.
  */
 export function mayReassignParameters(
     functionPath: BabelPath<t.Function>,
     parameterNames: string[],
     code: string,
     mayAliasParameters: boolean,
+    typesModule: BabelTypesModule,
 ): boolean {
     if (parameterNames.length === 0) {
         return false;
@@ -39,6 +89,11 @@ export function mayReassignParameters(
         const binding = functionPath.scope.getOwnBinding(name);
         if (!binding || binding.constantViolations.length > 0) {
             return true;
+        }
+        for (const referencePath of binding.referencePaths) {
+            if (isAssignedThroughTypeScriptWrapper(referencePath, typesModule)) {
+                return true;
+            }
         }
     }
 

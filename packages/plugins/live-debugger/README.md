@@ -410,11 +410,12 @@ function add(a, b) {
 
 `$dd_entry` returns `undefined` when no probe produced an entry (sampling, entry conditions, lifetime budgets). The exit guards are then false and the return and throw hooks are skipped entirely.
 
-Two properties of this contract are load-bearing for the generated code:
+Four properties of this contract are load-bearing for the generated code:
 
-- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters.
+- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters. When no probe produced an entry, the binding holds `undefined`, or `false` if `$dd_probes2` wasn't defined when the function started.
 - **`$dd_return` returns the value it is given.** Its result *is* the instrumented function's return value, so the hooks' parameter positions cannot be reordered without changing what applications return.
 - **The SDK keeps the receiver and the arguments `$dd_entry` gets.** The exit hooks only get them again when they may have changed: the arguments when the function may reassign a parameter, and the receiver in arrow functions inside derived class constructors, where `this` is only available once `super()` returns.
+- **`$dd_catch` reports exceptions to probes too.** In builds with [`exceptionReplay`](#livedebuggerexceptionreplay), it's the only hook an exception reaches, so the SDK defines it whenever it defines `$dd_probes2`, and reports the exception to the handle's probes whether or not Exception Replay is enabled.
 
 ### Activating probes
 

@@ -37,17 +37,25 @@ interface RunResult {
  * Transform `code` and execute it with stubbed Browser Debugger SDK hooks.
  *
  * `hasProbe` controls whether `$dd_probes2` returns a probe for every function, and
- * `defineCatchHook: false` leaves `$dd_catch` undefined, as when Exception Replay isn't enabled
- * in the SDK. `script` runs after the transformed code and writes what the test needs onto `out`.
+ * `defineProbesHook: false` leaves `$dd_probes2` undefined, as with an SDK that predates it.
+ * `defineCatchHook: false` leaves `$dd_catch` undefined, as before the SDK initializes or with an
+ * SDK that predates Exception Replay. `script` runs after the transformed code and writes what the
+ * test needs onto `out`.
  */
 const runInstrumented = (
     code: string,
     script: string,
     {
         hasProbe = false,
+        defineProbesHook = true,
         defineCatchHook = true,
         exceptionReplay = true,
-    }: { hasProbe?: boolean; defineCatchHook?: boolean; exceptionReplay?: boolean } = {},
+    }: {
+        hasProbe?: boolean;
+        defineProbesHook?: boolean;
+        defineCatchHook?: boolean;
+        exceptionReplay?: boolean;
+    } = {},
 ): RunResult => {
     const transformed = transformCode({ ...BASE_OPTIONS, exceptionReplay, code });
     const catchCalls: CatchCall[] = [];
@@ -56,13 +64,15 @@ const runInstrumented = (
     const handle = {};
     const sandbox: Record<string, unknown> = {
         out: output,
-        $dd_probes2: () => (hasProbe ? ['probe'] : undefined),
         $dd_entry: () => handle,
         $dd_return: (_handle: unknown, value: unknown) => value,
         $dd_throw: (_handle: unknown, error: unknown) => {
             throwCalls.push(error);
         },
     };
+    if (defineProbesHook) {
+        sandbox.$dd_probes2 = () => (hasProbe ? ['probe'] : undefined);
+    }
     if (defineCatchHook) {
         sandbox.$dd_catch = (
             functionId: string,
@@ -118,6 +128,17 @@ describe('Exception Replay catch hook', () => {
         expect(catchCalls).toHaveLength(1);
         expect(catchCalls[0].handle).toBeUndefined();
         expect(throwCalls).toHaveLength(0);
+    });
+
+    it('should pass false as the handle when the SDK does not define $dd_probes2', () => {
+        const { catchCalls } = runInstrumented(
+            'function f() { throw new Error("boom"); }',
+            'try { f(); } catch {}',
+            { defineProbesHook: false },
+        );
+
+        expect(catchCalls).toHaveLength(1);
+        expect(catchCalls[0].handle).toBe(false);
     });
 
     it('should pass the invocation handle instead of calling $dd_throw when a probe is active', () => {

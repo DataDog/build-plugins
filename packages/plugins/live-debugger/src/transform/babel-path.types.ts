@@ -25,8 +25,11 @@ export interface BabelScope {
     // resolves to a global.
     getBinding(name: string): object | undefined;
     // The binding this scope itself declares for `name`, if any. Its constant
-    // violations are the places that assign it after its declaration.
-    getOwnBinding(name: string): { constantViolations: readonly object[] } | undefined;
+    // violations are the places that assign it after its declaration, and its
+    // reference paths are the places that read it.
+    getOwnBinding(
+        name: string,
+    ): { constantViolations: readonly object[]; referencePaths: readonly BabelPath[] } | undefined;
 }
 
 /**
