@@ -4,6 +4,9 @@ Automatically instrument JavaScript functions at build time to enable Live Debug
 
 <!-- The title and the following line will both be added to the root README.md  -->
 
+> [!NOTE]
+> Browser Live Debugger is in Preview. If you're interested in this feature, contact [Datadog Support](https://docs.datadoghq.com/help/).
+
 ## Table of content <!-- #omit in toc -->
 
 <!-- This is auto generated with yarn cli integrity -->
