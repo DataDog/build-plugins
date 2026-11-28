@@ -175,25 +175,31 @@ const decodeStringLiteral = (code: string, offset: number): Decoded | undefined 
     return undefined;
 };
 
-// Read the function ID of a `$dd_probes2('<id>')` call, from right after its opening parenthesis.
-const readFunctionIdArgument = (code: string, offset: number): string | undefined => {
+// Read the string literal that a call passes first, from right after its opening parenthesis.
+// `separator` is the character that must follow it: `)` for the only argument, `,` for the first.
+const readFunctionIdArgument = (
+    code: string,
+    offset: number,
+    separator: ')' | ',',
+): string | undefined => {
     const literalStart = skipWhitespace(code, offset);
     const literal = decodeStringLiteral(code, literalStart);
     if (!literal) {
         return undefined;
     }
 
-    const closingParenthesis = skipWhitespace(code, literal.end);
-    return code[closingParenthesis] === ')' ? literal.value : undefined;
+    const next = skipWhitespace(code, literal.end);
+    return code[next] === separator ? literal.value : undefined;
 };
 
 /**
  * Find the instrumented functions in a chunk's code, without parsing it.
  *
  * Every instrumented function contains exactly one `$dd_probes2('<id>')` call at the start of its
- * body and one call at its end, in the injected `catch`: `$dd_throw(`, or `$dd_catch(` when it was
- * built with Exception Replay. Minifiers keep both, because they are calls to globals. Pairing them like brackets gives each function's extent, and the
- * nesting gives its enclosing function.
+ * body and one call at its end, in the injected `catch`: `$dd_throw(`, or `$dd_catch('<id>', ` when
+ * it was built with Exception Replay. Minifiers keep both, because they are calls to globals.
+ * Pairing them like brackets gives each function's extent, and the nesting gives its enclosing
+ * function.
  */
 export const scanChunk = (code: string): ChunkScan => {
     const functions: ScannedFunction[] = [];
@@ -208,7 +214,7 @@ export const scanChunk = (code: string): ChunkScan => {
 
         if (match[1] === LIVE_DEBUGGER_PROBES_FUNCTION) {
             const argumentOffset = offset + match[0].length;
-            const functionId = readFunctionIdArgument(code, argumentOffset);
+            const functionId = readFunctionIdArgument(code, argumentOffset, ')');
             if (functionId === undefined) {
                 continue;
             }
@@ -221,6 +227,20 @@ export const scanChunk = (code: string): ChunkScan => {
             });
             openFunctions.push(functions.length - 1);
             continue;
+        }
+
+        if (match[1] === LIVE_DEBUGGER_CATCH_FUNCTION) {
+            // Only the catch hook of the innermost open function closes it, which also skips the
+            // marker text in strings.
+            const argumentOffset = offset + match[0].length;
+            const functionId = readFunctionIdArgument(code, argumentOffset, ',');
+            const innermostFunction = openFunctions.at(-1);
+            if (
+                innermostFunction === undefined ||
+                functions[innermostFunction].functionId !== functionId
+            ) {
+                continue;
+            }
         }
 
         const closedFunction = openFunctions.pop();

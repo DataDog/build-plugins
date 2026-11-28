@@ -119,6 +119,16 @@ describe('Exception Replay catch hook', () => {
         expect(catchCalls[0].args).toBeUndefined();
     });
 
+    it('should pass the receiver an arrow in a derived constructor sets', () => {
+        const { catchCalls } = runInstrumented(
+            'class A {} class B extends A { constructor() { const init = () => { super(); throw new Error("boom"); }; init(); } }',
+            'try { new B(); } catch {}',
+        );
+
+        expect(catchCalls).toHaveLength(1);
+        expect((catchCalls[0].self as object).constructor.name).toBe('B');
+    });
+
     it('should report the frame when no probe is active', () => {
         const { catchCalls, throwCalls } = runInstrumented(
             'function f() { throw new Error("boom"); }',

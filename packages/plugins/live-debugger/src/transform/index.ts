@@ -18,10 +18,12 @@ import { resolveCjsDefaultExport } from './cjs-interop';
 import { createFunctionIdGenerator, getFunctionName } from './functionId';
 import { canInstrumentFunction, shouldSkipFunction } from './instrumentation';
 import {
+    assignsParameters,
     getLocalVariableDeclarations,
     getParameterNames,
-    mayReassignParameters,
-    mentionsParameterAliases,
+    hasOffsetInRange,
+    isParameterAlias,
+    mayContainParameterAliases,
 } from './scopeTracker';
 import type { LocalVariableDeclaration } from './scopeTracker';
 
@@ -179,6 +181,7 @@ interface ReturnInfo {
 }
 
 interface FunctionTarget {
+    functionStart: number;
     bodyStart: number;
     // Where an expression body's block prefix goes; see getExpressionBodyPrefixStart.
     bodyPrefixStart: number;
@@ -308,13 +311,25 @@ export function transformCode(options: TransformOptions): TransformResult {
     const superCallsByConstructorNode = new Map<BabelTypes.Node, SuperCallTarget[]>();
     const functionIdPath = getFunctionIdPath(filePath, repositoryRoot);
     const functionIds = createFunctionIdGenerator(functionIdPath, babelTypes);
-    const mayAliasParameters = mentionsParameterAliases(code);
+    // Offsets of the identifiers named `arguments` or `eval`, which can reassign parameters without
+    // assigning their bindings. Only collected in files that may contain them.
+    const parameterAliasOffsets: number[] = [];
+    const parameterAliasVisitor = mayContainParameterAliases(code)
+        ? {
+              Identifier(path: BabelPath<BabelTypes.Identifier>) {
+                  if (isParameterAlias(path.node.name)) {
+                      parameterAliasOffsets.push(path.node.start!);
+                  }
+              },
+          }
+        : {};
     let probeVarCounter = 0;
 
     // @babel/parser and @babel/traverse bundle separate copies of @babel/types,
     // causing a structural type mismatch. The cast is safe: parse() returns a
     // valid AST that traverse() accepts at runtime.
     traverse(ast as unknown as BabelTypes.Node, {
+        ...parameterAliasVisitor,
         Class: {
             enter(path: BabelPath<BabelTypes.Class>) {
                 functionIds.enterClass(path);
@@ -372,13 +387,8 @@ export function transformCode(options: TransformOptions): TransformResult {
                     const idx = probeVarCounter++;
                     const probeVarName = `$dd_p${idx}`;
                     const entryVars = getParameterNames(node, babelTypes);
-                    const passesArgumentsAtExit = mayReassignParameters(
-                        path,
-                        entryVars,
-                        code,
-                        mayAliasParameters,
-                        babelTypes,
-                    );
+                    // Completed once the traversal has found the `arguments` and `eval` identifiers.
+                    const passesArgumentsAtExit = assignsParameters(path, entryVars, babelTypes);
                     const localVars = getLocalVariableDeclarations(node, babelTypes);
 
                     const isExpressionBody =
@@ -416,6 +426,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                     }
 
                     targets.push({
+                        functionStart: node.start!,
                         bodyStart: node.body.start!,
                         bodyPrefixStart: getExpressionBodyPrefixStart(code, node.body),
                         bodyEnd: node.body.end!,
@@ -463,6 +474,19 @@ export function transformCode(options: TransformOptions): TransformResult {
             skippedUnsupportedCount,
             totalFunctions,
         };
+    }
+
+    // Any `arguments` or `eval` inside a function, including in nested functions, may reassign its
+    // parameters.
+    parameterAliasOffsets.sort((a, b) => a - b);
+    for (const target of targets) {
+        if (
+            !target.passesArgumentsAtExit &&
+            target.entryVars.length > 0 &&
+            hasOffsetInRange(parameterAliasOffsets, target.functionStart, target.functionEnd)
+        ) {
+            target.passesArgumentsAtExit = true;
+        }
     }
 
     const s = new MagicString(code);

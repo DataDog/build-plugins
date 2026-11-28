@@ -8,13 +8,37 @@ import type { BabelPath, BabelTypesModule } from './babel-path.types';
 
 export const MAX_CAPTURE_VARIABLES = 25;
 
-// `arguments` and direct `eval` can give parameters new values without assigning their bindings.
-// A Unicode escape can spell either name, as in `\u0065val`.
+// `arguments` and direct `eval` can give parameters new values without assigning their bindings:
+// in sloppy mode, `arguments[0] = value` reassigns the first parameter, and a direct `eval` can
+// assign any of them.
+const PARAMETER_ALIASES = new Set(['arguments', 'eval']);
+// Code that names neither can't contain them. A Unicode escape can spell either, as in `\u0065val`.
 const PARAMETER_ALIAS_RX = /\b(?:arguments|eval)\b|\\u/;
 
-// Whether code mentions `arguments` or `eval`, which `mayReassignParameters` then looks for.
-export function mentionsParameterAliases(code: string): boolean {
+// Whether code may contain an identifier named `arguments` or `eval`.
+export function mayContainParameterAliases(code: string): boolean {
     return PARAMETER_ALIAS_RX.test(code);
+}
+
+// Whether an identifier's name, which Babel has decoded, is `arguments` or `eval`.
+export function isParameterAlias(name: string): boolean {
+    return PARAMETER_ALIASES.has(name);
+}
+
+// Whether one of the ascending offsets is in the range from `start`, included, to `end`, excluded.
+export function hasOffsetInRange(offsets: number[], start: number, end: number): boolean {
+    let low = 0;
+    let high = offsets.length;
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (offsets[middle] < start) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+
+    return low < offsets.length && offsets[low] < end;
 }
 
 // TypeScript expressions that can wrap an assignment target, as in `value! = 1`. Angle-bracket
@@ -65,20 +89,14 @@ function isAssignedThroughTypeScriptWrapper(
 }
 
 /**
- * Whether a function may give one of the parameters it captures a new value after its entry, so
- * its exit hooks need the parameters again instead of the ones the entry hook got.
- *
- * Assignments count wherever they are, including in nested functions and through TypeScript
- * expressions such as `value! = 1`. So does any mention of `arguments` or `eval` in the function:
- * in sloppy mode, `arguments[0] = value` reassigns the first parameter, and a direct `eval` can
- * assign any of them. Pass `mayAliasParameters: false` when the file mentions neither, to skip
- * that search.
+ * Whether a function assigns one of the parameters it captures after its entry, so its exit hooks
+ * need the parameters again instead of the ones the entry hook got. Assignments count wherever
+ * they are, including in nested functions and through TypeScript expressions such as
+ * `value! = 1`. The transform checks for `arguments` and `eval` separately.
  */
-export function mayReassignParameters(
+export function assignsParameters(
     functionPath: BabelPath<t.Function>,
     parameterNames: string[],
-    code: string,
-    mayAliasParameters: boolean,
     typesModule: BabelTypesModule,
 ): boolean {
     if (parameterNames.length === 0) {
@@ -97,12 +115,7 @@ export function mayReassignParameters(
         }
     }
 
-    if (!mayAliasParameters) {
-        return false;
-    }
-
-    const functionCode = code.slice(functionPath.node.start!, functionPath.node.end!);
-    return PARAMETER_ALIAS_RX.test(functionCode);
+    return false;
 }
 
 export interface LocalVariableTemporalDeadZone {

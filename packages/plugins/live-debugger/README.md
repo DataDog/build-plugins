@@ -412,9 +412,9 @@ function add(a, b) {
 
 Four properties of this contract are load-bearing for the generated code:
 
-- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters. When no probe produced an entry, the binding holds `undefined`, or `false` if `$dd_probes2` wasn't defined when the function started.
+- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters. When no probe produced an entry, the binding holds `undefined`, or `false` if `$dd_probes2` wasn't defined when the function started. If `$dd_entry` throws, it still holds what `$dd_probes2` returned.
 - **`$dd_return` returns the value it is given.** Its result *is* the instrumented function's return value, so the hooks' parameter positions cannot be reordered without changing what applications return.
-- **The SDK keeps the receiver and the arguments `$dd_entry` gets.** The exit hooks only get them again when they may have changed: the arguments when the function may reassign a parameter, and the receiver in arrow functions inside derived class constructors, where `this` is only available once `super()` returns.
+- **The SDK keeps the receiver and the arguments `$dd_entry` gets.** `$dd_return` and `$dd_throw` only get them again when they may have changed: the arguments when the function may reassign a parameter, and the receiver in arrow functions inside derived class constructors, where `this` is only available once `super()` returns. `$dd_catch` always gets them, because Exception Replay needs them when no probe is active.
 - **`$dd_catch` reports exceptions to probes too.** In builds with [`exceptionReplay`](#livedebuggerexceptionreplay), it's the only hook an exception reaches, so the SDK defines it whenever it defines `$dd_probes2`, and reports the exception to the handle's probes whether or not Exception Replay is enabled.
 
 ### Activating probes

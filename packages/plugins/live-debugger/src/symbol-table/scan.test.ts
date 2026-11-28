@@ -45,6 +45,24 @@ describe('scanChunk', () => {
             },
         },
         {
+            description: 'ignore catch hook markers in strings',
+            code: `let p=$dd_probes2('a.js;one');try{return "$dd_catch(";}catch(e){$dd_throw(p,e)}`,
+            expected: {
+                functionIds: ['a.js;one'],
+                parentIndexes: [undefined],
+                paired: true,
+            },
+        },
+        {
+            description: 'only close a function on its own catch hook',
+            code: `let p=$dd_probes2('a.js;one');try{}catch(e){$dd_catch('a.js;other',e,this,void 0,p);$dd_catch('a.js;one',e,this,void 0,p)}`,
+            expected: {
+                functionIds: ['a.js;one'],
+                parentIndexes: [undefined],
+                paired: true,
+            },
+        },
+        {
             description: 'accept whitespace around the argument',
             code: `$dd_probes2 ( 'a.js;spaced' ) ;$dd_throw (p);`,
             expected: {

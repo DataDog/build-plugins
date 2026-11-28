@@ -475,6 +475,12 @@ describe('invocation handle forwarding', () => {
                 expected: { kind: 'return', args: { a: 4 }, locals: { set: expect.any(Function) } },
             },
             {
+                description: 'pass the arguments again when a nested function mentions arguments',
+                code: 'function f(a) { const g = function () { return arguments; }; return a; }',
+                script: 'out.result = f(1);',
+                expected: { kind: 'return', args: { a: 1 }, locals: { g: expect.any(Function) } },
+            },
+            {
                 description:
                     'leave out the arguments when only a catch binding with the same name is assigned',
                 code: 'function f(a) { try { throw 1; } catch (a) { a = 2; } return a; }',
@@ -495,6 +501,25 @@ describe('invocation handle forwarding', () => {
 
             expect(exit).toEqual(expect.objectContaining(expected));
             expect(exit?.self).toBeUndefined();
+        });
+
+        it('should pass undefined for placeholders when a local named undefined shadows it', () => {
+            const code = 'function f(a) { const x = 1; { let undefined = 5; return; } }';
+            const { runtime } = runInstrumented(code, 'out.result = f(1);', true);
+
+            expect(runtime.exits).toHaveLength(1);
+            expect(runtime.exits[0].value).toBeUndefined();
+            expect(runtime.exits[0].locals).toEqual(expect.objectContaining({ x: 1 }));
+        });
+
+        it('should pass the arguments and then the receiver when an arrow in a derived constructor reassigns a parameter', () => {
+            const code =
+                'class A {} class B extends A { constructor() { const init = (n) => { n += 1; super(); return n; }; init(1); } }';
+            const { runtime, output } = runInstrumented(code, 'out.instance = new B();', true);
+
+            expect(runtime.exits).toHaveLength(1);
+            expect(runtime.exits[0].args).toEqual({ n: 2 });
+            expect(runtime.exits[0].self).toBe(output.instance);
         });
 
         it('should pass the receiver again when an arrow in a derived constructor sets it', () => {
