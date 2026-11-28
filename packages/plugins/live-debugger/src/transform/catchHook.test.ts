@@ -15,6 +15,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     namedOnly: false,
     decorators: 'legacy',
     exceptionReplay: true,
+    hasUndefinedTopLevelThis: false,
 };
 
 interface CatchCall {

@@ -19,6 +19,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     namedOnly: false,
     decorators: 'legacy',
     exceptionReplay: false,
+    hasUndefinedTopLevelThis: false,
 };
 
 describe('transformCode', () => {
@@ -295,6 +296,119 @@ describe('transformCode', () => {
             expect(result.skippedUnsupportedCount).toBe(1);
             expect(result.code).toContain('$dd_entry($dd_p0, this, {x})');
             expect(result.code).not.toContain('let $dd_t');
+        });
+    });
+
+    describe('receiver', () => {
+        const HOOK_CALL_PATTERN = /\$dd_(?:entry|return|throw|catch)\(/g;
+        // The receiver follows the probe in $dd_entry, the return value in $dd_return, and the
+        // exception in $dd_throw and $dd_catch.
+        const RECEIVER_PATTERN =
+            /\$dd_entry\(\$dd_p\d+, ([^,)]+)|\$dd_return\(\$dd_p\d+, (?:\$dd_rv\d+|undefined), ([^,)]+)|\$dd_throw\(\$dd_p\d+, \$dd_e, ([^,)]+)|\$dd_catch\('[^']*', \$dd_e, ([^,)]+)/g;
+        const getReceivers = (code: string) => {
+            const matches = code.matchAll(RECEIVER_PATTERN);
+            return Array.from(matches, (match) => match.slice(1).find(Boolean));
+        };
+
+        const cases = [
+            {
+                description: 'pass void 0 for an arrow at the top level of an ES module',
+                code: 'export const double = (x) => x * 2;',
+                hasUndefinedTopLevelThis: true,
+                expected: 'void 0',
+            },
+            {
+                description:
+                    'pass void 0 for an arrow in an object at the top level of an ES module',
+                code: 'export const actions = { load: async ({ commit }, id) => { if (!id) return; commit(id); } };',
+                hasUndefinedTopLevelThis: true,
+                expected: 'void 0',
+            },
+            {
+                description: 'pass void 0 for arrows nested in a top-level arrow of an ES module',
+                code: 'export const add = (a) => (b) => a + b;',
+                hasUndefinedTopLevelThis: true,
+                expected: 'void 0',
+            },
+            {
+                description: 'pass void 0 for an arrow in the extends clause of an ES module class',
+                code: 'export class C extends mixin((x) => x * 2) {}',
+                hasUndefinedTopLevelThis: true,
+                expected: 'void 0',
+            },
+            {
+                description: 'pass void 0 for an arrow with a local variable named undefined',
+                code: 'export const read = (x) => { const undefined = x; return undefined; };',
+                hasUndefinedTopLevelThis: true,
+                expected: 'void 0',
+            },
+            {
+                description:
+                    'pass this for an arrow at the top level of an ES module in other bundlers',
+                code: 'export const double = (x) => x * 2;',
+                hasUndefinedTopLevelThis: false,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for an arrow at the top level of a script',
+                code: 'const double = (x) => x * 2;',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for a function declaration in an ES module',
+                code: 'export function double(x) { return x * 2; }',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for a function and the arrow in it in an ES module',
+                code: 'export function make() { return (x) => x * 2; }',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for an object method and the arrow in it in an ES module',
+                code: 'export const o = { make() { return (x) => x * 2; } };',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for an arrow in a class field of an ES module',
+                code: 'export class C { handler = (x) => x * 2; }',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description: 'pass this for an arrow in a static block of an ES module',
+                code: 'export class C { static { register((x) => x * 2); } }',
+                hasUndefinedTopLevelThis: true,
+                expected: 'this',
+            },
+            {
+                description:
+                    'pass the this alias for an arrow in a derived constructor of an ES module',
+                code: 'export class B extends A { constructor(items) { super(items.map((x) => x * 2)); } }',
+                hasUndefinedTopLevelThis: true,
+                expected: '$dd_t',
+            },
+        ];
+
+        test.each(cases)('should $description', ({ code, hasUndefinedTopLevelThis, expected }) => {
+            const result = transformCode({
+                ...BASE_OPTIONS,
+                code,
+                exceptionReplay: true,
+                hasUndefinedTopLevelThis,
+            });
+            const hookCalls = result.code.match(HOOK_CALL_PATTERN) ?? [];
+            const receivers = getReceivers(result.code);
+            const distinctReceivers = new Set(receivers);
+
+            expect(validateSyntax(result.code, BASE_OPTIONS.filePath)).toBeNull();
+            expect(result.instrumentedCount).toBeGreaterThan(0);
+            expect(receivers).toHaveLength(hookCalls.length);
+            expect(distinctReceivers).toEqual(new Set([expected]));
         });
     });
 

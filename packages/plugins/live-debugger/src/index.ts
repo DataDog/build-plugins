@@ -45,6 +45,21 @@ export const getLiveDebuggerPlugin = (
     let totalFunctions = 0;
     let totalFilesWithFunctions = 0;
     let repositoryRoot: string | undefined;
+    // Rollup's `moduleContext` option, normalized: the value of `this` at the top level of each
+    // module. Only Rollup and Vite set it, as they warn about `this` there. Other bundlers can
+    // treat a file Babel parses as a module, such as TypeScript with only type imports, as
+    // CommonJS.
+    let getModuleContext: ((id: string) => string) | undefined;
+    const recordModuleContext = (inputOptions: ModuleContextOptions) => {
+        // Defensive: a bundler that runs Rollup plugins may not provide it.
+        getModuleContext =
+            typeof inputOptions.moduleContext === 'function'
+                ? inputOptions.moduleContext
+                : undefined;
+    };
+    // Vite's dev server doesn't apply Rollup's options, and passes them to `buildStart` as given.
+    let isViteBuild = false;
+    const symbolTableHooks = getSymbolTableHooks(pluginOptions, context, log);
 
     // Looked up on the first transform, once the bundler has set the build root.
     const getFunctionIdRoot = () => {
@@ -85,6 +100,7 @@ export const getLiveDebuggerPlugin = (
 
                 try {
                     const functionIdRoot = getFunctionIdRoot();
+                    const moduleContext = getModuleContext?.(id);
                     const result = transformCode({
                         code,
                         filePath: id,
@@ -94,6 +110,7 @@ export const getLiveDebuggerPlugin = (
                         namedOnly: pluginOptions.namedOnly,
                         decorators: pluginOptions.decorators,
                         exceptionReplay: pluginOptions.exceptionReplay,
+                        hasUndefinedTopLevelThis: moduleContext === 'undefined',
                     });
 
                     instrumentedCount += result.instrumentedCount;
@@ -129,7 +146,31 @@ export const getLiveDebuggerPlugin = (
                 }
             },
         },
-        ...getSymbolTableHooks(pluginOptions, context, log),
+        ...symbolTableHooks,
+        // `buildStart` gets the input options after every plugin's `options` hook has run.
+        rollup: {
+            ...symbolTableHooks.rollup,
+            buildStart(inputOptions) {
+                recordModuleContext(inputOptions);
+                return callHook(symbolTableHooks.rollup?.buildStart, this, [inputOptions]);
+            },
+        },
+        vite: {
+            ...symbolTableHooks.vite,
+            configResolved(config) {
+                isViteBuild = config.command === 'build';
+                return callHook(symbolTableHooks.vite?.configResolved, this, [config]);
+            },
+            buildStart(inputOptions) {
+                if (isViteBuild) {
+                    recordModuleContext(inputOptions);
+                } else {
+                    // A dev server can reuse the plugin after a build.
+                    getModuleContext = undefined;
+                }
+                return callHook(symbolTableHooks.vite?.buildStart, this, [inputOptions]);
+            },
+        },
         buildEnd: () => {
             if (totalFunctions > 0) {
                 log.info(
@@ -169,6 +210,28 @@ export const getPlugins: GetPlugins = ({ options, context }) => {
 
     return [getLiveDebuggerPlugin(validatedOptions, context)];
 };
+
+// The part of Rollup's normalized input options that gives each module's top-level `this`.
+// It's `'undefined'` unless the `context` or `moduleContext` option sets it.
+type ModuleContextOptions = {
+    moduleContext: (id: string) => string;
+};
+
+type Hook<This, Args extends unknown[], Result> = (this: This, ...args: Args) => Result;
+
+/**
+ * Call a bundler hook, which may be a function or an object with a handler.
+ */
+function callHook<This, Args extends unknown[], Result>(
+    hook: Hook<This, Args, Result> | { handler: Hook<This, Args, Result> } | undefined,
+    thisArg: This,
+    args: Args,
+): Result | undefined {
+    if (typeof hook === 'function') {
+        return hook.apply(thisArg, args);
+    }
+    return hook?.handler.apply(thisArg, args);
+}
 
 /**
  * Return the source map produced by the previous loader, if any.

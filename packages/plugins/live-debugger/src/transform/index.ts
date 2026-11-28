@@ -183,7 +183,8 @@ interface FunctionTarget {
     hasSequenceExpressionBody: boolean;
     aliasesExpressionBodySuperCall: boolean;
     needsTrailingReturn: boolean;
-    useThisAlias: boolean;
+    // What the hooks receive as the function's `this`; see getReceiverArg.
+    receiverArg: string;
     bodyParenStart: number | undefined;
     directivesEnd: number | undefined;
     functionId: string;
@@ -214,6 +215,9 @@ export interface TransformOptions {
     namedOnly: boolean;
     decorators: DecoratorSyntax;
     exceptionReplay: boolean;
+    // Whether the bundler is known to make `this` at the top level of an ES module `undefined`.
+    // Arrow functions there then pass `void 0` to the hooks; see getReceiverArg.
+    hasUndefinedTopLevelThis: boolean;
 }
 
 /**
@@ -255,6 +259,7 @@ export function transformCode(options: TransformOptions): TransformResult {
         namedOnly,
         decorators,
         exceptionReplay,
+        hasUndefinedTopLevelThis,
     } = options;
 
     let failedCount = 0;
@@ -293,6 +298,11 @@ export function transformCode(options: TransformOptions): TransformResult {
         plugins: getParserPlugins(decorators),
         sourceFilename: filePath,
     });
+
+    // Babel parses a file as a module when it has module syntax, such as `import` or `export`.
+    // Other files keep `this`: they may be CommonJS, which a later plugin can still convert.
+    const isModule = ast.program.sourceType === 'module';
+    const hasUndefinedModuleThis = hasUndefinedTopLevelThis && isModule;
 
     // Read-only traverse: collect instrumentation targets without mutating the AST
     const targets: FunctionTarget[] = [];
@@ -380,6 +390,9 @@ export function transformCode(options: TransformOptions): TransformResult {
                             constructorPath.node.body.start!,
                         );
                     }
+                    const hasUndefinedThis =
+                        hasUndefinedModuleThis && inheritsTopLevelThis(path, babelTypes);
+                    const receiverArg = getReceiverArg(useThisAlias, hasUndefinedThis);
 
                     const returns: ReturnInfo[] = [];
                     const needsTrailingReturn =
@@ -412,7 +425,7 @@ export function transformCode(options: TransformOptions): TransformResult {
                             isExpressionBody &&
                             isSuperCallExpression(node.body, babelTypes),
                         needsTrailingReturn,
-                        useThisAlias,
+                        receiverArg,
                         bodyParenStart:
                             isExpressionBody && typeof node.body.extra?.parenStart === 'number'
                                 ? node.body.extra.parenStart
@@ -503,13 +516,12 @@ function injectInstrumentation(
         isExpressionBody,
         hasSequenceExpressionBody,
         aliasesExpressionBodySuperCall,
-        useThisAlias,
+        receiverArg,
         bodyParenStart,
         directivesEnd,
     } = target;
 
     const rvVarName = `$dd_rv${probeIdx}`;
-    const receiverArg = useThisAlias ? '$dd_t' : 'this';
 
     const entryVarsList = entryVars.join(', ');
 
@@ -850,6 +862,60 @@ function getDerivedConstructorForLexicalThis(
     }
 
     return undefined;
+}
+
+/**
+ * What the hooks receive as the function's `this`.
+ *
+ * Where `this` is known to be `undefined`, `void 0` is passed instead. An injected `this` at the
+ * top level of a module makes Rollup warn THIS_IS_UNDEFINED. Where Rollup can't map the
+ * warning's position in injected code back to the source, it also warns SOURCEMAP_ERROR. Vite
+ * hides the first warning but shows the second. Unlike `undefined`, `void 0` can't refer to a
+ * local variable.
+ */
+function getReceiverArg(useThisAlias: boolean, hasUndefinedThis: boolean): string {
+    if (useThisAlias) {
+        return '$dd_t';
+    }
+    if (hasUndefinedThis) {
+        return 'void 0';
+    }
+    return 'this';
+}
+
+/**
+ * Whether the function is an arrow function whose `this` is the file's top-level `this`,
+ * inherited through any arrow functions around it.
+ *
+ * A class body counts as binding `this`, as its field initializers and static blocks do. That
+ * keeps `this` in arrows in computed member keys and member decorators, which don't bind it, so
+ * they may still get the warning.
+ */
+function inheritsTopLevelThis(
+    path: BabelPath<BabelTypes.Function>,
+    typesModule: BabelTypesModule,
+): boolean {
+    if (!typesModule.isArrowFunctionExpression(path.node)) {
+        return false;
+    }
+
+    let current = path.parentPath;
+    while (current) {
+        const node = current.node;
+        if (typesModule.isProgram(node)) {
+            return true;
+        }
+        if (typesModule.isClassBody(node)) {
+            return false;
+        }
+        if (typesModule.isFunction(node) && !typesModule.isArrowFunctionExpression(node)) {
+            return false;
+        }
+
+        current = current.parentPath;
+    }
+
+    return false;
 }
 
 function isSuperCallExpression(

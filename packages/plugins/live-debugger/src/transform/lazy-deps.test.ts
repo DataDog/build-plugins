@@ -12,6 +12,7 @@ const BASE_OPTIONS: Omit<TransformOptions, 'code'> = {
     namedOnly: false,
     decorators: 'legacy',
     exceptionReplay: false,
+    hasUndefinedTopLevelThis: false,
 };
 
 const PEER_DEPS = ['@babel/parser', '@babel/traverse', '@babel/types', 'magic-string'] as const;
