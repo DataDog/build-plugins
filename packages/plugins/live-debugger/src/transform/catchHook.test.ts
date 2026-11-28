@@ -22,57 +22,72 @@ interface CatchCall {
     error: unknown;
     self: unknown;
     args: Record<string, unknown> | undefined;
+    handle: unknown;
 }
 
 interface RunResult {
     catchCalls: CatchCall[];
     throwCalls: unknown[];
     output: Record<string, unknown>;
+    // The invocation handle `$dd_entry` returns.
+    handle: object;
 }
 
 /**
  * Transform `code` and execute it with stubbed Browser Debugger SDK hooks.
  *
- * `hasProbe` controls whether `$dd_probes` returns a probe for every function, and
- * `defineCatchHook: false` leaves `$dd_catch` undefined, as when Exception Replay isn't enabled
- * in the SDK. `script` runs after the transformed code and writes what the test needs onto `out`.
+ * `hasProbe` controls whether `$dd_probes2` returns a probe for every function, and
+ * `defineProbesHook: false` leaves `$dd_probes2` undefined, as with an SDK that predates it.
+ * `defineCatchHook: false` leaves `$dd_catch` undefined, as before the SDK initializes or with an
+ * SDK that predates Exception Replay. `script` runs after the transformed code and writes what the
+ * test needs onto `out`.
  */
 const runInstrumented = (
     code: string,
     script: string,
     {
         hasProbe = false,
+        defineProbesHook = true,
         defineCatchHook = true,
         exceptionReplay = true,
-    }: { hasProbe?: boolean; defineCatchHook?: boolean; exceptionReplay?: boolean } = {},
+    }: {
+        hasProbe?: boolean;
+        defineProbesHook?: boolean;
+        defineCatchHook?: boolean;
+        exceptionReplay?: boolean;
+    } = {},
 ): RunResult => {
     const transformed = transformCode({ ...BASE_OPTIONS, exceptionReplay, code });
     const catchCalls: CatchCall[] = [];
     const throwCalls: unknown[] = [];
     const output: Record<string, unknown> = {};
+    const handle = {};
     const sandbox: Record<string, unknown> = {
         out: output,
-        $dd_probes: () => (hasProbe ? ['probe'] : undefined),
-        $dd_entry: () => ({}),
+        $dd_entry: () => handle,
         $dd_return: (_handle: unknown, value: unknown) => value,
         $dd_throw: (_handle: unknown, error: unknown) => {
             throwCalls.push(error);
         },
     };
+    if (defineProbesHook) {
+        sandbox.$dd_probes2 = () => (hasProbe ? ['probe'] : undefined);
+    }
     if (defineCatchHook) {
         sandbox.$dd_catch = (
             functionId: string,
             error: unknown,
             self: unknown,
-            args?: Record<string, unknown>,
+            args: Record<string, unknown> | undefined,
+            invocationHandle: unknown,
         ) => {
-            catchCalls.push({ functionId, error, self, args });
+            catchCalls.push({ functionId, error, self, args, handle: invocationHandle });
         };
     }
 
     runInNewContext(`${transformed.code}\n${script}`, sandbox);
 
-    return { catchCalls, throwCalls, output };
+    return { catchCalls, throwCalls, output, handle };
 };
 
 describe('Exception Replay catch hook', () => {
@@ -104,6 +119,16 @@ describe('Exception Replay catch hook', () => {
         expect(catchCalls[0].args).toBeUndefined();
     });
 
+    it('should pass the receiver an arrow in a derived constructor sets', () => {
+        const { catchCalls } = runInstrumented(
+            'class A {} class B extends A { constructor() { const init = () => { super(); throw new Error("boom"); }; init(); } }',
+            'try { new B(); } catch {}',
+        );
+
+        expect(catchCalls).toHaveLength(1);
+        expect((catchCalls[0].self as object).constructor.name).toBe('B');
+    });
+
     it('should report the frame when no probe is active', () => {
         const { catchCalls, throwCalls } = runInstrumented(
             'function f() { throw new Error("boom"); }',
@@ -111,23 +136,35 @@ describe('Exception Replay catch hook', () => {
         );
 
         expect(catchCalls).toHaveLength(1);
+        expect(catchCalls[0].handle).toBeUndefined();
         expect(throwCalls).toHaveLength(0);
     });
 
-    it('should report the frame to both hooks when a probe is active', () => {
-        const { catchCalls, throwCalls } = runInstrumented(
+    it('should pass false as the handle when the SDK does not define $dd_probes2', () => {
+        const { catchCalls } = runInstrumented(
+            'function f() { throw new Error("boom"); }',
+            'try { f(); } catch {}',
+            { defineProbesHook: false },
+        );
+
+        expect(catchCalls).toHaveLength(1);
+        expect(catchCalls[0].handle).toBe(false);
+    });
+
+    it('should pass the invocation handle instead of calling $dd_throw when a probe is active', () => {
+        const { catchCalls, throwCalls, handle } = runInstrumented(
             'function f() { throw new Error("boom"); }',
             'try { f(); } catch {}',
             { hasProbe: true },
         );
 
         expect(catchCalls).toHaveLength(1);
-        expect(throwCalls).toHaveLength(1);
-        expect(throwCalls[0]).toBe(catchCalls[0].error);
+        expect(catchCalls[0].handle).toBe(handle);
+        expect(throwCalls).toHaveLength(0);
     });
 
     it('should capture a parameter named e rather than the exception', () => {
-        const { catchCalls, throwCalls, output } = runInstrumented(
+        const { catchCalls, output, handle } = runInstrumented(
             'function onClick(e) { throw new Error("boom"); }',
             'try { onClick(42); } catch (error) { out.error = error; }',
             { hasProbe: true },
@@ -136,7 +173,7 @@ describe('Exception Replay catch hook', () => {
         expect(catchCalls).toHaveLength(1);
         expect(catchCalls[0].args).toEqual({ e: 42 });
         expect(catchCalls[0].error).toBe(output.error);
-        expect(throwCalls[0]).toBe(output.error);
+        expect(catchCalls[0].handle).toBe(handle);
     });
 
     it('should report rejections of async functions', async () => {
@@ -165,13 +202,14 @@ describe('Exception Replay catch hook', () => {
         expect((output.error as Error).name).toBe('TypeError');
     });
 
-    it('should not call the hook when exceptionReplay is disabled', () => {
-        const { catchCalls } = runInstrumented(
+    it('should report the exception to $dd_throw instead when exceptionReplay is disabled', () => {
+        const { catchCalls, throwCalls, output } = runInstrumented(
             'function f() { throw new Error("boom"); }',
-            'try { f(); } catch {}',
-            { exceptionReplay: false },
+            'try { f(); } catch (error) { out.error = error; }',
+            { exceptionReplay: false, hasProbe: true },
         );
 
         expect(catchCalls).toHaveLength(0);
+        expect(throwCalls).toEqual([output.error]);
     });
 });

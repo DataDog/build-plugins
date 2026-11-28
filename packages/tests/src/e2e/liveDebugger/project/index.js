@@ -90,7 +90,7 @@ function runPatterns() {
 runPatterns();
 
 // Expose pattern functions so the E2E spec can re-invoke them
-// after overriding $dd_probes to simulate active probes.
+// after overriding $dd_probes2 to simulate active probes.
 globalThis.ddTestPatterns = {
     add,
     addWithLocal,

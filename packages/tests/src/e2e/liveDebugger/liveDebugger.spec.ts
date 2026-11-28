@@ -62,9 +62,9 @@ describe('Live Debugger', () => {
         await userFlow(testBaseUrl, page, bundler);
         expect((await bundleRequest).ok()).toBe(true);
 
-        // Without the debugger SDK, nothing defines `$dd_probes`, and the
+        // Without the debugger SDK, nothing defines `$dd_probes2`, and the
         // instrumented code must still run safely.
-        const probesType = await page.evaluate(() => typeof (globalThis as any).$dd_probes);
+        const probesType = await page.evaluate(() => typeof (globalThis as any).$dd_probes2);
         expect(probesType).toBe('undefined');
 
         await expect(page.locator('#status')).toHaveText('Ready');
@@ -114,7 +114,7 @@ describe('Live Debugger', () => {
         await userFlow(testBaseUrl, page, bundler);
 
         // Override globals to simulate the Datadog Browser Debugger SDK
-        // being loaded with active probes. $dd_probes returns a truthy probe
+        // being loaded with active probes. $dd_probes2 returns a truthy probe
         // object, and $dd_entry/$dd_return/$dd_throw are recording stubs.
         //
         // $dd_entry must return a handle identifying the invocation: the
@@ -144,7 +144,7 @@ describe('Live Debugger', () => {
                     }
                 };
 
-                g.$dd_probes = () => ({ active: true });
+                g.$dd_probes2 = () => ({ active: true });
                 g.$dd_entry = () => {
                     entries++;
                     return { id: entries };
@@ -214,7 +214,7 @@ describe('Live Debugger', () => {
         expect(throwCount).toBe(1);
 
         // Every exit hook received the handle $dd_entry returned, not the
-        // probe object $dd_probes handed to $dd_entry.
+        // probe object $dd_probes2 handed to $dd_entry.
         expect(handleMismatches).toBe(0);
 
         expect(errors).toEqual([]);

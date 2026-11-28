@@ -4,9 +4,119 @@
 
 import type * as t from '@babel/types';
 
-import type { BabelTypesModule } from './babel-path.types';
+import type { BabelPath, BabelTypesModule } from './babel-path.types';
 
 export const MAX_CAPTURE_VARIABLES = 25;
+
+// `arguments` and direct `eval` can give parameters new values without assigning their bindings:
+// in sloppy mode, `arguments[0] = value` reassigns the first parameter, and a direct `eval` can
+// assign any of them.
+const PARAMETER_ALIASES = new Set(['arguments', 'eval']);
+// Code that names neither can't contain them. A Unicode escape can spell either, as in `\u0065val`.
+const PARAMETER_ALIAS_RX = /\b(?:arguments|eval)\b|\\u/;
+
+// Whether code may contain an identifier named `arguments` or `eval`.
+export function mayContainParameterAliases(code: string): boolean {
+    return PARAMETER_ALIAS_RX.test(code);
+}
+
+// Whether an identifier's name, which Babel has decoded, is `arguments` or `eval`.
+export function isParameterAlias(name: string): boolean {
+    return PARAMETER_ALIASES.has(name);
+}
+
+// Whether one of the ascending offsets is in the range from `start`, included, to `end`, excluded.
+export function hasOffsetInRange(offsets: number[], start: number, end: number): boolean {
+    let low = 0;
+    let high = offsets.length;
+    while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (offsets[middle] < start) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+
+    return low < offsets.length && offsets[low] < end;
+}
+
+// TypeScript expressions that can wrap an assignment target, as in `value! = 1`. Angle-bracket
+// assertions can't, because the parser always reads JSX.
+function isTypeScriptWrapper(node: t.Node, typesModule: BabelTypesModule): boolean {
+    return (
+        typesModule.isTSNonNullExpression(node) ||
+        typesModule.isTSAsExpression(node) ||
+        typesModule.isTSSatisfiesExpression(node)
+    );
+}
+
+/**
+ * Whether a reference is assigned through TypeScript expressions around it, as in `value! = 1`
+ * or `[value as number] = list`. Babel doesn't count those assignments as constant violations of
+ * the binding.
+ */
+function isAssignedThroughTypeScriptWrapper(
+    referencePath: BabelPath,
+    typesModule: BabelTypesModule,
+): boolean {
+    let target = referencePath;
+    while (target.parentPath && isTypeScriptWrapper(target.parent, typesModule)) {
+        target = target.parentPath;
+    }
+
+    if (target === referencePath || !target.parentPath) {
+        return false;
+    }
+
+    const { node, parent } = target;
+    if (
+        typesModule.isAssignmentExpression(parent) ||
+        typesModule.isAssignmentPattern(parent) ||
+        typesModule.isForXStatement(parent)
+    ) {
+        return parent.left === node;
+    }
+    if (typesModule.isObjectProperty(parent)) {
+        return parent.value === node && typesModule.isObjectPattern(target.parentPath.parent);
+    }
+
+    return (
+        typesModule.isUpdateExpression(parent) ||
+        typesModule.isArrayPattern(parent) ||
+        typesModule.isRestElement(parent)
+    );
+}
+
+/**
+ * Whether a function assigns one of the parameters it captures after its entry, so its exit hooks
+ * need the parameters again instead of the ones the entry hook got. Assignments count wherever
+ * they are, including in nested functions and through TypeScript expressions such as
+ * `value! = 1`. The transform checks for `arguments` and `eval` separately.
+ */
+export function assignsParameters(
+    functionPath: BabelPath<t.Function>,
+    parameterNames: string[],
+    typesModule: BabelTypesModule,
+): boolean {
+    if (parameterNames.length === 0) {
+        return false;
+    }
+
+    for (const name of parameterNames) {
+        const binding = functionPath.scope.getOwnBinding(name);
+        if (!binding || binding.constantViolations.length > 0) {
+            return true;
+        }
+        for (const referencePath of binding.referencePaths) {
+            if (isAssignedThroughTypeScriptWrapper(referencePath, typesModule)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
 
 export interface LocalVariableTemporalDeadZone {
     start: number;

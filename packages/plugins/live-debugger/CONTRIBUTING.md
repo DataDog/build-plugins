@@ -42,13 +42,26 @@ Changes that affect source positions, injected wrappers, return rewriting, or er
 
 The Babel packages and `magic-string` are optional peer dependencies for consumers. Keep the transform dependencies lazy-loaded and preserve the user-facing missing-dependency error path. Update [`src/transform/lazy-deps.test.ts`](./src/transform/lazy-deps.test.ts) when touching dependency loading.
 
-Generated code should keep the dormant runtime path small: call `$dd_probes(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Keep the `globalThis.$dd_probes !== void 0` guard before that call: nothing defines `$dd_probes` until the SDK initializes, and never in global scopes without the SDK. Don't turn it into a `typeof` check: minifiers rewrite `typeof x !== 'undefined'` into a relational comparison such as `"u">typeof x`, which costs 5–9 ns per call in every major engine once the SDK is loaded. Generated code must not add string literals besides the function ID: RUM privacy would move them into the module's dictionary, which instrumented functions would then read before the module has run. Keep `$dd_probes` a bare identifier call, because RUM privacy only leaves the function ID inline for that form.
+Generated code should keep the dormant runtime path small: call `$dd_probes2(functionId)` first, and only call `$dd_entry`, `$dd_return`, or `$dd_throw` when a probe is active. Keep the `globalThis.$dd_probes2 !== void 0` guard before that call: nothing defines `$dd_probes2` until the SDK initializes, and never in global scopes without the SDK. Don't turn it into a `typeof` check: minifiers rewrite `typeof x !== 'undefined'` into a relational comparison such as `"u">typeof x`, which costs 5–9 ns per call in every major engine once the SDK is loaded. Generated code must not add string literals besides the function ID: RUM privacy would move them into the module's dictionary, which instrumented functions would then read before the module has run. Keep `$dd_probes2` and `$dd_catch` bare identifier calls, because RUM privacy only leaves the function ID inline for that form. That rules out a shorter `globalThis.$dd_probes2?.(functionId)` guard. It would also be the only syntax in the output newer than ES2015: most bundlers ship this transform's output as it is, which breaks applications that target older browsers, and esbuild and Vite with an older target rewrite it into a form the symbol scan can't read.
+
+The hooks' signatures, where `handle` is the binding that `$dd_probes2` and then `$dd_entry` set, and the optional arguments are left out when they're undefined and the following ones are too, or written `void 0` otherwise:
+
+```js
+$dd_probes2(functionId)
+$dd_entry(probes, self, args?)
+$dd_return(handle, value?, locals?, args?, self?)
+$dd_throw(handle, error, args?, self?)
+// Instead of $dd_throw with Exception Replay.
+$dd_catch(functionId, error, self, args, handle)
+```
+
+`$dd_return` and `$dd_throw` don't get `this` or the arguments again, because the SDK keeps the ones `$dd_entry` got. They only get the arguments again when the function may reassign a parameter: [`assignsParameters`](./src/transform/scopeTracker.ts) finds assignments, and the transform also counts any `arguments` or `eval` identifier in the function. They get the receiver again when it's the `$dd_t` alias of a derived constructor. `$dd_catch` always gets both, because Exception Replay needs them when no probe is active. When the hooks' signatures change in a way an older SDK would misread, rename `$dd_probes2`, so that SDK leaves the new builds dormant. Builds made before the rename stay deployed, and they call the same `$dd_entry`, `$dd_return` and `$dd_throw` with `this` and the arguments, so the SDK has to tell the two apart, for instance by marking the probes that `$dd_probes2` returns. With Exception Replay, `$dd_catch` is the only hook an exception reaches, so the SDK must define it along with `$dd_probes2` and report the exception to the handle's probes before any Exception Replay check.
 
 When adding or changing `liveDebugger` configuration, update [`src/types.ts`](./src/types.ts), [`src/validate.ts`](./src/validate.ts), [`src/validate.test.ts`](./src/validate.test.ts), and the consumer-facing [`README.md`](./README.md).
 
 ## Function IDs
 
-Every instrumented function passes its ID to `$dd_probes`. Outside the plugin, IDs are opaque: Datadog stores them with the symbols and the Browser Debugger SDK matches probes on them, so the format can change here alone. [`src/transform/functionId.ts`](./src/transform/functionId.ts) generates them during the transform's traversal, and [`EXAMPLES.md`](./EXAMPLES.md#function-ids) describes the format.
+Every instrumented function passes its ID to `$dd_probes2`. Outside the plugin, IDs are opaque: Datadog stores them with the symbols and the Browser Debugger SDK matches probes on them, so the format can change here alone. [`src/transform/functionId.ts`](./src/transform/functionId.ts) generates them during the transform's traversal, and [`EXAMPLES.md`](./EXAMPLES.md#function-ids) describes the format.
 
 - The path part is computed once per module by [`getFunctionIdPath`](./src/paths.ts): the query string is removed, Yarn PnP virtual folders are resolved, and the path is made relative to the git repository root, or to the build root outside a repository. Symlinks are only resolved for files outside the root, so most modules don't touch the file system.
 - The name part has no line numbers, so a function keeps its ID when the code around it changes. Duplicate qualified names get a `#<n>` suffix in traversal order. The suffix is assigned before any skip check, so `namedOnly`, `functionTypes`, and skip comments don't change the IDs of other functions.
@@ -73,12 +86,12 @@ The dump is never written inside the bundler's output directory, and neither col
 How it works:
 
 - After a one-off build, outside watch mode and dev servers, the plugin scans the text of every emitted JavaScript chunk, without parsing it. It doesn't use the transform hook, which doesn't run for modules restored from a persistent cache and doesn't know which functions tree-shaking removes.
-- Every instrumented function has exactly one `$dd_probes('<id>')` call at the start of its body and one `$dd_throw(` call at its end. The scan pairs them like brackets, which also gives each function's parent.
-- The transform anchors the `$dd_probes` call to the original body's opening brace, which gives the start line through the chunk's final source map. The end line is the last mapped position up to the `$dd_throw` call: for block bodies that's the closing brace. The code appended after an arrow function's expression body has no mapping, and minifiers leave some tokens unmapped, so the closest mapped token before it is used instead.
+- Every instrumented function has exactly one `$dd_probes2('<id>')` call at the start of its body and one call at its end: `$dd_throw(`, or `$dd_catch(` with Exception Replay. The scan pairs them like brackets, which also gives each function's parent.
+- The transform anchors the `$dd_probes2` call to the original body's opening brace, which gives the start line through the chunk's final source map. The end line is the last mapped position up to the `$dd_throw` or `$dd_catch` call: for block bodies that's the closing brace. The code appended after an arrow function's expression body has no mapping, and minifiers leave some tokens unmapped, so the closest mapped token before it is used instead.
 - The path and display name come from the function ID, whose path the transform already made relative to the git root. Without a git repository, no symbols are collected.
 - Each chunk's debug ID is read from the runtime bootstrap, when debug IDs are enabled, to record which chunks contain each file.
 
-When changing instrumentation output, keep exactly one `$dd_probes` call at the start and one `$dd_throw` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the symbols on every bundler.
+When changing instrumentation output, keep exactly one `$dd_probes2` call at the start and one `$dd_throw` or `$dd_catch` call at the end of every instrumented function, anchored to the body's braces. [`src/symbolTable.integration.test.ts`](./src/symbolTable.integration.test.ts) checks the symbols on every bundler.
 
 Known limitations:
 

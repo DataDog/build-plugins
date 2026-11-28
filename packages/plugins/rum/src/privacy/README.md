@@ -123,7 +123,7 @@ module.exports = {
 
 ## Live Debugger Function IDs
 
-When the [Live Debugger plugin](/packages/plugins/live-debugger) is enabled, every instrumented function starts with a `$dd_probes('<function ID>')` call. The privacy plugin always leaves these function IDs inline and out of the allowlist. They are not application strings, and reading them from the module's dictionary would make every instrumented function depend on its module having been evaluated.
+When the [Live Debugger plugin](/packages/plugins/live-debugger) is enabled, every instrumented function starts with a `$dd_probes2('<function ID>')` call. The privacy plugin always leaves these function IDs inline and out of the allowlist. They are not application strings, and reading them from the module's dictionary would make every instrumented function depend on its module having been evaluated.
 
 ## Known Limitations
 

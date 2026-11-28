@@ -34,7 +34,7 @@ type TableFunction = {
 const APP_DIR = 'app';
 const VIRTUAL_PEER_PATH = '.yarn/__virtual__/peer-virtual-0123456789/1/packages/peer/index.js';
 const XPACK_BUNDLERS: BundlerName[] = ['webpack', 'rspack'];
-const PROBE_CALL_RX = /\$dd_probes\((['"`])(.*?)\1\)/g;
+const PROBE_CALL_RX = /\$dd_probes2\((['"`])(.*?)\1\)/g;
 
 const PEER_SOURCE = `export function peerHello() {
     return 'hello from peer';
@@ -415,61 +415,76 @@ describe('Live Debugger symbol table', () => {
         });
     });
     // Minifiers rewrite the injected code and don't map every token, like web-ui's production builds.
-    describe('rspack | minified production build', () => {
-        if (!BUNDLERS.some(({ name }) => name === 'rspack')) {
-            test.skip('rspack is not part of this run.', () => {});
-            return;
-        }
+    // With Exception Replay, `$dd_catch` instead of `$dd_throw` marks the end of each function.
+    describe.each([{ exceptionReplay: false }, { exceptionReplay: true }])(
+        'rspack | minified production build, exceptionReplay: $exceptionReplay',
+        ({ exceptionReplay }) => {
+            if (!BUNDLERS.some(({ name }) => name === 'rspack')) {
+                test.skip('rspack is not part of this run.', () => {});
+                return;
+            }
 
-        let minifiedTable: SymbolTablePayload | undefined;
+            let minifiedTable: SymbolTablePayload | undefined;
 
-        beforeAll(async () => {
-            const outDir = getOutDir(appDir, 'rspack-production');
-            const dumpPath = path.resolve(workingDir, 'symbol-table.rspack-production.json');
+            beforeAll(async () => {
+                const variant = exceptionReplay ? 'rspack-production-er' : 'rspack-production';
+                const outDir = getOutDir(appDir, variant);
+                const dumpPath = path.resolve(workingDir, `symbol-table.${variant}.json`);
 
-            minifiedTable = await buildWithSymbolTable(dumpPath, async () => {
-                const plugin = datadogRspackPlugin({
-                    ...defaultPluginOptions,
-                    ...PLUGIN_OVERRIDES,
-                    rum: { privacy: {} },
+                minifiedTable = await buildWithSymbolTable(dumpPath, async () => {
+                    const plugin = datadogRspackPlugin({
+                        ...defaultPluginOptions,
+                        ...PLUGIN_OVERRIDES,
+                        liveDebugger: { exceptionReplay },
+                        rum: { privacy: {} },
+                    });
+                    const config = configRspack({
+                        workingDir: appDir,
+                        outDir,
+                        entry: { main: './src/main-xpack.js' },
+                        plugins: [sourceMapLoaderPlugin, plugin],
+                    });
+                    const { errors } = await buildWithRspack({
+                        ...config,
+                        mode: 'production',
+                        optimization: { ...config.optimization, minimize: true },
+                    });
+                    return errors;
                 });
-                const config = configRspack({
-                    workingDir: appDir,
-                    outDir,
-                    entry: { main: './src/main-xpack.js' },
-                    plugins: [sourceMapLoaderPlugin, plugin],
-                });
-                const { errors } = await buildWithRspack({
-                    ...config,
-                    mode: 'production',
-                    optimization: { ...config.optimization, minimize: true },
-                });
-                return errors;
+            }, 200000);
+
+            test('Should give every function its original line range.', () => {
+                const functions = flattenScopes(minifiedTable?.scopes);
+                const withoutLines = functions.filter((tableFunction) => !tableFunction.endLine);
+
+                expect(functions.length).toBeGreaterThan(0);
+                expect(withoutLines).toEqual([]);
+                expect(functions).toContainEqual(
+                    expect.objectContaining({
+                        sourceFile: 'app/src/math.js',
+                        name: 'add',
+                        startLine: 1,
+                        endLine: 6,
+                    }),
+                );
+                expect(functions).toContainEqual(
+                    expect.objectContaining({
+                        sourceFile: 'app/src/math.js',
+                        name: 'double',
+                        startLine: 2,
+                        endLine: 4,
+                        parentName: 'add',
+                    }),
+                );
+
+                // The end of an expression body is the last token the minifier keeps mapped.
+                const triple = functions.find((tableFunction) => tableFunction.name === 'triple');
+                expect(triple?.startLine).toBe(9);
+                expect(triple?.endLine).toBeGreaterThanOrEqual(9);
+                expect(triple?.endLine).toBeLessThanOrEqual(10);
             });
-        }, 200000);
-
-        test('Should give every function its original line range.', () => {
-            const functions = flattenScopes(minifiedTable?.scopes);
-            const withoutLines = functions.filter((tableFunction) => !tableFunction.endLine);
-
-            expect(functions.length).toBeGreaterThan(0);
-            expect(withoutLines).toEqual([]);
-            expect(functions).toContainEqual(
-                expect.objectContaining({
-                    sourceFile: 'app/src/math.js',
-                    name: 'add',
-                    startLine: 1,
-                    endLine: 6,
-                }),
-            );
-
-            // The end of an expression body is the last token the minifier keeps mapped.
-            const triple = functions.find((tableFunction) => tableFunction.name === 'triple');
-            expect(triple?.startLine).toBe(9);
-            expect(triple?.endLine).toBeGreaterThanOrEqual(9);
-            expect(triple?.endLine).toBeLessThanOrEqual(10);
-        });
-    });
+        },
+    );
     describe('upload', () => {
         type UploadRequest = { path: string; apiKey: string | string[] | undefined };
         const uploads: Partial<Record<BundlerName, UploadRequest[]>> = {};

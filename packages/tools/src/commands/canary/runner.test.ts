@@ -88,8 +88,8 @@ const writeVariantOutputs = async (root: string): Promise<void> => {
     const allFunctionsPath = path.resolve(root, 'all-functions/app.js');
     const namedOnlyPath = path.resolve(root, 'named-only/app.js');
     await outputFile(controlPath, 'function app() { return 1; }');
-    await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
-    await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
+    await outputFile(allFunctionsPath, 'function app() { $dd_probes2("app"); return 1; }');
+    await outputFile(namedOnlyPath, 'function app() { $dd_probes2("app"); return 1; }');
 };
 
 // Finds a run ID whose variant order starts with the given variants.
@@ -178,8 +178,8 @@ describe('canary runner', () => {
         const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
         const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
         await outputFile(controlPath, 'function app() { return 1; }');
-        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
-        await outputFile(namedOnlyPath, 'function app() { $dd_probes("a"); return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes2("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes2("a"); return 1; }');
 
         const commands: string[] = [];
         const runCommand: RunCommand = async (spec) => {
@@ -227,7 +227,7 @@ describe('canary runner', () => {
             deltaPercent: 10,
         });
         expect(report.phases[0]?.comparisons['named-only'].rawBytes.delta).toBe(
-            Buffer.byteLength('$dd_probes("a"); '),
+            Buffer.byteLength('$dd_probes2("a"); '),
         );
         expect(commands).toHaveLength(6);
         expect(cleanupOrder).toEqual(['second', 'first']);
@@ -242,8 +242,8 @@ describe('canary runner', () => {
         const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
         const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
         await outputFile(controlPath, 'function app() { return 1; }');
-        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
-        await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes2("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes2("app"); return 1; }');
 
         const commands: string[] = [];
         const runCommand: RunCommand = async (spec) => {
@@ -327,8 +327,8 @@ describe('canary runner', () => {
         const allFunctionsPath = path.resolve(TEST_ROOT, 'all-functions/app.js');
         const namedOnlyPath = path.resolve(TEST_ROOT, 'named-only/app.js');
         await outputFile(controlPath, 'function app() { return 1; }');
-        await outputFile(allFunctionsPath, 'function app() { $dd_probes("app"); return 1; }');
-        await outputFile(namedOnlyPath, 'function app() { $dd_probes("app"); return 1; }');
+        await outputFile(allFunctionsPath, 'function app() { $dd_probes2("app"); return 1; }');
+        await outputFile(namedOnlyPath, 'function app() { $dd_probes2("app"); return 1; }');
 
         const steps: string[] = [];
         const target: CanaryTarget = {

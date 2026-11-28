@@ -10,8 +10,9 @@ export const PLUGIN_NAME: PluginName = 'datadog-live-debugger-plugin' as const;
 // Skip instrumentation comment
 export const SKIP_INSTRUMENTATION_COMMENT = '@dd-no-instrumentation';
 
-// Runtime global that instrumented functions call when they throw.
-// The symbol table relies on it marking the end of every instrumented function's body.
+// Runtime global that instrumented functions call when they throw, unless they were built with
+// Exception Replay, whose catch hook reports the exception instead. The symbol table relies on
+// one of the two marking the end of every instrumented function's body.
 export const LIVE_DEBUGGER_THROW_FUNCTION = '$dd_throw';
 
 // Function IDs are `<repository-relative path>;<qualified function name>`.

@@ -23,7 +23,7 @@ import type { BenchVariant, BrowserBenchApi, SdkBuild } from './types';
 declare global {
     var ddBench: Record<BenchVariant, BrowserBenchApi> | undefined;
     var crossOriginIsolated: boolean;
-    var $dd_probes: (functionId: string) => unknown[] | undefined;
+    var $dd_probes2: ((functionId: string) => unknown[] | undefined) | undefined;
     var DD_DEBUGGER:
         | {
               version: string;
@@ -48,7 +48,7 @@ const BENCH_OPTIONS = {
 };
 
 // The Browser Debugger SDK is published to the CDN on every commit to master, so the
-// benchmark exercises the real, shipped $dd_probes / $dd_entry / $dd_return / $dd_throw
+// benchmark exercises the real, shipped $dd_probes2 / $dd_entry / $dd_return / $dd_throw
 // instead of a hand-written stub that could silently drift from the SDK.
 const SDK_BUNDLE_URL = 'https://www.datadoghq-browser-agent.com/us1/v7/datadog-debugger.js';
 // Cache the vendored SDK bundle under the build's dist/ folder so it inherits the repo's
@@ -216,14 +216,14 @@ const installRealDebuggerSdk = async (page: Page, bundlePath: string) => {
     await page.addInitScript({ path: bundlePath });
 };
 
-// Initialize the real SDK dormant (no active probes), wiring the production $dd_probes /
+// Initialize the real SDK dormant (no active probes), wiring the production $dd_probes2 /
 // $dd_entry / $dd_return / $dd_throw. Called after the page has loaded rather than from a
 // document_start init script: init() starts the probe-delivery poll, and a fetch fired that
 // early escapes Playwright route interception in Firefox (it hits the network and the SDK
 // logs a "Delivery API poll error"). Initializing post-load fires the poll while interception
 // is reliably active in every browser. `proxyOrigin` is the page origin, keeping the poll
 // same-origin (no CORS preflight). The instrumented workloads only run later (in
-// runBenchPair), so $dd_probes is the real getProbes for every measured call even though init
+// runBenchPair), so $dd_probes2 is the real getProbes for every measured call even though init
 // happens after the bundle has loaded.
 const initRealDebuggerSdk = async (page: Page, proxyOrigin: string) => {
     await page.evaluate((proxy) => {
@@ -295,16 +295,25 @@ describe('Live Debugger Runtime Benchmark', () => {
 
         // Confirm the real SDK loaded and is dormant (no active probes) before measuring.
         const sdkState = await page.evaluate(() => {
-            const probesForAbsentFunction = globalThis.$dd_probes(
-                'live-debugger-runtime-bench;__absent__',
-            );
+            const getProbes = globalThis.$dd_probes2;
+            const hasProbesHook = typeof getProbes === 'function';
             return {
                 hasSdk: typeof globalThis.DD_DEBUGGER !== 'undefined',
                 version: globalThis.DD_DEBUGGER?.version,
-                dormant: probesForAbsentFunction === undefined,
+                hasProbesHook,
+                dormant:
+                    hasProbesHook &&
+                    getProbes('live-debugger-runtime-bench;__absent__') === undefined,
             };
         });
         expect(sdkState.hasSdk).toBe(true);
+        // Without the hook, the instrumented code would stay dormant and the benchmark would
+        // measure the code path of a page without the SDK.
+        if (!sdkState.hasProbesHook) {
+            throw new Error(
+                `Browser Debugger SDK ${sdkState.version ?? '(unknown version)'} doesn't define $dd_probes2, which the instrumented code calls`,
+            );
+        }
         expect(sdkState.dormant).toBe(true);
 
         // The SDK always exposes its build version (set by makePublicApi). A missing version

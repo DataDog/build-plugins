@@ -127,7 +127,7 @@ describe('getLiveDebuggerPlugin', () => {
 
                 // The first file WITH functions should still be instrumented
                 const result = handler('function f() { return 1; }', '/src/utils.ts');
-                expect(result?.code).toContain('$dd_probes');
+                expect(result?.code).toContain('$dd_probes2');
             });
         });
 
@@ -161,7 +161,7 @@ describe('getLiveDebuggerPlugin', () => {
 
                 // First file with functions — within limit
                 const result1 = handler('function f() { return 1; }', '/src/a.ts');
-                expect(result1?.code).toContain('$dd_probes');
+                expect(result1?.code).toContain('$dd_probes2');
 
                 // Second file with functions — exceeds limit, left unchanged
                 const result2 = handler('function g() { return 2; }', '/src/b.ts');
@@ -182,7 +182,7 @@ describe('getLiveDebuggerPlugin', () => {
             const handler = getHandler(makeOptions({ include: [/\.tsx?$/] }));
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/src/utils.ts')?.code).toContain('$dd_probes');
+            expect(handler(code, '/src/utils.ts')?.code).toContain('$dd_probes2');
         });
 
         it.each(DEFAULT_FILE_EXTENSIONS)(
@@ -191,7 +191,7 @@ describe('getLiveDebuggerPlugin', () => {
                 const handler = getHandler(makeOptions({ include: [], exclude: [] }));
                 const code = 'function f() { return 1; }';
 
-                expect(handler(code, `/src/utils${extension}`)?.code).toContain('$dd_probes');
+                expect(handler(code, `/src/utils${extension}`)?.code).toContain('$dd_probes2');
             },
         );
 
@@ -205,7 +205,7 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
 
             expect(handler(code, '/project/src/styles.css')).toBeNull();
-            expect(handler(code, '/project/src/utils.ts')?.code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/utils.ts')?.code).toContain('$dd_probes2');
         });
 
         it('should process a custom file extension', () => {
@@ -218,7 +218,7 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/project/src/component.vue')?.code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/component.vue')?.code).toContain('$dd_probes2');
             expect(handler(code, '/project/src/utils.ts')).toBeNull();
         });
 
@@ -232,7 +232,7 @@ describe('getLiveDebuggerPlugin', () => {
             );
             const code = 'function f() { return 1; }';
 
-            expect(handler(code, '/project/src/anything.xyz')?.code).toContain('$dd_probes');
+            expect(handler(code, '/project/src/anything.xyz')?.code).toContain('$dd_probes2');
         });
 
         it('should match file extensions case-insensitively before an ID query', () => {
@@ -240,7 +240,7 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
 
             expect(handler(code, '/src/component.TSX?loader=transformed')?.code).toContain(
-                '$dd_probes',
+                '$dd_probes2',
             );
         });
 
@@ -261,7 +261,7 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
             const projectRoot = process.cwd();
 
-            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes2');
             expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toBeNull();
         });
 
@@ -275,7 +275,7 @@ describe('getLiveDebuggerPlugin', () => {
             const code = 'function f() { return 1; }';
             const projectRoot = process.cwd();
 
-            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes');
+            expect(handler(code, `${projectRoot}/src/utils.ts`)?.code).toContain('$dd_probes2');
             expect(handler(code, `${projectRoot}/vendor/lib.ts`)).toBeNull();
         });
     });

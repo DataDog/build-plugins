@@ -72,8 +72,8 @@ describe('getRuntimeBootstrap', () => {
         const code = getRuntimeBootstrap(options)(inputChunk);
         const globalScope = runInFreshGlobal(code);
 
-        // Instrumented functions only call `$dd_probes` once the SDK has defined it.
-        expect(typeof globalScope.$dd_probes).toBe('undefined');
+        // Instrumented functions only call `$dd_probes2` once the SDK has defined it.
+        expect(typeof globalScope.$dd_probes2).toBe('undefined');
         // The vm returns objects from another realm, so compare their JSON shape.
         const serializedBuildMetadata = JSON.stringify(globalScope[BUILD_METADATA_GLOBAL]);
         const buildMetadata = JSON.parse(serializedBuildMetadata);

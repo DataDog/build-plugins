@@ -107,12 +107,14 @@ The Live Debugger plugin automatically instruments all JavaScript functions in y
 
 Each instrumented function gets:
 - A function ID that identifies the function and stays the same across builds until the function is renamed or moved
-- A `$dd_probes()` call that returns active probes for that function (or `undefined` if none)
+- A `$dd_probes2()` call that returns active probes for that function (or `undefined` if none)
 - Entry point tracking with parameter capture via `$dd_entry()`, which returns a handle identifying the current invocation
 - Return value tracking with local variable capture via `$dd_return()`
-- Exception tracking with variable state at throw time via `$dd_throw()`
+- Exception tracking via `$dd_throw()`, or via `$dd_catch()` when [`exceptionReplay`](#livedebuggerexceptionreplay) is enabled
 
-The instrumentation checks whether probes are active by calling `$dd_probes(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the guarded `$dd_probes` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
+The SDK keeps the parameters that `$dd_entry()` captured, so `$dd_return()` and `$dd_throw()` only get them again when the function may reassign one. See [Reassigned parameters](./EXAMPLES.md#reassigned-parameters).
+
+The instrumentation checks whether probes are active by calling `$dd_probes2(functionId)`. When no probes are active, the function returns `undefined` and all instrumentation is skipped — only the guarded `$dd_probes2` call and a conditional check remain on the hot path. When probes exist but none of them produced an entry (sampling, entry conditions, lifetime budgets), `$dd_entry()` returns `undefined` and the return and throw hooks are skipped too. See [Invocation handles](#invocation-handles).
 
 **Example transformation:**
 
@@ -125,13 +127,13 @@ function add(a, b) {
 
 // After
 function add(a, b) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
         const sum = a + b;
-        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}, {sum}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
+        return ($dd_rv0 = sum, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, {sum}) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
@@ -304,13 +306,13 @@ liveDebugger: {
 
 > default: `false`
 
-When `true`, every instrumented function also reports the exceptions that leave it, whether or not a probe is active, so the Browser Debugger SDK can capture the arguments of each frame an error passes through (Exception Replay). The catch block of each instrumented function gets an extra call:
+When `true`, every instrumented function also reports the exceptions that leave it, whether or not a probe is active, so the Browser Debugger SDK can capture the arguments of each frame an error passes through (Exception Replay). The catch block of each instrumented function calls `$dd_catch` instead of `$dd_throw`, with the function's ID and arguments, and with the invocation handle, so active probes get the exception too:
 
 ```javascript
-catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.js;add', $dd_e, this, {a, b}); throw $dd_e; }
+catch($dd_e) { if (globalThis.$dd_catch !== void 0) $dd_catch('src/utils.js;add', $dd_e, this, {a, b}, $dd_p0); throw $dd_e; }
 ```
 
-The call only runs when an exception leaves the function and Exception Replay is enabled in the SDK, so it adds no measurable cost to calls that don't throw. It repeats each function's ID, which adds 120 to 140 bytes per instrumented function to the uncompressed output, but compresses well. See [Bundle size impact](#bundle-size-impact).
+The call only runs when an exception leaves the function, so it adds no measurable cost to calls that don't throw. It repeats each function's ID and arguments, which grows the uncompressed output but compresses well. See [Bundle size impact](#bundle-size-impact).
 
 **Example:**
 
@@ -351,21 +353,23 @@ Check the size limits your build enforces before enabling Live Debugger, especia
 
 If a chunk no longer fits, raise the limit, or instrument less of your code with [`include`](#livedebuggerinclude), [`exclude`](#livedebuggerexclude), [`namedOnly`](#livedebuggernamedonly), or [`functionTypes`](#livedebuggerfunctiontypes).
 
-[`exceptionReplay`](#livedebuggerexceptionreplay) adds to this growth. On a large application, it added 12% to 15% to the uncompressed size of the instrumented output, and 0.5% to 1.2% to the gzipped size.
+[`exceptionReplay`](#livedebuggerexceptionreplay) adds to this growth, because the catch block of every instrumented function repeats the function's ID and arguments. Most of it compresses away.
 
 ## Runtime requirements
 
-The instrumented code calls four global functions at runtime: `$dd_probes`, `$dd_entry`, `$dd_return`, and `$dd_throw`, plus `$dd_catch` when [`exceptionReplay`](#livedebuggerexceptionreplay) is enabled. These are provided by the **Datadog Browser Debugger SDK** (`@datadog/browser-debugger`).
+The instrumented code calls four global functions at runtime: `$dd_probes2`, `$dd_entry`, `$dd_return`, and `$dd_throw`, or `$dd_catch` instead of `$dd_throw` when [`exceptionReplay`](#livedebuggerexceptionreplay) is enabled. These are provided by the **Datadog Browser Debugger SDK** (`@datadog/browser-debugger`).
+
+This version of the plugin needs a Browser Debugger SDK that defines `$dd_probes2`. With an older SDK, logpoints can't fire in your build, but Exception Replay still works, and your application runs normally.
 
 ### Safe fallback when the SDK is absent
 
-Every instrumented function only calls `$dd_probes` when it is defined:
+Every instrumented function only calls `$dd_probes2` when it is defined:
 
 ```javascript
-let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/utils.js;add');
+let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/utils.js;add');
 ```
 
-This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks). The `$dd_catch` call has its own `globalThis.$dd_catch !== void 0` guard, so it's skipped until the SDK enables Exception Replay.
+This ensures that instrumented code never crashes, even if the SDK has not been loaded. Without the SDK, `$dd_p0` is falsy, which causes all `$dd_entry`, `$dd_return`, and `$dd_throw` calls to be skipped (they are guarded by `if (probe)` checks). The `$dd_catch` call has its own `globalThis.$dd_catch !== void 0` guard, so it's skipped until the SDK defines it.
 
 This also covers instrumented code that runs in another global scope than the page, such as a sandboxed iframe, a worker built from a string, or a function converted to a string and evaluated elsewhere. That code runs normally, but its probes can't fire unless the Browser Debugger SDK is initialized in the same global scope.
 
@@ -393,24 +397,26 @@ Each instrumented function holds a single binding that identifies the call curre
 
 ```js
 function add(a, b) {
-    let $dd_p0 = globalThis.$dd_probes !== void 0 && $dd_probes('src/math.ts;add');
+    let $dd_p0 = globalThis.$dd_probes2 !== void 0 && $dd_probes2('src/math.ts;add');
     try {
         let $dd_rv0;
         if ($dd_p0) $dd_p0 = $dd_entry($dd_p0, this, {a, b});
-        return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0, this, {a, b}) : $dd_rv0);
-    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e, this, {a, b}); throw $dd_e; }
+        return ($dd_rv0 = a + b, $dd_p0 ? $dd_return($dd_p0, $dd_rv0) : $dd_rv0);
+    } catch($dd_e) { if ($dd_p0) $dd_throw($dd_p0, $dd_e); throw $dd_e; }
 }
 ```
 
-`$dd_probes` returns the probes registered for the function, and `$dd_entry` exchanges them for an opaque handle identifying this one invocation. Because the binding is function-scoped, every exit path hands the exit hooks the handle belonging to their own call — so overlapping asynchronous invocations are paired correctly even when they finish out of entry order.
+`$dd_probes2` returns the probes registered for the function, and `$dd_entry` exchanges them for an opaque handle identifying this one invocation. Because the binding is function-scoped, every exit path hands the exit hooks the handle belonging to their own call — so overlapping asynchronous invocations are paired correctly even when they finish out of entry order.
 
 `$dd_entry` returns `undefined` when no probe produced an entry (sampling, entry conditions, lifetime budgets). The exit guards are then false and the return and throw hooks are skipped entirely.
 
-Two properties of this contract are load-bearing for the generated code:
+Four properties of this contract are load-bearing for the generated code:
 
-- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters.
+- **The handle is opaque.** Instrumented code only stores it and passes it back. Per-invocation state belongs inside the handle, never in additional positional parameters. When no probe produced an entry, the binding holds `undefined`, or `false` if `$dd_probes2` wasn't defined when the function started. If `$dd_entry` throws, it still holds what `$dd_probes2` returned.
 - **`$dd_return` returns the value it is given.** Its result *is* the instrumented function's return value, so the hooks' parameter positions cannot be reordered without changing what applications return.
+- **The SDK keeps the receiver and the arguments `$dd_entry` gets.** `$dd_return` and `$dd_throw` only get them again when they may have changed: the arguments when the function may reassign a parameter, and the receiver in arrow functions inside derived class constructors, where `this` is only available once `super()` returns. `$dd_catch` always gets them, because Exception Replay needs them when no probe is active.
+- **`$dd_catch` reports exceptions to probes too.** In builds with [`exceptionReplay`](#livedebuggerexceptionreplay), it's the only hook an exception reaches, so the SDK defines it whenever it defines `$dd_probes2`, and reports the exception to the handle's probes whether or not Exception Replay is enabled.
 
 ### Activating probes
 
-When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it defines `$dd_probes` and sets up `$dd_entry`, `$dd_return`, and `$dd_throw`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
+When the Debugger SDK loads and `DD_DEBUGGER.init()` is called, it defines `$dd_probes2` and sets up `$dd_entry`, `$dd_return`, `$dd_throw`, and `$dd_catch`. Probes begin working immediately on the next function invocation — no rebuild required. The ordering of SDK initialization vs. application code execution does not matter.
