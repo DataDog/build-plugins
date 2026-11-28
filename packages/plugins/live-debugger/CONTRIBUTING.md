@@ -12,6 +12,7 @@ Developer notes for the Live Debugger plugin.
     -   [Fresh checkouts and CI](#fresh-checkouts-and-ci)
     -   [Excalidraw target](#excalidraw-target)
     -   [Mastodon target](#mastodon-target)
+    -   [Chatwoot target](#chatwoot-target)
 -   [Runtime benchmark](#runtime-benchmark)
     -   [Running it](#running-it)
     -   [What it measures](#what-it-measures)
@@ -249,6 +250,33 @@ Babel peer dependencies into the checkout, and generates
 config. Cleanup restores `package.json` and `yarn.lock`, then reinstalls the
 checkout's dependencies. Every variant is a production build, written to
 `build/live-debugger-canary/`.
+
+### Chatwoot target
+
+The `chatwoot` target builds the web frontend of the public
+[Chatwoot](https://github.com/chatwoot/chatwoot) app, a Vue 3 app, with Vite 6.
+Building the frontend needs Node.js and pnpm only, not Ruby. By default the
+target expects a checkout next to this repository, with its dependencies
+installed. Chatwoot pins pnpm 10 through its `packageManager` field, so `pnpm`
+must honor that field in its checkout, for example through Corepack:
+
+```bash
+git clone --depth 1 --branch develop https://github.com/chatwoot/chatwoot.git ../chatwoot
+(cd ../chatwoot && pnpm install --frozen-lockfile)
+yarn cli canary chatwoot
+```
+
+Setup packs `@datadog/vite-plugin`, installs the tarball and the Live Debugger
+Babel peer dependencies into the checkout, and generates
+`vite.config.live-debugger-canary.mjs`, which wraps Chatwoot's unmodified Vite
+config. Live Debugger doesn't instrument `.vue` files by default, so the
+generated config adds `.vue` to `liveDebugger.fileExtensions`, and the canary
+fails when an instrumented build has no function from a `.vue` file. Cleanup
+restores `package.json` and `pnpm-lock.yaml`, then reinstalls the checkout's
+dependencies. Every variant is a production build, written to
+`public/live-debugger-canary/`: Chatwoot's Vite config uses `vite-plugin-ruby`,
+which ignores `--outDir`, so the build sets `VITE_RUBY_PUBLIC_OUTPUT_DIR`
+instead.
 
 ## Runtime benchmark
 

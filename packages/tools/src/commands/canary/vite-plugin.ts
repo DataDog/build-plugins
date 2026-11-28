@@ -3,6 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { mkdir, rm } from '@dd/core/helpers/fs';
+import { DEFAULT_FILE_EXTENSIONS } from '@dd/live-debugger-plugin/constants';
 import os from 'os';
 import { outdent } from 'outdent';
 import path from 'path';
@@ -21,9 +22,31 @@ const LIVE_DEBUGGER_PEER_DEPENDENCIES = ['@babel/parser', '@babel/traverse', '@b
 const LIVE_DEBUGGER_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER';
 const NAMED_ONLY_ENV = 'BUILD_PLUGIN_LIVE_DEBUGGER_NAMED_ONLY';
 
+export type CanaryViteConfigOptions = {
+    // Extensions Live Debugger instruments besides its defaults, such as `.vue`.
+    additionalFileExtensions?: readonly string[];
+};
+
+// Indentation of the Live Debugger options in the generated config.
+const LIVE_DEBUGGER_OPTION_INDENT = ' '.repeat(20);
+
+const getFileExtensionsOption = (additionalFileExtensions: readonly string[]): string => {
+    if (additionalFileExtensions.length === 0) {
+        return '';
+    }
+
+    const fileExtensions = [...DEFAULT_FILE_EXTENSIONS, ...additionalFileExtensions];
+    const list = fileExtensions.map((extension) => `'${extension}'`).join(', ');
+    return `\n${LIVE_DEBUGGER_OPTION_INDENT}fileExtensions: [${list}],`;
+};
+
 // Wraps a target's own Vite config and adds the Datadog plugin, so the target's
 // config file stays untouched.
-export const getCanaryViteConfig = (baseConfigSpecifier: string): string => {
+export const getCanaryViteConfig = (
+    baseConfigSpecifier: string,
+    { additionalFileExtensions = [] }: CanaryViteConfigOptions = {},
+): string => {
+    const fileExtensionsOption = getFileExtensionsOption(additionalFileExtensions);
     return outdent`
         import { datadogVitePlugin } from '${VITE_PACKAGE}';
         import { defineConfig, mergeConfig } from 'vite';
@@ -38,7 +61,7 @@ export const getCanaryViteConfig = (baseConfigSpecifier: string): string => {
                         logLevel: 'info',
                         liveDebugger: {
                             enable: process.env.${LIVE_DEBUGGER_ENV} === 'true',
-                            namedOnly: process.env.${NAMED_ONLY_ENV} === 'true',
+                            namedOnly: process.env.${NAMED_ONLY_ENV} === 'true',${fileExtensionsOption}
                         },
                     }),
                 ],

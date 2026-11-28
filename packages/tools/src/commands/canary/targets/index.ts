@@ -4,11 +4,13 @@
 
 import type { CanaryTarget } from '../types';
 
+import { chatwootTarget } from './chatwoot';
 import { excalidrawTarget } from './excalidraw';
 import { mastodonTarget } from './mastodon';
 import { webUiTarget } from './web-ui';
 
 const targets = new Map<string, CanaryTarget>([
+    [chatwootTarget.id, chatwootTarget],
     [excalidrawTarget.id, excalidrawTarget],
     [mastodonTarget.id, mastodonTarget],
     [webUiTarget.id, webUiTarget],

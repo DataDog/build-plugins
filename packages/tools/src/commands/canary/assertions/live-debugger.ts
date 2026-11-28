@@ -3,6 +3,8 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import { readFile } from '@dd/core/helpers/fs';
+import { scanChunk } from '@dd/live-debugger-plugin/symbol-table/scan';
+import { parseFunctionId } from '@dd/live-debugger-plugin/transform/functionId';
 
 import { CanaryCommandError } from '../runner';
 import type { CanaryVariant, CommandResult } from '../types';
@@ -67,5 +69,33 @@ export const assertLiveDebuggerArtifacts = async (
 
     throw new CanaryCommandError(
         'Instrumented build output does not contain the Live Debugger runtime marker.',
+    );
+};
+
+// Live Debugger skips files whose extension it isn't configured for, without an
+// error. A target that adds an extension, such as `.vue`, checks that the build
+// instrumented functions from such files.
+export const assertFileExtensionInstrumented = async (
+    filePaths: string[],
+    variant: CanaryVariant,
+    extension: string,
+): Promise<void> => {
+    if (variant === 'control') {
+        return;
+    }
+
+    for (const filePath of filePaths) {
+        const content = await readFile(filePath);
+        const { functions } = scanChunk(content);
+        const hasFunction = functions.some(({ functionId }) => {
+            return parseFunctionId(functionId)?.modulePath.endsWith(extension);
+        });
+        if (hasFunction) {
+            return;
+        }
+    }
+
+    throw new CanaryCommandError(
+        `Instrumented build output contains no function from a ${extension} file.`,
     );
 };
