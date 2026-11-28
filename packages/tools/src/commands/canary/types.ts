@@ -2,6 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import type { RuntimeBenchmarkResult, RuntimePage, RuntimeSettings } from './runtime';
+
 export const INSTRUMENTED_VARIANTS = ['all-functions', 'named-only'] as const;
 export const CANARY_VARIANTS = ['control', ...INSTRUMENTED_VARIANTS] as const;
 export type CanaryVariant = (typeof CANARY_VARIANTS)[number];
@@ -63,6 +65,25 @@ export type CanaryPhase = {
     getValidationCommand?: (root: string, variant: CanaryVariant) => CommandSpec;
     assertBuildOutput: (result: CommandResult, variant: CanaryVariant) => void;
     assertArtifacts?: (filePaths: string[], variant: CanaryVariant) => Promise<void>;
+    // Phases with a runtime spec can also load their builds in Chrome (--runtime).
+    runtime?: RuntimeSpec;
+};
+
+// What the runtime step serves and loads for a phase.
+export type RuntimeSpec = {
+    // Directory served as the site root for a variant.
+    getServeRoot: (root: string, variant: CanaryVariant) => string;
+    // URL paths of files whose names change with their content. They're served with
+    // a year-long max-age; everything else is revalidated on every load.
+    immutablePaths: RegExp;
+    pages: RuntimePage[];
+    // Added to Chrome's own, for example --host-resolver-rules.
+    chromeFlags: string[];
+};
+
+export type RuntimeOptions = {
+    settings: RuntimeSettings;
+    chromePath: string;
 };
 
 export type Cleanup = {
@@ -140,8 +161,17 @@ export type AlertOptions = {
     };
 };
 
+export type RuntimePhaseReport = RuntimeBenchmarkResult<CanaryVariant> & {
+    phase: string;
+};
+
+export type RuntimeReport = {
+    settings: RuntimeSettings;
+    phases: RuntimePhaseReport[];
+};
+
 export type CanaryReport = {
-    schemaVersion: 3;
+    schemaVersion: 5;
     status: 'passed' | 'failed';
     failureKind: FailureKind | null;
     target: string;
@@ -168,5 +198,7 @@ export type CanaryReport = {
         };
     };
     phases: PhaseReport[];
+    // Only set with --runtime.
+    runtime: RuntimeReport | null;
     failures: CanaryFailure[];
 };

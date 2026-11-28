@@ -7,7 +7,7 @@ import type { CanaryReport, FailureKind } from './types';
 
 const createReport = (overrides: Partial<CanaryReport>): CanaryReport => {
     return {
-        schemaVersion: 3,
+        schemaVersion: 5,
         status: 'failed',
         failureKind: 'plugin',
         target: 'excalidraw',
@@ -22,6 +22,7 @@ const createReport = (overrides: Partial<CanaryReport>): CanaryReport => {
             target: { root: '/builds/canary-target', commit: 'e1b7aacb3560', dirty: false },
         },
         phases: [],
+        runtime: null,
         failures: [
             {
                 message: 'app all-functions build failed with exit code 1.',

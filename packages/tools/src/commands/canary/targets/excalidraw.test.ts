@@ -38,6 +38,35 @@ describe('Excalidraw canary target', () => {
         expect(outDir).toContain('named-only');
     });
 
+    test('should load the same directory in Chrome that each variant builds into', () => {
+        const phase = createExcalidrawPhase();
+        const artifacts = phase.getArtifactSpec('/excalidraw', 'all-functions');
+
+        expect(phase.runtime?.getServeRoot('/excalidraw', 'all-functions')).toBe(
+            artifacts.roots[0],
+        );
+    });
+
+    const runtimeCacheCases = [
+        {
+            description: 'cache Vite assets for a year',
+            urlPath: '/assets/index-CR2ccv0S.js',
+            expected: true,
+        },
+        {
+            description: 'cache fonts for a year',
+            urlPath: '/fonts/Virgil/Virgil-Regular.woff2',
+            expected: true,
+        },
+        { description: 'revalidate the page', urlPath: '/index.html', expected: false },
+        { description: 'revalidate the service worker', urlPath: '/sw.js', expected: false },
+    ];
+
+    test.each(runtimeCacheCases)('should $description', ({ urlPath, expected }) => {
+        const phase = createExcalidrawPhase();
+        expect(phase.runtime?.immutablePaths.test(urlPath)).toBe(expected);
+    });
+
     test('should downgrade the PWA precache size error to a warning', () => {
         const config = 'plugins: [VitePWA({ registerType: "autoUpdate" })]';
 

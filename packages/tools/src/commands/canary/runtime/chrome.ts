@@ -1,0 +1,592 @@
+// Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2019-Present Datadog, Inc.
+
+import type { ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { access, constants, mkdtemp, rm } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+// Launches headless Chrome and talks the Chrome DevTools Protocol to it over
+// Node's own WebSocket.
+
+export const CHROME_PATH_ENV = 'CANARY_CHROME_PATH';
+const CHROME_COMMANDS = [
+    'google-chrome',
+    'google-chrome-stable',
+    'chromium',
+    'chromium-browser',
+    'chrome',
+];
+const WINDOW_SIZE = { width: 1280, height: 800 };
+const STARTUP_TIMEOUT_MS = 30_000;
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+const COMMAND_TIMEOUT_MS = 120_000;
+// The browser's own commands answer quickly. One that doesn't means Chrome hangs.
+const BROWSER_COMMAND_TIMEOUT_MS = 10_000;
+const STDERR_TAIL_LENGTH = 4_000;
+const DEVTOOLS_URL = /DevTools listening on (ws:\/\/\S+)/;
+
+// Makes every host name fail to resolve, so pages only reach servers on
+// 127.0.0.1 and runs don't depend on third-party services.
+export const BLOCK_EXTERNAL_HOSTS_FLAG = '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1';
+
+// Quiets the features that make background requests or change behaviour between
+// runs. Extra flags come after these, so callers can override them.
+export const DEFAULT_CHROME_FLAGS = [
+    '--headless=new',
+    '--remote-debugging-port=0',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad',
+    '--disable-component-update',
+    '--disable-default-apps',
+    '--disable-dev-shm-usage',
+    '--disable-extensions',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--metrics-recording-only',
+    '--mute-audio',
+    '--password-store=basic',
+    '--use-mock-keychain',
+    `--window-size=${WINDOW_SIZE.width},${WINDOW_SIZE.height}`,
+];
+
+// Chrome itself failed: it went away, its DevTools connection broke, it didn't
+// answer one of its own commands, or it couldn't open or set up a page. That's
+// never a page's fault, so it fails the whole run instead of counting as a failed
+// load.
+export class ChromeConnectionError extends Error {}
+
+type Listener = (params: unknown) => void;
+
+type WebSocketEvent = {
+    data?: unknown;
+};
+
+type WebSocketLike = {
+    addEventListener: (
+        type: 'open' | 'message' | 'close' | 'error',
+        listener: (event: WebSocketEvent) => void,
+    ) => void;
+    send: (data: string) => void;
+    close: () => void;
+};
+
+type WebSocketConstructor = new (url: string) => WebSocketLike;
+
+type PendingCommand = {
+    method: string;
+    sessionId: string | undefined;
+    resolve: (result: unknown) => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+};
+
+export type CdpSession = {
+    send: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+    // Returns a function that removes the listener.
+    on: (method: string, listener: Listener) => () => void;
+    waitFor: (method: string, timeoutMs: number) => Promise<unknown>;
+};
+
+export type ChromePage = CdpSession & {
+    close: () => Promise<void>;
+};
+
+export type Chrome = {
+    version: string;
+    newPage: () => Promise<ChromePage>;
+    close: () => Promise<void>;
+};
+
+export const isRecord = (value: unknown): value is Record<string, unknown> => {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+export const getString = (value: unknown, key: string): string | undefined => {
+    const field = isRecord(value) ? value[key] : undefined;
+    return typeof field === 'string' ? field : undefined;
+};
+
+export const getNumber = (value: unknown, key: string): number | undefined => {
+    const field = isRecord(value) ? value[key] : undefined;
+    return typeof field === 'number' ? field : undefined;
+};
+
+const getRequiredString = (value: unknown, key: string, method: string): string => {
+    const field = getString(value, key);
+    if (field === undefined) {
+        throw new Error(`Chrome's ${method} response has no ${key}.`);
+    }
+    return field;
+};
+
+const isWebSocketConstructor = (value: unknown): value is WebSocketConstructor => {
+    return typeof value === 'function';
+};
+
+const getWebSocketConstructor = (): WebSocketConstructor => {
+    const candidate: unknown = Reflect.get(global, 'WebSocket');
+    if (!isWebSocketConstructor(candidate)) {
+        throw new Error('This Node.js has no global WebSocket. Use Node.js 22 or later.');
+    }
+    return candidate;
+};
+
+const isExecutable = async (filePath: string): Promise<boolean> => {
+    try {
+        await access(filePath, constants.X_OK);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
+// Uses the given path, then CANARY_CHROME_PATH, then the first Chrome or Chromium
+// on PATH.
+export const findChrome = async ({
+    env,
+    explicitPath,
+}: {
+    env: Record<string, string | undefined>;
+    explicitPath: string | undefined;
+}): Promise<string> => {
+    const configuredPath = explicitPath ?? env[CHROME_PATH_ENV];
+    if (configuredPath) {
+        if (!(await isExecutable(configuredPath))) {
+            throw new Error(`Chrome at ${configuredPath} doesn't exist or isn't executable.`);
+        }
+        return configuredPath;
+    }
+
+    const searchPath = env.PATH ?? '';
+    const directories = searchPath.split(path.delimiter).filter(Boolean);
+    for (const command of CHROME_COMMANDS) {
+        for (const directory of directories) {
+            const candidate = path.join(directory, command);
+            if (await isExecutable(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    throw new Error(
+        `Found no Chrome. Set ${CHROME_PATH_ENV}, or put one of ${CHROME_COMMANDS.join(', ')} on PATH.`,
+    );
+};
+
+const getChromeFlags = (userDataDirectory: string, extraFlags: string[]): string[] => {
+    // Chrome refuses to run as root, as in CI containers, without its sandbox off.
+    const runsAsRoot = process.getuid?.() === 0;
+    const sandboxFlags = runsAsRoot ? ['--no-sandbox'] : [];
+    return [
+        ...DEFAULT_CHROME_FLAGS,
+        ...sandboxFlags,
+        `--user-data-dir=${userDataDirectory}`,
+        ...extraFlags,
+        'about:blank',
+    ];
+};
+
+// Chrome prints its DevTools URL to stderr once it listens.
+const readDevToolsUrl = (child: ChildProcess, getStderr: () => string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const cleanup = (): void => {
+            clearTimeout(timeout);
+            child.stderr?.off('data', onData);
+            child.off('exit', onExit);
+            child.off('error', onError);
+        };
+        const onData = (): void => {
+            const match = DEVTOOLS_URL.exec(getStderr());
+            if (match?.[1]) {
+                cleanup();
+                resolve(match[1]);
+            }
+        };
+        const onExit = (code: number | null, signal: string | null): void => {
+            cleanup();
+            const outcome = signal ? `signal ${signal}` : `exit code ${code}`;
+            const error = new Error(
+                `Chrome exited with ${outcome} before it started:\n${getStderr()}`,
+            );
+            reject(error);
+        };
+        const onError = (error: Error): void => {
+            cleanup();
+            reject(error);
+        };
+        const timeout = setTimeout(() => {
+            cleanup();
+            const error = new Error(`Chrome didn't start within ${STARTUP_TIMEOUT_MS / 1_000}s.`);
+            reject(error);
+        }, STARTUP_TIMEOUT_MS);
+        child.stderr?.on('data', onData);
+        child.once('exit', onExit);
+        child.once('error', onError);
+    });
+};
+
+export type Connection = {
+    send: (
+        method: string,
+        params: Record<string, unknown>,
+        sessionId: string | undefined,
+        timeoutMs?: number,
+    ) => Promise<unknown>;
+    on: (method: string, sessionId: string | undefined, listener: Listener) => () => void;
+    // Rejects the session's commands that are still waiting for an answer.
+    rejectSession: (sessionId: string, error: Error) => void;
+    // Calls fail when the connection closes. Returns a function that removes it.
+    onClosed: (fail: (error: Error) => void) => () => void;
+    getClosedError: () => Error | undefined;
+    close: () => void;
+};
+
+const getCommandTimeoutMs = (sessionId: string | undefined): number => {
+    return sessionId === undefined ? BROWSER_COMMAND_TIMEOUT_MS : COMMAND_TIMEOUT_MS;
+};
+
+const getListenerKey = (method: string, sessionId: string | undefined): string => {
+    return `${sessionId ?? ''}:${method}`;
+};
+
+// Exported for tests.
+export const connect = (url: string): Promise<Connection> => {
+    const WebSocketClass = getWebSocketConstructor();
+    const socket = new WebSocketClass(url);
+    const pending = new Map<number, PendingCommand>();
+    const listeners = new Map<string, Set<Listener>>();
+    const closeWatchers = new Set<(error: Error) => void>();
+    let nextId = 1;
+    let closedError: Error | undefined;
+
+    const rejectAll = (error: Error): void => {
+        closedError ??= error;
+        for (const command of pending.values()) {
+            clearTimeout(command.timeout);
+            command.reject(closedError);
+        }
+        pending.clear();
+        for (const fail of Array.from(closeWatchers)) {
+            fail(closedError);
+        }
+        closeWatchers.clear();
+    };
+
+    const handleMessage = (data: unknown): void => {
+        if (typeof data !== 'string') {
+            return;
+        }
+        const message: unknown = JSON.parse(data);
+        const id = getNumber(message, 'id');
+        if (id !== undefined) {
+            const command = pending.get(id);
+            if (!command) {
+                return;
+            }
+            pending.delete(id);
+            clearTimeout(command.timeout);
+            const error = isRecord(message) ? message.error : undefined;
+            if (error !== undefined) {
+                const errorMessage = getString(error, 'message') ?? JSON.stringify(error);
+                const commandError = new Error(`${command.method}: ${errorMessage}`);
+                command.reject(commandError);
+                return;
+            }
+            const result = isRecord(message) ? message.result : undefined;
+            command.resolve(result);
+            return;
+        }
+
+        const method = getString(message, 'method');
+        if (method === undefined) {
+            return;
+        }
+        const sessionId = getString(message, 'sessionId');
+        const key = getListenerKey(method, sessionId);
+        const params = isRecord(message) ? message.params : undefined;
+        for (const listener of listeners.get(key) ?? []) {
+            listener(params);
+        }
+    };
+
+    const connection: Connection = {
+        // The browser's own commands get less time than a page's.
+        send: (method, params, sessionId, timeoutMs = getCommandTimeoutMs(sessionId)) => {
+            if (closedError) {
+                return Promise.reject(closedError);
+            }
+            const id = nextId;
+            nextId += 1;
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    pending.delete(id);
+                    const seconds = timeoutMs / 1_000;
+                    // A page's command can hang on the page's own scripts, but the
+                    // browser's own commands only hang when Chrome does.
+                    const error =
+                        sessionId === undefined
+                            ? new ChromeConnectionError(
+                                  `Chrome didn't answer ${method} within ${seconds}s.`,
+                              )
+                            : new Error(`${method} got no answer within ${seconds}s.`);
+                    reject(error);
+                }, timeoutMs);
+                pending.set(id, { method, sessionId, resolve, reject, timeout });
+                const message = JSON.stringify({ id, method, params, sessionId });
+                try {
+                    socket.send(message);
+                } catch (error) {
+                    pending.delete(id);
+                    clearTimeout(timeout);
+                    const reason = error instanceof Error ? error.message : String(error);
+                    reject(new ChromeConnectionError(`Sending ${method} failed: ${reason}`));
+                }
+            });
+        },
+        on: (method, sessionId, listener) => {
+            const key = getListenerKey(method, sessionId);
+            const methodListeners = listeners.get(key) ?? new Set<Listener>();
+            methodListeners.add(listener);
+            listeners.set(key, methodListeners);
+            return () => {
+                methodListeners.delete(listener);
+                if (methodListeners.size === 0 && listeners.get(key) === methodListeners) {
+                    listeners.delete(key);
+                }
+            };
+        },
+        rejectSession: (sessionId, error) => {
+            for (const [id, command] of Array.from(pending.entries())) {
+                if (command.sessionId === sessionId) {
+                    pending.delete(id);
+                    clearTimeout(command.timeout);
+                    command.reject(error);
+                }
+            }
+        },
+        onClosed: (fail) => {
+            closeWatchers.add(fail);
+            return () => {
+                closeWatchers.delete(fail);
+            };
+        },
+        getClosedError: () => closedError,
+        close: () => {
+            socket.close();
+        },
+    };
+
+    return new Promise((resolve, reject) => {
+        const openTimeout = setTimeout(() => {
+            const seconds = BROWSER_COMMAND_TIMEOUT_MS / 1_000;
+            const error = new ChromeConnectionError(
+                `The DevTools connection to ${url} didn't open within ${seconds}s.`,
+            );
+            rejectAll(error);
+            reject(error);
+            socket.close();
+        }, BROWSER_COMMAND_TIMEOUT_MS);
+        socket.addEventListener('open', () => {
+            clearTimeout(openTimeout);
+            resolve(connection);
+        });
+        socket.addEventListener('error', () => {
+            clearTimeout(openTimeout);
+            const error = new ChromeConnectionError(`The DevTools connection to ${url} failed.`);
+            rejectAll(error);
+            reject(error);
+        });
+        socket.addEventListener('close', () => {
+            clearTimeout(openTimeout);
+            const error = new ChromeConnectionError('The DevTools connection closed.');
+            rejectAll(error);
+            // Only matters when it closes before it opened.
+            reject(error);
+        });
+        socket.addEventListener('message', (event) => handleMessage(event.data));
+    });
+};
+
+export type Session = CdpSession & {
+    // Rejects the session's pending commands and waits, for example when its page
+    // closes: Chrome doesn't answer a closed page's commands.
+    cancel: (error: Error) => void;
+};
+
+// Exported for tests.
+export const createSession = (connection: Connection, sessionId: string | undefined): Session => {
+    const waits = new Set<(error: Error) => void>();
+    return {
+        send: (method, params = {}) => connection.send(method, params, sessionId),
+        on: (method, listener) => connection.on(method, sessionId, listener),
+        waitFor: (method, timeoutMs) =>
+            new Promise((resolve, reject) => {
+                const closedError = connection.getClosedError();
+                if (closedError) {
+                    reject(closedError);
+                    return;
+                }
+                const settle = (): void => {
+                    clearTimeout(timeout);
+                    removeListener();
+                    removeCloseWatcher();
+                    waits.delete(fail);
+                };
+                const fail = (error: Error): void => {
+                    settle();
+                    reject(error);
+                };
+                const timeout = setTimeout(() => {
+                    fail(new Error(`${method} didn't happen within ${timeoutMs / 1_000}s.`));
+                }, timeoutMs);
+                const removeListener = connection.on(method, sessionId, (params) => {
+                    settle();
+                    resolve(params);
+                });
+                const removeCloseWatcher = connection.onClosed(fail);
+                waits.add(fail);
+            }),
+        cancel: (error) => {
+            for (const fail of Array.from(waits)) {
+                fail(error);
+            }
+            if (sessionId !== undefined) {
+                connection.rejectSession(sessionId, error);
+            }
+        },
+    };
+};
+
+const waitForExit = (child: ChildProcess, timeoutMs: number): Promise<boolean> => {
+    // A child that failed to spawn has no PID and never exits.
+    if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+        return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(false), timeoutMs);
+        child.once('exit', () => {
+            clearTimeout(timeout);
+            resolve(true);
+        });
+    });
+};
+
+// Starts Chrome with a throwaway profile on disk, so it keeps an HTTP cache and
+// V8's code cache like a returning visitor's browser.
+export const launchChrome = async ({
+    chromePath,
+    flags,
+}: {
+    chromePath: string;
+    flags: string[];
+}): Promise<Chrome> => {
+    const tmpDirectory = os.tmpdir();
+    const profilePrefix = path.join(tmpDirectory, 'build-plugins-canary-chrome-');
+    const userDataDirectory = await mkdtemp(profilePrefix);
+    const chromeFlags = getChromeFlags(userDataDirectory, flags);
+    const child = spawn(chromePath, chromeFlags, { stdio: ['ignore', 'ignore', 'pipe'] });
+    const killChrome = (): void => {
+        child.kill('SIGKILL');
+    };
+    // Chrome and its profile must not outlive the process that started it. Node.js
+    // doesn't run exit handlers when a signal kills it, so a host must handle SIGINT
+    // and SIGTERM itself: abort the benchmark's signal and let it return.
+    const onProcessExit = (): void => {
+        killChrome();
+        rmSync(userDataDirectory, { force: true, recursive: true });
+    };
+    process.once('exit', onProcessExit);
+
+    // Keeps reading stderr, so Chrome never blocks on a full pipe.
+    let stderr = '';
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', (chunk: string) => {
+        stderr = `${stderr}${chunk}`.slice(-STDERR_TAIL_LENGTH);
+    });
+
+    const removeProfile = async (): Promise<void> => {
+        await rm(userDataDirectory, { force: true, maxRetries: 3, recursive: true });
+    };
+    const stop = async (): Promise<void> => {
+        const exited = await waitForExit(child, SHUTDOWN_TIMEOUT_MS);
+        if (!exited) {
+            killChrome();
+            await waitForExit(child, SHUTDOWN_TIMEOUT_MS);
+        }
+        process.off('exit', onProcessExit);
+        await removeProfile();
+    };
+
+    let connection: Connection | undefined;
+    try {
+        const url = await readDevToolsUrl(child, () => stderr);
+        connection = await connect(url);
+        const browser = createSession(connection, undefined);
+        const versionResult = await browser.send('Browser.getVersion');
+        const version = getRequiredString(versionResult, 'product', 'Browser.getVersion');
+        const openConnection = connection;
+
+        return {
+            version,
+            newPage: async () => {
+                const sendToBrowser = (method: string, params: Record<string, unknown>) =>
+                    openConnection.send(method, params, undefined, BROWSER_COMMAND_TIMEOUT_MS);
+                const created = await sendToBrowser('Target.createTarget', { url: 'about:blank' });
+                const targetId = getRequiredString(created, 'targetId', 'Target.createTarget');
+                const attached = await sendToBrowser('Target.attachToTarget', {
+                    flatten: true,
+                    targetId,
+                });
+                const sessionId = getRequiredString(attached, 'sessionId', 'Target.attachToTarget');
+                const { cancel, ...session } = createSession(openConnection, sessionId);
+                const removers: Array<() => void> = [];
+                return {
+                    ...session,
+                    on: (method, listener) => {
+                        const remove = session.on(method, listener);
+                        removers.push(remove);
+                        return remove;
+                    },
+                    close: async () => {
+                        cancel(new Error('The page closed.'));
+                        for (const remove of removers) {
+                            remove();
+                        }
+                        await sendToBrowser('Target.closeTarget', { targetId });
+                    },
+                };
+            },
+            close: async () => {
+                try {
+                    await openConnection.send(
+                        'Browser.close',
+                        {},
+                        undefined,
+                        BROWSER_COMMAND_TIMEOUT_MS,
+                    );
+                } catch {
+                    // Chrome can close the connection before it answers, and stop()
+                    // waits for it to exit. If it doesn't answer at all, it hangs:
+                    // don't wait for it.
+                    if (!openConnection.getClosedError()) {
+                        killChrome();
+                    }
+                }
+                openConnection.close();
+                await stop();
+            },
+        };
+    } catch (error) {
+        connection?.close();
+        killChrome();
+        await stop();
+        throw error;
+    }
+};

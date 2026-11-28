@@ -13,6 +13,14 @@ import type { Readable, Writable } from 'stream';
 import { gzipSync } from 'zlib';
 
 import { formatRunAlert } from './alert';
+import {
+    findInsufficientVariant,
+    hash,
+    launchChrome,
+    RuntimeAbortedError,
+    runRuntimeBenchmark,
+    RuntimeVariantError,
+} from './runtime';
 import { CANARY_VARIANTS } from './types';
 import type {
     AlertOptions,
@@ -32,6 +40,9 @@ import type {
     PhaseComparison,
     PhaseReport,
     RunCommand,
+    RuntimeOptions,
+    RuntimePhaseReport,
+    RuntimeSpec,
     VariantMeasurement,
     VariantReport,
 } from './types';
@@ -288,14 +299,6 @@ const createPhaseComparison = (
     };
 };
 
-const hash = (value: string): number => {
-    let result = 0;
-    for (const character of value) {
-        result = (result * 31 + character.charCodeAt(0)) % Number.MAX_SAFE_INTEGER;
-    }
-    return result;
-};
-
 const getPermutations = <T>(values: readonly T[]): T[][] => {
     if (values.length <= 1) {
         return [[...values]];
@@ -454,6 +457,73 @@ const runPhase = async ({
     };
 };
 
+// Fails like a build would: an instrumented variant that doesn't load, or fails
+// too many loads, after control did is a plugin failure.
+const getRuntimeFailure = (
+    phase: CanaryPhase,
+    variant: string,
+    message: string,
+): CanaryPhaseError => {
+    const stage = `phase:${phase.id}:${variant}:runtime`;
+    const kind = variant === 'control' ? 'target' : 'plugin';
+    return new CanaryPhaseError(message, stage, kind);
+};
+
+// Checks that Chrome starts before anything is built.
+const checkChrome = async (runtime: RuntimeOptions, phases: CanaryPhase[]): Promise<void> => {
+    const flags = phases[0]?.runtime?.chromeFlags ?? [];
+    const chrome = await launchChrome({ chromePath: runtime.chromePath, flags });
+    console.log(`\n[Canary] Runtime step uses ${chrome.version} at ${runtime.chromePath}.`);
+    await chrome.close();
+};
+
+const runPhaseRuntime = async ({
+    abortSignal,
+    phase,
+    root,
+    runId,
+    runtime,
+    spec,
+}: {
+    abortSignal: AbortSignal | undefined;
+    phase: CanaryPhase;
+    root: string;
+    runId: string;
+    runtime: RuntimeOptions;
+    spec: RuntimeSpec;
+}): Promise<RuntimePhaseReport> => {
+    const variants = CANARY_VARIANTS.map((variant) => ({
+        id: variant,
+        immutablePaths: spec.immutablePaths,
+        root: spec.getServeRoot(root, variant),
+    }));
+    console.log(`\n[Canary] Loading ${phase.id} builds in Chrome.`);
+    try {
+        const result = await runRuntimeBenchmark({
+            chromeFlags: spec.chromeFlags,
+            chromePath: runtime.chromePath,
+            controlVariant: 'control',
+            log: (message) => console.log(`[Canary] ${phase.id} runtime: ${message}`),
+            pages: spec.pages,
+            seed: `${runId}:${phase.id}`,
+            settings: runtime.settings,
+            signal: abortSignal,
+            variants,
+        });
+        return { phase: phase.id, ...result };
+    } catch (error) {
+        if (error instanceof RuntimeAbortedError || abortSignal?.aborted) {
+            const normalized = normalizeError(error);
+            throw new CanaryInterruptedError(normalized.message);
+        }
+        if (error instanceof RuntimeVariantError) {
+            throw getRuntimeFailure(phase, error.variant, error.message);
+        }
+        // Anything else, such as Chrome crashing, is a target failure.
+        throw error;
+    }
+};
+
 const getGitState = async (root: string): Promise<{ commit: string; dirty: boolean }> => {
     try {
         const commitResult = await execute('git', ['rev-parse', 'HEAD'], root);
@@ -509,6 +579,7 @@ const writeReport = async (report: CanaryReport): Promise<void> => {
 };
 
 export const runCanary = async ({
+    abortSignal,
     alert,
     buildPluginsRoot,
     cleanup,
@@ -519,8 +590,11 @@ export const runCanary = async ({
     root,
     runCommand,
     runId,
+    runtime,
     target,
 }: {
+    // Stops the runtime step, also during a page load.
+    abortSignal: AbortSignal | undefined;
     // When set, a failed run also writes an alert for the CI notify job.
     alert: AlertOptions | undefined;
     buildPluginsRoot: string;
@@ -533,13 +607,15 @@ export const runCanary = async ({
     root: string;
     runCommand: RunCommand;
     runId: string;
+    // When set, phases with a runtime spec also load their builds in Chrome.
+    runtime: RuntimeOptions | undefined;
     target: CanaryTarget;
 }): Promise<CanaryReport> => {
     const startedAt = new Date().toISOString();
     const buildPluginsGit = await getGitState(buildPluginsRoot);
     const targetGit = await getGitState(root);
     const report: CanaryReport = {
-        schemaVersion: 3,
+        schemaVersion: 5,
         status: 'passed',
         failureKind: null,
         target: target.id,
@@ -564,6 +640,7 @@ export const runCanary = async ({
             },
         },
         phases: [],
+        runtime: runtime ? { settings: runtime.settings, phases: [] } : null,
         failures: [],
     };
     const cleanups: Cleanup[] = [];
@@ -599,6 +676,16 @@ export const runCanary = async ({
                 `Target ${target.id} does not define phase "${phaseSelection}".`,
             );
         }
+        if (runtime) {
+            stage = 'runtime';
+            const runtimePhases = selectedPhases.filter((phase) => phase.runtime);
+            if (runtimePhases.length === 0) {
+                throw new CanaryCommandError(
+                    `--runtime: target ${target.id} has no runtime spec for phase "${phaseSelection}".`,
+                );
+            }
+            await checkChrome(runtime, runtimePhases);
+        }
 
         for (const phase of selectedPhases) {
             stage = `phase:${phase.id}`;
@@ -609,6 +696,23 @@ export const runCanary = async ({
                 runId,
             });
             report.phases.push(phaseReport);
+
+            if (runtime && report.runtime && phase.runtime) {
+                stage = `phase:${phase.id}:runtime`;
+                const runtimeReport = await runPhaseRuntime({
+                    abortSignal,
+                    phase,
+                    root,
+                    runId,
+                    runtime,
+                    spec: phase.runtime,
+                });
+                report.runtime.phases.push(runtimeReport);
+                const insufficient = findInsufficientVariant(runtimeReport.conditions, 'control');
+                if (insufficient) {
+                    throw getRuntimeFailure(phase, insufficient.variant, insufficient.message);
+                }
+            }
         }
     } catch (error) {
         primaryError = normalizeError(error);
