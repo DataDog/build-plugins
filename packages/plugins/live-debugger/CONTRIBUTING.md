@@ -10,6 +10,7 @@ Developer notes for the Live Debugger plugin.
 -   [Symbols](#symbols)
 -   [Consumer build canary](#consumer-build-canary)
     -   [Fresh checkouts and CI](#fresh-checkouts-and-ci)
+    -   [Page loads in Chrome](#page-loads-in-chrome)
     -   [Excalidraw target](#excalidraw-target)
     -   [Mastodon target](#mastodon-target)
 -   [Runtime benchmark](#runtime-benchmark)
@@ -154,7 +155,8 @@ A failed run records where it failed and who most likely needs to act on it:
 
 -   `stage` names the step, for example `setup` or
     `phase:app:all-functions:build`. A variant's steps are `build`, `output`
-    (the build log checks), `artifacts` and `validate`.
+    (the build log checks), `artifacts`, `validate` and, with `--runtime`,
+    `runtime`.
 -   `failureKind` is `plugin` when the control build passed but an instrumented
     build failed, so Live Debugger is the suspect. It is `target` when the
     target, its install, the canary setup or its control build failed, so Live
@@ -204,6 +206,148 @@ When either command fails with `--artifacts-dir`, it also writes
 `slack-message.txt`: the failure kind, stage, error, commits and, in GitLab,
 links to the job and pipeline. The CI notify job posts it as is.
 
+### Page loads in Chrome
+
+`--runtime` also loads each variant's build in headless Chrome and compares
+how fast its pages load, for targets whose phases have a runtime spec. Unlike
+the [runtime benchmark](#runtime-benchmark), which times single instrumented
+calls in a small workload, this measures whole page loads of a real app.
+
+```bash
+yarn cli canary excalidraw --runtime
+```
+
+Chrome comes from `--runtime-chrome`, then `CANARY_CHROME_PATH`, then the first
+`google-chrome`, `google-chrome-stable`, `chromium`, `chromium-browser` or
+`chrome` on `PATH`. The canary starts it once before building, so a missing or
+broken Chrome fails the run in seconds.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--runtime-repetitions` | `15` | Measured loads of each variant per page, cache state and CPU rate. At least 3. |
+| `--runtime-cpu-throttling` | `1` | Comma-separated CPU slowdown factors, such as `1,4`. Each is its own condition. |
+| `--runtime-network` | `40:10:20` | Download Mbps, upload Mbps and latency in ms for every load, or `none`. |
+| `--runtime-lcp-settle-ms` | `8000` | A load ends once no new LCP candidate has appeared for this long... |
+| `--runtime-max-wait-ms` | `40000` | ...or this long after navigation started. |
+
+With the defaults, Excalidraw's step took 13.5 minutes on a 16-core Linux
+machine: 90 loads of about 9 seconds, most of it the LCP settle wait. Each
+extra CPU rate adds as much again. A shorter settle wait saves time, but it cut the LCP of slower
+builds short when it was tried.
+
+How a run works:
+
+-   Each variant's build is served from `127.0.0.1` on its own port, so
+    variants never share cache entries. Files the target marks as hashed get
+    `Cache-Control: public, max-age=31536000, immutable`, everything else
+    `no-cache` with an `ETag`, and text is compressed with gzip, like a CDN
+    serves a production build. The server keeps files in memory once read.
+-   Two Chromes with throwaway profiles on disk run side by side. The cold one
+    clears its cache and the origin's storage before every load. The warm one
+    visits each variant's pages twice before measuring, which fills its HTTP
+    cache and lets V8 write its code cache, and never clears anything, like a
+    returning visitor's browser. So cold and warm loads can interleave without
+    priming in between.
+-   Before measuring, every variant must load each page, control first. When
+    one doesn't, the run fails at `phase:<phase>:<variant>:runtime`: a
+    `plugin` failure when control loaded, a `target` failure otherwise. It
+    fails the same way when a variant ends up with fewer than 3 successful
+    loads in a condition.
+-   Each repetition then loads every variant once per page, cache state and CPU
+    rate, in a new order. The order and the bootstrap derive from the run ID,
+    so a run ID reproduces them.
+-   Service workers can't register, so the HTTP cache alone decides what a
+    load fetches. That's the only script added to pages.
+-   With `BLOCK_EXTERNAL_HOSTS_FLAG` in its spec's `chromeFlags`, as Excalidraw
+    has, a target's pages can only reach `127.0.0.1`: every host name fails to
+    resolve, so third-party fonts and services fail fast and the same way for
+    every variant.
+
+For each load, the report records:
+
+-   `fcpMs` and `lcpMs`: First Contentful Paint and the last Largest
+    Contentful Paint candidate, from the page's own performance entries.
+-   `scriptMs`: JavaScript execution time over the whole load, settle wait
+    included, from CDP's `Performance.getMetrics`.
+-   `blockingBeforeLcpMs`: the blocking time of the Long Animation Frames that
+    start before LCP.
+-   `jsTransferBytes` and `jsDecodedBytes`: the scripts' bytes over the
+    network, headers included, and once decoded, over the whole load. Bytes
+    before LCP would give the slower variant a longer window. Warm loads
+    transfer almost nothing.
+
+Loads that fail, or have no FCP or LCP, count as failed and stay out of the
+statistics.
+
+The report's `runtime` section, `null` without `--runtime`, holds the settings
+and one entry per phase with the Chrome version, the step's duration, the
+pages, every load, and one entry in `conditions` per page, cache state (`cold`
+or `warm`) and CPU rate. Each condition has, per variant, the number of
+successful and failed loads and each metric's median, p75 and sample count,
+and, per instrumented variant, a comparison of medians against control:
+`delta` and `deltaPercent`, with 95% intervals from a bootstrap that resamples
+each side 2,000 times. Intervals need 3 loads on each side, and percentages a
+control median above 0.
+
+Compare variants within a run only. Absolute timings depend on the machine
+and on what else runs on it, so read them as trends.
+
+Other caveats:
+
+-   The server speaks HTTP/1.1, so loads use up to 6 connections per variant,
+    where production CDNs use HTTP/2.
+-   CPU throttling only slows the page's main thread. Chrome compiles large
+    scripts on other threads, so throttling understates their cost.
+-   Chrome only reports Long Animation Frames from version 123, and the
+    blocking time is `null` before.
+-   For Excalidraw, warm loads mostly save the network: without network
+    throttling, they're barely faster than a new profile's first load.
+
+#### Adding a target
+
+A phase opts in with a `runtime` spec:
+
+-   `getServeRoot(root, variant)`: the directory served as the site root, the
+    same one the phase builds into.
+-   `immutablePaths`: a regular expression for the URL paths of hashed files.
+-   `pages`: each page's `id`, a short stable name for reports and metric
+    tags, its `path`, and `readySelector`, a CSS selector that is visible
+    once the page has rendered.
+-   `chromeFlags`: extra Chrome flags, for example
+    `BLOCK_EXTERNAL_HOSTS_FLAG`.
+
+#### The engine
+
+The code in `packages/tools/src/commands/canary/runtime/` imports nothing but
+Node.js built-ins and its own files, and only uses TypeScript syntax that
+Node.js can strip. It launches Chrome itself with `--headless=new` and
+`--remote-debugging-port=0`, talks the DevTools Protocol over Node's own
+`WebSocket` and serves builds with `node:http`. So a job that can't install
+packages can copy the directory and run it with Node.js 22.18 or later and a
+Chrome binary:
+
+```ts
+import { findChrome, runRuntimeBenchmark } from './runtime/index.ts';
+```
+
+`runRuntimeBenchmark` also takes variants served elsewhere, by `origin`,
+cookies to set before every navigation, and extra Chrome flags. Add
+`"type": "module"` to the copy's `package.json` to keep Node.js from warning
+that it reparses the files. `runtime/selfContained.test.ts` checks the imports
+and runs a copy outside the repository.
+
+#### Running it in CI
+
+-   Chrome or Chromium must be installed. On a `node` Debian image,
+    `apt-get install -y chromium fonts-liberation` provides `chromium` on
+    `PATH`. Chrome then runs as root without its sandbox, which the canary
+    turns off itself.
+-   The step runs after the builds, with two Chromes that took about 600 MB
+    together for Excalidraw. Plan for 2 CPUs and 2 GB of memory. Other jobs on
+    the same machine add noise to the timings, so a dedicated runner gives
+    tighter intervals.
+-   Budget about 15 minutes per phase at the defaults, on top of the builds.
+
 ### Excalidraw target
 
 The `excalidraw` target builds the public
@@ -227,6 +371,13 @@ precache limit, so setup also downgrades that `vite-plugin-pwa` error to a
 warning in every variant. Cleanup restores `package.json`, `yarn.lock`, and the
 Vite config, then reinstalls the checkout's dependencies. Builds are written to
 `excalidraw-app/build/live-debugger-canary/`.
+
+With `--runtime`, the canary loads the app's start page, `home`, which shows the
+welcome screen on an empty scene, and waits for its interactive canvas. Vite's
+`assets/` and the fonts are cached for a year, as excalidraw.com caches fonts.
+Excalidraw's fonts and services are on other hosts, so the app falls back to
+system fonts. Its stylesheet also asks for fonts that the build doesn't
+contain, which shows as 4 `failedRequests` per load in every variant.
 
 ### Mastodon target
 

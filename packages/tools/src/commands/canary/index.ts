@@ -1,6 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
+
 import { outputFile } from '@dd/core/helpers/fs';
 import { formatDuration as formatMilliseconds } from '@dd/core/helpers/strings';
 import { ROOT } from '@dd/tools/constants';
@@ -215,6 +216,7 @@ class Canary extends Command {
         examples: [
             ['Run every phase for a target', '$0 canary <target>'],
             ['Run one target-defined phase', '$0 canary <target> --phase <phase>'],
+            ['Also compare page loads in headless Chrome', '$0 canary <target> --runtime'],
             [
                 'Run in CI on a fresh checkout from canary-checkout',
                 '$0 canary <target> --root <checkout> --install --no-cleanup --artifacts-dir <dir>',

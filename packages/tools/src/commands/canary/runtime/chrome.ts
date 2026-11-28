@@ -434,9 +434,18 @@ export const launchChrome = async ({
                 });
                 const sessionId = getRequiredString(attached, 'sessionId', 'Target.attachToTarget');
                 const session = createSession(openConnection, sessionId);
+                const removers: Array<() => void> = [];
                 return {
                     ...session,
+                    on: (method, listener) => {
+                        const remove = session.on(method, listener);
+                        removers.push(remove);
+                        return remove;
+                    },
                     close: async () => {
+                        for (const remove of removers) {
+                            remove();
+                        }
                         await browser.send('Target.closeTarget', { targetId });
                     },
                 };

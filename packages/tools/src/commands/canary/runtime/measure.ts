@@ -336,7 +336,7 @@ const preparePage = async ({
     await page.send('Network.enable');
     await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
     if (clearCache) {
-        // Clears the HTTP and code caches of the whole profile.
+        // Clears the cache of the whole profile, which only cold loads use.
         await page.send('Network.clearBrowserCache');
         await page.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' });
     }

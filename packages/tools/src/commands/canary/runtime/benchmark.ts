@@ -23,8 +23,8 @@ import type {
     RuntimeVariantTarget,
 } from './types.ts';
 
-// Warm loads come after two visits: the first fills the HTTP cache, the second
-// makes V8 write its code cache, which the third load uses.
+// Warm loads come after two visits: the first fills the HTTP cache, and V8 only
+// writes its code cache for scripts it has seen before.
 const WARM_PRIMING_VISITS = 2;
 // One visit warms up a fresh browser before its first measured cold load.
 const COLD_PRIMING_VISITS = 1;

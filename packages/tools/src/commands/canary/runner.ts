@@ -459,7 +459,11 @@ const runPhase = async ({
 
 // Fails like a build would: an instrumented variant that doesn't load, or loads
 // too rarely, after control did is a plugin failure.
-const getRuntimeFailure = (phase: CanaryPhase, variant: string, message: string) => {
+const getRuntimeFailure = (
+    phase: CanaryPhase,
+    variant: string,
+    message: string,
+): CanaryPhaseError => {
     const stage = `phase:${phase.id}:${variant}:runtime`;
     const kind = variant === 'control' ? 'target' : 'plugin';
     return new CanaryPhaseError(message, stage, kind);
