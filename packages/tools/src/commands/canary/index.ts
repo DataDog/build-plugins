@@ -1,7 +1,6 @@
 // Unless explicitly stated otherwise all files in this repository are licensed under the MIT License.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
-
 import { outputFile } from '@dd/core/helpers/fs';
 import { formatDuration as formatMilliseconds } from '@dd/core/helpers/strings';
 import { ROOT } from '@dd/tools/constants';
@@ -12,6 +11,16 @@ import path from 'path';
 import { formatCheckoutAlert } from './alert';
 import { checkoutTarget, getCheckoutRef, resolveExistingCheckout } from './checkout';
 import { NETWORK_RETRY_DELAYS_MS, runCanary, StreamingCommandRunner } from './runner';
+import {
+    DEFAULT_RUNTIME_CPU_THROTTLING,
+    DEFAULT_RUNTIME_LCP_SETTLE_MS,
+    DEFAULT_RUNTIME_MAX_WAIT_MS,
+    DEFAULT_RUNTIME_NETWORK,
+    DEFAULT_RUNTIME_REPETITIONS,
+    parseRuntimeSettings,
+} from './runtime-options';
+import type { RuntimeComparison } from './runtime';
+import { CHROME_PATH_ENV, findChrome } from './runtime';
 import { getCanaryTarget, getCanaryTargetNames } from './targets';
 import {
     DEFAULT_NODE_DIST_URL,
@@ -26,6 +35,8 @@ import type {
     CanaryTarget,
     InterruptSignal,
     MetricComparison,
+    RuntimeOptions,
+    RuntimeReport,
 } from './types';
 
 const SUPPORTED_TARGETS = getCanaryTargetNames().join(', ');
@@ -112,6 +123,70 @@ export const formatDelta = (
     )} (${sign}${formatter(absoluteDelta)}, ${percentage})`;
 };
 
+const formatRoundedMs = (value: number): string => {
+    return `${Math.round(value)} ms`;
+};
+
+const formatPercentage = (value: number): string => {
+    return `${value.toFixed(1)}%`;
+};
+
+const formatSigned = (value: number, formatter: (value: number) => string): string => {
+    const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+    const magnitude = Math.abs(value);
+    return `${sign}${formatter(magnitude)}`;
+};
+
+export const formatRuntimeComparison = (
+    comparison: RuntimeComparison | null,
+    formatter: (value: number) => string,
+): string => {
+    if (!comparison) {
+        return 'n/a';
+    }
+    const control = formatter(comparison.control);
+    const instrumented = formatter(comparison.instrumented);
+    const delta = formatSigned(comparison.delta, formatter);
+    const percentage =
+        comparison.deltaPercent === null
+            ? 'n/a'
+            : formatSigned(comparison.deltaPercent, formatPercentage);
+    let interval = '';
+    if (comparison.deltaCi95Low !== null && comparison.deltaCi95High !== null) {
+        const low = formatSigned(comparison.deltaCi95Low, formatter);
+        const high = formatSigned(comparison.deltaCi95High, formatter);
+        interval = `, 95% CI ${low} to ${high}`;
+    }
+    return `${control} -> ${instrumented} (${delta}, ${percentage}${interval})`;
+};
+
+const RUNTIME_LINES = [
+    { label: 'FCP:        ', metric: 'fcpMs', formatter: formatRoundedMs },
+    { label: 'LCP:        ', metric: 'lcpMs', formatter: formatRoundedMs },
+    { label: 'script:     ', metric: 'scriptMs', formatter: formatRoundedMs },
+    { label: 'blocking:   ', metric: 'blockingBeforeLcpMs', formatter: formatRoundedMs },
+    { label: 'JS decoded: ', metric: 'jsDecodedBytes', formatter: formatBytes },
+] as const;
+
+const printRuntimeReport = (runtime: RuntimeReport): void => {
+    for (const phase of runtime.phases) {
+        console.log(`\n${phase.phase} in ${phase.browser.version}: control -> variant medians`);
+        for (const condition of phase.conditions) {
+            console.log(
+                `  ${condition.page}, ${condition.cache} cache, CPU ${condition.cpuThrottling}x`,
+            );
+            for (const comparison of condition.comparisons) {
+                console.log(`    ${comparison.variant}`);
+                for (const { formatter, label, metric } of RUNTIME_LINES) {
+                    const metricComparison = comparison.metrics[metric];
+                    const formatted = formatRuntimeComparison(metricComparison, formatter);
+                    console.log(`      ${label}${formatted}`);
+                }
+            }
+        }
+    }
+};
+
 const printReport = (report: CanaryReport): void => {
     console.log('\n[Canary] Live Debugger comparison');
     for (const phase of report.phases) {
@@ -123,6 +198,9 @@ const printReport = (report: CanaryReport): void => {
             console.log(`    raw JS:     ${formatDelta(comparison.rawBytes, formatBytes)}`);
             console.log(`    gzip JS:    ${formatDelta(comparison.gzipBytes, formatBytes)}`);
         }
+    }
+    if (report.runtime) {
+        printRuntimeReport(report.runtime);
     }
     console.log(`\n[Canary] JSON report: ${report.reportPath}`);
 };
@@ -171,8 +249,66 @@ class Canary extends Command {
         description: `Directory for ${REPORT_FILE} (unless --report is set), a log file per command in logs/canary/, and ${ALERT_FILE} when the run fails.`,
     });
 
+    runtime = Option.Boolean('--runtime', false, {
+        description:
+            'Also load each build in headless Chrome and compare page-load metrics, for targets with a runtime spec.',
+    });
+
+    runtimeChrome = Option.String('--runtime-chrome', {
+        description: `Chrome or Chromium executable. Defaults to ${CHROME_PATH_ENV}, then the first google-chrome, chromium or chrome on PATH.`,
+    });
+
+    runtimeRepetitions = Option.String('--runtime-repetitions', DEFAULT_RUNTIME_REPETITIONS, {
+        description: 'Loads of each variant per page, cache state and CPU rate. At least 3.',
+    });
+
+    runtimeCpuThrottling = Option.String(
+        '--runtime-cpu-throttling',
+        DEFAULT_RUNTIME_CPU_THROTTLING,
+        {
+            description:
+                'Comma-separated CPU slowdown factors, each its own condition, 1 for none.',
+        },
+    );
+
+    runtimeNetwork = Option.String('--runtime-network', DEFAULT_RUNTIME_NETWORK, {
+        description: 'Network throttling, "<download Mbps>:<upload Mbps>:<latency ms>" or "none".',
+    });
+
+    runtimeLcpSettleMs = Option.String('--runtime-lcp-settle-ms', DEFAULT_RUNTIME_LCP_SETTLE_MS, {
+        description: 'A load ends once no new LCP candidate has appeared for this long.',
+    });
+
+    runtimeMaxWaitMs = Option.String('--runtime-max-wait-ms', DEFAULT_RUNTIME_MAX_WAIT_MS, {
+        description: 'A load ends this long after navigation started at the latest.',
+    });
+
+    private async getRuntimeOptions(): Promise<RuntimeOptions | undefined> {
+        if (!this.runtime) {
+            return undefined;
+        }
+        try {
+            const settings = parseRuntimeSettings({
+                cpuThrottling: this.runtimeCpuThrottling,
+                lcpSettleMs: this.runtimeLcpSettleMs,
+                maxWaitMs: this.runtimeMaxWaitMs,
+                network: this.runtimeNetwork,
+                repetitions: this.runtimeRepetitions,
+            });
+            const chromePath = await findChrome({
+                env: process.env,
+                explicitPath: this.runtimeChrome,
+            });
+            return { chromePath, settings };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new UsageError(message);
+        }
+    }
+
     async execute(): Promise<number> {
         const target = getTargetOrThrow(this.targetName);
+        const runtime = await this.getRuntimeOptions();
         const root = path.resolve(this.root ?? target.getDefaultRoot());
         const artifactsReportPath = this.artifactsDirectory
             ? path.resolve(this.artifactsDirectory, REPORT_FILE)
@@ -187,9 +323,11 @@ class Canary extends Command {
         const alertLinks = getAlertLinks();
         const alert = alertPath ? { path: alertPath, links: alertLinks } : undefined;
         let interruption: InterruptSignal | undefined;
+        const abortController = new AbortController();
         const handleSignal = (signal: InterruptSignal): void => {
             interruption = signal;
             commandRunner.cancel(signal);
+            abortController.abort(signal);
         };
         const handleInterrupt = (): void => handleSignal('SIGINT');
         const handleTermination = (): void => handleSignal('SIGTERM');
@@ -198,6 +336,7 @@ class Canary extends Command {
 
         try {
             const report = await runCanary({
+                abortSignal: abortController.signal,
                 alert,
                 buildPluginsRoot: ROOT,
                 cleanup: this.cleanup,
@@ -208,6 +347,7 @@ class Canary extends Command {
                 root,
                 runCommand: commandRunner.run,
                 runId,
+                runtime,
                 target,
             });
             printReport(report);

@@ -10,12 +10,14 @@ import { assertLiveDebuggerBuildOutput } from '../assertions/live-debugger';
 import { getTargetCommandEnvironment } from '../environment';
 import { readFiles, readJsonObject, restoreSnapshots } from '../files';
 import { CanaryCommandError, runCheckedCommand } from '../runner';
+import { BLOCK_EXTERNAL_HOSTS_FLAG } from '../runtime';
 import type {
     ArtifactSpec,
     CanaryPhase,
     CanaryTarget,
     CanaryVariant,
     CommandSpec,
+    RuntimeSpec,
     TargetSetupContext,
 } from '../types';
 import {
@@ -66,12 +68,34 @@ const getOutputDirectory = (variant: CanaryVariant): string => {
     return `${CANARY_OUTPUT_DIRECTORY}/${PHASE_ID}/${variant}`;
 };
 
-const getArtifactSpec = (root: string, variant: CanaryVariant): ArtifactSpec => {
+const getOutputRoot = (root: string, variant: CanaryVariant): string => {
     const outputDirectory = getOutputDirectory(variant);
+    return path.resolve(root, APP_DIRECTORY, outputDirectory);
+};
+
+const getArtifactSpec = (root: string, variant: CanaryVariant): ArtifactSpec => {
+    const outputRoot = getOutputRoot(root, variant);
     return {
-        roots: [path.resolve(root, APP_DIRECTORY, outputDirectory)],
+        roots: [outputRoot],
         patterns: JAVASCRIPT_PATTERNS,
     };
+};
+
+// The app's start page with an empty scene, which shows the welcome screen.
+// excalidraw.com caches its fonts for a year too. The page's fonts and services
+// live on other hosts, which the runtime step blocks: the app falls back to
+// system fonts and works offline.
+const RUNTIME_SPEC: RuntimeSpec = {
+    getServeRoot: getOutputRoot,
+    immutablePaths: /^\/assets\/|\.woff2$/,
+    pages: [
+        {
+            id: 'home',
+            path: '/',
+            readySelector: 'canvas.excalidraw__canvas.interactive',
+        },
+    ],
+    chromeFlags: [BLOCK_EXTERNAL_HOSTS_FLAG],
 };
 
 const getBuildCommand = (root: string, variant: CanaryVariant): CommandSpec => {
@@ -101,6 +125,7 @@ export const createExcalidrawPhase = (): CanaryPhase => {
         getBuildCommand,
         assertBuildOutput: assertLiveDebuggerBuildOutput,
         assertArtifacts: assertViteArtifacts,
+        runtime: RUNTIME_SPEC,
     };
 };
 

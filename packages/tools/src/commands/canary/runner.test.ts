@@ -199,6 +199,7 @@ describe('canary runner', () => {
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const reportPath = path.resolve(TEST_ROOT, 'report.json');
         const report = await runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -209,6 +210,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand,
             runId: 'synthetic-run',
+            runtime: undefined,
             target,
         });
 
@@ -232,9 +234,53 @@ describe('canary runner', () => {
         expect(commands).toHaveLength(6);
         expect(cleanupOrder).toEqual(['second', 'first']);
         const serialized = await readFile(reportPath);
-        expect(serialized).toContain('"schemaVersion": 3');
+        expect(serialized).toContain('"schemaVersion": 5');
         expect(serialized).toContain('"buildTool": "webpack"');
         expect(serialized).toContain('"dirty": true');
+        expect(report.runtime).toBeNull();
+    });
+
+    test('should refuse --runtime before building when no selected phase has a runtime spec', async () => {
+        const commands: string[] = [];
+        const runCommand: RunCommand = async (spec) => {
+            commands.push(spec.label);
+            return successfulResult(1);
+        };
+        const reportPath = path.resolve(TEST_ROOT, 'runtime-report.json');
+        const settings = {
+            repetitions: 3,
+            cpuThrottlingRates: [1],
+            network: null,
+            lcpSettleMs: 1_000,
+            maxWaitMs: 5_000,
+            bootstrapResamples: 10,
+        };
+        const promise = runCanary({
+            abortSignal: undefined,
+            alert: undefined,
+            buildPluginsRoot: process.cwd(),
+            cleanup: true,
+            install: false,
+            networkRetryDelaysMs: [],
+            phaseSelection: 'all',
+            reportPath,
+            root: TEST_ROOT,
+            runCommand,
+            runId: 'runtime-run',
+            runtime: { chromePath: '/no/chrome', settings },
+            target: createSyntheticTarget(TEST_ROOT, []),
+        });
+
+        await expect(promise).rejects.toThrow('has no runtime spec');
+        expect(commands).toEqual([]);
+        const serialized = await readFile(reportPath);
+        const report: unknown = JSON.parse(serialized);
+        expect(report).toMatchObject({
+            status: 'failed',
+            failureKind: 'target',
+            runtime: { settings, phases: [] },
+            failures: [{ stage: 'runtime' }],
+        });
     });
 
     test('should skip the validation command when a phase validates its artifacts itself', async () => {
@@ -263,6 +309,7 @@ describe('canary runner', () => {
             getPhases: () => [phase],
         };
         const report = await runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -273,6 +320,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand,
             runId: 'self-validated-run',
+            runtime: undefined,
             target,
         });
 
@@ -301,6 +349,7 @@ describe('canary runner', () => {
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const reportPath = path.resolve(TEST_ROOT, 'failed-report.json');
         const promise = runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -311,6 +360,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand,
             runId: 'failed-run',
+            runtime: undefined,
             target,
         });
 
@@ -344,6 +394,7 @@ describe('canary runner', () => {
             },
         };
         const report = await runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -354,6 +405,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand: async () => successfulResult(1),
             runId: 'installed-run',
+            runtime: undefined,
             target,
         });
 
@@ -372,6 +424,7 @@ describe('canary runner', () => {
         };
         const reportPath = path.resolve(TEST_ROOT, 'install-failed-report.json');
         const promise = runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -382,6 +435,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand: async () => successfulResult(1),
             runId: 'install-failed-run',
+            runtime: undefined,
             target,
         });
 
@@ -401,6 +455,7 @@ describe('canary runner', () => {
         const cleanupOrder: string[] = [];
         const target = createSyntheticTarget(TEST_ROOT, cleanupOrder);
         const promise = runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: false,
@@ -411,6 +466,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand,
             runId: 'no-cleanup-run',
+            runtime: undefined,
             target,
         });
 
@@ -513,6 +569,7 @@ describe('canary runner', () => {
             };
             const reportPath = path.resolve(TEST_ROOT, 'classified-report.json');
             const promise = runCanary({
+                abortSignal: undefined,
                 alert: undefined,
                 buildPluginsRoot: process.cwd(),
                 cleanup: true,
@@ -523,6 +580,7 @@ describe('canary runner', () => {
                 root: TEST_ROOT,
                 runCommand,
                 runId,
+                runtime: undefined,
                 target,
             });
 
@@ -555,6 +613,7 @@ describe('canary runner', () => {
         const reportPath = path.resolve(TEST_ROOT, 'output-report.json');
         const runId = findRunIdStartingWith(['control']);
         const promise = runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -565,6 +624,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand: async () => successfulResult(1),
             runId,
+            runtime: undefined,
             target,
         });
 
@@ -582,6 +642,7 @@ describe('canary runner', () => {
         const reportPath = path.resolve(TEST_ROOT, 'interrupted-report.json');
         const target = createSyntheticTarget(TEST_ROOT, []);
         const promise = runCanary({
+            abortSignal: undefined,
             alert: undefined,
             buildPluginsRoot: process.cwd(),
             cleanup: true,
@@ -592,6 +653,7 @@ describe('canary runner', () => {
             root: TEST_ROOT,
             runCommand,
             runId: 'interrupted-run',
+            runtime: undefined,
             target,
         });
 
@@ -615,6 +677,7 @@ describe('canary runner', () => {
         const target = createSyntheticTarget(TEST_ROOT, []);
         const runWith = (exitCode: number) =>
             runCanary({
+                abortSignal: undefined,
                 alert,
                 buildPluginsRoot: process.cwd(),
                 cleanup: true,
@@ -625,6 +688,7 @@ describe('canary runner', () => {
                 root: TEST_ROOT,
                 runCommand: async () => ({ durationMs: 1, exitCode, output: '', signal: null }),
                 runId,
+                runtime: undefined,
                 target,
             });
 
