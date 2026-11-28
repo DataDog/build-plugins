@@ -7,19 +7,25 @@
 // files, and only uses TypeScript that Node.js strips, so another job can copy this
 // directory and run it with Node.js 22.18 or later and a Chrome binary, without
 // installing anything. Keep it that way: runtime/selfContained.test.ts checks it.
+//
+// A host must handle SIGINT and SIGTERM itself: abort the signal it passes to
+// runRuntimeBenchmark and wait for it to return. Otherwise Chrome outlives it,
+// because Node.js runs no exit handlers when a signal kills it.
 
 export {
     findInsufficientVariant,
+    MAX_FAILED_LOAD_SHARE,
     planLoads,
     RuntimeAbortedError,
     runRuntimeBenchmark,
     RuntimeVariantError,
     summarizeLoads,
 } from './benchmark.ts';
-export type { PlannedLoad, RuntimeBenchmarkOptions } from './benchmark.ts';
+export type { InsufficientVariant, PlannedLoad, RuntimeBenchmarkOptions } from './benchmark.ts';
 export {
     BLOCK_EXTERNAL_HOSTS_FLAG,
     CHROME_PATH_ENV,
+    ChromeConnectionError,
     DEFAULT_CHROME_FLAGS,
     findChrome,
     launchChrome,

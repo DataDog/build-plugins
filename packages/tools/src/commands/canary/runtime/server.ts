@@ -2,7 +2,8 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
@@ -79,13 +80,19 @@ export const resolveRequestPath = (root: string, urlPath: string): string | unde
     return isInsideRoot ? filePath : undefined;
 };
 
-const loadFile = async (filePath: string): Promise<ServedFile | undefined> => {
+// realRoot is the root with symlinks resolved. A symlink in the build that points
+// outside it isn't served.
+const loadFile = async (filePath: string, realRoot: string): Promise<ServedFile | undefined> => {
     try {
-        const fileStat = await stat(filePath);
+        const realFilePath = await realpath(filePath);
+        if (!realFilePath.startsWith(`${realRoot}${path.sep}`)) {
+            return undefined;
+        }
+        const fileStat = await stat(realFilePath);
         if (!fileStat.isFile()) {
             return undefined;
         }
-        const body = await readFile(filePath);
+        const body = await readFile(realFilePath);
         const contentType = getContentType(filePath);
         const compressible = COMPRESSIBLE_CONTENT_TYPE.test(contentType);
         return {
@@ -110,24 +117,32 @@ export const startStaticServer = async ({
     root: string;
 }): Promise<StaticServer> => {
     const resolvedRoot = path.resolve(root);
+    const realRoot = await realpath(resolvedRoot);
     const files = new Map<string, Promise<ServedFile | undefined>>();
     const getFile = (filePath: string): Promise<ServedFile | undefined> => {
         let file = files.get(filePath);
         if (!file) {
-            file = loadFile(filePath);
+            file = loadFile(filePath, realRoot);
             files.set(filePath, file);
         }
         return file;
     };
 
-    const server = http.createServer(async (request, response) => {
+    const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
         if (request.method !== 'GET' && request.method !== 'HEAD') {
             response.writeHead(405, { Allow: 'GET, HEAD' });
             response.end();
             return;
         }
 
-        const url = new URL(request.url ?? '/', 'http://localhost');
+        let url: URL;
+        try {
+            url = new URL(request.url ?? '/', 'http://localhost');
+        } catch {
+            response.writeHead(400, { 'Cache-Control': 'no-store' });
+            response.end();
+            return;
+        }
         const filePath = resolveRequestPath(resolvedRoot, url.pathname);
         const file = filePath ? await getFile(filePath) : undefined;
         if (!file) {
@@ -158,6 +173,15 @@ export const startStaticServer = async ({
         headers['Content-Length'] = String(body.length);
         response.writeHead(200, headers);
         response.end(request.method === 'HEAD' ? undefined : body);
+    };
+
+    const server = http.createServer((request, response) => {
+        handle(request, response).catch(() => {
+            if (!response.headersSent) {
+                response.writeHead(500, { 'Cache-Control': 'no-store' });
+            }
+            response.end();
+        });
     });
 
     await new Promise<void>((resolve, reject) => {

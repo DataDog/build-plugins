@@ -4,8 +4,9 @@
 
 import { outputFile, rm } from '@dd/core/helpers/fs';
 // The core helpers only write text; the binary case needs raw bytes.
-import { writeFile } from 'fs/promises';
+import { symlink, writeFile } from 'fs/promises';
 import http from 'http';
+import net from 'net';
 import nock from 'nock';
 import os from 'os';
 import path from 'path';
@@ -53,6 +54,45 @@ const request = (
     });
 };
 
+type RawResponse = {
+    statusLine: string;
+    headers: Record<string, string>;
+    body: string;
+};
+
+// Sends a request over a plain socket. It sends request targets that
+// http.request refuses, and it bypasses the tests' HTTP interceptor, which keeps a
+// HEAD request's socket open.
+const requestRaw = (
+    server: StaticServer,
+    target: string,
+    method: string = 'GET',
+): Promise<RawResponse> => {
+    const { hostname, port } = new URL(server.origin);
+    return new Promise((resolve, reject) => {
+        const socket = net.connect(Number(port), hostname);
+        let received = '';
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk: string) => {
+            received += chunk;
+        });
+        socket.on('end', () => {
+            const [head = '', body = ''] = received.split('\r\n\r\n');
+            const [statusLine = '', ...headerLines] = head.split('\r\n');
+            const headers: Record<string, string> = {};
+            for (const line of headerLines) {
+                const separator = line.indexOf(':');
+                headers[line.slice(0, separator).toLowerCase()] = line.slice(separator + 1).trim();
+            }
+            resolve({ statusLine, headers, body });
+        });
+        socket.on('error', reject);
+        socket.write(
+            `${method} ${target} HTTP/1.1\r\nHost: ${hostname}\r\nConnection: close\r\n\r\n`,
+        );
+    });
+};
+
 describe('runtime static server', () => {
     let server: StaticServer;
 
@@ -68,6 +108,7 @@ describe('runtime static server', () => {
         await outputFile(fontPath, '');
         await writeFile(fontPath, BINARY);
         await outputFile(outsidePath, 'secret');
+        await symlink(outsidePath, path.resolve(TEST_ROOT, 'build/leak.txt'));
         const root = path.resolve(TEST_ROOT, 'build');
         server = await startStaticServer({ immutablePaths: IMMUTABLE_PATHS, root });
     });
@@ -184,10 +225,10 @@ describe('runtime static server', () => {
     });
 
     test('should answer HEAD without a body', async () => {
-        const response = await request(server, '/index.html', { method: 'HEAD' });
-        expect(response.status).toBe(200);
+        const response = await requestRaw(server, '/index.html', 'HEAD');
+        expect(response.statusLine).toBe('HTTP/1.1 200 OK');
         expect(response.headers['content-length']).toBe(String(HTML.length));
-        expect(response.body.length).toBe(0);
+        expect(response.body).toBe('');
     });
 
     const errorCases = [
@@ -204,6 +245,12 @@ describe('runtime static server', () => {
             expected: 404,
         },
         {
+            description: 'not follow a symlink out of the root',
+            urlPath: '/leak.txt',
+            method: 'GET',
+            expected: 404,
+        },
+        {
             description: 'refuse other methods',
             urlPath: '/index.html',
             method: 'POST',
@@ -214,5 +261,11 @@ describe('runtime static server', () => {
     test.each(errorCases)('should $description', async ({ urlPath, method, expected }) => {
         const response = await request(server, urlPath, { method });
         expect(response.status).toBe(expected);
+    });
+
+    test('should answer a request URL it cannot parse with 400', async () => {
+        // Node.js accepts this request target, but it isn't a valid URL.
+        const response = await requestRaw(server, '//[');
+        expect(response.statusLine).toBe('HTTP/1.1 400 Bad Request');
     });
 });

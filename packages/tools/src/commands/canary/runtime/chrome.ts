@@ -5,6 +5,7 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { access, constants, mkdtemp, rm } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -53,6 +54,10 @@ export const DEFAULT_CHROME_FLAGS = [
     '--use-mock-keychain',
     `--window-size=${WINDOW_SIZE.width},${WINDOW_SIZE.height}`,
 ];
+
+// Chrome went away or its DevTools connection broke. That's never a page's fault,
+// so it fails the whole run instead of counting as a failed load.
+export class ChromeConnectionError extends Error {}
 
 type Listener = (params: unknown) => void;
 
@@ -222,13 +227,16 @@ const readDevToolsUrl = (child: ChildProcess, getStderr: () => string): Promise<
     });
 };
 
-type Connection = {
+export type Connection = {
     send: (
         method: string,
         params: Record<string, unknown>,
         sessionId: string | undefined,
     ) => Promise<unknown>;
     on: (method: string, sessionId: string | undefined, listener: Listener) => () => void;
+    // Calls fail when the connection closes. Returns a function that removes it.
+    onClosed: (fail: (error: Error) => void) => () => void;
+    getClosedError: () => Error | undefined;
     close: () => void;
 };
 
@@ -236,21 +244,27 @@ const getListenerKey = (method: string, sessionId: string | undefined): string =
     return `${sessionId ?? ''}:${method}`;
 };
 
-const connect = (url: string): Promise<Connection> => {
+// Exported for tests.
+export const connect = (url: string): Promise<Connection> => {
     const WebSocketClass = getWebSocketConstructor();
     const socket = new WebSocketClass(url);
     const pending = new Map<number, PendingCommand>();
     const listeners = new Map<string, Set<Listener>>();
+    const closeWatchers = new Set<(error: Error) => void>();
     let nextId = 1;
     let closedError: Error | undefined;
 
     const rejectAll = (error: Error): void => {
-        closedError = error;
+        closedError ??= error;
         for (const command of pending.values()) {
             clearTimeout(command.timeout);
-            command.reject(error);
+            command.reject(closedError);
         }
         pending.clear();
+        for (const fail of Array.from(closeWatchers)) {
+            fail(closedError);
+        }
+        closeWatchers.clear();
     };
 
     const handleMessage = (data: unknown): void => {
@@ -307,7 +321,14 @@ const connect = (url: string): Promise<Connection> => {
                 }, COMMAND_TIMEOUT_MS);
                 pending.set(id, { method, resolve, reject, timeout });
                 const message = JSON.stringify({ id, method, params, sessionId });
-                socket.send(message);
+                try {
+                    socket.send(message);
+                } catch (error) {
+                    pending.delete(id);
+                    clearTimeout(timeout);
+                    const reason = error instanceof Error ? error.message : String(error);
+                    reject(new ChromeConnectionError(`Sending ${method} failed: ${reason}`));
+                }
             });
         },
         on: (method, sessionId, listener) => {
@@ -317,8 +338,18 @@ const connect = (url: string): Promise<Connection> => {
             listeners.set(key, methodListeners);
             return () => {
                 methodListeners.delete(listener);
+                if (methodListeners.size === 0 && listeners.get(key) === methodListeners) {
+                    listeners.delete(key);
+                }
             };
         },
+        onClosed: (fail) => {
+            closeWatchers.add(fail);
+            return () => {
+                closeWatchers.delete(fail);
+            };
+        },
+        getClosedError: () => closedError,
         close: () => {
             socket.close();
         },
@@ -327,42 +358,67 @@ const connect = (url: string): Promise<Connection> => {
     return new Promise((resolve, reject) => {
         socket.addEventListener('open', () => resolve(connection));
         socket.addEventListener('error', () => {
-            const error = new Error(`The DevTools connection to ${url} failed.`);
+            const error = new ChromeConnectionError(`The DevTools connection to ${url} failed.`);
             rejectAll(error);
             reject(error);
         });
         socket.addEventListener('close', () => {
-            const error = new Error('The DevTools connection closed.');
+            const error = new ChromeConnectionError('The DevTools connection closed.');
             rejectAll(error);
         });
         socket.addEventListener('message', (event) => handleMessage(event.data));
     });
 };
 
-const createSession = (connection: Connection, sessionId: string | undefined): CdpSession => {
+export type Session = CdpSession & {
+    // Rejects every pending waitFor, for example when its page closes.
+    cancelWaits: (error: Error) => void;
+};
+
+// Exported for tests.
+export const createSession = (connection: Connection, sessionId: string | undefined): Session => {
+    const waits = new Set<(error: Error) => void>();
     return {
         send: (method, params = {}) => connection.send(method, params, sessionId),
         on: (method, listener) => connection.on(method, sessionId, listener),
         waitFor: (method, timeoutMs) =>
             new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    removeListener();
-                    const error = new Error(
-                        `${method} didn't happen within ${timeoutMs / 1_000}s.`,
-                    );
-                    reject(error);
-                }, timeoutMs);
-                const removeListener = connection.on(method, sessionId, (params) => {
+                const closedError = connection.getClosedError();
+                if (closedError) {
+                    reject(closedError);
+                    return;
+                }
+                const settle = (): void => {
                     clearTimeout(timeout);
                     removeListener();
+                    removeCloseWatcher();
+                    waits.delete(fail);
+                };
+                const fail = (error: Error): void => {
+                    settle();
+                    reject(error);
+                };
+                const timeout = setTimeout(() => {
+                    fail(new Error(`${method} didn't happen within ${timeoutMs / 1_000}s.`));
+                }, timeoutMs);
+                const removeListener = connection.on(method, sessionId, (params) => {
+                    settle();
                     resolve(params);
                 });
+                const removeCloseWatcher = connection.onClosed(fail);
+                waits.add(fail);
             }),
+        cancelWaits: (error) => {
+            for (const fail of Array.from(waits)) {
+                fail(error);
+            }
+        },
     };
 };
 
 const waitForExit = (child: ChildProcess, timeoutMs: number): Promise<boolean> => {
-    if (child.exitCode !== null || child.signalCode !== null) {
+    // A child that failed to spawn has no PID and never exits.
+    if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
         return Promise.resolve(true);
     }
     return new Promise((resolve) => {
@@ -388,11 +444,17 @@ export const launchChrome = async ({
     const userDataDirectory = await mkdtemp(profilePrefix);
     const chromeFlags = getChromeFlags(userDataDirectory, flags);
     const child = spawn(chromePath, chromeFlags, { stdio: ['ignore', 'ignore', 'pipe'] });
-    // Chrome must not outlive the process that started it.
     const killChrome = (): void => {
         child.kill('SIGKILL');
     };
-    process.once('exit', killChrome);
+    // Chrome and its profile must not outlive the process that started it. Node.js
+    // doesn't run exit handlers when a signal kills it, so a host must handle SIGINT
+    // and SIGTERM itself: abort the benchmark's signal and let it return.
+    const onProcessExit = (): void => {
+        killChrome();
+        rmSync(userDataDirectory, { force: true, recursive: true });
+    };
+    process.once('exit', onProcessExit);
 
     // Keeps reading stderr, so Chrome never blocks on a full pipe.
     let stderr = '';
@@ -410,7 +472,7 @@ export const launchChrome = async ({
             killChrome();
             await waitForExit(child, SHUTDOWN_TIMEOUT_MS);
         }
-        process.off('exit', killChrome);
+        process.off('exit', onProcessExit);
         await removeProfile();
     };
 
@@ -433,7 +495,7 @@ export const launchChrome = async ({
                     targetId,
                 });
                 const sessionId = getRequiredString(attached, 'sessionId', 'Target.attachToTarget');
-                const session = createSession(openConnection, sessionId);
+                const { cancelWaits, ...session } = createSession(openConnection, sessionId);
                 const removers: Array<() => void> = [];
                 return {
                     ...session,
@@ -443,6 +505,7 @@ export const launchChrome = async ({
                         return remove;
                     },
                     close: async () => {
+                        cancelWaits(new Error('The page closed.'));
                         for (const remove of removers) {
                             remove();
                         }

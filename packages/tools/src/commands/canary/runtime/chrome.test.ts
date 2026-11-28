@@ -8,7 +8,14 @@ import { chmod } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
-import { CHROME_PATH_ENV, findChrome } from './chrome';
+import {
+    CHROME_PATH_ENV,
+    ChromeConnectionError,
+    connect,
+    createSession,
+    findChrome,
+    getNumber,
+} from './chrome';
 
 const TEST_ROOT = path.resolve(os.tmpdir(), `build-plugins-canary-chrome-${process.pid}`);
 const FIRST_BIN = path.resolve(TEST_ROOT, 'first');
@@ -73,5 +80,114 @@ describe('Chrome lookup', () => {
     test('should reject a configured path that is not executable', async () => {
         const lookup = findChrome({ env: {}, explicitPath: notExecutable });
         await expect(lookup).rejects.toThrow("isn't executable");
+    });
+});
+
+type FakeEvent = { data?: unknown };
+
+// Stands in for Node.js's WebSocket, so the DevTools client runs without Chrome.
+class FakeSocket {
+    static latest: FakeSocket | undefined;
+    static failSends = false;
+    readonly sent: string[] = [];
+    private readonly listeners = new Map<string, Array<(event: FakeEvent) => void>>();
+
+    constructor() {
+        FakeSocket.latest = this;
+    }
+
+    addEventListener(type: string, listener: (event: FakeEvent) => void): void {
+        const listeners = this.listeners.get(type) ?? [];
+        listeners.push(listener);
+        this.listeners.set(type, listeners);
+    }
+
+    send(data: string): void {
+        if (FakeSocket.failSends) {
+            throw new Error('The socket is not open.');
+        }
+        this.sent.push(data);
+    }
+
+    close(): void {
+        this.emit('close');
+    }
+
+    emit(type: string, event: FakeEvent = {}): void {
+        for (const listener of this.listeners.get(type) ?? []) {
+            listener(event);
+        }
+    }
+}
+
+const getSocket = (): FakeSocket => {
+    if (!FakeSocket.latest) {
+        throw new Error('No socket was opened.');
+    }
+    return FakeSocket.latest;
+};
+
+const openSession = async () => {
+    const connecting = connect('ws://127.0.0.1:9222/devtools/browser/test');
+    getSocket().emit('open');
+    const connection = await connecting;
+    return createSession(connection, 'session-1');
+};
+
+describe('DevTools connection', () => {
+    const originalWebSocket: unknown = Reflect.get(global, 'WebSocket');
+
+    beforeEach(() => {
+        FakeSocket.latest = undefined;
+        FakeSocket.failSends = false;
+        Reflect.set(global, 'WebSocket', FakeSocket);
+    });
+
+    afterEach(() => {
+        Reflect.set(global, 'WebSocket', originalWebSocket);
+    });
+
+    test('should resolve a command with its result and a wait with its event', async () => {
+        const session = await openSession();
+        const command = session.send('Runtime.evaluate', { expression: '1' });
+        const sent: unknown = JSON.parse(getSocket().sent[0] ?? '{}');
+        const id = getNumber(sent, 'id');
+        getSocket().emit('message', { data: JSON.stringify({ id, result: { value: 1 } }) });
+
+        await expect(command).resolves.toEqual({ value: 1 });
+
+        const waiting = session.waitFor('Page.loadEventFired', 60_000);
+        const event = { method: 'Page.loadEventFired', sessionId: 'session-1', params: { t: 1 } };
+        getSocket().emit('message', { data: JSON.stringify(event) });
+
+        await expect(waiting).resolves.toEqual({ t: 1 });
+    });
+
+    test('should fail pending and later commands and waits once the connection closes', async () => {
+        const session = await openSession();
+        const command = session.send('Page.navigate', { url: 'http://127.0.0.1/' });
+        const waiting = session.waitFor('Page.loadEventFired', 60_000);
+        getSocket().emit('close');
+
+        await expect(command).rejects.toBeInstanceOf(ChromeConnectionError);
+        await expect(waiting).rejects.toBeInstanceOf(ChromeConnectionError);
+        await expect(session.send('Page.reload')).rejects.toBeInstanceOf(ChromeConnectionError);
+        const later = session.waitFor('Page.loadEventFired', 60_000);
+        await expect(later).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+
+    test('should cancel waits when asked, for example when their page closes', async () => {
+        const session = await openSession();
+        const waiting = session.waitFor('Page.loadEventFired', 60_000);
+        session.cancelWaits(new Error('The page closed.'));
+
+        await expect(waiting).rejects.toThrow('The page closed.');
+    });
+
+    test('should fail a command the socket cannot send as a connection error', async () => {
+        const session = await openSession();
+        FakeSocket.failSends = true;
+
+        await expect(session.send('Page.reload')).rejects.toBeInstanceOf(ChromeConnectionError);
     });
 });

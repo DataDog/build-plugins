@@ -457,8 +457,8 @@ const runPhase = async ({
     };
 };
 
-// Fails like a build would: an instrumented variant that doesn't load, or loads
-// too rarely, after control did is a plugin failure.
+// Fails like a build would: an instrumented variant that doesn't load, or fails
+// too many loads, after control did is a plugin failure.
 const getRuntimeFailure = (
     phase: CanaryPhase,
     variant: string,
@@ -519,6 +519,7 @@ const runPhaseRuntime = async ({
         if (error instanceof RuntimeVariantError) {
             throw getRuntimeFailure(phase, error.variant, error.message);
         }
+        // Anything else, such as Chrome crashing, is a target failure.
         throw error;
     }
 };
@@ -592,7 +593,7 @@ export const runCanary = async ({
     runtime,
     target,
 }: {
-    // Stops the runtime step between page loads.
+    // Stops the runtime step, also during a page load.
     abortSignal: AbortSignal | undefined;
     // When set, a failed run also writes an alert for the CI notify job.
     alert: AlertOptions | undefined;
@@ -709,9 +710,7 @@ export const runCanary = async ({
                 report.runtime.phases.push(runtimeReport);
                 const insufficient = findInsufficientVariant(runtimeReport.conditions, 'control');
                 if (insufficient) {
-                    const { cache, cpuThrottling, page } = insufficient.condition;
-                    const message = `${insufficient.variant} loaded ${page} only ${insufficient.loads} times without errors (${cache} cache, CPU ${cpuThrottling}x).`;
-                    throw getRuntimeFailure(phase, insufficient.variant, message);
+                    throw getRuntimeFailure(phase, insufficient.variant, insufficient.message);
                 }
             }
         }

@@ -176,6 +176,10 @@ const printRuntimeReport = (runtime: RuntimeReport): void => {
             console.log(
                 `  ${condition.page}, ${condition.cache} cache, CPU ${condition.cpuThrottling}x`,
             );
+            const loadCounts = condition.variants.map(
+                ({ failedLoads, loads, variant }) => `${variant} ${loads}/${loads + failedLoads}`,
+            );
+            console.log(`    loads without errors: ${loadCounts.join(', ')}`);
             for (const comparison of condition.comparisons) {
                 console.log(`    ${comparison.variant}`);
                 for (const { formatter, label, metric } of RUNTIME_LINES) {

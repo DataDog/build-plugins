@@ -3,7 +3,7 @@
 // Copyright 2019-Present Datadog, Inc.
 
 import type { Chrome } from './chrome.ts';
-import { launchChrome } from './chrome.ts';
+import { ChromeConnectionError, launchChrome } from './chrome.ts';
 import type { LoadResult } from './measure.ts';
 import { measureLoad, visitPage } from './measure.ts';
 import type { Random } from './random.ts';
@@ -28,6 +28,9 @@ import type {
 const WARM_PRIMING_VISITS = 2;
 // One visit warms up a fresh browser before its first measured cold load.
 const COLD_PRIMING_VISITS = 1;
+// The slow loads are the likeliest to fail, so dropping many of them would make a
+// variant look faster than it is.
+export const MAX_FAILED_LOAD_SHARE = 0.1;
 
 // A variant whose build doesn't load, which says who needs to act.
 export class RuntimeVariantError extends Error {
@@ -193,12 +196,35 @@ export const summarizeLoads = <V extends string>({
     return conditions;
 };
 
-// The first variant, control first, with too few successful loads in a condition
-// for a confidence interval.
+export type InsufficientVariant<V extends string> = {
+    variant: V;
+    condition: RuntimeCondition<V>;
+    loads: number;
+    failedLoads: number;
+    message: string;
+};
+
+const describeInsufficient = <V extends string>(
+    variant: V,
+    { cache, cpuThrottling, page }: RuntimeCondition<V>,
+    loads: number,
+    failedLoads: number,
+): string => {
+    const condition = `${cache} cache, CPU ${cpuThrottling}x`;
+    if (loads < MIN_SAMPLES_FOR_INTERVAL) {
+        return `${variant} loaded ${page} only ${loads} times without errors (${condition}).`;
+    }
+    const total = loads + failedLoads;
+    const allowed = Math.round(MAX_FAILED_LOAD_SHARE * 100);
+    return `${variant} failed ${failedLoads} of ${total} loads of ${page} (${condition}), more than ${allowed}%.`;
+};
+
+// The first variant, control first, whose loads in a condition are too few for a
+// confidence interval, or failed too often to trust.
 export const findInsufficientVariant = <V extends string>(
     conditions: RuntimeCondition<V>[],
     controlVariant: V,
-): { variant: V; condition: RuntimeCondition<V>; loads: number } | undefined => {
+): InsufficientVariant<V> | undefined => {
     const summaries = conditions.flatMap((condition) =>
         condition.variants.map((summary) => ({ condition, summary })),
     );
@@ -206,14 +232,26 @@ export const findInsufficientVariant = <V extends string>(
         ...summaries.filter(({ summary }) => summary.variant === controlVariant),
         ...summaries.filter(({ summary }) => summary.variant !== controlVariant),
     ];
-    const insufficient = ordered.find(({ summary }) => summary.loads < MIN_SAMPLES_FOR_INTERVAL);
+    const insufficient = ordered.find(({ summary }) => {
+        const total = summary.loads + summary.failedLoads;
+        const failedShare = total === 0 ? 0 : summary.failedLoads / total;
+        return summary.loads < MIN_SAMPLES_FOR_INTERVAL || failedShare > MAX_FAILED_LOAD_SHARE;
+    });
     if (!insufficient) {
         return undefined;
     }
+    const { condition, summary } = insufficient;
     return {
-        variant: insufficient.summary.variant,
-        condition: insufficient.condition,
-        loads: insufficient.summary.loads,
+        variant: summary.variant,
+        condition,
+        loads: summary.loads,
+        failedLoads: summary.failedLoads,
+        message: describeInsufficient(
+            summary.variant,
+            condition,
+            summary.loads,
+            summary.failedLoads,
+        ),
     };
 };
 
@@ -323,6 +361,7 @@ export const runRuntimeBenchmark = async <V extends string>(
                     maxWaitMs: settings.maxWaitMs,
                     origin: getOrigin(variant),
                     page,
+                    signal,
                 };
                 try {
                     for (let visitIndex = 0; visitIndex < WARM_PRIMING_VISITS; visitIndex++) {
@@ -333,6 +372,10 @@ export const runRuntimeBenchmark = async <V extends string>(
                     }
                 } catch (error) {
                     throwIfAborted(signal);
+                    // Chrome itself failing says nothing about the variant.
+                    if (error instanceof ChromeConnectionError) {
+                        throw error;
+                    }
                     const message = getErrorMessage(error);
                     throw new RuntimeVariantError(
                         `${variant} didn't load ${page.id} in Chrome: ${message}`,
@@ -359,8 +402,14 @@ export const runRuntimeBenchmark = async <V extends string>(
                     network: settings.network,
                     origin: getOrigin(planned.variant),
                     page: planned.page,
+                    signal,
                 });
             } catch (error) {
+                throwIfAborted(signal);
+                // A broken Chrome would fail every load that follows, in every variant.
+                if (error instanceof ChromeConnectionError) {
+                    throw error;
+                }
                 result = getFailedResult(error);
             }
             const load = toLoad(planned, result);
@@ -368,6 +417,8 @@ export const runRuntimeBenchmark = async <V extends string>(
             const description = formatLoad(load);
             log(`Load ${index + 1}/${plan.length}: ${description}`);
         }
+        // A stop during the last load mustn't produce a result.
+        throwIfAborted(signal);
 
         const statisticsRandom = createRandom(`${options.seed}:bootstrap`);
         const conditions = summarizeLoads({

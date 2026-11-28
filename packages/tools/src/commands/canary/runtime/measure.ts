@@ -2,10 +2,11 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
+import { performance } from 'node:perf_hooks';
 import { setTimeout as wait } from 'node:timers/promises';
 
 import type { Chrome, ChromePage } from './chrome.ts';
-import { getNumber, getString, isRecord } from './chrome.ts';
+import { ChromeConnectionError, getNumber, getString, isRecord } from './chrome.ts';
 import type {
     RuntimeCacheState,
     RuntimeCookie,
@@ -19,6 +20,9 @@ const POLL_INTERVAL_MS = 100;
 const SETTLE_POLL_INTERVAL_MS = 250;
 // A priming load waits this long without requests before it ends.
 const NETWORK_IDLE_MS = 500;
+// How long a command may still take once a load's time is up. A page that doesn't
+// answer by then, for example because a script loops, fails the load.
+const COMMAND_GRACE_MS = 5_000;
 const BITS_PER_MEGABIT = 1_000_000;
 const BITS_PER_BYTE = 8;
 
@@ -64,7 +68,8 @@ const SETTLE_EXPRESSION = `(() => {
     return { now: performance.now(), lastLcpMs: last ? last.startTime : null };
 })()`;
 
-// Blocking time adds up the Long Animation Frames that start before LCP.
+// Blocking time adds up the whole blocking duration of every Long Animation Frame
+// that starts before LCP, so a frame that LCP falls into counts in full.
 const COLLECT_EXPRESSION = `(() => {
     ${READ_ENTRIES}
     const fcp = performance.getEntriesByName('first-contentful-paint')[0];
@@ -111,8 +116,54 @@ export const getPageUrl = (origin: string, page: RuntimePage): string => {
     return url.toString();
 };
 
-const evaluate = async (page: ChromePage, expression: string): Promise<unknown> => {
-    const response = await page.send('Runtime.evaluate', { expression, returnByValue: true });
+const getOrigin = (url: string): string | undefined => {
+    try {
+        return new URL(url).origin;
+    } catch {
+        return undefined;
+    }
+};
+
+// A monotonic clock, so a load's time limit doesn't move with the system clock.
+const now = (): number => performance.now();
+
+const getRemainingMs = (deadline: number): number => {
+    return Math.max(0, deadline - now());
+};
+
+type Limits = {
+    // On the now() clock.
+    deadline: number;
+    signal: AbortSignal | undefined;
+};
+
+// Waits for promise, but no longer than COMMAND_GRACE_MS past the deadline, and not
+// past an abort.
+const withinLimits = <T>(promise: Promise<T>, { deadline, signal }: Limits, what: string) => {
+    signal?.throwIfAborted();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+    const limit = new Promise<never>((_resolve, reject) => {
+        const timeoutMs = getRemainingMs(deadline) + COMMAND_GRACE_MS;
+        timeout = setTimeout(() => {
+            reject(new Error(`${what} got no answer within the load's time limit.`));
+        }, timeoutMs);
+        if (signal) {
+            onAbort = () => reject(signal.reason);
+            signal.addEventListener('abort', onAbort, { once: true });
+        }
+    });
+    return Promise.race([promise, limit]).finally(() => {
+        clearTimeout(timeout);
+        if (signal && onAbort) {
+            signal.removeEventListener('abort', onAbort);
+        }
+    });
+};
+
+const evaluate = async (page: ChromePage, expression: string, limits: Limits) => {
+    const request = page.send('Runtime.evaluate', { expression, returnByValue: true });
+    const response = await withinLimits(request, limits, 'Runtime.evaluate');
     const exception = isRecord(response) ? response.exceptionDetails : undefined;
     if (exception !== undefined) {
         const text = getString(exception, 'text') ?? 'Uncaught exception';
@@ -122,54 +173,48 @@ const evaluate = async (page: ChromePage, expression: string): Promise<unknown> 
     return isRecord(result) ? result.value : undefined;
 };
 
-const getRemainingMs = (deadline: number): number => {
-    return Math.max(0, deadline - Date.now());
-};
-
-const navigate = async (page: ChromePage, url: string, deadline: number): Promise<void> => {
-    const timeoutMs = getRemainingMs(deadline);
-    const loaded = page.waitFor('Page.loadEventFired', timeoutMs);
+const navigate = async (page: ChromePage, url: string, limits: Limits): Promise<void> => {
+    const loaded = page.waitFor('Page.loadEventFired', getRemainingMs(limits.deadline));
     // Navigation errors are reported below; don't let this one go unhandled first.
+    // Closing the page cancels the wait.
     loaded.catch(() => undefined);
-    const navigation = await page.send('Page.navigate', { url });
+    const request = page.send('Page.navigate', { url });
+    const navigation = await withinLimits(request, limits, 'Page.navigate');
     const errorText = getString(navigation, 'errorText');
     if (errorText) {
         throw new Error(`Loading ${url} failed: ${errorText}`);
     }
-    await loaded;
+    await withinLimits(loaded, limits, 'The load event');
 };
 
-const waitForVisible = async (page: ChromePage, selector: string, deadline: number) => {
+const waitForVisible = async (page: ChromePage, selector: string, limits: Limits) => {
     const expression = getVisibleExpression(selector);
     for (;;) {
-        const visible = await evaluate(page, expression);
+        const visible = await evaluate(page, expression, limits);
         if (visible === true) {
             return;
         }
-        if (Date.now() >= deadline) {
+        if (now() >= limits.deadline) {
             throw new Error(`${selector} wasn't visible in time.`);
         }
-        await wait(POLL_INTERVAL_MS);
+        await wait(POLL_INTERVAL_MS, undefined, { signal: limits.signal });
     }
 };
 
-// Waits until no new LCP candidate has appeared for lcpSettleMs, or until
-// maxWaitMs have passed since navigation started.
-const waitForLcpToSettle = async (
-    page: ChromePage,
-    { lcpSettleMs, maxWaitMs }: { lcpSettleMs: number; maxWaitMs: number },
-): Promise<void> => {
+// Waits until no new LCP candidate has appeared for lcpSettleMs, or until the
+// load's time is up.
+const waitForLcpToSettle = async (page: ChromePage, lcpSettleMs: number, limits: Limits) => {
     for (;;) {
-        const state = await evaluate(page, SETTLE_EXPRESSION);
-        const now = getNumber(state, 'now') ?? 0;
+        if (now() >= limits.deadline) {
+            return;
+        }
+        const state = await evaluate(page, SETTLE_EXPRESSION, limits);
+        const pageNow = getNumber(state, 'now') ?? 0;
         const lastLcpMs = getNumber(state, 'lastLcpMs');
-        if (now >= maxWaitMs) {
+        if (lastLcpMs !== undefined && pageNow - lastLcpMs >= lcpSettleMs) {
             return;
         }
-        if (lastLcpMs !== undefined && now - lastLcpMs >= lcpSettleMs) {
-            return;
-        }
-        await wait(SETTLE_POLL_INTERVAL_MS);
+        await wait(SETTLE_POLL_INTERVAL_MS, undefined, { signal: limits.signal });
     }
 };
 
@@ -197,14 +242,16 @@ type NetworkTracker = {
     };
 };
 
-// Follows a load's requests through CDP's network events. Scripts count over the
-// whole load: bytes "before LCP" would give the slower variant a longer window.
-const trackNetwork = (page: ChromePage, origin: string): NetworkTracker => {
+// Follows a load's requests through CDP's network events. Only requests to the
+// page's own origin count, so scripts served from another host aren't measured.
+// Scripts count over the whole load: bytes "before LCP" would give the slower
+// variant a longer window. Exported for tests.
+export const trackNetwork = (page: Pick<ChromePage, 'on'>, pageOrigin: string): NetworkTracker => {
     const requests = new Map<string, TrackedRequest>();
     let inFlight = 0;
-    let lastActivity = Date.now();
+    let lastActivity = now();
     const getRequest = (params: unknown): TrackedRequest => {
-        lastActivity = Date.now();
+        lastActivity = now();
         const requestId = getString(params, 'requestId') ?? '';
         let request = requests.get(requestId);
         if (!request) {
@@ -265,8 +312,8 @@ const trackNetwork = (page: ChromePage, origin: string): NetworkTracker => {
         getInFlight: () => inFlight,
         getLastActivity: () => lastActivity,
         summarize: () => {
-            const ownRequests = Array.from(requests.values()).filter((request) =>
-                request.url.startsWith(origin),
+            const ownRequests = Array.from(requests.values()).filter(
+                (request) => getOrigin(request.url) === pageOrigin,
             );
             const scripts = ownRequests.filter(
                 (request) =>
@@ -285,13 +332,13 @@ const trackNetwork = (page: ChromePage, origin: string): NetworkTracker => {
     };
 };
 
-const waitForNetworkIdle = async (network: NetworkTracker, deadline: number): Promise<void> => {
-    while (Date.now() < deadline) {
-        const quietMs = Date.now() - network.getLastActivity();
+const waitForNetworkIdle = async (network: NetworkTracker, limits: Limits): Promise<void> => {
+    while (now() < limits.deadline) {
+        const quietMs = now() - network.getLastActivity();
         if (network.getInFlight() === 0 && quietMs >= NETWORK_IDLE_MS) {
             return;
         }
-        await wait(POLL_INTERVAL_MS);
+        await wait(POLL_INTERVAL_MS, undefined, { signal: limits.signal });
     }
 };
 
@@ -314,38 +361,57 @@ const preparePage = async ({
     chrome,
     clearCache,
     cookies,
-    origin,
+    pageOrigin,
 }: {
     chrome: Chrome;
     clearCache: boolean;
     cookies: RuntimeCookie[];
-    origin: string;
+    pageOrigin: string;
 }): Promise<PreparedPage> => {
     const page = await chrome.newPage();
-    const pageErrors: string[] = [];
-    page.on('Runtime.exceptionThrown', (params) => {
-        const details = isRecord(params) ? params.exceptionDetails : undefined;
-        const exception = isRecord(details) ? details.exception : undefined;
-        const description = getString(exception, 'description') ?? getString(details, 'text');
-        pageErrors.push(description ?? 'Uncaught exception');
-    });
-    const network = trackNetwork(page, origin);
-    await page.send('Page.enable');
-    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: BLOCK_SERVICE_WORKERS });
-    await page.send('Runtime.enable');
-    await page.send('Network.enable');
-    await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
-    if (clearCache) {
-        // Clears the HTTP cache and V8's code cache of the whole profile, which
-        // only cold loads use.
-        await page.send('Network.clearBrowserCache');
-        await page.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' });
+    try {
+        const pageErrors: string[] = [];
+        page.on('Runtime.exceptionThrown', (params) => {
+            const details = isRecord(params) ? params.exceptionDetails : undefined;
+            const exception = isRecord(details) ? details.exception : undefined;
+            const description = getString(exception, 'description') ?? getString(details, 'text');
+            pageErrors.push(description ?? 'Uncaught exception');
+        });
+        const network = trackNetwork(page, pageOrigin);
+        await page.send('Page.enable');
+        await page.send('Page.addScriptToEvaluateOnNewDocument', {
+            source: BLOCK_SERVICE_WORKERS,
+        });
+        await page.send('Runtime.enable');
+        await page.send('Network.enable');
+        await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
+        if (clearCache) {
+            // Clears the HTTP cache and V8's code cache of the whole profile, which
+            // only cold loads use.
+            await page.send('Network.clearBrowserCache');
+            await page.send('Storage.clearDataForOrigin', {
+                origin: pageOrigin,
+                storageTypes: 'all',
+            });
+        }
+        if (cookies.length > 0) {
+            await page.send('Network.setCookies', { cookies });
+        }
+        await page.send('Page.bringToFront');
+        return { page, network, getPageErrors: () => pageErrors };
+    } catch (error) {
+        try {
+            await page.close();
+        } catch {
+            // The error that stopped the preparation matters more.
+        }
+        throw error;
     }
-    if (cookies.length > 0) {
-        await page.send('Network.setCookies', { cookies });
-    }
-    await page.send('Page.bringToFront');
-    return { page, network, getPageErrors: () => pageErrors };
+};
+
+// Errors that end the whole run instead of one load.
+const isFatal = (error: unknown, signal: AbortSignal | undefined): boolean => {
+    return error instanceof ChromeConnectionError || signal?.aborted === true;
 };
 
 // Loads a page without measuring it, to fill the caches or to check that the build
@@ -356,27 +422,33 @@ export const visitPage = async ({
     maxWaitMs,
     origin,
     page: runtimePage,
+    signal,
 }: {
     chrome: Chrome;
     cookies: RuntimeCookie[];
     maxWaitMs: number;
     origin: string;
     page: RuntimePage;
+    signal: AbortSignal | undefined;
 }): Promise<void> => {
-    const deadline = Date.now() + maxWaitMs;
+    const url = getPageUrl(origin, runtimePage);
+    const pageOrigin = new URL(url).origin;
     const { page, network, getPageErrors } = await preparePage({
         chrome,
         clearCache: false,
         cookies,
-        origin,
+        pageOrigin,
     });
     try {
-        const url = getPageUrl(origin, runtimePage);
-        await navigate(page, url, deadline);
-        await waitForVisible(page, runtimePage.readySelector, deadline);
+        const limits = { deadline: now() + maxWaitMs, signal };
+        await navigate(page, url, limits);
+        await waitForVisible(page, runtimePage.readySelector, limits);
         // Lets lazy chunks load and V8 write its code cache.
-        await waitForNetworkIdle(network, deadline);
+        await waitForNetworkIdle(network, limits);
     } catch (error) {
+        if (isFatal(error, signal)) {
+            throw error;
+        }
         const message = getErrorMessage(error);
         const pageErrors = getPageErrors();
         const details = pageErrors.length > 0 ? ` Page errors: ${pageErrors.join('; ')}` : '';
@@ -386,6 +458,8 @@ export const visitPage = async ({
     }
 };
 
+// Measures one load. A load that fails returns its error; Chrome failures and
+// aborts throw.
 export const measureLoad = async ({
     cache,
     chrome,
@@ -396,6 +470,7 @@ export const measureLoad = async ({
     network: networkThrottling,
     origin,
     page: runtimePage,
+    signal,
 }: {
     cache: RuntimeCacheState;
     chrome: Chrome;
@@ -406,12 +481,15 @@ export const measureLoad = async ({
     network: RuntimeNetworkThrottling | null;
     origin: string;
     page: RuntimePage;
+    signal: AbortSignal | undefined;
 }): Promise<LoadResult> => {
+    const url = getPageUrl(origin, runtimePage);
+    const pageOrigin = new URL(url).origin;
     const { page, network, getPageErrors } = await preparePage({
         chrome,
         clearCache: cache === 'cold',
         cookies,
-        origin,
+        pageOrigin,
     });
     const metrics: RuntimeLoadMetrics = {
         fcpMs: null,
@@ -430,14 +508,13 @@ export const measureLoad = async ({
         }
         await page.send('Performance.enable', { timeDomain: 'timeTicks' });
 
+        const limits = { deadline: now() + maxWaitMs, signal };
         let error: string | null = null;
         try {
-            const deadline = Date.now() + maxWaitMs;
-            const url = getPageUrl(origin, runtimePage);
-            await navigate(page, url, deadline);
-            await waitForVisible(page, runtimePage.readySelector, deadline);
-            await waitForLcpToSettle(page, { lcpSettleMs, maxWaitMs });
-            const inPage = await evaluate(page, COLLECT_EXPRESSION);
+            await navigate(page, url, limits);
+            await waitForVisible(page, runtimePage.readySelector, limits);
+            await waitForLcpToSettle(page, lcpSettleMs, limits);
+            const inPage = await evaluate(page, COLLECT_EXPRESSION, limits);
             metrics.fcpMs = getNullableNumber(inPage, 'fcpMs');
             metrics.lcpMs = getNullableNumber(inPage, 'lcpMs');
             metrics.blockingBeforeLcpMs = getNullableNumber(inPage, 'blockingBeforeLcpMs');
@@ -448,18 +525,31 @@ export const measureLoad = async ({
                 error = 'Chrome reported no FCP or LCP.';
             }
         } catch (loadError) {
+            if (isFatal(loadError, signal)) {
+                throw loadError;
+            }
             error = getErrorMessage(loadError);
         }
 
-        const performanceMetrics = await page.send('Performance.getMetrics');
-        const metricList = isRecord(performanceMetrics) ? performanceMetrics.metrics : undefined;
-        const entries: unknown[] = Array.isArray(metricList) ? metricList : [];
-        const scriptDuration = entries.find(
-            (entry) => getString(entry, 'name') === 'ScriptDuration',
-        );
-        // Reported in seconds, for the whole load.
-        const scriptSeconds = getNumber(scriptDuration, 'value');
-        metrics.scriptMs = scriptSeconds === undefined ? null : scriptSeconds * 1_000;
+        // A failed load's metrics aren't used, and its page may not answer.
+        if (error === null) {
+            const request = page.send('Performance.getMetrics');
+            const performanceMetrics = await withinLimits(
+                request,
+                limits,
+                'Performance.getMetrics',
+            );
+            const metricList = isRecord(performanceMetrics)
+                ? performanceMetrics.metrics
+                : undefined;
+            const entries: unknown[] = Array.isArray(metricList) ? metricList : [];
+            const scriptDuration = entries.find(
+                (entry) => getString(entry, 'name') === 'ScriptDuration',
+            );
+            // Reported in seconds, for the whole load.
+            const scriptSeconds = getNumber(scriptDuration, 'value');
+            metrics.scriptMs = scriptSeconds === undefined ? null : scriptSeconds * 1_000;
+        }
         const networkSummary = network.summarize();
         metrics.jsTransferBytes = networkSummary.jsTransferBytes;
         metrics.jsDecodedBytes = networkSummary.jsDecodedBytes;

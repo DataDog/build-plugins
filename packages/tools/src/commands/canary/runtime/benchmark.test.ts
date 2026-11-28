@@ -2,9 +2,27 @@
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
 // Copyright 2019-Present Datadog, Inc.
 
-import { findInsufficientVariant, planLoads, summarizeLoads } from './benchmark';
+import {
+    findInsufficientVariant,
+    planLoads,
+    runRuntimeBenchmark,
+    summarizeLoads,
+} from './benchmark';
+import type { Chrome, ChromePage } from './chrome';
+import { ChromeConnectionError, launchChrome } from './chrome';
 import { createRandom } from './random';
-import type { RuntimeLoad, RuntimePage, RuntimeSettings } from './types';
+import type { RuntimeLoad, RuntimePage, RuntimeSettings, RuntimeVariantTarget } from './types';
+
+// Lets the benchmark run against a fake Chrome.
+jest.mock('./chrome', () => {
+    const original = jest.requireActual('./chrome');
+    return {
+        ...original,
+        launchChrome: jest.fn(),
+    };
+});
+
+const mockLaunchChrome = jest.mocked(launchChrome);
 
 type Variant = 'control' | 'instrumented';
 
@@ -204,33 +222,69 @@ describe('runtime benchmark summary', () => {
         {
             description: 'blame control first when it loaded too rarely',
             controlLoads: 2,
+            controlFailed: 0,
             instrumentedLoads: 0,
-            expected: { variant: 'control', loads: 2, cache: 'warm' },
+            instrumentedFailed: 0,
+            expected: { variant: 'control', loads: 2, failedLoads: 0, cache: 'warm' },
         },
         {
             description: 'name the variant that loaded too rarely after control',
             controlLoads: 3,
+            controlFailed: 0,
             instrumentedLoads: 1,
-            expected: { variant: 'instrumented', loads: 1, cache: 'warm' },
+            instrumentedFailed: 0,
+            expected: { variant: 'instrumented', loads: 1, failedLoads: 0, cache: 'warm' },
         },
         {
             description: 'accept 3 successful loads of every variant',
             controlLoads: 3,
+            controlFailed: 0,
             instrumentedLoads: 3,
+            instrumentedFailed: 0,
             expected: undefined,
+        },
+        {
+            description: 'accept up to 10% failed loads',
+            controlLoads: 9,
+            controlFailed: 1,
+            instrumentedLoads: 9,
+            instrumentedFailed: 1,
+            expected: undefined,
+        },
+        {
+            description: 'name the variant that failed more than 10% of its loads',
+            controlLoads: 10,
+            controlFailed: 0,
+            instrumentedLoads: 8,
+            instrumentedFailed: 2,
+            expected: { variant: 'instrumented', loads: 8, failedLoads: 2, cache: 'warm' },
+        },
+        {
+            description: 'blame control first when it failed too often',
+            controlLoads: 8,
+            controlFailed: 2,
+            instrumentedLoads: 5,
+            instrumentedFailed: 5,
+            expected: { variant: 'control', loads: 8, failedLoads: 2, cache: 'warm' },
         },
     ];
 
     test.each(insufficientCases)(
         'should $description',
-        ({ controlLoads, instrumentedLoads, expected }) => {
+        ({ controlLoads, controlFailed, instrumentedLoads, instrumentedFailed, expected }) => {
+            const createWarmLoads = (variant: Variant, ok: number, failed: number) =>
+                Array.from({ length: ok + failed }, (_, repetition) =>
+                    createLoad({
+                        repetition,
+                        variant,
+                        cache: 'warm',
+                        ok: repetition < ok,
+                        error: repetition < ok ? null : 'Timed out.',
+                    }),
+                );
             const loads = [
-                ...Array.from({ length: controlLoads }, (_, repetition) =>
-                    createLoad({ repetition, variant: 'control', cache: 'warm' }),
-                ),
-                ...Array.from({ length: instrumentedLoads }, (_, repetition) =>
-                    createLoad({ repetition, variant: 'instrumented', cache: 'warm' }),
-                ),
+                ...createWarmLoads('control', controlLoads, controlFailed),
+                ...createWarmLoads('instrumented', instrumentedLoads, instrumentedFailed),
             ];
             // Cold loads are fine, so only the warm condition can be short.
             for (let repetition = 0; repetition < 3; repetition++) {
@@ -249,10 +303,147 @@ describe('runtime benchmark summary', () => {
             const found = insufficient && {
                 variant: insufficient.variant,
                 loads: insufficient.loads,
+                failedLoads: insufficient.failedLoads,
                 cache: insufficient.condition.cache,
             };
 
             expect(found).toEqual(expected);
         },
     );
+
+    test('should say how often a variant failed', () => {
+        const loads: RuntimeLoad<Variant>[] = [];
+        for (let repetition = 0; repetition < 10; repetition++) {
+            const ok = repetition >= 2;
+            const error = ok ? null : 'Timed out.';
+            loads.push(createLoad({ repetition, variant: 'instrumented', ok, error }));
+            loads.push(createLoad({ repetition, variant: 'instrumented', cache: 'warm' }));
+            loads.push(createLoad({ repetition, variant: 'control' }));
+            loads.push(createLoad({ repetition, variant: 'control', cache: 'warm' }));
+        }
+        const conditions = summarizeLoads({
+            controlVariant: 'control',
+            loads,
+            pages: [PAGES[0]],
+            random: createRandom('seed'),
+            settings: { ...SETTINGS, cpuThrottlingRates: [1] },
+            variants: VARIANTS,
+        });
+        const insufficient = findInsufficientVariant(conditions, 'control');
+
+        expect(insufficient?.message).toBe(
+            'instrumented failed 2 of 10 loads of home (cold cache, CPU 1x), more than 10%.',
+        );
+    });
+});
+
+// What a page that loads at once answers: its ready selector is visible, LCP has
+// settled, and nothing is on the network.
+const evaluateInFakePage = (expression: string): unknown => {
+    if (expression.includes('getBoundingClientRect')) {
+        return true;
+    }
+    if (expression.includes('lastLcpMs')) {
+        return { now: 10_000, lastLcpMs: 100 };
+    }
+    return { fcpMs: 50, lcpMs: 100, blockingBeforeLcpMs: 0, visibility: 'visible' };
+};
+
+const createFakePage = (): ChromePage => ({
+    send: async (method, params) => {
+        if (method === 'Runtime.evaluate') {
+            const expression = typeof params?.expression === 'string' ? params.expression : '';
+            return { result: { value: evaluateInFakePage(expression) } };
+        }
+        if (method === 'Performance.getMetrics') {
+            return { metrics: [{ name: 'ScriptDuration', value: 0.1 }] };
+        }
+        return {};
+    },
+    on: () => () => undefined,
+    waitFor: async () => ({}),
+    close: async () => undefined,
+});
+
+describe('runtime benchmark failures', () => {
+    // Priming opens 3 pages per variant: 2 warm visits and 1 cold one.
+    const PRIMING_PAGES = 3 * VARIANTS.length;
+    const variants: RuntimeVariantTarget<Variant>[] = VARIANTS.map((id) => ({
+        id,
+        origin: 'http://127.0.0.1:9',
+    }));
+
+    // Every page after priming fails to open with failure().
+    const runWithFailingPages = (failure: () => Error) => {
+        let openedPages = 0;
+        const newPage = async (): Promise<ChromePage> => {
+            openedPages += 1;
+            if (openedPages > PRIMING_PAGES) {
+                throw failure();
+            }
+            return createFakePage();
+        };
+        const chrome: Chrome = {
+            version: 'HeadlessChrome/1',
+            newPage,
+            close: async () => undefined,
+        };
+        mockLaunchChrome.mockResolvedValue(chrome);
+        return runRuntimeBenchmark({
+            chromeFlags: [],
+            chromePath: '/fake/chrome',
+            controlVariant: 'control',
+            log: () => undefined,
+            pages: [PAGES[0]],
+            seed: 'seed',
+            settings: { ...SETTINGS, repetitions: 3, cpuThrottlingRates: [1], maxWaitMs: 1_000 },
+            signal: undefined,
+            variants,
+        });
+    };
+
+    test('should stop on a Chrome failure instead of counting failed loads', async () => {
+        const run = runWithFailingPages(
+            () => new ChromeConnectionError('The DevTools connection closed.'),
+        );
+        await expect(run).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+
+    test("should count a page's own failures as failed loads and keep going", async () => {
+        const result = await runWithFailingPages(() => new Error('Target.createTarget failed.'));
+        expect(result.loads).toHaveLength(12);
+        expect(result.loads.every((load) => !load.ok)).toBe(true);
+        expect(result.conditions[0].variants[0]).toMatchObject({ loads: 0, failedLoads: 3 });
+    });
+
+    test('should stop with an abort instead of a result after the last load', async () => {
+        const controller = new AbortController();
+        let openedPages = 0;
+        const newPage = async (): Promise<ChromePage> => {
+            openedPages += 1;
+            // The last of the 12 measured loads.
+            if (openedPages === PRIMING_PAGES + 12) {
+                controller.abort();
+            }
+            return createFakePage();
+        };
+        const chrome: Chrome = {
+            version: 'HeadlessChrome/1',
+            newPage,
+            close: async () => undefined,
+        };
+        mockLaunchChrome.mockResolvedValue(chrome);
+        const run = runRuntimeBenchmark({
+            chromeFlags: [],
+            chromePath: '/fake/chrome',
+            controlVariant: 'control',
+            log: () => undefined,
+            pages: [PAGES[0]],
+            seed: 'seed',
+            settings: { ...SETTINGS, repetitions: 3, cpuThrottlingRates: [1], maxWaitMs: 1_000 },
+            signal: controller.signal,
+            variants,
+        });
+        await expect(run).rejects.toThrow('The runtime benchmark was stopped.');
+    });
 });
