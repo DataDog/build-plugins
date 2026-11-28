@@ -64,6 +64,7 @@ export type { types as RumTypes } from '@dd/rum-plugin';
 export const helpers = {
     // Each product should have a unique entry.
     // #helpers-injection-marker
+    [liveDebugger.CONFIG_KEY]: liveDebugger.helpers,
     [metrics.CONFIG_KEY]: metrics.helpers,
     // #helpers-injection-marker
 };

@@ -9,7 +9,7 @@ import type { SourceMapInput } from '@jridgewell/remapping';
 import type { SourceMap } from 'magic-string';
 import type { SourceMapCompact, UnpluginBuildContext } from 'unplugin';
 
-import { CONFIG_KEY, PLUGIN_NAME } from './constants';
+import { CONFIG_KEY, DEFAULT_EXCLUDE, DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
 import { createFileExtensionPattern, createFileFilter } from './filter';
 import { getRepositoryRoot } from './paths';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
@@ -21,6 +21,13 @@ import { validateOptions } from './validate';
 export { CONFIG_KEY, PLUGIN_NAME };
 
 const DD_LD_LIMIT = Number(process.env.DD_LD_LIMIT) || Infinity;
+
+// Published as `helpers.liveDebugger`. Setting `exclude` or `fileExtensions`
+// replaces that option's defaults, so consumers spread these to add to them instead.
+export const helpers = {
+    exclude: DEFAULT_EXCLUDE,
+    fileExtensions: DEFAULT_FILE_EXTENSIONS,
+};
 
 // Export types for factory integration
 export type types = {
