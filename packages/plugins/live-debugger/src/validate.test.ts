@@ -6,6 +6,7 @@ import type { BuildMetadata, Options } from '@dd/core/types';
 import { getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 
 import { DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
+import { helpers } from './index';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { validateOptions } from './validate';
 
@@ -175,9 +176,14 @@ describe('validateOptions', () => {
             expect(validateOptions(input, mockLogger).enableGit).toBe(expected);
         });
 
-        it('should apply all default exclude patterns', () => {
+        it('should apply the default exclude patterns that helpers exports', () => {
             const result = validateOptions(makeConfig({}), mockLogger);
-            expect(result.exclude).toHaveLength(9);
+            expect(result.exclude).toEqual(helpers.exclude);
+        });
+
+        it('should apply the default file extensions that helpers exports', () => {
+            const result = validateOptions(makeConfig({}), mockLogger);
+            expect(result.fileExtensions).toEqual(helpers.fileExtensions);
         });
     });
 

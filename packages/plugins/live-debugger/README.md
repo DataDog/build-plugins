@@ -99,6 +99,9 @@ liveDebugger?: {
 
 Live Debugger also reads the build's service and version from the top-level [`metadata.service`](#metadataservice) and [`metadata.version`](#metadataversion) options.
 
+> [!IMPORTANT]
+> Setting [`exclude`](#livedebuggerexclude) or [`fileExtensions`](#livedebuggerfileextensions) replaces that option's defaults rather than adding to them. To add to the defaults, spread `helpers.liveDebugger.exclude` or `helpers.liveDebugger.fileExtensions` into your list.
+
 After each production build, the plugin [uploads symbols](#symbol-upload) to Datadog, which Live Debugger needs to add logpoints to your browser application.
 
 ## How it works
@@ -196,9 +199,11 @@ The [`fileExtensions`](#livedebuggerfileextensions) filter is applied independen
 
 ### liveDebugger.exclude
 
-> default: `[/\/node_modules\//, /\.min\.js$/, /\/pyodide-lib\//, /^vite\//, /\0/, /commonjsHelpers\.js$/, /__vite-browser-external/, /@datadog\/browser-/, /browser-sdk\/packages\//]`
+> default: [`helpers.liveDebugger.exclude`](/packages/plugins/live-debugger/src/constants.ts)
 
-Array of file patterns (strings or RegExp) to exclude from instrumentation. By default, the following are excluded:
+Array of file patterns to exclude from instrumentation, written like [`include`](#livedebuggerinclude) patterns. A file is excluded when any pattern matches.
+
+By default, the following are excluded:
 - `node_modules` — Third-party dependencies
 - Minified files (`.min.js`)
 - Bundled third-party Pyodide library (`pyodide-lib/`)
@@ -209,20 +214,41 @@ Array of file patterns (strings or RegExp) to exclude from instrumentation. By d
 - Datadog browser SDK packages (`@datadog/browser-*`, when npm linked)
 - Datadog browser SDK source files (`browser-sdk/packages/`)
 
+Your list replaces the defaults, so files such as `node_modules` are eligible for instrumentation unless your list excludes them too. Instrumenting `node_modules` makes your build slower and your bundle [larger](#bundle-size-impact). To add patterns, spread the defaults into your list:
+
+```ts
+import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
+
+datadogWebpackPlugin({
+    liveDebugger: {
+        exclude: [...helpers.liveDebugger.exclude, 'src/generated/**'],
+    },
+});
+```
+
+To use only your own patterns, leave out the defaults. With `exclude: []`, every file that matches [`include`](#livedebuggerinclude) and [`fileExtensions`](#livedebuggerfileextensions) is eligible for instrumentation.
+
 ### liveDebugger.fileExtensions
 
-> default: `['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']`
+> default: [`helpers.liveDebugger.fileExtensions`](/packages/plugins/live-debugger/src/constants.ts)
 
 Non-empty array of file extensions eligible for instrumentation. Extension matching is case-insensitive and is applied in addition to `include` and `exclude`.
 
-Use custom extensions for file IDs containing JavaScript produced by another transform:
+The default extensions are `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`, `.mts`, and `.cts`.
+
+Your list replaces the defaults. To also instrument file IDs containing JavaScript produced by another transform, spread the defaults into your list and add their extensions:
 
 ```ts
-liveDebugger: {
-    include: ['src/**'],
-    fileExtensions: ['.js', '.ts', '.vue'],
-}
+import { datadogWebpackPlugin, helpers } from '@datadog/webpack-plugin';
+
+datadogWebpackPlugin({
+    liveDebugger: {
+        fileExtensions: [...helpers.liveDebugger.fileExtensions, '.vue'],
+    },
+});
 ```
+
+To instrument only some extensions, list just those, such as `fileExtensions: ['.ts', '.tsx']`.
 
 Set `fileExtensions: 'all'` to disable the extension guard. This is intended for advanced configurations where `include` fully identifies instrumentable files.
 

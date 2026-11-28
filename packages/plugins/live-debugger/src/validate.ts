@@ -7,7 +7,7 @@ import { shouldGetGitInfo } from '@dd/core/helpers/plugins';
 import type { Logger, Options } from '@dd/core/types';
 import chalk from 'chalk';
 
-import { CONFIG_KEY, DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
+import { CONFIG_KEY, DEFAULT_EXCLUDE, DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
 import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
 import { VALID_DECORATOR_SYNTAXES, VALID_FUNCTION_KINDS } from './types';
 
@@ -139,17 +139,7 @@ export const validateOptions = (config: Options, log: Logger): LiveDebuggerOptio
         enableGit: shouldGetGitInfo(config),
         debugId: areDebugIdsEnabled(config, log),
         include: pluginConfig.include ?? [],
-        exclude: pluginConfig.exclude || [
-            /\/node_modules\//,
-            /\.min\.js$/,
-            /\/pyodide-lib\//, // Bundled third-party Pyodide library
-            /^vite\//, // Vite internal modules
-            /\0/, // Virtual modules (Rollup/Vite convention)
-            /commonjsHelpers\.js$/, // Rollup commonjs helpers
-            /__vite-browser-external/, // Vite browser externals
-            /@datadog\/browser-/, // Datadog browser SDK packages (when npm linked)
-            /browser-sdk\/packages\//, // Datadog browser SDK source files
-        ],
+        exclude: pluginConfig.exclude ?? [...DEFAULT_EXCLUDE],
         fileExtensions,
         honorSkipComments: pluginConfig.honorSkipComments ?? true,
         functionTypes: pluginConfig.functionTypes,

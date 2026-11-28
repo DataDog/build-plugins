@@ -4,13 +4,14 @@
 
 import type { ChunkInfo, OptionsWithDefaults } from '@dd/core/types';
 import { InjectPosition } from '@dd/core/types';
-import { getContextMock, getGetPluginsArg } from '@dd/tests/_jest/helpers/mocks';
+import { getContextMock, getGetPluginsArg, getMockLogger } from '@dd/tests/_jest/helpers/mocks';
 import type { UnpluginBuildContext, UnpluginContext } from 'unplugin';
 
 import { DEFAULT_FILE_EXTENSIONS, PLUGIN_NAME } from './constants';
-import { getLiveDebuggerPlugin, getPlugins } from './index';
+import { getLiveDebuggerPlugin, getPlugins, helpers } from './index';
 import { getRuntimeBootstrap } from './runtime-bootstrap';
-import type { LiveDebuggerOptionsWithDefaults } from './types';
+import type { LiveDebuggerOptions, LiveDebuggerOptionsWithDefaults } from './types';
+import { validateOptions } from './validate';
 
 const makeOptions = (
     overrides: Partial<LiveDebuggerOptionsWithDefaults> = {},
@@ -564,5 +565,66 @@ describe('getPlugins', () => {
         const expectedBootstrap = getRuntimeBootstrap(expected)(chunk);
 
         expect(injectedBootstrap).toBe(expectedBootstrap);
+    });
+});
+
+describe('helpers', () => {
+    const code = 'function f() { return 1; }';
+
+    const cases: {
+        description: string;
+        liveDebugger: LiveDebuggerOptions;
+        // Whether each file ID gets instrumented.
+        expected: Record<string, boolean>;
+    }[] = [
+        {
+            description: 'keep the default exclude patterns when a pattern is added to them',
+            liveDebugger: { exclude: [...helpers.exclude, /\/vendor\//] },
+            expected: {
+                '/project/src/app.ts': true,
+                '/project/vendor/lib.ts': false,
+                '/project/node_modules/dep/index.js': false,
+            },
+        },
+        {
+            description: 'drop the default exclude patterns when exclude replaces them',
+            liveDebugger: { exclude: [/\/vendor\//] },
+            expected: {
+                '/project/src/app.ts': true,
+                '/project/vendor/lib.ts': false,
+                '/project/node_modules/dep/index.js': true,
+            },
+        },
+        {
+            description: 'keep the default file extensions when an extension is added to them',
+            liveDebugger: { fileExtensions: [...helpers.fileExtensions, '.vue'] },
+            expected: {
+                '/project/src/App.vue': true,
+                '/project/src/app.tsx': true,
+            },
+        },
+        {
+            description: 'drop the default file extensions when fileExtensions replaces them',
+            liveDebugger: { fileExtensions: ['.vue'] },
+            expected: {
+                '/project/src/App.vue': true,
+                '/project/src/app.tsx': false,
+            },
+        },
+    ];
+
+    test.each(cases)('should $description', ({ liveDebugger, expected }) => {
+        const options = validateOptions({ liveDebugger }, getMockLogger());
+        const handler = getHandler(options);
+        const ids = Object.keys(expected);
+        const results = ids.map((id) => [id, handler(code, id) !== null]);
+        const instrumented = Object.fromEntries(results);
+
+        expect(instrumented).toEqual(expected);
+    });
+
+    it('should not let consumers change the defaults', () => {
+        expect(Object.isFrozen(helpers.exclude)).toBe(true);
+        expect(Object.isFrozen(helpers.fileExtensions)).toBe(true);
     });
 });

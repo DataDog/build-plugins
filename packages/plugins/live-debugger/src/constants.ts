@@ -34,7 +34,21 @@ export const SYMBOL_TABLE_INTAKE_PATH = 'api/v2/debugger';
 // The intake accepts up to 50 MiB per request. Keep room for the request's event part.
 export const SYMBOL_TABLE_MAX_PART_BYTES = 50 * 1024 * 1024 - 64 * 1024;
 
-export const DEFAULT_FILE_EXTENSIONS = [
+// The defaults are frozen because consumers can reach them through `helpers`,
+// and they're shared by every build in the process.
+export const DEFAULT_EXCLUDE: readonly (string | RegExp)[] = Object.freeze([
+    /\/node_modules\//,
+    /\.min\.js$/,
+    /\/pyodide-lib\//, // Bundled third-party Pyodide library
+    /^vite\//, // Vite internal modules
+    /\0/, // Virtual modules (Rollup/Vite convention)
+    /commonjsHelpers\.js$/, // Rollup commonjs helpers
+    /__vite-browser-external/, // Vite browser externals
+    /@datadog\/browser-/, // Datadog browser SDK packages (when npm linked)
+    /browser-sdk\/packages\//, // Datadog browser SDK source files
+]);
+
+export const DEFAULT_FILE_EXTENSIONS: readonly string[] = Object.freeze([
     '.js',
     '.jsx',
     '.ts',
@@ -43,4 +57,4 @@ export const DEFAULT_FILE_EXTENSIONS = [
     '.cjs',
     '.mts',
     '.cts',
-] as const;
+]);
