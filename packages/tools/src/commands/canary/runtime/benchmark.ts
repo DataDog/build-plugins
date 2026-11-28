@@ -437,16 +437,19 @@ export const runRuntimeBenchmark = async <V extends string>(
             loads,
         };
     } finally {
-        // A failed close mustn't hide why the benchmark stopped.
+        // A failed close mustn't hide why the benchmark stopped. Closing them all at
+        // once keeps a hung Chrome from delaying the others.
         const closers = [...browsers, ...servers];
-        for (const closer of closers) {
-            try {
-                await closer.close();
-            } catch (error) {
-                const message = getErrorMessage(error);
-                log(`Couldn't stop a browser or server: ${message}`);
-            }
-        }
+        await Promise.all(
+            closers.map(async (closer) => {
+                try {
+                    await closer.close();
+                } catch (error) {
+                    const message = getErrorMessage(error);
+                    log(`Couldn't stop a browser or server: ${message}`);
+                }
+            }),
+        );
     }
     // A stop during the last load, or while Chrome shuts down, mustn't produce a
     // result.

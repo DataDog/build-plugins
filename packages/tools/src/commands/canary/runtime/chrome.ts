@@ -24,7 +24,8 @@ const WINDOW_SIZE = { width: 1280, height: 800 };
 const STARTUP_TIMEOUT_MS = 30_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const COMMAND_TIMEOUT_MS = 120_000;
-const CLOSE_PAGE_TIMEOUT_MS = 10_000;
+// The browser's own commands answer quickly. One that doesn't means Chrome hangs.
+const BROWSER_COMMAND_TIMEOUT_MS = 10_000;
 const STDERR_TAIL_LENGTH = 4_000;
 const DEVTOOLS_URL = /DevTools listening on (ws:\/\/\S+)/;
 
@@ -56,8 +57,10 @@ export const DEFAULT_CHROME_FLAGS = [
     `--window-size=${WINDOW_SIZE.width},${WINDOW_SIZE.height}`,
 ];
 
-// Chrome went away or its DevTools connection broke. That's never a page's fault,
-// so it fails the whole run instead of counting as a failed load.
+// Chrome itself failed: it went away, its DevTools connection broke, it didn't
+// answer one of its own commands, or it couldn't open or set up a page. That's
+// never a page's fault, so it fails the whole run instead of counting as a failed
+// load.
 export class ChromeConnectionError extends Error {}
 
 type Listener = (params: unknown) => void;
@@ -514,9 +517,11 @@ export const launchChrome = async ({
         return {
             version,
             newPage: async () => {
-                const created = await browser.send('Target.createTarget', { url: 'about:blank' });
+                const sendToBrowser = (method: string, params: Record<string, unknown>) =>
+                    openConnection.send(method, params, undefined, BROWSER_COMMAND_TIMEOUT_MS);
+                const created = await sendToBrowser('Target.createTarget', { url: 'about:blank' });
                 const targetId = getRequiredString(created, 'targetId', 'Target.createTarget');
-                const attached = await browser.send('Target.attachToTarget', {
+                const attached = await sendToBrowser('Target.attachToTarget', {
                     flatten: true,
                     targetId,
                 });
@@ -535,22 +540,25 @@ export const launchChrome = async ({
                         for (const remove of removers) {
                             remove();
                         }
-                        // A browser-level command, so a timeout means Chrome hangs.
-                        await openConnection.send(
-                            'Target.closeTarget',
-                            { targetId },
-                            undefined,
-                            CLOSE_PAGE_TIMEOUT_MS,
-                        );
+                        await sendToBrowser('Target.closeTarget', { targetId });
                     },
                 };
             },
             close: async () => {
                 try {
-                    await browser.send('Browser.close');
+                    await openConnection.send(
+                        'Browser.close',
+                        {},
+                        undefined,
+                        BROWSER_COMMAND_TIMEOUT_MS,
+                    );
                 } catch {
-                    // Chrome can close the connection before it answers; stop() kills
-                    // it if it doesn't exit.
+                    // Chrome can close the connection before it answers, and stop()
+                    // waits for it to exit. If it doesn't answer at all, it hangs:
+                    // don't wait for it.
+                    if (!openConnection.getClosedError()) {
+                        killChrome();
+                    }
                 }
                 openConnection.close();
                 await stop();

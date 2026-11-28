@@ -5,6 +5,7 @@
 import { setTimeout as wait } from 'timers/promises';
 
 import type { Chrome, ChromePage } from './chrome';
+import { ChromeConnectionError } from './chrome';
 import { measureLoad, trackNetwork } from './measure';
 
 type Listener = (params: unknown) => void;
@@ -123,5 +124,50 @@ describe('runtime page loads', () => {
 
         await expect(load(tracked, controller.signal)).rejects.toThrow();
         expect(sent).toEqual([]);
+    });
+
+    // Wraps createChrome's pages: overrides replaces their send and close.
+    const withPages = (overrides: (fakePage: ChromePage) => Partial<ChromePage>): Chrome => {
+        const chrome = createChrome(0);
+        return {
+            ...chrome,
+            newPage: async () => {
+                const fakePage = await chrome.newPage();
+                return { ...fakePage, ...overrides(fakePage) };
+            },
+        };
+    };
+
+    test("should keep a load's own result when its page fails to close", async () => {
+        const chrome = withPages(() => ({
+            close: async () => {
+                throw new Error('Target.closeTarget: No target with given id found.');
+            },
+        }));
+        const result = await load(chrome);
+        // The fake page reports no visibility state, so the load fails on its own
+        // terms, and closing the page doesn't replace that.
+        expect(result.error).toBe('The page was not visible during the load.');
+    });
+
+    test('should stop the run when Chrome fails to close a page', async () => {
+        const chrome = withPages(() => ({
+            close: async () => {
+                throw new ChromeConnectionError("Chrome didn't answer Target.closeTarget.");
+            },
+        }));
+        await expect(load(chrome)).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+
+    test("should treat a page's failing setup as Chrome failing", async () => {
+        const chrome = withPages((fakePage) => ({
+            send: async (method, params) => {
+                if (method === 'Network.enable') {
+                    throw new Error('Network.enable: Internal error.');
+                }
+                return fakePage.send(method, params);
+            },
+        }));
+        await expect(load(chrome)).rejects.toBeInstanceOf(ChromeConnectionError);
     });
 });

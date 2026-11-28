@@ -263,8 +263,11 @@ How a run works:
     fail: the slow loads are the likeliest to fail, so dropping many of them
     would make a variant look faster than it is. Below 10 repetitions, a
     single failed load is more than 10%.
--   Chrome crashing, or its DevTools connection breaking, fails the run at
-    once as a `target` failure, instead of failing every load that follows.
+-   Chrome itself failing fails the run at once as a `target` failure,
+    instead of failing every load that follows. That's Chrome crashing, its
+    DevTools connection breaking, Chrome not answering one of its own
+    commands within 10 seconds, or a page failing to open or to be set up
+    before it navigates, when no variant code has run yet.
 -   Each repetition then loads every variant once per page, cache state and CPU
     rate, in a new order. The order and the bootstrap derive from the run ID,
     so a run ID reproduces them.

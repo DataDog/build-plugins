@@ -197,7 +197,7 @@ describe('runtime static server', () => {
         });
         expect(second.status).toBe(304);
         expect(second.headers['cache-control']).toBe(IMMUTABLE_CACHE_CONTROL);
-        expect(second.body.length).toBe(0);
+        expect(second.body).toHaveLength(0);
     });
 
     test('should compress text only for clients that accept gzip', async () => {

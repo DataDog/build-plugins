@@ -218,10 +218,20 @@ describe('DevTools connection timeouts and cancellation', () => {
         const browser = createSession(connection, undefined).send('Target.createTarget');
         const page = createSession(connection, 'session-1').send('Runtime.evaluate');
         jest.advanceTimersByTime(120_000);
+        // Settles both first, so neither rejection goes unhandled if one check fails.
+        const [browserOutcome, pageOutcome] = await Promise.allSettled([browser, page]);
 
-        await expect(browser).rejects.toBeInstanceOf(ChromeConnectionError);
-        await expect(page).rejects.toThrow('Runtime.evaluate got no answer within 120s.');
-        await expect(page).rejects.not.toBeInstanceOf(ChromeConnectionError);
+        expect(browserOutcome).toMatchObject({
+            status: 'rejected',
+            reason: expect.any(ChromeConnectionError),
+        });
+        expect(pageOutcome).toMatchObject({
+            status: 'rejected',
+            reason: expect.objectContaining({
+                message: 'Runtime.evaluate got no answer within 120s.',
+            }),
+        });
+        expect(pageOutcome).not.toMatchObject({ reason: expect.any(ChromeConnectionError) });
     });
 
     test("should reject a cancelled session's commands, and only its own", async () => {

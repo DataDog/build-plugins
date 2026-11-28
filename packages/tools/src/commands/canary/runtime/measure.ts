@@ -140,8 +140,9 @@ type Limits = {
 };
 
 // Starts a command and waits for it, but no longer than COMMAND_GRACE_MS past the
-// deadline, and not past an abort. An abort is checked before the command starts,
-// so no command is left without a handler.
+// deadline, and not past an abort. The grace is shared: commands that start after
+// the deadline don't each get their own. Both limits are checked before the command
+// starts, so no command is left without a handler.
 const withinLimits = <T>(
     start: () => Promise<T>,
     { deadline, signal }: Limits,
@@ -150,11 +151,14 @@ const withinLimits = <T>(
     if (signal?.aborted) {
         return Promise.reject(signal.reason);
     }
+    const timeoutMs = getRemainingMs(deadline + COMMAND_GRACE_MS);
+    if (timeoutMs === 0) {
+        return Promise.reject(new Error(`${what} came after its time limit.`));
+    }
     const promise = start();
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
     const limit = new Promise<never>((_resolve, reject) => {
-        const timeoutMs = getRemainingMs(deadline) + COMMAND_GRACE_MS;
         timeout = setTimeout(() => {
             reject(new Error(`${what} got no answer within its time limit.`));
         }, timeoutMs);
@@ -378,6 +382,15 @@ type PreparedPage = {
     send: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 };
 
+// Until a load navigates, its page is about:blank and no variant code has run, so
+// a failure up to then is Chrome's.
+const asChromeFailure = (error: unknown, signal: AbortSignal | undefined, what: string) => {
+    if (signal?.aborted || error instanceof ChromeConnectionError) {
+        return error;
+    }
+    return new ChromeConnectionError(`${what} failed: ${getErrorMessage(error)}`);
+};
+
 const preparePage = async ({
     chrome,
     clearCache,
@@ -391,7 +404,12 @@ const preparePage = async ({
     pageOrigin: string;
     signal: AbortSignal | undefined;
 }): Promise<PreparedPage> => {
-    const page = await chrome.newPage();
+    let page: ChromePage;
+    try {
+        page = await chrome.newPage();
+    } catch (error) {
+        throw asChromeFailure(error, signal, 'Opening a page');
+    }
     try {
         const pageErrors: string[] = [];
         page.on('Runtime.exceptionThrown', (params) => {
@@ -424,9 +442,9 @@ const preparePage = async ({
         try {
             await page.close();
         } catch {
-            // The error that stopped the preparation matters more.
+            // The error that stopped the setup matters more, and is Chrome's too.
         }
-        throw error;
+        throw asChromeFailure(error, signal, 'Setting up a page');
     }
 };
 
@@ -536,12 +554,16 @@ export const measureLoad = async ({
     };
 
     try {
-        await send('Emulation.setCPUThrottlingRate', { rate: cpuThrottling });
-        if (networkThrottling) {
-            const conditions = getNetworkConditions(networkThrottling);
-            await send('Network.emulateNetworkConditions', conditions);
+        try {
+            await send('Emulation.setCPUThrottlingRate', { rate: cpuThrottling });
+            if (networkThrottling) {
+                const conditions = getNetworkConditions(networkThrottling);
+                await send('Network.emulateNetworkConditions', conditions);
+            }
+            await send('Performance.enable', { timeDomain: 'timeTicks' });
+        } catch (error) {
+            throw asChromeFailure(error, signal, 'Setting up a page');
         }
-        await send('Performance.enable', { timeDomain: 'timeTicks' });
 
         const limits = { deadline: now() + maxWaitMs, signal };
         let error: string | null = null;

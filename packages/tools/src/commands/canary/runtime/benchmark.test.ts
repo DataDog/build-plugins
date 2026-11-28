@@ -431,13 +431,33 @@ describe('runtime benchmark failures', () => {
         await expect(run).rejects.toBeInstanceOf(ChromeConnectionError);
     });
 
+    test("should treat Chrome failing to open a page as Chrome's failure", async () => {
+        // The instrumented variant's first priming visit, which would otherwise be
+        // blamed on the variant.
+        const failure = () => new Error('Target.createTarget: Not attached.');
+        const run = runWithFakeChrome({ openPage: failPagesAfter(3, failure) });
+        await expect(run).rejects.toBeInstanceOf(ChromeConnectionError);
+    });
+
     test("should count a page's own failures as failed loads and keep going", async () => {
-        const failure = () => new Error('Target.createTarget failed.');
         const result = await runWithFakeChrome({
-            openPage: failPagesAfter(PRIMING_PAGES, failure),
+            openPage: async (pageNumber) => {
+                const page = createFakePage();
+                if (pageNumber <= PRIMING_PAGES) {
+                    return page;
+                }
+                return {
+                    ...page,
+                    send: async (method, params) =>
+                        method === 'Page.navigate'
+                            ? { errorText: 'net::ERR_CONNECTION_REFUSED' }
+                            : page.send(method, params),
+                };
+            },
         });
         expect(result.loads).toHaveLength(MEASURED_LOADS);
         expect(result.loads.every((load) => !load.ok)).toBe(true);
+        expect(result.loads[0].error).toContain('net::ERR_CONNECTION_REFUSED');
         expect(result.conditions[0].variants[0]).toMatchObject({ loads: 0, failedLoads: 3 });
     });
 
