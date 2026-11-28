@@ -224,16 +224,23 @@ broken Chrome fails the run in seconds.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--runtime-repetitions` | `15` | Measured loads of each variant per page, cache state and CPU rate. At least 3. |
+| `--runtime-repetitions` | `30` | Measured loads of each variant per page, cache state and CPU rate. At least 3. |
 | `--runtime-cpu-throttling` | `1` | Comma-separated CPU slowdown factors, such as `1,4`. Each is its own condition. |
 | `--runtime-network` | `40:10:20` | Download Mbps, upload Mbps and latency in ms for every load, or `none`. |
 | `--runtime-lcp-settle-ms` | `8000` | A load ends once no new LCP candidate has appeared for this long... |
 | `--runtime-max-wait-ms` | `40000` | ...or this long after navigation started. |
 
-With the defaults, Excalidraw's step took 13.5 minutes on a 16-core Linux
-machine: 90 loads of about 9 seconds, most of it the LCP settle wait. Each
-extra CPU rate adds as much again. A shorter settle wait saves time, but it cut the LCP of slower
-builds short when it was tried.
+With 15 repetitions, Excalidraw's step took 13.5 minutes on a 16-core Linux
+machine: 90 loads of about 9 seconds, most of it the LCP settle wait. The
+default of 30 takes about 27 minutes and narrows the intervals by about 30%:
+the canary runs on a schedule, so accuracy matters more than time. Each extra
+CPU rate adds as much again, and loads at 4x take about a quarter longer. A
+shorter settle wait saves time, but it cut the LCP of slower builds short when
+it was tried.
+
+CPU throttling defaults to none. In a run with both 1x and 4x, Excalidraw's
+overheads in percent came out about the same at 4x, while the intervals were
+wider relative to the effect, so 4x added time without adding accuracy.
 
 How a run works:
 
@@ -243,11 +250,11 @@ How a run works:
     `no-cache` with an `ETag`, and text is compressed with gzip, like a CDN
     serves a production build. The server keeps files in memory once read.
 -   Two Chromes with throwaway profiles on disk run side by side. The cold one
-    clears its cache and the origin's storage before every load. The warm one
-    visits each variant's pages twice before measuring, which fills its HTTP
-    cache and lets V8 write its code cache, and never clears anything, like a
-    returning visitor's browser. So cold and warm loads can interleave without
-    priming in between.
+    clears its HTTP cache, V8's code cache and the origin's storage before
+    every load. The warm one visits each variant's pages twice before
+    measuring, which fills its HTTP cache and makes V8 write its code cache,
+    and never clears anything, like a returning visitor's browser. So cold and
+    warm loads can interleave without priming in between.
 -   Before measuring, every variant must load each page, control first. When
     one doesn't, the run fails at `phase:<phase>:<variant>:runtime`: a
     `plugin` failure when control loaded, a `target` failure otherwise. It
@@ -300,8 +307,9 @@ Other caveats:
     scripts on other threads, so throttling understates their cost.
 -   Chrome only reports Long Animation Frames from version 123, and the
     blocking time is `null` before.
--   For Excalidraw, warm loads mostly save the network: without network
-    throttling, they're barely faster than a new profile's first load.
+-   For Excalidraw, warm loads mostly save the network: V8's code cache is
+    there, but without network throttling, warm loads are barely faster than a
+    new profile's first load.
 
 #### Adding a target
 
@@ -346,7 +354,7 @@ and runs a copy outside the repository.
     together for Excalidraw. Plan for 2 CPUs and 2 GB of memory. Other jobs on
     the same machine add noise to the timings, so a dedicated runner gives
     tighter intervals.
--   Budget about 15 minutes per phase at the defaults, on top of the builds.
+-   Budget about 30 minutes per phase at the defaults, on top of the builds.
 
 ### Excalidraw target
 
@@ -376,7 +384,8 @@ With `--runtime`, the canary loads the app's start page, `home`, which shows the
 welcome screen on an empty scene, and waits for its interactive canvas. Vite's
 `assets/` and the fonts are cached for a year, as excalidraw.com caches fonts.
 Excalidraw's fonts and services are on other hosts, so the app falls back to
-system fonts. Its stylesheet also asks for fonts that the build doesn't
+system fonts. Allowing those hosts gave the same differences between variants
+in a test run, with wider intervals: the first loads waited on the font CDN. Its stylesheet also asks for fonts that the build doesn't
 contain, which shows as 4 `failedRequests` per load in every variant.
 
 ### Mastodon target

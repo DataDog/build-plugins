@@ -4,8 +4,11 @@
 
 import type { RuntimeNetworkThrottling, RuntimeSettings } from './runtime';
 
-// About 15 minutes for Excalidraw: 6 loads a repetition at roughly 10s each.
-export const DEFAULT_RUNTIME_REPETITIONS = '15';
+// About 27 minutes for Excalidraw: 6 loads a repetition at roughly 9s each. The
+// canary runs on a schedule, so it spends the time on tighter intervals.
+export const DEFAULT_RUNTIME_REPETITIONS = '30';
+// At 4x, overheads in percent came out about the same as at 1x, with wider
+// intervals relative to the effect.
 export const DEFAULT_RUNTIME_CPU_THROTTLING = '1';
 // A fast home connection: download Mbps, upload Mbps, latency in ms.
 export const DEFAULT_RUNTIME_NETWORK = '40:10:20';

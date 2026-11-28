@@ -336,7 +336,8 @@ const preparePage = async ({
     await page.send('Network.enable');
     await page.send('Emulation.setDeviceMetricsOverride', VIEWPORT);
     if (clearCache) {
-        // Clears the cache of the whole profile, which only cold loads use.
+        // Clears the HTTP cache and V8's code cache of the whole profile, which
+        // only cold loads use.
         await page.send('Network.clearBrowserCache');
         await page.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' });
     }

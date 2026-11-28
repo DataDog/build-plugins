@@ -24,7 +24,7 @@ const DEFAULTS = {
 describe('canary runtime options', () => {
     test('should parse the defaults', () => {
         expect(parseRuntimeSettings(DEFAULTS)).toEqual({
-            repetitions: 15,
+            repetitions: 30,
             cpuThrottlingRates: [1],
             network: { downloadMbps: 40, uploadMbps: 10, latencyMs: 20 },
             lcpSettleMs: 8_000,
